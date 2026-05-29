@@ -9,6 +9,7 @@ export function Nav() {
       <Link href="/methods">Methods</Link>
       <Link href="/directory">Directory</Link>
       <Link href="/blog">Guides</Link>
+      <Link href="/jobs">Jobs</Link>
       <Link href="/comparisons">Comparisons</Link>
       <Link href="/waitlist" className="pill">Join beta</Link>
     </nav>
