@@ -10,7 +10,7 @@ async function fetchRemotive(query: string): Promise<LiveJob[]> {
     const res = await fetch(url, { next: { revalidate: 1800 } })
     if (!res.ok) return []
     const json = await res.json()
-    return (json.jobs || []).filter((j: any) => isRecruitingRole(j.title, j.description)).slice(0, 12).map((j: any) => ({
+    return (json.jobs || []).filter((j: any) => isRecruitingRole(j.title, j.description)).slice(0, 25).map((j: any) => ({
       id: `remotive-${j.id}`,
       title: cleanText(j.title, 160),
       company: cleanText(j.company_name, 120),
@@ -41,7 +41,7 @@ async function fetchArbeitnow(query: string): Promise<LiveJob[]> {
     return (json.data || []).filter((j: any) => {
       const text = `${j.title} ${(j.tags || []).join(' ')}`.toLowerCase()
       return isRecruitingRole(j.title, j.description) && (!q || text.includes(q) || q.split(/\s+/).some((part: string) => text.includes(part)))
-    }).slice(0, 10).map((j: any) => ({
+    }).slice(0, 25).map((j: any) => ({
       id: `arbeitnow-${j.slug}`,
       title: cleanText(j.title, 160),
       company: cleanText(j.company_name, 120),
@@ -71,7 +71,7 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
     const url = new URL('https://data.usajobs.gov/api/search')
     url.searchParams.set('Keyword', query || 'recruiter')
     if (location) url.searchParams.set('LocationName', location)
-    url.searchParams.set('ResultsPerPage', '10')
+    url.searchParams.set('ResultsPerPage', '25')
     const res = await fetch(url, { headers: { 'Authorization-Key': key, 'User-Agent': userAgent, Host: 'data.usajobs.gov' }, next: { revalidate: 1800 } })
     if (!res.ok) return []
     const json = await res.json()
@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
   const query = searchParams.get('q') || 'recruiter sourcer talent acquisition'
   const location = searchParams.get('location') || ''
   const selectedSources = (searchParams.get('sources') || 'ats,remotive,arbeitnow,usajobs').split(',')
+  const limit = Math.min(Number(searchParams.get('limit') || 250), 250)
 
   const atsJobs = selectedSources.includes('ats') ? await Promise.all(atsTargets.map(target => {
     if (target.ats === 'greenhouse') return fetchGreenhouseJobs(target)
@@ -126,13 +127,14 @@ export async function GET(req: NextRequest) {
     selectedSources.includes('usajobs') ? fetchUsaJobs(query, location) : Promise.resolve([])
   ])
 
-  const jobs = dedupeJobs([...atsJobs, ...remotive, ...arbeitnow, ...usajobs]).filter(job => queryMatches(job, query, location)).slice(0, 40)
+  const jobs = dedupeJobs([...atsJobs, ...remotive, ...arbeitnow, ...usajobs]).filter(job => queryMatches(job, query, location)).slice(0, limit)
 
   return NextResponse.json({
     ok: true,
     query,
     location,
     count: jobs.length,
+    targetPoolSize: atsTargets.length,
     jobs,
     sources: ['Greenhouse', 'Lever', 'Ashby', 'Remotive', 'Arbeitnow', 'USAJOBS optional via env'],
     notes: [
