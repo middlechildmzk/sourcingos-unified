@@ -1,30 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { atsTargets } from '@/data/ats-targets'
+import { dedupeJobs, fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs, isRecruitingRole, cleanText, NormalizedJob } from '@/lib/jobs-ingestion'
 
-type LiveJob = {
-  id: string
-  title: string
-  company: string
-  location: string
-  remoteType: string
-  employmentType: string
-  salaryRange: string
-  source: string
-  applyUrl: string
-  postedDate: string
-  description: string
-  tags: string[]
-}
-
-const recruiterTerms = ['recruiter','sourcer','talent acquisition','recruiting operations','technical recruiter','technical sourcer','healthcare recruiter','nurse recruiter','people ops']
-
-function isRecruitingRole(title = '', description = '') {
-  const haystack = `${title} ${description}`.toLowerCase()
-  return recruiterTerms.some(term => haystack.includes(term))
-}
-
-function cleanText(value: unknown) {
-  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-}
+type LiveJob = NormalizedJob
 
 async function fetchRemotive(query: string): Promise<LiveJob[]> {
   try {
@@ -34,17 +12,22 @@ async function fetchRemotive(query: string): Promise<LiveJob[]> {
     const json = await res.json()
     return (json.jobs || []).filter((j: any) => isRecruitingRole(j.title, j.description)).slice(0, 12).map((j: any) => ({
       id: `remotive-${j.id}`,
-      title: cleanText(j.title),
-      company: cleanText(j.company_name),
-      location: cleanText(j.candidate_required_location || 'Remote'),
+      title: cleanText(j.title, 160),
+      company: cleanText(j.company_name, 120),
+      location: cleanText(j.candidate_required_location || 'Remote', 120),
       remoteType: 'Remote',
-      employmentType: cleanText(j.job_type || 'Remote'),
-      salaryRange: cleanText(j.salary || 'Not listed'),
+      employmentType: cleanText(j.job_type || 'Remote', 120),
+      salaryRange: cleanText(j.salary || 'Not listed', 120),
       source: 'Remotive',
+      sourceType: 'remotive',
+      sourceId: String(j.id),
       applyUrl: j.url,
-      postedDate: cleanText(j.publication_date || ''),
-      description: cleanText(j.description).slice(0, 360),
-      tags: (j.tags || []).slice(0, 5).map((t: any) => cleanText(t))
+      sourceUrl: j.url,
+      postedDate: cleanText(j.publication_date || '', 80),
+      lastCheckedAt: new Date().toISOString(),
+      description: cleanText(j.description, 360),
+      tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'remote job feed'])),
+      category: 'recruiter'
     }))
   } catch { return [] }
 }
@@ -60,17 +43,22 @@ async function fetchArbeitnow(query: string): Promise<LiveJob[]> {
       return isRecruitingRole(j.title, j.description) && (!q || text.includes(q) || q.split(/\s+/).some((part: string) => text.includes(part)))
     }).slice(0, 10).map((j: any) => ({
       id: `arbeitnow-${j.slug}`,
-      title: cleanText(j.title),
-      company: cleanText(j.company_name),
-      location: cleanText(j.location || 'Remote/varies'),
+      title: cleanText(j.title, 160),
+      company: cleanText(j.company_name, 120),
+      location: cleanText(j.location || 'Remote/varies', 120),
       remoteType: j.remote ? 'Remote' : 'Hybrid/Onsite',
       employmentType: 'Full-time',
       salaryRange: 'Not listed',
       source: 'Arbeitnow',
+      sourceType: 'arbeitnow',
+      sourceId: String(j.slug),
       applyUrl: j.url,
+      sourceUrl: j.url,
       postedDate: j.created_at ? new Date(j.created_at * 1000).toISOString() : '',
-      description: cleanText(j.description).slice(0, 360),
-      tags: (j.tags || []).slice(0, 5).map((t: any) => cleanText(t))
+      lastCheckedAt: new Date().toISOString(),
+      description: cleanText(j.description, 360),
+      tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'public job feed'])),
+      category: 'recruiter'
     }))
   } catch { return [] }
 }
@@ -84,41 +72,76 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
     url.searchParams.set('Keyword', query || 'recruiter')
     if (location) url.searchParams.set('LocationName', location)
     url.searchParams.set('ResultsPerPage', '10')
-    const res = await fetch(url, { headers: { 'Authorization-Key': key, 'User-Agent': userAgent }, next: { revalidate: 1800 } })
+    const res = await fetch(url, { headers: { 'Authorization-Key': key, 'User-Agent': userAgent, Host: 'data.usajobs.gov' }, next: { revalidate: 1800 } })
     if (!res.ok) return []
     const json = await res.json()
     const items = json.SearchResult?.SearchResultItems || []
     return items.filter((it: any) => isRecruitingRole(it.MatchedObjectDescriptor?.PositionTitle, it.MatchedObjectDescriptor?.UserArea?.Details?.JobSummary)).map((it: any) => {
       const d = it.MatchedObjectDescriptor
+      const salary = d.PositionRemuneration?.[0] ? `${d.PositionRemuneration[0].MinimumRange}-${d.PositionRemuneration[0].MaximumRange}` : 'Not listed'
       return {
         id: `usajobs-${d.PositionID}`,
-        title: cleanText(d.PositionTitle),
-        company: cleanText(d.OrganizationName || d.DepartmentName),
-        location: cleanText((d.PositionLocation || []).map((l: any) => l.LocationName).join(', ')),
+        title: cleanText(d.PositionTitle, 160),
+        company: cleanText(d.OrganizationName || d.DepartmentName, 120),
+        location: cleanText((d.PositionLocation || []).map((l: any) => l.LocationName).join(', '), 160),
         remoteType: 'Federal',
-        employmentType: cleanText((d.PositionSchedule || [])[0]?.Name || 'Federal'),
-        salaryRange: d.PositionRemuneration?.[0] ? `${d.PositionRemuneration[0].MinimumRange}-${d.PositionRemuneration[0].MaximumRange}` : 'Not listed',
+        employmentType: cleanText((d.PositionSchedule || [])[0]?.Name || 'Federal', 120),
+        salaryRange: salary,
         source: 'USAJOBS',
+        sourceType: 'usajobs',
+        sourceId: String(d.PositionID),
         applyUrl: d.PositionURI,
-        postedDate: cleanText(d.PublicationStartDate),
-        description: cleanText(d.UserArea?.Details?.JobSummary).slice(0, 360),
-        tags: ['Federal', 'USAJOBS']
-      }
+        sourceUrl: d.PositionURI,
+        postedDate: cleanText(d.PublicationStartDate, 80),
+        lastCheckedAt: new Date().toISOString(),
+        description: cleanText(d.UserArea?.Details?.JobSummary, 360),
+        tags: ['Federal', 'USAJOBS', 'GovCon-adjacent'],
+        category: 'govcon-recruiter'
+      } satisfies LiveJob
     })
   } catch { return [] }
+}
+
+function queryMatches(job: LiveJob, query: string, location: string) {
+  const q = query.toLowerCase().trim()
+  const loc = location.toLowerCase().trim()
+  const haystack = `${job.title} ${job.company} ${job.location} ${job.description} ${job.tags.join(' ')}`.toLowerCase()
+  const queryOk = !q || q.split(/\s+/).filter(Boolean).some(part => haystack.includes(part))
+  const locOk = !loc || job.location.toLowerCase().includes(loc) || job.remoteType.toLowerCase().includes('remote')
+  return queryOk && locOk
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const query = searchParams.get('q') || 'recruiter sourcer talent acquisition'
   const location = searchParams.get('location') || ''
-  const [remotive, arbeitnow, usajobs] = await Promise.all([fetchRemotive(query), fetchArbeitnow(query), fetchUsaJobs(query, location)])
-  const seen = new Set<string>()
-  const jobs = [...remotive, ...arbeitnow, ...usajobs].filter(job => {
-    const key = `${job.title}-${job.company}-${job.applyUrl}`.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return Boolean(job.applyUrl && job.title && job.company)
+  const selectedSources = (searchParams.get('sources') || 'ats,remotive,arbeitnow,usajobs').split(',')
+
+  const atsJobs = selectedSources.includes('ats') ? await Promise.all(atsTargets.map(target => {
+    if (target.ats === 'greenhouse') return fetchGreenhouseJobs(target)
+    if (target.ats === 'lever') return fetchLeverJobs(target)
+    return fetchAshbyJobs(target)
+  })).then(groups => groups.flat()) : []
+
+  const [remotive, arbeitnow, usajobs] = await Promise.all([
+    selectedSources.includes('remotive') ? fetchRemotive(query) : Promise.resolve([]),
+    selectedSources.includes('arbeitnow') ? fetchArbeitnow(query) : Promise.resolve([]),
+    selectedSources.includes('usajobs') ? fetchUsaJobs(query, location) : Promise.resolve([])
+  ])
+
+  const jobs = dedupeJobs([...atsJobs, ...remotive, ...arbeitnow, ...usajobs]).filter(job => queryMatches(job, query, location)).slice(0, 40)
+
+  return NextResponse.json({
+    ok: true,
+    query,
+    location,
+    count: jobs.length,
+    jobs,
+    sources: ['Greenhouse', 'Lever', 'Ashby', 'Remotive', 'Arbeitnow', 'USAJOBS optional via env'],
+    notes: [
+      'Uses metadata and short snippets only.',
+      'Apply buttons link to the original job source.',
+      'ATS targets are curated public job-board feeds, not scraped pages.'
+    ]
   })
-  return NextResponse.json({ ok: true, query, location, count: jobs.length, jobs, sources: ['Remotive', 'Arbeitnow', 'USAJOBS optional via env'] })
 }
