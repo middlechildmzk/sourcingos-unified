@@ -39,7 +39,7 @@ async function fetchArbeitnow(query: string): Promise<LiveJob[]> {
     const json = await res.json()
     const q = (query || '').toLowerCase()
     return (json.data || []).filter((j: any) => {
-      const text = `${j.title} ${j.description} ${(j.tags || []).join(' ')}`.toLowerCase()
+      const text = `${j.title} ${(j.tags || []).join(' ')}`.toLowerCase()
       return isRecruitingRole(j.title, j.description) && (!q || text.includes(q) || q.split(/\s+/).some((part: string) => text.includes(part)))
     }).slice(0, 10).map((j: any) => ({
       id: `arbeitnow-${j.slug}`,
@@ -103,12 +103,9 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
 }
 
 function queryMatches(job: LiveJob, query: string, location: string) {
-  const q = query.toLowerCase().trim()
   const loc = location.toLowerCase().trim()
-  const haystack = `${job.title} ${job.company} ${job.location} ${job.description} ${job.tags.join(' ')}`.toLowerCase()
-  const queryOk = !q || q.split(/\s+/).filter(Boolean).some(part => haystack.includes(part))
   const locOk = !loc || job.location.toLowerCase().includes(loc) || job.remoteType.toLowerCase().includes('remote')
-  return queryOk && locOk
+  return isRecruitingRole(job.title, job.description) && locOk
 }
 
 export async function GET(req: NextRequest) {
@@ -139,6 +136,7 @@ export async function GET(req: NextRequest) {
     jobs,
     sources: ['Greenhouse', 'Lever', 'Ashby', 'Remotive', 'Arbeitnow', 'USAJOBS optional via env'],
     notes: [
+      'Only job titles that match recruiter, sourcer, talent acquisition, recruiting operations, people operations, healthcare recruiter, or GovCon recruiter roles are shown.',
       'Uses metadata and short snippets only.',
       'Apply buttons link to the original job source.',
       'ATS targets are curated public job-board feeds, not scraped pages.'
