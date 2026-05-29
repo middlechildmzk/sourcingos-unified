@@ -19,13 +19,13 @@ export function XrayTool() {
 
   const query = useMemo(() => {
     const termGroup = terms
-      .split(/[,
-]+/)
+      .replaceAll(String.fromCharCode(10), ',')
+      .split(',')
       .map(term => term.trim())
       .filter(Boolean)
       .join(' OR ')
     const exclusions = exclude
-      .split(/\s+/)
+      .split(' ')
       .map(item => item.trim())
       .filter(Boolean)
       .map(item => `-${item}`)
