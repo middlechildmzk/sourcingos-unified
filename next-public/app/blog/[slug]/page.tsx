@@ -9,8 +9,8 @@ export function generateMetadata({ params }: { params: { slug: string } }){
   description: article.description,
   keywords: [article.keyword, article.category, 'SourcingOS'],
   alternates: { canonical: `/blog/${article.slug}` },
-  openGraph: { title: article.title, description: article.description, type: 'article', url: `/blog/${article.slug}` },
-  twitter: { card: 'summary_large_image', title: article.title, description: article.description }
+  openGraph: { title: article.title, description: article.description, url: `/blog/${article.slug}` },
+  twitter: { title: article.title, description: article.description }
  }
 }
 export default function BlogArticle({ params }: { params: { slug: string } }){ const article = articles.find(a => a.slug === params.slug); if(!article) return notFound(); return <ArticleBody article={article}/> }
