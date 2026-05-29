@@ -7,21 +7,48 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://sourcingos-unified.
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: 'SourcingOS — The sourcing stack for hard-to-fill roles', template: '%s | SourcingOS' },
-  description: 'Source packs, Boolean strings, X-Ray searches, and recruiter-confirmed candidate evidence for hard-to-fill technical, cleared, cyber, healthcare, and AI roles.',
+  title: {
+    default: 'SourcingOS — Find who your search missed.',
+    template: '%s | SourcingOS',
+  },
+  description:
+    'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free sourcing tools for technical, cleared, healthcare, and AI roles.',
   openGraph: {
-    title: 'SourcingOS — The sourcing stack for hard-to-fill roles',
-    description: 'Free sourcing tools and a private Candidate Graph beta for senior sourcers.',
+    title: 'SourcingOS — Find who your search missed.',
+    description:
+      'Free sourcing tools and private Candidate Search beta for senior sourcers.',
     type: 'website',
-    url: siteUrl
+    url: siteUrl,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SourcingOS — The sourcing stack for hard-to-fill roles',
-    description: 'Free sourcing tools and a private Candidate Graph beta for senior sourcers.'
-  }
+    title: 'SourcingOS — Find who your search missed.',
+    description:
+      'Free sourcing tools and private Candidate Search beta for senior sourcers.',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en"><body><PageTracker/><Nav />{children}<footer className="footer">Human-approved sourcing intelligence, not autonomous recruiting. Public evidence, recruiter confirmation, and no silent profile merges.</footer></body></html>
+  return (
+    <html lang="en">
+      <head>
+        {/* DM Sans (body) + Syne (display) — distinctive, technical, professional */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,900;1,9..40,400&family=Syne:wght@700;800;900&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body>
+        <PageTracker />
+        <Nav />
+        {children}
+        <footer className="footer">
+          Human-approved sourcing intelligence. Public evidence, recruiter confirmation, no silent profile merges.{' '}
+          <a href="/privacy">Privacy</a>
+        </footer>
+      </body>
+    </html>
+  )
 }

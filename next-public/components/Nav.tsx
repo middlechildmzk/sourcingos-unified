@@ -1,16 +1,16 @@
 import Link from 'next/link'
+import { publicNav, requestAccessCTA } from '@/data/nav'
 
 export function Nav() {
-  return <header className="nav">
-    <Link className="brand" href="/">SourcingOS</Link>
-    <nav>
-      <Link href="/tools">Free Tools</Link>
-      <Link href="/methods">Sourcing Vault</Link>
-      <Link href="/sources">Candidate Graph</Link>
-      <Link href="/directory">Directory</Link>
-      <Link href="/blog">Guides</Link>
-      <Link href="/jobs">Jobs</Link>
-      <Link href="/waitlist" className="pill">Request access</Link>
-    </nav>
-  </header>
+  return (
+    <header className="nav">
+      <Link className="brand" href="/">SourcingOS</Link>
+      <nav>
+        {publicNav.map(item => (
+          <Link key={item.href} href={item.href}>{item.label}</Link>
+        ))}
+        <Link href={requestAccessCTA.href} className="pill">{requestAccessCTA.label}</Link>
+      </nav>
+    </header>
+  )
 }

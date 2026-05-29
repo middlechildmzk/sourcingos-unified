@@ -1,13 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildCandidateSummary, contactsFromText, evidenceFromText, getCandidateDb, inferOpenToWorkSignals, nowIso, SourceProfileRecord, uid } from '@/lib/candidate-db-v18'
+import {
+  buildCandidateSummary,
+  contactsFromText,
+  evidenceFromText,
+  getCandidateDb,
+  inferOpenToWorkSignals,
+  nowIso,
+  SourceProfileRecord,
+  uid,
+} from '@/lib/candidate-db-v18'
+import { persistCandidateGraphSnapshot } from '@/lib/supabase-candidate-graph'
+import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { getUserIdFromHeader } from '@/lib/supabase/auth'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const text = String(body.text || '')
     const fileName = String(body.fileName || 'pasted-resume.txt')
-    const displayName = String(body.name || text.split('\n').find((line: string) => line.trim().length > 2)?.trim() || 'Resume import')
-    if (text.trim().length < 20) return NextResponse.json({ ok: false, error: 'Resume text is too short to import.' }, { status: 400 })
+    const displayName = String(
+      body.name ||
+      text.split('\n').find((line: string) => line.trim().length > 2)?.trim() ||
+      'Resume import'
+    )
+    if (text.trim().length < 20) {
+      return NextResponse.json({ ok: false, error: 'Resume text is too short to import.' }, { status: 400 })
+    }
 
     const db = getCandidateDb()
     const sourceProfile: SourceProfileRecord = {
@@ -23,7 +41,7 @@ export async function POST(req: NextRequest) {
       matchScore: 0,
       matchReasons: ['Created from recruiter-provided resume text'],
       lastSeenAt: nowIso(),
-      createdAt: nowIso()
+      createdAt: nowIso(),
     }
 
     const evidence = evidenceFromText(text, 'uploaded_resume', sourceProfile.id)
@@ -39,23 +57,53 @@ export async function POST(req: NextRequest) {
       evidenceItemIds: evidence.map(item => item.id),
       contactSignalIds: contacts.map(item => item.id),
       openToWorkSignalIds: openSignals.map(item => item.id),
-      mergeStatus: 'pending' as const
+      mergeStatus: 'pending' as const,
     }
 
     sourceProfile.candidateId = candidate.id
-    evidence.forEach(item => candidate.id && (item.candidateId = candidate.id))
-    contacts.forEach(item => candidate.id && (item.candidateId = candidate.id))
-    openSignals.forEach(item => candidate.id && (item.candidateId = candidate.id))
+    evidence.forEach(item => { if (candidate.id) item.candidateId = candidate.id })
+    contacts.forEach(item => { if (candidate.id) item.candidateId = candidate.id })
+    openSignals.forEach(item => { if (candidate.id) item.candidateId = candidate.id })
 
     db.candidates.unshift(candidate)
     db.sourceProfiles.unshift(sourceProfile)
     db.evidenceItems.unshift(...evidence)
     db.contactSignals.unshift(...contacts)
     db.openToWorkSignals.unshift(...openSignals)
-    db.importBatches.unshift({ id: uid('batch'), importType: 'resume_text', fileName, rowsSeen: 1, recordsCreated: 1, warnings: [], createdAt: nowIso() })
+    db.importBatches.unshift({
+      id: uid('batch'),
+      importType: 'resume_text',
+      fileName,
+      rowsSeen: 1,
+      recordsCreated: 1,
+      warnings: [],
+      createdAt: nowIso(),
+    })
 
-    return NextResponse.json({ ok: true, candidate, sourceProfile, evidence, contacts, openToWorkSignals: openSignals })
+    // ── Async persistence to Supabase when configured ──────────────────────
+    let persistenceMode: 'supabase' | 'preview' = 'preview'
+    if (isSupabaseConfigured()) {
+      const userId = await getUserIdFromHeader(req.headers.get('authorization'))
+      // Fire-and-forget: don't block the response on DB write
+      persistCandidateGraphSnapshot(getCandidateDb(), userId ?? undefined).catch(err => {
+        console.error('[SourcingOS import-resume] Supabase persist error:', err)
+      })
+      persistenceMode = 'supabase'
+    }
+
+    return NextResponse.json({
+      ok: true,
+      persistence_mode: persistenceMode,
+      candidate,
+      sourceProfile,
+      evidence,
+      contacts,
+      openToWorkSignals: openSignals,
+    })
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Import failed' }, { status: 500 })
+    return NextResponse.json(
+      { ok: false, error: error instanceof Error ? error.message : 'Import failed' },
+      { status: 500 }
+    )
   }
 }

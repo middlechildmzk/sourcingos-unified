@@ -1,0 +1,10 @@
+
+# SourcingOS build/dependency artifacts
+next-public/.next/
+next-public/node_modules/
+next-public/tsconfig.tsbuildinfo
+
+# local secrets
+.env
+.env.local
+.env.*.local
