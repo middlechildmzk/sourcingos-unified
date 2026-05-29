@@ -4,14 +4,12 @@ export function Nav() {
   return <header className="nav">
     <Link className="brand" href="/">SourcingOS</Link>
     <nav>
-      <Link href="/tools">Tools</Link>
-      <Link href="/sources">Sources</Link>
-      <Link href="/methods">Methods</Link>
+      <Link href="/tools">Free Tools</Link>
+      <Link href="/methods">Sourcing Vault</Link>
+      <Link href="/sources">Candidate Graph</Link>
       <Link href="/directory">Directory</Link>
       <Link href="/blog">Guides</Link>
-      <Link href="/jobs">Jobs</Link>
-      <Link href="/comparisons">Comparisons</Link>
-      <Link href="/waitlist" className="pill">Join beta</Link>
+      <Link href="/waitlist" className="pill">Request access</Link>
     </nav>
   </header>
 }
