@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { JobCard } from '@/components/JobCard'
-import { getCategoryBySlug, jobCategories, jobsForCategory } from '@/data/jobs'
+import { LiveJobsClient } from '@/components/LiveJobsClient'
+import { getCategoryBySlug, jobCategories } from '@/data/jobs'
 
 export function generateStaticParams() {
   return jobCategories.map(category => ({ category: category.slug }))
@@ -14,9 +14,19 @@ export function generateMetadata({ params }: { params: { category: string } }) {
   }
 }
 
+function queryForCategory(slug: string) {
+  if (slug.includes('technical')) return 'technical sourcer technical recruiter'
+  if (slug.includes('healthcare')) return 'healthcare recruiter nurse recruiter'
+  if (slug.includes('cleared')) return 'federal recruiter cleared recruiter GovCon recruiter'
+  if (slug.includes('operations')) return 'recruiting operations talent acquisition operations'
+  if (slug.includes('ai')) return 'AI recruiter technical sourcer machine learning'
+  if (slug.includes('contract')) return 'contract recruiter fractional recruiter'
+  if (slug.includes('sourcer')) return 'talent sourcer remote'
+  return 'remote recruiter talent acquisition'
+}
+
 export default function JobCategoryPage({ params }: { params: { category: string } }) {
   const category = getCategoryBySlug(params.category)
-  const categoryJobs = jobsForCategory(params.category)
 
   if (!category) {
     return <main className="wrap"><h1>Job category not found.</h1><Link className="btn" href="/jobs">Back to jobs</Link></main>
@@ -35,10 +45,8 @@ export default function JobCategoryPage({ params }: { params: { category: string
         </div>
       </section>
       <section className="wrap">
-        <h2>Open roles</h2>
-        <div className="job-list">
-          {categoryJobs.length ? categoryJobs.map(job => <JobCard job={job} key={job.slug} />) : <div className="card"><h3>No active seed roles yet.</h3><p className="muted">This category is ready for curated listings and employer submissions.</p></div>}
-        </div>
+        <h2>Live public-source search</h2>
+        <LiveJobsClient initialQuery={queryForCategory(params.category)} />
       </section>
       <section className="wrap">
         <div className="card">
