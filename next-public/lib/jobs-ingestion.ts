@@ -27,8 +27,53 @@ export type AtsTarget = {
   tags?: string[]
 }
 
-const recruitingTerms = [
-  'recruiter','sourcer','talent acquisition','talent partner','recruiting operations','recruiting ops','people ops','hr operations','technical recruiter','technical sourcer','healthcare recruiter','nurse recruiter','university recruiter','executive recruiter'
+const recruiterTitlePatterns = [
+  'recruiter',
+  'sourcer',
+  'talent acquisition',
+  'talent partner',
+  'recruiting coordinator',
+  'recruiting operations',
+  'recruiting ops',
+  'talent operations',
+  'people operations',
+  'people ops',
+  'hr operations',
+  'technical recruiting',
+  'technical sourc',
+  'technical recruiter',
+  'healthcare recruiter',
+  'nurse recruiter',
+  'provider recruiter',
+  'physician recruiter',
+  'university recruiter',
+  'campus recruiter',
+  'executive recruiter',
+  'recruitment consultant',
+  'talent sourc'
+]
+
+const falsePositiveTitlePatterns = [
+  'sales recruiter enablement',
+  'recruiting software engineer',
+  'recruiting platform engineer',
+  'growth',
+  'account executive',
+  'customer success',
+  'product manager',
+  'software engineer',
+  'backend engineer',
+  'frontend engineer',
+  'data engineer',
+  'machine learning engineer',
+  'devops engineer',
+  'solutions engineer',
+  'sales engineer',
+  'security engineer',
+  'designer',
+  'marketing manager',
+  'finance',
+  'legal counsel'
 ]
 
 export function cleanText(value: unknown, max = 500) {
@@ -36,15 +81,17 @@ export function cleanText(value: unknown, max = 500) {
 }
 
 export function isRecruitingRole(title = '', description = '') {
-  const haystack = `${title} ${description}`.toLowerCase()
-  return recruitingTerms.some(term => haystack.includes(term))
+  const normalizedTitle = cleanText(title, 180).toLowerCase()
+  if (!normalizedTitle) return false
+  if (falsePositiveTitlePatterns.some(pattern => normalizedTitle.includes(pattern))) return false
+  return recruiterTitlePatterns.some(pattern => normalizedTitle.includes(pattern))
 }
 
 export function inferCategory(title = '', description = '') {
   const text = `${title} ${description}`.toLowerCase()
-  if (text.includes('sourcer')) return 'sourcer'
+  if (text.includes('sourcer') || text.includes('sourcing')) return 'sourcer'
   if (text.includes('recruiting operations') || text.includes('talent operations') || text.includes('recruiting ops')) return 'recruiting-ops'
-  if (text.includes('healthcare') || text.includes('nurse') || text.includes('clinical')) return 'healthcare-recruiter'
+  if (text.includes('healthcare') || text.includes('nurse') || text.includes('provider') || text.includes('physician') || text.includes('clinical')) return 'healthcare-recruiter'
   if (text.includes('federal') || text.includes('govcon') || text.includes('cleared') || text.includes('clearance')) return 'govcon-recruiter'
   if (text.includes('technical') || text.includes('engineering') || text.includes('ai') || text.includes('machine learning')) return 'technical-sourcer'
   return 'recruiter'
@@ -63,7 +110,7 @@ export function dedupeJobs(jobs: NormalizedJob[]) {
     const key = `${job.title}-${job.company}-${job.applyUrl}`.toLowerCase()
     if (seen.has(key)) return false
     seen.add(key)
-    return Boolean(job.title && job.company && job.applyUrl)
+    return Boolean(job.title && job.company && job.applyUrl && isRecruitingRole(job.title, job.description))
   })
 }
 
