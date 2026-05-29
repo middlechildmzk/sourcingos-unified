@@ -1,0 +1,3 @@
+import { WaitlistForm } from '@/components/WaitlistForm'
+export const metadata = { title: 'Private Beta Waitlist', description: 'Request private access to SourcingOS Core and the Evidence Matrix beta cockpit.' }
+export default function Page(){return <main className="wrap"><span className="kicker">Private Beta</span><h1>Join the first SourcingOS beta cohort.</h1><p className="lead">Get private access to the evidence cockpit: Candidate 360, source linking, Evidence Matrix, AI synthesis, HM pitch drafts, project memory, and rediscovery.</p><WaitlistForm /><div className="cta"><strong>Beta promise:</strong> human-approved sourcing intelligence. No auto-send. No auto-merge. No clearance verification claims from public breadcrumbs.</div></main>}
