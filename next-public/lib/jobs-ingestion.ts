@@ -25,6 +25,9 @@ export type AtsTarget = {
   ats: 'greenhouse' | 'lever' | 'ashby'
   token: string
   tags?: string[]
+  categories?: string[]
+  relevance?: 'High' | 'Medium' | 'Low'
+  status?: 'untested' | 'valid' | 'invalid' | 'empty' | 'rate_limited' | 'needs_review'
 }
 
 const recruiterTitlePatterns = [
