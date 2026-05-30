@@ -147,3 +147,91 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .app-session-link:hover{color:var(--text)}
 .app-session-user{display:flex;align-items:center;gap:6px;flex-shrink:0}
 @media(max-width:600px){.app-session-links{display:none}}
+
+/* ─── Sprint 1.7: Search Composer ─────────────────────────────────────────── */
+.composer{background:linear-gradient(180deg,rgba(16,36,61,.6),rgba(7,18,34,.6));border:1px solid var(--line);border-radius:22px;padding:22px;margin-top:12px}
+.composer-samples{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px}
+.composer-samples-label{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-right:4px}
+.composer-sample-btn{background:rgba(72,217,255,.06);border:1px solid rgba(72,217,255,.2);border-radius:999px;padding:4px 12px;font-size:12px;color:var(--muted);cursor:pointer;transition:border-color .15s,color .15s}
+.composer-sample-btn:hover{border-color:rgba(72,217,255,.5);color:var(--text)}
+.composer-input-row{display:flex;gap:10px;align-items:stretch}
+.composer-input{flex:1;padding:14px 18px;border-radius:14px;border:1px solid rgba(72,217,255,.3);background:rgba(2,16,30,.8);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;transition:border-color .15s}
+.composer-input:focus{outline:none;border-color:rgba(72,217,255,.7)}
+.composer-location{width:180px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:#07182b;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px}
+.composer-location:focus{outline:none;border-color:rgba(72,217,255,.4)}
+.composer-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.composer-chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;border:1px solid;cursor:default;transition:opacity .15s}
+.composer-chip.chip-locked{opacity:1;box-shadow:0 0 0 2px rgba(72,217,255,.3)}
+.chip-type-label{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;opacity:.7}
+.chip-value{cursor:pointer}
+.chip-lock-icon{font-size:10px;opacity:.8}
+.chip-remove{background:none;border:none;cursor:pointer;font-size:14px;line-height:1;padding:0;margin-left:2px;opacity:.6;transition:opacity .15s}
+.chip-remove:hover{opacity:1}
+/* Chip type colors */
+.chip-title{background:rgba(72,217,255,.1);color:#a8e6f7;border-color:rgba(72,217,255,.3)}
+.chip-skill,.chip-tool{background:rgba(93,242,163,.1);color:#8ef5c4;border-color:rgba(93,242,163,.3)}
+.chip-cert{background:rgba(138,124,255,.1);color:#b8a8ff;border-color:rgba(138,124,255,.3)}
+.chip-clearance{background:rgba(246,100,100,.1);color:#f88;border-color:rgba(246,100,100,.3)}
+.chip-location{background:rgba(246,201,107,.1);color:#f6c96b;border-color:rgba(246,201,107,.3)}
+.chip-industry{background:rgba(72,185,255,.1);color:#90d0f5;border-color:rgba(72,185,255,.3)}
+.chip-company{background:rgba(200,150,100,.1);color:#c8a06e;border-color:rgba(200,150,100,.3)}
+.chip-seniority{background:rgba(180,180,255,.1);color:#c0c0f8;border-color:rgba(180,180,255,.3)}
+.chip-signal{background:rgba(100,200,100,.1);color:#8edf8e;border-color:rgba(100,200,100,.3)}
+/* Suggestions */
+.composer-suggestions{margin-top:16px}
+.composer-section-label{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.composer-suggestion-groups{display:flex;flex-direction:column;gap:10px}
+.suggestion-group{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+.suggestion-group-label{font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;margin-top:3px}
+.suggestion-tags{display:flex;flex-wrap:wrap;gap:6px}
+.suggestion-tag{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s}
+.suggestion-tag:hover{border-color:rgba(72,217,255,.5);color:var(--text);background:rgba(72,217,255,.07)}
+/* Action bar */
+.composer-action-bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.composer-toggle-btn{background:none;border:1px solid var(--line);border-radius:10px;padding:7px 14px;font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;color:var(--muted);cursor:pointer;transition:all .15s}
+.composer-toggle-btn:hover{border-color:rgba(72,217,255,.4);color:var(--text)}
+/* Generated outputs */
+.composer-outputs{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+.output-row{background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:start}
+.output-label{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding-top:2px}
+.output-value{font-size:12px;color:var(--text);word-break:break-all;font-family:'JetBrains Mono',ui-monospace,monospace;line-height:1.6}
+.output-actions{display:flex;gap:6px;flex-shrink:0}
+.output-btn{background:rgba(72,217,255,.08);border:1px solid rgba(72,217,255,.25);border-radius:8px;padding:5px 12px;font-size:11px;font-weight:800;color:var(--accent);cursor:pointer;text-decoration:none;transition:all .15s;display:inline-block}
+.output-btn:hover{background:rgba(72,217,255,.15)}
+.output-btn:disabled{opacity:.3;cursor:not-allowed}
+.output-warnings{margin-top:8px;padding:12px 14px;background:rgba(246,201,107,.05);border:1px solid rgba(246,201,107,.2);border-radius:12px}
+/* Improvements panel */
+.composer-improvements{margin-top:14px;background:rgba(7,18,34,.6);border:1px solid var(--line);border-radius:16px;padding:18px;display:grid;gap:16px}
+.improvement-section{}
+/* Source lanes */
+.composer-lanes{margin-top:16px}
+.lanes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-top:8px}
+.lane-card{background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:14px;padding:12px 14px;transition:border-color .15s}
+.lane-recommended{border-color:rgba(72,217,255,.3)}
+.lane-card:hover{border-color:rgba(72,217,255,.4)}
+.lane-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.lane-name{font-size:13px;font-weight:700;color:var(--text)}
+.lane-desc{font-size:11px;color:var(--muted);line-height:1.5;margin:0}
+/* Sprint 2: Workbench results */
+.wb-results{margin-top:24px}
+.wb-results-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.result-cards{display:flex;flex-direction:column;gap:14px}
+.result-card{background:rgba(7,18,34,.8);border:1px solid var(--line);border-radius:16px;padding:18px}
+.result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.result-identity{display:flex;align-items:flex-start;gap:12px}
+.result-source-badge{display:inline-block;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;border:1px solid;flex-shrink:0;margin-top:2px}
+.result-name{font-size:16px;font-weight:700;margin-bottom:3px}
+.result-headline{font-size:13px;color:var(--muted)}
+.result-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}
+.result-meta{font-size:12px;color:var(--muted);margin-bottom:8px}
+.result-skills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.result-evidence{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.result-evidence-item{display:flex;align-items:center;gap:8px;font-size:12px}
+.result-contacts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.result-contact-value{font-size:12px;color:var(--muted)}
+/* Project bar */
+.project-bar{background:rgba(6,17,31,.5);border-bottom:1px solid var(--line);padding:10px 28px;display:flex;align-items:center;gap:14px}
+.project-bar-label{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.project-bar-name{font-size:13px;font-weight:700;color:var(--text)}
+.project-bar-mode{font-size:11px;color:var(--muted)}
+@media(max-width:640px){.output-row{grid-template-columns:1fr;gap:6px}.composer-location{display:none}}

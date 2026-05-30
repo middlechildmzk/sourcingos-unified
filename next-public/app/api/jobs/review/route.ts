@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getJobSubmissions, updateJobSubmissionStatus } from '@/lib/job-board-db'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
-import { requireAdmin } from '@/lib/supabase/auth'
+import { requireAdminCookie } from '@/lib/supabase/route-session'
 
 export async function GET(req: NextRequest) {
-  // ── Admin check ────────────────────────────────────────────────────────────
-  const authError = await requireAdmin(req.headers.get('authorization'))
+  // ── Admin check via cookies (fixes 401 for logged-in admins) ──────────────
+  const authError = await requireAdminCookie()
   if (authError) {
     return NextResponse.json(authError, { status: authError.status })
   }
@@ -49,8 +49,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // ── Admin check ────────────────────────────────────────────────────────────
-  const authError = await requireAdmin(req.headers.get('authorization'))
+  // ── Admin check via cookies ────────────────────────────────────────────────
+  const authError = await requireAdminCookie()
   if (authError) {
     return NextResponse.json(authError, { status: authError.status })
   }
