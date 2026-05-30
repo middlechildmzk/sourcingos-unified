@@ -25,7 +25,7 @@ function isAlwaysPublic(pathname: string): boolean {
 }
 
 // Paths that require auth when Supabase is configured
-const PROTECTED_PREFIXES = ['/app', '/jobs/admin']
+const PROTECTED_PREFIXES = ['/app', '/jobs/admin', '/admin']
 
 function isProtectedPath(pathname: string): boolean {
   const clean = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname

@@ -1,5 +1,6 @@
 import { LoginForm } from '@/components/LoginForm'
 import { getSession } from '@/lib/supabase/session'
+import { safeRelativePath } from '@/lib/safe-redirect'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Metadata } from 'next'
@@ -18,11 +19,12 @@ export default async function LoginPage({ searchParams }: Props) {
   // Already authenticated? Redirect to the app
   const session = await getSession()
   if (session.authenticated) {
-    const destination = searchParams.from?.startsWith('/') ? searchParams.from : '/app/candidate-search'
+    const destination = safeRelativePath(searchParams.from)
     redirect(destination)
   }
 
-  const from = searchParams.from?.startsWith('/') ? searchParams.from : undefined
+  // Sanitise the from param before displaying it in UI or passing to LoginForm
+  const from = safeRelativePath(searchParams.from, '') || undefined
 
   return (
     <main className="wrap" style={{ maxWidth: '480px', paddingTop: '80px' }}>

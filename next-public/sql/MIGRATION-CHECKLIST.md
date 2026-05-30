@@ -44,6 +44,19 @@ Expected: All tables created. The trigger `on_auth_user_created` is created on `
 ```
 Expected: RLS enabled on all 15 tables. Policies created for each.
 
+### Step 2.5 — Disable email signups (invite-only enforcement)
+In Supabase Dashboard → **Authentication → Providers → Email**:
+- **Disable "Enable email signups"**
+- Keep **"Enable email magic links"** enabled
+- Add the production `/auth/callback` URL to **Redirect URLs** (e.g. `https://your-domain.com/auth/callback`)
+- Add `http://localhost:3000/auth/callback` for local development
+
+This ensures beta access is invite-only at the Supabase auth layer.
+Without this step, `shouldCreateUser: false` in the client is not reliably enforced —
+Supabase behavior varies by client version and project settings.
+
+Grant beta access by inviting users: **Authentication → Users → Invite user**.
+
 ### Step 3 — Verify RLS
 In the Supabase dashboard → Authentication → Policies, confirm:
 - Every table shows `enabled = true` for RLS

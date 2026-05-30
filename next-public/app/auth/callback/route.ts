@@ -16,6 +16,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { safeRelativePath } from '@/lib/safe-redirect'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // Session set — redirect to intended destination (sanitise to prevent open redirects)
-  const destination = next.startsWith('/') ? next : '/app/candidate-search'
+  // Session set — sanitise destination to prevent open redirect
+  const destination = safeRelativePath(next)
   return NextResponse.redirect(new URL(destination, origin))
 }

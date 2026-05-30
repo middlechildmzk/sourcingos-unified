@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { CandidateGraphProfile, identityMatchScore } from '@/lib/candidate-graph'
 import { allSourceNames, SourceResult, sourceGroups, sourceLabels, SourceName } from '@/lib/source-types'
 
@@ -24,7 +25,9 @@ const presets = [
 ]
 
 export function SourceSearchClient() {
-  const [query, setQuery] = useState('DevSecOps Kubernetes Terraform AWS GovCloud')
+  const searchParams = useSearchParams()
+  const initialQuery = searchParams.get('q') || 'DevSecOps Kubernetes Terraform AWS GovCloud'
+  const [query, setQuery] = useState(initialQuery)
   const [location, setLocation] = useState('Virginia')
   const [sources, setSources] = useState<SourceName[]>(['github','stackoverflow','openalex'])
   const [loading, setLoading] = useState(false)

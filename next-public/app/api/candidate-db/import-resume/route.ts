@@ -80,20 +80,34 @@ export async function POST(req: NextRequest) {
       createdAt: nowIso(),
     })
 
-    // ── Async persistence to Supabase when configured ──────────────────────
+    // ── Persistence to Supabase when configured ───────────────────────────────
+    // Awaited so we can return an accurate persistence_mode — no false positives.
     let persistenceMode: 'supabase' | 'preview' = 'preview'
+    let persistDetail: string | undefined
+
     if (isSupabaseConfigured()) {
       const userId = await getUserIdFromHeader(req.headers.get('authorization'))
-      // Fire-and-forget: don't block the response on DB write
-      persistCandidateGraphSnapshot(getCandidateDb(), userId ?? undefined).catch(err => {
-        console.error('[SourcingOS import-resume] Supabase persist error:', err)
-      })
-      persistenceMode = 'supabase'
+      try {
+        const persistResult = await persistCandidateGraphSnapshot(
+          getCandidateDb(),
+          userId ?? undefined
+        )
+        persistenceMode = persistResult.ok ? 'supabase' : 'preview'
+        persistDetail = persistResult.message
+        if (!persistResult.ok) {
+          console.error('[SourcingOS import-resume] Persist failed:', persistResult.message)
+        }
+      } catch (err) {
+        console.error('[SourcingOS import-resume] Persist error:', err)
+        persistenceMode = 'preview'
+        persistDetail = 'Persist threw an exception — falling back to preview mode.'
+      }
     }
 
     return NextResponse.json({
       ok: true,
       persistence_mode: persistenceMode,
+      ...(persistDetail ? { persistence_detail: persistDetail } : {}),
       candidate,
       sourceProfile,
       evidence,

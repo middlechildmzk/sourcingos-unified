@@ -1,5 +1,6 @@
 import { SourceSearchClient } from '@/components/SourceSearchClient'
 import Link from 'next/link'
+import { Suspense } from 'react'
 
 export const metadata = {
   title: 'Candidate Search — Connected Source Search | SourcingOS',
@@ -44,7 +45,13 @@ export default function SourcesPage() {
         <Link href="/app/candidate-search" style={{ color: 'var(--accent)' }}>Open Candidate Search workbench →</Link>
       </p>
 
-      <SourceSearchClient />
+      <Suspense fallback={
+        <div className="cta" style={{ textAlign: 'center', padding: '40px 0' }}>
+          Loading source search…
+        </div>
+      }>
+        <SourceSearchClient />
+      </Suspense>
     </main>
   )
 }

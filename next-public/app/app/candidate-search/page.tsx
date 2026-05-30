@@ -11,19 +11,6 @@ export const metadata = {
 export default function CandidateSearchPage() {
   return (
     <main className="wrap">
-
-      {/* Preview / persistence banner */}
-      <div className="preview-banner">
-        <span className="pb-icon">◈</span>
-        <span>
-          <strong>Preview mode:</strong> The Candidate Search workbench is in private beta.
-          Data entered here is not persisted between sessions until Supabase persistence and auth are enabled.
-          <Link href="/waitlist" style={{ color: 'var(--amber)', textDecoration: 'underline', marginLeft: '6px' }}>
-            Request full beta access →
-          </Link>
-        </span>
-      </div>
-
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
       <h1>Candidate Search</h1>
       <p className="lead">
@@ -31,8 +18,9 @@ export default function CandidateSearchPage() {
         recruiter-controlled workflow. Powered by Candidate Graph under the hood.
       </p>
 
+      {/* Compliance guardrails — factual, not a preview warning */}
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--muted)' }}>
+        <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
           No auto-merge at any confidence level ·
           Contact signals are unverified by default ·
           Open-to-work is a signal, not a verified claim ·
@@ -59,7 +47,6 @@ export default function CandidateSearchPage() {
           </Link>
         </div>
       </div>
-
     </main>
   )
 }

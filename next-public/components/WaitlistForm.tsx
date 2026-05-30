@@ -6,7 +6,7 @@ export function WaitlistForm(){
  const [email,setEmail]=useState(''); const [role,setRole]=useState('Technical sourcer'); const [focus,setFocus]=useState('Cleared / GovCon'); const [status,setStatus]=useState('')
  async function submit(e:React.FormEvent){
   e.preventDefault();
-  const payload={email,role,focus,time:new Date().toISOString()};
+  const payload={email,role,focus,source_page:typeof window!=='undefined'?window.location.pathname:undefined};
   const local=JSON.parse(localStorage.getItem('sourcingos.public.waitlist')||'[]');
   localStorage.setItem('sourcingos.public.waitlist',JSON.stringify([payload,...local]));
   trackClientEvent('waitlist_submit',focus,{role});

@@ -133,7 +133,12 @@ export type CandidateDbSnapshot = {
 }
 
 export function nowIso() { return new Date().toISOString() }
-export function uid(prefix: string) { return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}` }
+export function uid(_prefix: string): string {
+  // crypto.randomUUID() is globally available in Node 18+ / Next.js 14.
+  // All V19 Supabase tables use `id uuid primary key` — non-UUID strings like
+  // "sp_1748455200_abc" fail with: invalid input syntax for type uuid.
+  return crypto.randomUUID()
+}
 
 const globalForCandidateDb = globalThis as unknown as { __sourcingosCandidateDb?: CandidateDbSnapshot }
 
