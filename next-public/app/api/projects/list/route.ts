@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 
+// Must be dynamic — reads cookies/session on every request
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const session = await getRouteSession()
 
