@@ -9,10 +9,13 @@ import { persistCandidateGraphSnapshot } from '@/lib/supabase-candidate-graph'
 // Save a source profile (from workbench search results) to the Candidate Graph.
 //
 // Guardrails:
-//   - Contact signals always stored as verified=false
-//   - open_to_work_signals always stored with requires_review=true
-//   - No auto-merge — candidate stays in pending state
-//   - Fit score is null — project_candidates row created with stage=sourced
+//   - Contact signals always stored as verified=false (enforced at DB level too)
+//   - No auto-merge — candidate stays in pending state until recruiter confirms
+//   - Fit score is null — project_candidates row created with stage=sourced only
+//
+// NOTE: open_to_work_signals are NOT persisted here because SourceResult does
+// not include OTW signals. OTW signals are added during candidate normalization
+// from profile/resume content analysis, not raw source connector results.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {

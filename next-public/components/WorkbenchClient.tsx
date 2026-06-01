@@ -1,8 +1,8 @@
 'use client'
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
-import { SearchComposer, type ComposerOutput, type RecognizedChip } from '@/components/SearchComposer'
-import { WorkbenchResults } from '@/components/WorkbenchResults'
+import { SearchComposer, type ComposerOutput } from '@/components/SearchComposer'
+import { WorkbenchResults, type SavedEntry } from '@/components/WorkbenchResults'
 import type { SourceResult } from '@/lib/source-types'
 
 type Tab = 'intake' | 'strategy' | 'discovery' | 'saved'
@@ -53,7 +53,7 @@ export function WorkbenchClient() {
   const [searchResults, setSearchResults] = useState<SourceResult[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
-  const [savedCandidateIds, setSavedCandidateIds] = useState<string[]>([])
+  const [savedEntries, setSavedEntries] = useState<SavedEntry[]>([])
 
   const setField = (field: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setIntake(prev => ({ ...prev, [field]: e.target.value }))
@@ -307,7 +307,7 @@ export function WorkbenchClient() {
                 <WorkbenchResults
                   results={searchResults}
                   projectId={currentProject?.id}
-                  onProfileSaved={id => setSavedCandidateIds(prev => [...prev, id])}
+                  onProfileSaved={entry => setSavedEntries(prev => [...prev, entry])}
                 />
               )}
             </div>
@@ -316,7 +316,7 @@ export function WorkbenchClient() {
           {/* ── 04 Saved ────────────────────────────────────────────────────── */}
           {tab === 'saved' && (
             <div className="wb-section">
-              {savedCandidateIds.length === 0 ? (
+              {savedEntries.length === 0 ? (
                 <div className="wb-empty">
                   <h3>No saved candidates yet</h3>
                   <p>Run a search in the Discovery tab, review source profiles, and save them to the Candidate Graph.</p>
@@ -326,26 +326,54 @@ export function WorkbenchClient() {
                   </div>
                 </div>
               ) : (
-                <div className="wb-section">
-                  <div className="wb-section-title">Saved this session — {savedCandidateIds.length} source profile{savedCandidateIds.length !== 1 ? 's' : ''}</div>
-                  <div className="preview-banner">
-                    <span className="pb-icon">◈</span>
-                    <span>Saved source profiles are pending recruiter review. Open Candidate 360 to confirm identity, review evidence, and run merge review.</span>
+                <>
+                  <div className="wb-section-title">
+                    Saved this session — {savedEntries.length} source profile{savedEntries.length !== 1 ? 's' : ''}
                   </div>
-                  <div style={{ display: 'flex', flex: 'column', gap: '10px', marginTop: '14px' }}>
-                    {savedCandidateIds.map(id => (
-                      <div key={id} className="result-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="muted" style={{ fontSize: '13px', fontFamily: 'monospace' }}>{id}</span>
-                        <a className="btn secondary" href={`/app/candidate/${id}`} style={{ fontSize: '12px', padding: '6px 14px' }}>
-                          View Candidate 360 →
+                  <div className="preview-banner" style={{ marginBottom: '16px' }}>
+                    <span className="pb-icon">◈</span>
+                    <span>
+                      Saved source profiles are pending recruiter review. Open Candidate 360 to confirm
+                      identity, review evidence, and run merge review.
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+                    {savedEntries.map(entry => (
+                      <div
+                        key={entry.id}
+                        className="result-card"
+                        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <span
+                            className="result-source-badge"
+                            style={{ flexShrink: 0, fontSize: '10px', padding: '2px 7px' }}
+                          >
+                            {entry.source}
+                          </span>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="result-name" style={{ fontSize: '15px' }}>{entry.displayName}</div>
+                            <div className="muted" style={{ fontSize: '11px', fontFamily: 'monospace', marginTop: '2px', opacity: .5 }}>
+                              {entry.id}
+                            </div>
+                          </div>
+                        </div>
+                        <a
+                          className="btn secondary"
+                          href={`/app/candidate/${entry.id}`}
+                          style={{ fontSize: '12px', padding: '6px 14px', flexShrink: 0 }}
+                        >
+                          View 360 →
                         </a>
                       </div>
                     ))}
                   </div>
                   <div style={{ marginTop: '16px' }}>
-                    <Link className="btn secondary" href="/app/candidate-database">View full Candidate Database →</Link>
+                    <Link className="btn secondary" href="/app/candidate-database">
+                      View full Candidate Database →
+                    </Link>
                   </div>
-                </div>
+                </>
               )}
             </div>
           )}
