@@ -55,6 +55,16 @@ function buildCommonIdentity(source: SourceName, name: string, location = '', or
   ]
 }
 
+
+// Gate demo/fallback results behind an explicit env flag.
+// In production, return [] when no real results are found instead of fake profiles.
+const DEMO_RESULTS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_DEMO_SOURCE_RESULTS === 'true'
+
+function maybeDemo(source: SourceName, query: string, suffix: string): SourceResult[] {
+  if (!DEMO_RESULTS_ENABLED) return []
+  return [demoResult(source, query, suffix)]
+}
+
 export async function searchGitHub(req: SourceSearchRequest): Promise<SourceResult[]> {
   const q = encodeURIComponent(`${req.query} ${req.location || ''}`.trim())
   try {
@@ -97,9 +107,9 @@ export async function searchGitHub(req: SourceSearchRequest): Promise<SourceResu
         raw: detail || u
       })
     }
-    return out.length ? out : [demoResult('github', req.query, 'GitHub')]
+    return out.length ? out : maybeDemo('github', req.query, 'GitHub')
   } catch {
-    return [demoResult('github', req.query, 'GitHub')]
+    return maybeDemo('github', req.query, 'GitHub')
   }
 }
 
@@ -136,9 +146,9 @@ export async function searchStackOverflow(req: SourceSearchRequest): Promise<Sou
         raw: u
       }
     })
-    return out.length ? out : [demoResult('stackoverflow', req.query, 'StackOverflow')]
+    return out.length ? out : maybeDemo('stackoverflow', req.query, 'StackOverflow')
   } catch {
-    return [demoResult('stackoverflow', req.query, 'StackOverflow')]
+    return maybeDemo('stackoverflow', req.query, 'StackOverflow')
   }
 }
 
@@ -175,9 +185,9 @@ export async function searchOpenAlex(req: SourceSearchRequest): Promise<SourceRe
         raw: a
       }
     })
-    return out.length ? out : [demoResult('openalex', req.query, 'OpenAlex')]
+    return out.length ? out : maybeDemo('openalex', req.query, 'OpenAlex')
   } catch {
-    return [demoResult('openalex', req.query, 'OpenAlex')]
+    return maybeDemo('openalex', req.query, 'OpenAlex')
   }
 }
 
@@ -223,9 +233,9 @@ export async function searchNpi(req: SourceSearchRequest): Promise<SourceResult[
         raw: r
       }
     })
-    return out.length ? out : [demoResult('npi', req.query, 'NPI')]
+    return out.length ? out : maybeDemo('npi', req.query, 'NPI')
   } catch {
-    return [demoResult('npi', req.query, 'NPI')]
+    return maybeDemo('npi', req.query, 'NPI')
   }
 }
 
@@ -254,9 +264,9 @@ export async function searchOrcid(req: SourceSearchRequest): Promise<SourceResul
         raw: row
       }
     })
-    return out.length ? out : [demoResult('orcid', req.query, 'ORCID')]
+    return out.length ? out : maybeDemo('orcid', req.query, 'ORCID')
   } catch {
-    return [demoResult('orcid', req.query, 'ORCID')]
+    return maybeDemo('orcid', req.query, 'ORCID')
   }
 }
 
@@ -289,9 +299,9 @@ export async function searchSemanticScholar(req: SourceSearchRequest): Promise<S
         raw: a
       }
     })
-    return out.length ? out : [demoResult('semantic_scholar', req.query, 'SemanticScholar')]
+    return out.length ? out : maybeDemo('semantic_scholar', req.query, 'SemanticScholar')
   } catch {
-    return [demoResult('semantic_scholar', req.query, 'SemanticScholar')]
+    return maybeDemo('semantic_scholar', req.query, 'SemanticScholar')
   }
 }
 
@@ -324,9 +334,9 @@ export async function searchArxiv(req: SourceSearchRequest): Promise<SourceResul
         raw: { title, url }
       }
     })
-    return out.length ? out : [demoResult('arxiv', req.query, 'arXiv')]
+    return out.length ? out : maybeDemo('arxiv', req.query, 'arXiv')
   } catch {
-    return [demoResult('arxiv', req.query, 'arXiv')]
+    return maybeDemo('arxiv', req.query, 'arXiv')
   }
 }
 
@@ -335,7 +345,7 @@ export async function searchPubMed(req: SourceSearchRequest): Promise<SourceResu
   try {
     const data = await safeJson(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${q}&retmode=json&retmax=${Math.min(req.limit || 6, 8)}`)
     const ids: string[] = data?.esearchresult?.idlist || []
-    if (!ids.length) return [demoResult('pubmed', req.query, 'PubMed')]
+    if (!ids.length) return maybeDemo('pubmed', req.query, 'PubMed')
     const summaries = await safeJson(`https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${ids.join(',')}&retmode=json`)
     return ids.map((id): SourceResult => {
       const row = summaries?.result?.[id] || {}
@@ -359,7 +369,7 @@ export async function searchPubMed(req: SourceSearchRequest): Promise<SourceResu
       }
     })
   } catch {
-    return [demoResult('pubmed', req.query, 'PubMed')]
+    return maybeDemo('pubmed', req.query, 'PubMed')
   }
 }
 
@@ -391,9 +401,9 @@ export async function searchHuggingFace(req: SourceSearchRequest): Promise<Sourc
         raw: m
       }
     })
-    return out.length ? out : [demoResult('huggingface', req.query, 'HuggingFace')]
+    return out.length ? out : maybeDemo('huggingface', req.query, 'HuggingFace')
   } catch {
-    return [demoResult('huggingface', req.query, 'HuggingFace')]
+    return maybeDemo('huggingface', req.query, 'HuggingFace')
   }
 }
 
@@ -429,9 +439,9 @@ export async function searchNpm(req: SourceSearchRequest): Promise<SourceResult[
         raw: o
       }
     })
-    return out.length ? out : [demoResult('npm', req.query, 'npm')]
+    return out.length ? out : maybeDemo('npm', req.query, 'npm')
   } catch {
-    return [demoResult('npm', req.query, 'npm')]
+    return maybeDemo('npm', req.query, 'npm')
   }
 }
 
@@ -467,7 +477,7 @@ export async function searchPyPi(req: SourceSearchRequest): Promise<SourceResult
       // Package-name search is intentionally conservative. Use demo fallback below if no packages resolve.
     }
   }
-  return out.length ? out : [demoResult('pypi', req.query, 'PyPI')]
+  return out.length ? out : maybeDemo('pypi', req.query, 'PyPI')
 }
 
 
@@ -477,16 +487,16 @@ export async function searchKaggle(req: SourceSearchRequest): Promise<SourceResu
   return [{ id: idFor('kaggle', `search-${normId(req.query)}`), source: 'kaggle', sourceProfileId: `search:${req.query}`, displayName: `Kaggle search: ${req.query}`, headline: 'Manual-safe Kaggle discovery lane for data science and ML profiles, notebooks, datasets, and competitions.', profileUrl: queryUrl, skills, evidence: [evidence('kaggle', 'Kaggle discovery lane', `Open Kaggle search for ${req.query}. Use results as evidence breadcrumbs, not verified candidate records.`, 'low', queryUrl)], contactSignals: [{ type: 'profile_url', value: queryUrl, source: 'kaggle', verified: false, note: 'Manual-safe public Kaggle search URL.' }], identitySignals: skills.slice(0, 5).map(s => ({ type: 'skill' as const, value: s, weight: 3, source: 'kaggle' as const })), refreshedAt: now(), raw: { mode: 'manual_safe_search', queryUrl } }]
 }
 export async function searchDevTo(req: SourceSearchRequest): Promise<SourceResult[]> {
-  try { const data = await safeJson(`https://dev.to/api/articles?tag=${encodeURIComponent(words(req.query)[0] || 'javascript')}&per_page=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data) ? data.slice(0, req.limit || 6) : []; const out = rows.map((a: any): SourceResult => { const user = a.user || {}; const name = safe(user.name) || safe(user.username) || 'DEV author'; const profileUrl = `https://dev.to/${safe(user.username)}`; const skills = Array.from(new Set([...words(req.query), ...(Array.isArray(a.tag_list) ? a.tag_list.map(safe) : [])])).slice(0, 10); return { id: idFor('devto', safe(user.username) || safe(a.id)), source: 'devto', sourceProfileId: safe(user.username) || safe(a.id), displayName: name, headline: `DEV Community author. Recent article: ${safe(a.title)}`, profileUrl, avatarUrl: safe(user.profile_image), skills, evidence: [evidence('devto', 'Technical writing signal', `${name} authored: ${safe(a.title)}`, 'medium', safe(a.url) || profileUrl), evidence('devto', 'Topic/tag signal', skills.join(', '), 'low', safe(a.url) || profileUrl)], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'devto', verified: false, note: 'Public DEV Community profile URL.' }], identitySignals: buildCommonIdentity('devto', name, '', '', skills), refreshedAt: now(), raw: a } }); return out.length ? out : [demoResult('devto', req.query, 'DEV')] } catch { return [demoResult('devto', req.query, 'DEV')] }
+  try { const data = await safeJson(`https://dev.to/api/articles?tag=${encodeURIComponent(words(req.query)[0] || 'javascript')}&per_page=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data) ? data.slice(0, req.limit || 6) : []; const out = rows.map((a: any): SourceResult => { const user = a.user || {}; const name = safe(user.name) || safe(user.username) || 'DEV author'; const profileUrl = `https://dev.to/${safe(user.username)}`; const skills = Array.from(new Set([...words(req.query), ...(Array.isArray(a.tag_list) ? a.tag_list.map(safe) : [])])).slice(0, 10); return { id: idFor('devto', safe(user.username) || safe(a.id)), source: 'devto', sourceProfileId: safe(user.username) || safe(a.id), displayName: name, headline: `DEV Community author. Recent article: ${safe(a.title)}`, profileUrl, avatarUrl: safe(user.profile_image), skills, evidence: [evidence('devto', 'Technical writing signal', `${name} authored: ${safe(a.title)}`, 'medium', safe(a.url) || profileUrl), evidence('devto', 'Topic/tag signal', skills.join(', '), 'low', safe(a.url) || profileUrl)], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'devto', verified: false, note: 'Public DEV Community profile URL.' }], identitySignals: buildCommonIdentity('devto', name, '', '', skills), refreshedAt: now(), raw: a } }); return out.length ? out : maybeDemo('devto', req.query, 'DEV') } catch { return maybeDemo('devto', req.query, 'DEV') }
 }
 export async function searchDockerHub(req: SourceSearchRequest): Promise<SourceResult[]> {
-  try { const data = await safeJson(`https://hub.docker.com/v2/search/repositories/?query=${encodeURIComponent(req.query)}&page_size=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data.results) ? data.results.slice(0, req.limit || 6) : []; const out = rows.map((r: any): SourceResult => { const repo = safe(r.repo_name); const owner = repo.split('/')[0] || repo; const profileUrl = `https://hub.docker.com/r/${repo}`; const skills = words(`${req.query} docker container kubernetes ${safe(r.short_description)}`); return { id: idFor('dockerhub', repo), source: 'dockerhub', sourceProfileId: repo, displayName: owner, headline: `Docker Hub repository signal: ${repo}`, profileUrl, skills, evidence: [evidence('dockerhub', 'Container/package evidence', `${owner} is associated with Docker Hub repository ${repo}.`, 'medium', profileUrl), ...(r.star_count ? [evidence('dockerhub', 'Repository usage signal', `${r.star_count} stars reported by Docker Hub.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'dockerhub', verified: false, note: 'Public Docker Hub repository/profile URL.' }], identitySignals: buildCommonIdentity('dockerhub', owner, '', '', skills), refreshedAt: now(), raw: r } }); return out.length ? out : [demoResult('dockerhub', req.query, 'DockerHub')] } catch { return [demoResult('dockerhub', req.query, 'DockerHub')] }
+  try { const data = await safeJson(`https://hub.docker.com/v2/search/repositories/?query=${encodeURIComponent(req.query)}&page_size=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data.results) ? data.results.slice(0, req.limit || 6) : []; const out = rows.map((r: any): SourceResult => { const repo = safe(r.repo_name); const owner = repo.split('/')[0] || repo; const profileUrl = `https://hub.docker.com/r/${repo}`; const skills = words(`${req.query} docker container kubernetes ${safe(r.short_description)}`); return { id: idFor('dockerhub', repo), source: 'dockerhub', sourceProfileId: repo, displayName: owner, headline: `Docker Hub repository signal: ${repo}`, profileUrl, skills, evidence: [evidence('dockerhub', 'Container/package evidence', `${owner} is associated with Docker Hub repository ${repo}.`, 'medium', profileUrl), ...(r.star_count ? [evidence('dockerhub', 'Repository usage signal', `${r.star_count} stars reported by Docker Hub.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'dockerhub', verified: false, note: 'Public Docker Hub repository/profile URL.' }], identitySignals: buildCommonIdentity('dockerhub', owner, '', '', skills), refreshedAt: now(), raw: r } }); return out.length ? out : maybeDemo('dockerhub', req.query, 'DockerHub') } catch { return maybeDemo('dockerhub', req.query, 'DockerHub') }
 }
 export async function searchCrates(req: SourceSearchRequest): Promise<SourceResult[]> {
-  try { const data = await safeJson(`https://crates.io/api/v1/crates?q=${encodeURIComponent(req.query)}&per_page=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data.crates) ? data.crates.slice(0, req.limit || 6) : []; const out = rows.map((c: any): SourceResult => { const name = safe(c.name); const profileUrl = `https://crates.io/crates/${name}`; const skills = words(`${req.query} rust crate ${safe(c.description)}`); return { id: idFor('crates', name), source: 'crates', sourceProfileId: name, displayName: safe(c.id) || name, headline: `Rust crates.io package signal: ${name}`, profileUrl, skills, evidence: [evidence('crates', 'Rust package signal', `${name} matched crates.io search for ${req.query}.`, 'medium', profileUrl), ...(c.downloads ? [evidence('crates', 'Crate usage signal', `${c.downloads} downloads reported.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'crates', verified: false, note: 'Public crates.io package URL.' }], identitySignals: buildCommonIdentity('crates', name, '', '', skills), refreshedAt: now(), raw: c } }); return out.length ? out : [demoResult('crates', req.query, 'Crates')] } catch { return [demoResult('crates', req.query, 'Crates')] }
+  try { const data = await safeJson(`https://crates.io/api/v1/crates?q=${encodeURIComponent(req.query)}&per_page=${Math.min(req.limit || 6, 8)}`); const rows = Array.isArray(data.crates) ? data.crates.slice(0, req.limit || 6) : []; const out = rows.map((c: any): SourceResult => { const name = safe(c.name); const profileUrl = `https://crates.io/crates/${name}`; const skills = words(`${req.query} rust crate ${safe(c.description)}`); return { id: idFor('crates', name), source: 'crates', sourceProfileId: name, displayName: safe(c.id) || name, headline: `Rust crates.io package signal: ${name}`, profileUrl, skills, evidence: [evidence('crates', 'Rust package signal', `${name} matched crates.io search for ${req.query}.`, 'medium', profileUrl), ...(c.downloads ? [evidence('crates', 'Crate usage signal', `${c.downloads} downloads reported.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'crates', verified: false, note: 'Public crates.io package URL.' }], identitySignals: buildCommonIdentity('crates', name, '', '', skills), refreshedAt: now(), raw: c } }); return out.length ? out : maybeDemo('crates', req.query, 'Crates') } catch { return maybeDemo('crates', req.query, 'Crates') }
 }
 export async function searchRubyGems(req: SourceSearchRequest): Promise<SourceResult[]> {
-  try { const data = await safeJson(`https://rubygems.org/api/v1/search.json?query=${encodeURIComponent(req.query)}`); const rows = Array.isArray(data) ? data.slice(0, Math.min(req.limit || 6, 8)) : []; const out = rows.map((g: any): SourceResult => { const name = safe(g.name); const owner = safe(g.authors) || name; const profileUrl = safe(g.project_uri) || `https://rubygems.org/gems/${name}`; const skills = words(`${req.query} ruby rails gem ${safe(g.info)}`); return { id: idFor('rubygems', name), source: 'rubygems', sourceProfileId: name, displayName: owner, headline: `RubyGems package signal: ${name}`, profileUrl, skills, evidence: [evidence('rubygems', 'Ruby package signal', `${owner} is associated with RubyGem ${name}.`, 'medium', profileUrl), ...(g.downloads ? [evidence('rubygems', 'Gem usage signal', `${g.downloads} downloads reported.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'rubygems', verified: false, note: 'Public RubyGems package URL.' }], identitySignals: buildCommonIdentity('rubygems', owner, '', '', skills), refreshedAt: now(), raw: g } }); return out.length ? out : [demoResult('rubygems', req.query, 'RubyGems')] } catch { return [demoResult('rubygems', req.query, 'RubyGems')] }
+  try { const data = await safeJson(`https://rubygems.org/api/v1/search.json?query=${encodeURIComponent(req.query)}`); const rows = Array.isArray(data) ? data.slice(0, Math.min(req.limit || 6, 8)) : []; const out = rows.map((g: any): SourceResult => { const name = safe(g.name); const owner = safe(g.authors) || name; const profileUrl = safe(g.project_uri) || `https://rubygems.org/gems/${name}`; const skills = words(`${req.query} ruby rails gem ${safe(g.info)}`); return { id: idFor('rubygems', name), source: 'rubygems', sourceProfileId: name, displayName: owner, headline: `RubyGems package signal: ${name}`, profileUrl, skills, evidence: [evidence('rubygems', 'Ruby package signal', `${owner} is associated with RubyGem ${name}.`, 'medium', profileUrl), ...(g.downloads ? [evidence('rubygems', 'Gem usage signal', `${g.downloads} downloads reported.`, 'low', profileUrl)] : [])], contactSignals: [{ type: 'profile_url', value: profileUrl, source: 'rubygems', verified: false, note: 'Public RubyGems package URL.' }], identitySignals: buildCommonIdentity('rubygems', owner, '', '', skills), refreshedAt: now(), raw: g } }); return out.length ? out : maybeDemo('rubygems', req.query, 'RubyGems') } catch { return maybeDemo('rubygems', req.query, 'RubyGems') }
 }
 export async function searchResumeXray(req: SourceSearchRequest): Promise<SourceResult[]> {
   const q = encodeURIComponent(`("resume" OR "cv") (${req.query}) ${req.location || ''} (filetype:pdf OR filetype:doc OR filetype:docx OR intitle:resume OR inurl:resume)`); const googleUrl = `https://www.google.com/search?q=${q}`; const bingUrl = `https://www.bing.com/search?q=${q}`; const skills = words(req.query); return [{ id: idFor('resume_xray', `resume-${normId(req.query)}-${normId(req.location || '')}`), source: 'resume_xray', sourceProfileId: `resume-xray:${req.query}:${req.location || ''}`, displayName: `Public resume search: ${req.query}`, headline: 'Manual-safe public resume/CV discovery lane. Opens search results; it does not scrape resumes or store personal data automatically.', location: req.location || '', profileUrl: googleUrl, skills, evidence: [evidence('resume_xray', 'Public resume X-Ray lane', `Prepared Google/Bing public resume search for ${req.query}. Recruiter must manually review and confirm every result.`, 'low', googleUrl)], contactSignals: [{ type: 'profile_url', value: googleUrl, source: 'resume_xray', verified: false, note: 'Google public resume search URL.' }, { type: 'profile_url', value: bingUrl, source: 'resume_xray', verified: false, note: 'Bing public resume search URL.' }], identitySignals: skills.slice(0, 5).map(s => ({ type: 'skill' as const, value: s, weight: 3, source: 'resume_xray' as const })), refreshedAt: now(), raw: { googleUrl, bingUrl, note: 'Manual-safe discovery only. No scraping, no auto-import.' } }]

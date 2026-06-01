@@ -53,6 +53,7 @@ export function WorkbenchClient() {
   const [searchResults, setSearchResults] = useState<SourceResult[]>([])
   const [searching, setSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
+  const [noResultsMeta, setNoResultsMeta] = useState<{ sources: string[]; suggestions: string[] }>({ sources: [], suggestions: [] })
   const [savedEntries, setSavedEntries] = useState<SavedEntry[]>([])
 
   const setField = (field: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
@@ -102,13 +103,19 @@ export function WorkbenchClient() {
     setSearching(true)
     setSearchError('')
     setSearchResults([])
+    setNoResultsMeta({ sources: [], suggestions: [] })
     try {
       const res = await fetch('/api/workbench/search', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           query: output.rawQuery,
-          sources: output.recommendedSourceIds.filter(id => ['github', 'npm', 'pypi', 'openalex', 'huggingface', 'crates', 'rubygems'].includes(id)),
+          // Pass chips so source-specific query building can run server-side
+          chips: output.chips.map(c => ({ canonical: c.canonical, type: c.type })),
+          // Only pass sources that are confirmed live
+          sources: output.recommendedSourceIds.filter(id =>
+            ['github', 'npm', 'pypi', 'openalex', 'huggingface', 'crates', 'rubygems'].includes(id)
+          ),
           limit: 5,
           projectId: currentProject?.id,
         }),
@@ -116,7 +123,12 @@ export function WorkbenchClient() {
       const json = await res.json()
       if (json.ok) {
         setSearchResults(json.results || [])
-        if ((json.results || []).length === 0) setSearchError('No results from live connectors for this query. Try broader terms or check the X-Ray string.')
+        if ((json.results || []).length === 0) {
+          setNoResultsMeta({
+            sources: json.noResultsSources || [],
+            suggestions: json.suggestions || ['Try broader terms or check the X-Ray string for manual search.'],
+          })
+        }
       } else {
         setSearchError(json.error || 'Search failed.')
       }
@@ -303,9 +315,12 @@ export function WorkbenchClient() {
                 </div>
               )}
 
-              {searchResults.length > 0 && (
+              {(searchResults.length > 0 || (noResultsMeta.suggestions.length > 0 && !searching)) && (
                 <WorkbenchResults
                   results={searchResults}
+                  noResultsSources={noResultsMeta.sources}
+                  suggestions={noResultsMeta.suggestions}
+                  searchedQuery={composerOutput?.rawQuery}
                   projectId={currentProject?.id}
                   onProfileSaved={entry => setSavedEntries(prev => [...prev, entry])}
                 />
