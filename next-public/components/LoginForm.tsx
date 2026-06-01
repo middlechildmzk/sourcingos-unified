@@ -71,9 +71,13 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
         <div style={{ textAlign: 'center', padding: '24px 0' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>✉</div>
           <h3 style={{ margin: '0 0 8px' }}>Check your inbox</h3>
-          <p className="muted" style={{ fontSize: '15px', margin: '0 0 16px' }}>
-            We sent a magic link to <strong>{email}</strong>.
+          <p className="muted" style={{ fontSize: '15px', margin: '0 0 10px' }}>
+            We sent a sign-in link to <strong>{email}</strong>.
             Click it to sign in — it expires in 1 hour.
+          </p>
+          <p className="muted" style={{ fontSize: '13px', margin: '0 0 16px' }}>
+            Use only the <strong>newest email link</strong> — each request generates a new link
+            and invalidates older ones.
           </p>
           <p className="muted" style={{ fontSize: '13px' }}>
             No email? Check your spam folder, or{' '}
@@ -81,7 +85,7 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
               onClick={() => { setStatus('idle'); setMessage('') }}
               style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0, fontSize: '13px', textDecoration: 'underline' }}
             >
-              try again
+              request a new link
             </button>.
           </p>
         </div>

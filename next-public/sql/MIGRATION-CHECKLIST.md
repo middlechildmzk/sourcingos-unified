@@ -57,6 +57,47 @@ Supabase behavior varies by client version and project settings.
 
 Grant beta access by inviting users: **Authentication → Users → Invite user**.
 
+### Step 2.6 — Configure Supabase Email Templates (REQUIRED for magic-link login)
+
+The default Supabase magic-link template uses `{{ .ConfirmationURL }}` which triggers
+the PKCE flow and requires `exchangeCodeForSession`. This **will fail** with
+"PKCE code verifier not found in storage" on Vercel.
+
+**Fix: Switch to `token_hash` flow.**
+
+Go to: **Supabase Dashboard → Authentication → Email Templates → Magic Link**
+
+Find the button or link URL and replace it with:
+
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/app/candidate-search
+```
+
+If Supabase requires `type=magiclink` (try `type=email` first):
+```
+{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/app/candidate-search
+```
+
+**Also set:**
+
+In **Authentication → URL Configuration**:
+- **Site URL**: `https://sourcingos-unified.vercel.app`
+- **Redirect URLs** (add all of these):
+  - `https://sourcingos-unified.vercel.app/auth/confirm`
+  - `https://sourcingos-unified.vercel.app/auth/callback`
+  - `http://localhost:3000/auth/confirm`
+  - `http://localhost:3000/auth/callback`
+
+**How this fixes the issue:**
+- Old flow: magic link → `?code=xxx` → `exchangeCodeForSession(code)` → needs PKCE verifier in browser storage → **fails**
+- New flow: magic link → `?token_hash=xxx&type=email` → `verifyOtp({ token_hash, type })` → **no browser storage needed** → works server-side
+
+**Testing the template change:**
+1. Update the email template in Supabase dashboard
+2. Invite a test user (Authentication → Users → Invite user)
+3. Click the magic link in the email
+4. Confirm you land on `/app/candidate-search` without PKCE errors
+
 ### Step 3 — Verify RLS
 In the Supabase dashboard → Authentication → Policies, confirm:
 - Every table shows `enabled = true` for RLS
