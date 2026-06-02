@@ -264,3 +264,11 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .result-compliance-badges{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
 .result-compliance-badge{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border-radius:5px;padding:2px 7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);color:var(--muted)}
 .result-badge-public{border-color:rgba(93,242,163,.25);color:#8ef5c4;background:rgba(93,242,163,.06)}
+
+/* ─── Sprint 2.7 prep: Find contact affordance ────────────────────────────── */
+.find-contact{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.find-contact-btn{display:inline-flex;align-items:center;gap:4px}
+.find-contact-msg{font-size:12px;line-height:1.5;border-radius:8px;padding:7px 11px;border:1px solid}
+.find-contact-info{background:rgba(72,217,255,.05);border-color:rgba(72,217,255,.2);color:var(--muted)}
+.find-contact-warn{background:rgba(246,201,107,.05);border-color:rgba(246,201,107,.25);color:#f6c96b}
+.find-contact-auth{background:rgba(138,124,255,.05);border-color:rgba(138,124,255,.25);color:#b8a8ff}

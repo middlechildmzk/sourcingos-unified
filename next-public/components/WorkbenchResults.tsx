@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import { FindContactButton } from '@/components/FindContactButton'
 import type { SourceResult } from '@/lib/source-types'
 
 export interface SavedEntry { id: string; displayName: string; source: string }
@@ -268,14 +269,35 @@ export function WorkbenchResults({
               )}
 
               {/* Contact — always unverified */}
-              {result.contactSignals.length > 0 && (
+              {result.contactSignals.length > 0 ? (
                 <div className="result-contacts">
                   <span className="contact-unverified">⚠ Unverified</span>
                   {result.contactSignals.slice(0, 2).map((c, i) => (
                     <span key={i} className="result-contact-value">{c.value}</span>
                   ))}
                 </div>
+              ) : (
+                <div className="result-contacts">
+                  <span className="muted" style={{ fontSize: '12px' }}>No contact signal found yet</span>
+                </div>
               )}
+
+              {/* Find contact — future-ready, gated (provider not configured yet) */}
+              <div style={{ marginTop: '6px' }}>
+                <FindContactButton
+                  compact
+                  source={{
+                    candidateId: undefined,
+                    sourceProfileId: result.sourceProfileId,
+                    displayName: result.displayName,
+                    headline: result.headline,
+                    organization: result.organization,
+                    location: result.location,
+                    profileUrl: result.profileUrl,
+                    source: result.source,
+                  }}
+                />
+              </div>
 
               {/* Missing info */}
               {result.evidence.length > 0 && (!result.location || !result.organization) && (
