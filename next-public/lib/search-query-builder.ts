@@ -1,16 +1,34 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // lib/search-query-builder.ts — Source-specific query building from composer chips.
-// Takes the SearchComposer output (entity chips + raw query) and builds
-// optimized queries for each source connector type. No single raw query
-// should be passed to all sources identically.
+//
+// CORE PRINCIPLE: Public technical sources (GitHub, npm, PyPI, OpenAlex) do not
+// contain clearance, seniority, or precise location data. Sending those terms
+// returns zero results. Only skill/tool terms are used for live source queries.
+//
+// Chip classification:
+//   hardTerms   — skill, tool → used in live source queries
+//   softFilters — title, seniority, location, company, industry → UI display/review only
+//   manualSafe  — clearance, employment-signal → route to manual sources only, never live API
+//   certTerms   — certification → healthcare/academic sources only
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ChipType = 'title' | 'skill' | 'tool' | 'certification' | 'location' |
-  'clearance' | 'company' | 'industry' | 'seniority' | 'employment-signal' | 'source'
+export type ChipType =
+  | 'title' | 'skill' | 'tool' | 'certification' | 'location'
+  | 'clearance' | 'company' | 'industry' | 'seniority' | 'employment-signal' | 'source'
 
-export interface ComposerChip {
-  canonical: string
-  type: ChipType
+export interface ComposerChip { canonical: string; type: ChipType }
+
+export interface ChipClassification {
+  /** Sent to live technical source queries. */
+  hardTerms: ComposerChip[]
+  /** Displayed as review filters — NOT sent to live sources. */
+  softFilters: ComposerChip[]
+  /** Never in live queries — route to manual-safe sources only. */
+  manualSafe: ComposerChip[]
+  /** Healthcare/academic sources only. */
+  certTerms: ComposerChip[]
+  /** Context hints for source lane scoring. */
+  industryHints: ComposerChip[]
 }
 
 export interface SourceQueries {
@@ -23,201 +41,279 @@ export interface SourceQueries {
   pubmed: string
   orcid: string
   stackOverflow: string
-  rawFallback: string // for sources without specific building
+  rawFallback: string
+  /** Broadened fallback — skill-terms only, no location/seniority */
+  broadFallback: string
 }
 
-// Return terms relevant for a given chip type and source class
-function titlesAndSkills(chips: ComposerChip[]): string[] {
-  return chips
-    .filter(c => c.type === 'title' || c.type === 'skill' || c.type === 'tool' || c.type === 'certification')
-    .map(c => c.canonical)
+export interface QueryContext {
+  /** Classification of the chips for UI display */
+  classified: ChipClassification
+  /** True when clearance chips are present — route to manual sources */
+  hasClearance: boolean
+  /** True when no skill/tool chips were found */
+  isSkillLight: boolean
+  /** Implied skills inferred from title chip when no skill chips exist */
+  impliedSkills: string[]
 }
 
-function locationTerms(chips: ComposerChip[]): string {
-  const locs = chips.filter(c => c.type === 'location').map(c => c.canonical)
-  return locs.join(' ')
+// ── Title → implied skills mapping ────────────────────────────────────────────
+// When no skill/tool chips are recognized, infer reasonable search terms from title.
+const TITLE_SKILL_MAP: Record<string, string[]> = {
+  'front end developer':    ['JavaScript', 'React', 'TypeScript', 'frontend', 'HTML'],
+  'frontend engineer':      ['JavaScript', 'React', 'TypeScript', 'frontend'],
+  'software engineer':      ['JavaScript', 'Python', 'TypeScript', 'Git'],
+  'full stack developer':   ['JavaScript', 'React', 'Node.js', 'Python'],
+  'full stack engineer':    ['JavaScript', 'React', 'Node.js', 'TypeScript'],
+  'backend engineer':       ['Python', 'Node.js', 'PostgreSQL', 'REST API'],
+  'devsecops engineer':     ['Kubernetes', 'Terraform', 'Docker', 'CI/CD', 'pipeline'],
+  'devops engineer':        ['Kubernetes', 'Docker', 'Terraform', 'AWS', 'CI/CD'],
+  'platform engineer':      ['Kubernetes', 'Terraform', 'AWS', 'Docker', 'Helm'],
+  'kubernetes engineer':    ['Kubernetes', 'Docker', 'Helm', 'Terraform'],
+  'ml engineer':            ['PyTorch', 'TensorFlow', 'Python', 'scikit-learn', 'MLOps'],
+  'data scientist':         ['Python', 'pandas', 'scikit-learn', 'SQL', 'Jupyter'],
+  'data engineer':          ['Python', 'SQL', 'Spark', 'Kafka', 'PostgreSQL'],
+  'cybersecurity engineer': ['SIEM', 'Python', 'network security', 'vulnerability'],
+  'security analyst':       ['SIEM', 'Splunk', 'threat hunting', 'incident response'],
+  'nurse recruiter':        ['Epic', 'healthcare', 'clinical', 'nursing'],
+  'technical sourcer':      ['GitHub', 'Boolean', 'sourcing', 'recruiting'],
+  'technical recruiter':    ['GitHub', 'Boolean', 'sourcing', 'recruiting'],
+  'staff engineer':         ['distributed systems', 'architecture', 'TypeScript', 'Python'],
+  'site reliability engineer': ['Kubernetes', 'Docker', 'Python', 'monitoring', 'SRE'],
+  'recruiter':              ['recruiting', 'ATS', 'sourcing', 'talent acquisition'],
 }
 
-function industryTerms(chips: ComposerChip[]): string[] {
-  return chips.filter(c => c.type === 'industry').map(c => c.canonical)
+function titleToImpliedSkills(titleCanonical: string): string[] {
+  const lower = titleCanonical.toLowerCase()
+  for (const [key, skills] of Object.entries(TITLE_SKILL_MAP)) {
+    if (lower.includes(key) || key.includes(lower)) return skills
+  }
+  return []
+}
+
+// ── Stop words for raw query cleaning ─────────────────────────────────────────
+// These terms produce zero results on technical public sources.
+const STOP_WORDS_FOR_LIVE_SEARCH = new Set([
+  'ts', 'sci', 'ts/sci', 'tssci', 'secret', 'top', 'clearance', 'cleared',
+  'polygraph', 'poly', 'public', 'trust',
+  'senior', 'sr', 'junior', 'jr', 'lead', 'staff', 'principal', 'distinguished',
+  'dc', 'washington', 'virginia', 'maryland', 'northern', 'nova',
+  'remote', 'hybrid', 'onsite', 'metro',
+  'candidate', 'recruiter', 'hiring', 'job', 'position', 'opening',
+  'developer', 'engineer', 'manager',  // too generic alone
+])
+
+function cleanRawQuery(rawQuery: string, removeChips: ComposerChip[]): string {
+  const removeTerms = new Set(removeChips.map(c => c.canonical.toLowerCase()))
+  return rawQuery.split(/\s+/)
+    .filter(w => {
+      const lower = w.toLowerCase()
+      return !STOP_WORDS_FOR_LIVE_SEARCH.has(lower) && !removeTerms.has(lower)
+    })
+    .slice(0, 5)
+    .join(' ')
+    .trim()
+}
+
+// ── Chip classification ────────────────────────────────────────────────────────
+export function classifyChips(chips: ComposerChip[]): ChipClassification {
+  return {
+    hardTerms:    chips.filter(c => c.type === 'skill' || c.type === 'tool'),
+    softFilters:  chips.filter(c => ['title', 'seniority', 'location', 'company'].includes(c.type)),
+    manualSafe:   chips.filter(c => c.type === 'clearance' || c.type === 'employment-signal'),
+    certTerms:    chips.filter(c => c.type === 'certification'),
+    industryHints: chips.filter(c => c.type === 'industry'),
+  }
+}
+
+// ── Core query term extraction ─────────────────────────────────────────────────
+// Returns the best live-search terms for a chip set.
+// Priority: hardTerms > implied from title > cleaned raw query
+function getLiveTerms(classified: ChipClassification, rawQuery: string): string[] {
+  if (classified.hardTerms.length > 0) {
+    return classified.hardTerms.map(c => c.canonical).slice(0, 5)
+  }
+  // Infer from title
+  const titleChip = classified.softFilters.find(c => c.type === 'title')
+  if (titleChip) {
+    const implied = titleToImpliedSkills(titleChip.canonical)
+    if (implied.length > 0) return implied.slice(0, 4)
+  }
+  // Fall back to cleaned raw query
+  const cleaned = cleanRawQuery(rawQuery, [
+    ...classified.manualSafe,
+    ...classified.softFilters.filter(c => c.type === 'location' || c.type === 'seniority'),
+  ])
+  return cleaned ? [cleaned] : []
 }
 
 // ── GitHub ────────────────────────────────────────────────────────────────────
-// GitHub search query focuses on technical skills and tools; clears recruiter noise.
-// Adds language/topic hints where inferrable from chips.
-function buildGithubQuery(chips: ComposerChip[], rawQuery: string): string {
-  const skills = chips
-    .filter(c => c.type === 'skill' || c.type === 'tool')
-    .map(c => c.canonical.toLowerCase())
+// ONLY skill/tool/implied terms. Clearance and seniority produce zero results.
+// Optional simple location filter (city only, not "Metro" or multi-word areas).
+function buildGithubQuery(classified: ChipClassification, rawQuery: string): string {
+  const terms = getLiveTerms(classified, rawQuery)
+  if (terms.length === 0) return rawQuery.split(' ').slice(0, 3).join(' ')
 
-  const title = chips.find(c => c.type === 'title')?.canonical
+  // Add location only if it's a simple short location (not "Northern Virginia", "DC Metro")
+  const loc = classified.softFilters.find(c => c.type === 'location')
+  const simpleLocation = loc &&
+    loc.canonical.split(' ').length <= 2 &&
+    !loc.canonical.toLowerCase().includes('metro') &&
+    !loc.canonical.toLowerCase().includes('northern') &&
+    loc.canonical.toLowerCase() !== 'remote'
 
-  // Build from specific chips when available; fall back to rawQuery
-  const terms: string[] = []
-  if (skills.length > 0) terms.push(...skills.slice(0, 4))
-  else if (title) terms.push(title)
-  else terms.push(rawQuery)
-
-  // Add location if it's a real location (not "remote")
-  const loc = chips.find(c => c.type === 'location')?.canonical
-  if (loc && loc.toLowerCase() !== 'remote' && loc.toLowerCase() !== 'hybrid') {
-    return `${terms.join(' ')} location:"${loc}"`
+  if (simpleLocation) {
+    return `${terms.join(' ')} location:"${loc!.canonical}"`
   }
-
   return terms.join(' ')
 }
 
+// ── npm / PyPI / crates / RubyGems ────────────────────────────────────────────
+// Package ecosystem: only package/tool/language terms.
+// Clearance, location, seniority, and title language produce zero results.
+function buildPackageQuery(classified: ChipClassification, rawQuery: string): string {
+  // Only JS/Python/Rust/Ruby relevant tools
+  const pkgTerms = classified.hardTerms
+    .filter(c => !['kubernetes', 'terraform', 'aws', 'azure', 'gcp', 'docker', 'splunk', 'siem'].includes(c.canonical.toLowerCase()))
+    .map(c => c.canonical.toLowerCase())
+
+  if (pkgTerms.length > 0) return pkgTerms.slice(0, 3).join(' ')
+
+  // Fall back to all hard terms
+  const all = classified.hardTerms.map(c => c.canonical.toLowerCase())
+  if (all.length > 0) return all.slice(0, 3).join(' ')
+
+  // Clean raw query removing all stop words
+  return cleanRawQuery(rawQuery, [
+    ...classified.manualSafe,
+    ...classified.softFilters,
+  ]).split(' ').slice(0, 3).join(' ')
+}
+
 // ── OpenAlex ──────────────────────────────────────────────────────────────────
-// OpenAlex is a research/publication database. Best for AI/ML, healthcare,
-// engineering, and research-adjacent roles. Uses concept-level terms.
-function buildOpenAlexQuery(chips: ComposerChip[], rawQuery: string): string {
-  const researchTerms = chips
+// Research database: concepts, AI/ML, healthcare, engineering topics.
+// No clearance, seniority, or job-title language.
+function buildOpenAlexQuery(classified: ChipClassification, rawQuery: string): string {
+  const researchTerms = classified.hardTerms
+    .concat(classified.industryHints)
     .filter(c =>
-      c.type === 'skill' ||
-      (c.type === 'industry' && ['ai/ml', 'healthcare', 'biotech'].includes(c.canonical.toLowerCase()))
+      !['kubernetes', 'docker', 'terraform'].includes(c.canonical.toLowerCase())
     )
     .map(c => c.canonical)
 
-  const institution = chips.find(c => c.type === 'company')?.canonical
+  if (researchTerms.length > 0) return researchTerms.slice(0, 3).join(' ')
 
-  if (researchTerms.length > 0) {
-    const base = researchTerms.slice(0, 3).join(' ')
-    return institution ? `${base} ${institution}` : base
+  // Try implied skills from title
+  const titleChip = classified.softFilters.find(c => c.type === 'title')
+  if (titleChip) {
+    const implied = titleToImpliedSkills(titleChip.canonical).slice(0, 2)
+    if (implied.length > 0) return implied.join(' ')
   }
 
-  return rawQuery
-}
-
-// ── npm ───────────────────────────────────────────────────────────────────────
-// npm is best for JavaScript/TypeScript/Node.js engineers.
-// Search by package keywords, not job titles.
-function buildNpmQuery(chips: ComposerChip[], rawQuery: string): string {
-  const jsTerms = chips
-    .filter(c =>
-      c.type === 'skill' || c.type === 'tool'
-    )
-    .filter(c => !['kubernetes', 'docker', 'terraform', 'aws', 'azure', 'gcp'].includes(c.canonical.toLowerCase()))
-    .map(c => c.canonical.toLowerCase())
-
-  if (jsTerms.length > 0) return jsTerms.slice(0, 3).join(' ')
-
-  // Strip title/location words that won't match npm packages
-  const clean = rawQuery
-    .replace(/\b(engineer|developer|recruiter|sourcer|remote|hybrid|senior|staff|lead)\b/gi, '')
-    .trim()
-  return clean || rawQuery
-}
-
-// ── PyPI ──────────────────────────────────────────────────────────────────────
-// PyPI is best for Python/ML/data engineers. Use Python-specific terms.
-function buildPypiQuery(chips: ComposerChip[], rawQuery: string): string {
-  const pyTerms = chips
-    .filter(c => c.type === 'skill' || c.type === 'tool')
-    .filter(c => ['pytorch', 'tensorflow', 'numpy', 'pandas', 'fastapi', 'django', 'flask', 'python', 'ml', 'nlp', 'llm'].some(kw => c.canonical.toLowerCase().includes(kw)))
-    .map(c => c.canonical.toLowerCase())
-
-  if (pyTerms.length > 0) return pyTerms.slice(0, 3).join(' ')
-
-  const clean = rawQuery
-    .replace(/\b(engineer|developer|recruiter|remote|hybrid|senior|staff|lead)\b/gi, '')
-    .trim()
-  return clean || rawQuery
+  return cleanRawQuery(rawQuery, classified.manualSafe.concat(classified.softFilters))
 }
 
 // ── Hugging Face ──────────────────────────────────────────────────────────────
-// Hugging Face is best for AI/ML researchers. Use model and framework terms.
-function buildHuggingFaceQuery(chips: ComposerChip[], rawQuery: string): string {
-  const aiTerms = chips
-    .filter(c =>
-      c.type === 'skill' || c.type === 'tool' ||
-      (c.type === 'industry' && c.canonical.toLowerCase().includes('ai'))
-    )
-    .map(c => c.canonical.toLowerCase())
+// Only AI/ML terms. No infra or recruiting language.
+function buildHuggingFaceQuery(classified: ChipClassification, rawQuery: string): string {
+  const aiTerms = classified.hardTerms
+    .filter(c => [
+      'pytorch', 'tensorflow', 'transformers', 'llm', 'nlp', 'hugging face',
+      'fine-tuning', 'mlops', 'diffusers', 'peft', 'lora', 'bert', 'gpt',
+      'computer vision', 'deep learning',
+    ].some(kw => c.canonical.toLowerCase().includes(kw)))
+    .map(c => c.canonical)
 
   if (aiTerms.length > 0) return aiTerms.slice(0, 3).join(' ')
-  return rawQuery
+  if (classified.hardTerms.length > 0) return classified.hardTerms[0].canonical
+  return 'machine learning'
 }
 
-// ── NPI (healthcare providers) ────────────────────────────────────────────────
-// NPI is most useful for searching licensed healthcare providers.
-// Use specialty terms and credentials.
-function buildNpiQuery(chips: ComposerChip[], rawQuery: string): string {
-  const healthTerms = chips
-    .filter(c =>
-      c.type === 'title' ||
-      c.type === 'certification' ||
-      (c.type === 'industry' && c.canonical.toLowerCase() === 'healthcare')
-    )
-    .map(c => c.canonical)
+// ── Healthcare sources (NPI, PubMed, ORCID) ───────────────────────────────────
+function buildHealthcareQuery(classified: ChipClassification, rawQuery: string): string {
+  const healthTerms = [
+    ...classified.certTerms,
+    ...classified.hardTerms.filter(c =>
+      ['epic', 'cerner', 'emr', 'ehr', 'hl7', 'fhir'].includes(c.canonical.toLowerCase())
+    ),
+  ].map(c => c.canonical)
 
-  return healthTerms.slice(0, 2).join(' ') || rawQuery
+  if (healthTerms.length > 0) return healthTerms.slice(0, 2).join(' ')
+  const titleChip = classified.softFilters.find(c => c.type === 'title')
+  if (titleChip) return titleChip.canonical
+  return rawQuery.split(' ').slice(0, 2).join(' ')
 }
 
-// ── PubMed / ORCID ────────────────────────────────────────────────────────────
-// Research databases. Use research-oriented terms.
-function buildPubmedQuery(chips: ComposerChip[], rawQuery: string): string {
-  const clinicalTerms = chips
-    .filter(c => c.type === 'tool' || (c.type === 'industry' && ['healthcare', 'biotech'].includes(c.canonical.toLowerCase())))
-    .map(c => c.canonical)
-
-  return clinicalTerms.slice(0, 3).join(' ') || rawQuery
+// ── Broad fallback query ──────────────────────────────────────────────────────
+// Used when the initial search returns zero results.
+// Strips location, seniority, and clearance — skill terms only.
+export function buildBroadQuery(chips: ComposerChip[], rawQuery: string): string {
+  const classified = classifyChips(chips)
+  const terms = getLiveTerms(classified, rawQuery)
+  // Take only the top 2-3 terms for maximum breadth
+  if (terms.length > 0) return terms.slice(0, 3).join(' ')
+  return rawQuery.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ')
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
-
-/**
- * Build source-specific queries from composer chips and raw query.
- * Each source gets a query optimized for its content type.
- */
-export function buildSourceQueries(
-  chips: ComposerChip[],
-  rawQuery: string
-): SourceQueries {
-  return {
-    github: buildGithubQuery(chips, rawQuery),
-    openalex: buildOpenAlexQuery(chips, rawQuery),
-    npm: buildNpmQuery(chips, rawQuery),
-    pypi: buildPypiQuery(chips, rawQuery),
-    huggingface: buildHuggingFaceQuery(chips, rawQuery),
-    npi: buildNpiQuery(chips, rawQuery),
-    pubmed: buildPubmedQuery(chips, rawQuery),
-    orcid: buildPubmedQuery(chips, rawQuery), // same as pubmed
-    stackOverflow: buildGithubQuery(chips, rawQuery), // reuse github query
-    rawFallback: rawQuery,
-  }
-}
-
-/**
- * Which sources make sense for a given set of chips?
- * Returns ordered list of source IDs based on entity types detected.
- */
+// ── Source lane recommendations ────────────────────────────────────────────────
 export function recommendSourcesFromChips(chips: ComposerChip[]): string[] {
+  const classified = classifyChips(chips)
   const scores: Record<string, number> = {}
   const add = (id: string, w = 1) => { scores[id] = (scores[id] || 0) + w }
 
-  const hasHealthcare = chips.some(c => c.canonical.toLowerCase() === 'healthcare' || c.type === 'certification')
-  const hasAI = chips.some(c => ['ai/ml', 'pytorch', 'tensorflow', 'hugging face', 'llm', 'nlp'].includes(c.canonical.toLowerCase()))
-  const hasGovCon = chips.some(c => c.type === 'clearance' || (c.type === 'industry' && c.canonical === 'GovCon'))
-  const hasResearch = chips.some(c => c.type === 'industry' && ['ai/ml', 'biotech', 'healthcare'].includes(c.canonical.toLowerCase()))
-  const hasPython = chips.some(c => ['python', 'pytorch', 'tensorflow', 'ml'].includes(c.canonical.toLowerCase()))
-  const hasJS = chips.some(c => ['react', 'node', 'typescript', 'javascript'].includes(c.canonical.toLowerCase()))
+  const isHealthcare = classified.industryHints.some(c => c.canonical.toLowerCase() === 'healthcare') ||
+    classified.hardTerms.some(c => ['epic', 'cerner', 'npi'].includes(c.canonical.toLowerCase()))
+  const isAI = classified.industryHints.some(c => c.canonical.toLowerCase() === 'ai/ml') ||
+    classified.hardTerms.some(c => ['pytorch', 'tensorflow', 'llm', 'nlp', 'hugging face'].includes(c.canonical.toLowerCase()))
+  const hasPython = classified.hardTerms.some(c => c.canonical.toLowerCase() === 'python')
+  const hasJS = classified.hardTerms.some(c => ['react', 'typescript', 'node.js', 'javascript'].includes(c.canonical.toLowerCase()))
+  const hasRust = classified.hardTerms.some(c => c.canonical.toLowerCase() === 'rust')
+  const hasClearance = classified.manualSafe.some(c => c.type === 'clearance')
 
-  // Always recommend GitHub for technical roles
   add('github', 3)
-
-  if (hasHealthcare) { add('npi', 4); add('pubmed', 2) }
-  if (hasAI) { add('huggingface', 4); add('openalex', 3); add('pypi', 2) }
-  if (hasResearch) { add('openalex', 3); add('orcid', 2) }
+  if (isHealthcare) { add('npi', 4); add('pubmed', 2) }
+  if (isAI) { add('huggingface', 4); add('openalex', 3); add('pypi', 2) }
   if (hasPython) { add('pypi', 3) }
-  if (hasJS) { add('npm', 3) }
-  if (hasGovCon) { add('github', 1) } // cleared engineers still show on GitHub
+  if (hasJS) { add('npm', 3); add('github', 1) }
+  if (hasRust) { add('crates', 3) }
+  if (hasClearance) { /* clearance → manual-safe only, no live sources */ }
+  classified.hardTerms.forEach(() => { add('github', 1); add('stackoverflow', 1) })
 
-  chips.filter(c => c.type === 'skill' || c.type === 'tool').forEach(() => {
-    add('github', 1); add('stackoverflow', 1)
-  })
+  if (Object.keys(scores).length === 0) add('github', 3)
 
   return Object.entries(scores)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
+    .slice(0, 5)
     .map(([id]) => id)
+}
+
+// ── Main export ────────────────────────────────────────────────────────────────
+export function buildSourceQueries(chips: ComposerChip[], rawQuery: string): SourceQueries {
+  const classified = classifyChips(chips)
+  return {
+    github:       buildGithubQuery(classified, rawQuery),
+    openalex:     buildOpenAlexQuery(classified, rawQuery),
+    npm:          buildPackageQuery(classified, rawQuery),
+    pypi:         buildPackageQuery(classified, rawQuery),
+    huggingface:  buildHuggingFaceQuery(classified, rawQuery),
+    npi:          buildHealthcareQuery(classified, rawQuery),
+    pubmed:       buildHealthcareQuery(classified, rawQuery),
+    orcid:        buildOpenAlexQuery(classified, rawQuery),
+    stackOverflow: buildGithubQuery(classified, rawQuery),
+    rawFallback:  rawQuery,
+    broadFallback: buildBroadQuery(chips, rawQuery),
+  }
+}
+
+/** Build QueryContext for the UI — classification + metadata for display. */
+export function buildQueryContext(chips: ComposerChip[], rawQuery: string): QueryContext {
+  const classified = classifyChips(chips)
+  const titleChip = classified.softFilters.find(c => c.type === 'title')
+  const impliedSkills = titleChip ? titleToImpliedSkills(titleChip.canonical) : []
+  return {
+    classified,
+    hasClearance: classified.manualSafe.some(c => c.type === 'clearance'),
+    isSkillLight: classified.hardTerms.length === 0,
+    impliedSkills,
+  }
 }

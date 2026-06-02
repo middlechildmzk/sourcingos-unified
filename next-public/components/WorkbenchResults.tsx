@@ -3,10 +3,15 @@ import { useState } from 'react'
 import Link from 'next/link'
 import type { SourceResult } from '@/lib/source-types'
 
-export interface SavedEntry {
-  id: string
-  displayName: string
-  source: string
+export interface SavedEntry { id: string; displayName: string; source: string }
+
+interface ChipContext {
+  hardTerms: string[]
+  softFilters: { canonical: string; type: string }[]
+  manualSafe: string[]
+  hasClearance: boolean
+  hasLocation: boolean
+  isSkillLight: boolean
 }
 
 interface WorkbenchResultsProps {
@@ -14,8 +19,10 @@ interface WorkbenchResultsProps {
   noResultsSources?: string[]
   suggestions?: string[]
   searchedQuery?: string
+  chipContext?: ChipContext | null
   projectId?: string
   onProfileSaved?: (entry: SavedEntry) => void
+  onRetryComposer?: () => void
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -23,35 +30,75 @@ const SOURCE_COLORS: Record<string, string> = {
   huggingface: '#f5a623', crates: '#e8805a', stackoverflow: '#f68b28',
   rubygems: '#cc342d', npi: '#6dd2de', pubmed: '#5398be', default: 'var(--muted)',
 }
-
-const CONF_COLOR: Record<string, string> = { high: 'var(--green)', medium: 'var(--accent)', low: 'var(--muted)' }
+const CONF_COLOR: Record<string, string> = {
+  high: 'var(--green)', medium: 'var(--accent)', low: 'var(--muted)',
+}
 
 export function WorkbenchResults({
-  results, noResultsSources = [], suggestions = [], searchedQuery = '',
-  projectId, onProfileSaved,
+  results, noResultsSources = [], suggestions = [], searchedQuery,
+  chipContext, projectId, onProfileSaved, onRetryComposer,
 }: WorkbenchResultsProps) {
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [saved, setSaved] = useState<Map<string, string>>(new Map())
   const [notices, setNotices] = useState<Map<string, string>>(new Map())
   const [authRequired, setAuthRequired] = useState(false)
 
-  // No-results state
+  // ── No-results state — context-aware guidance ──────────────────────────────
   if (results.length === 0) {
     return (
       <div className="wb-no-results">
         <div className="wb-section-title" style={{ marginBottom: '12px' }}>No results found</div>
+
         {searchedQuery && (
-          <p className="muted" style={{ fontSize: '14px', marginBottom: '12px' }}>
-            Searched: <code style={{ background: 'rgba(255,255,255,.05)', padding: '2px 6px', borderRadius: '4px' }}>{searchedQuery}</code>
+          <p className="muted" style={{ fontSize: '13px', marginBottom: '10px' }}>
+            Searched: <code style={{ background: 'rgba(255,255,255,.05)', padding: '2px 6px', borderRadius: '4px' }}>
+              {searchedQuery}
+            </code>
           </p>
         )}
+
+        {/* Context-specific guidance */}
+        {chipContext?.hasClearance && (
+          <div className="preview-banner" style={{ marginBottom: '14px', borderColor: 'rgba(138,124,255,.35)' }}>
+            <span className="pb-icon">◈</span>
+            <span>
+              <strong>Clearance terms stripped from public source queries.</strong>{' '}
+              GitHub, npm, OpenAlex, and PyPI do not surface clearance data.
+              The search above used only your technical skill terms.
+              Verify clearance manually through approved channels.
+              Use ClearanceJobs (manual-safe) for cleared talent searches.
+            </span>
+          </div>
+        )}
+
+        {chipContext?.isSkillLight && !chipContext?.hasClearance && (
+          <div className="preview-banner" style={{ marginBottom: '14px', borderColor: 'rgba(246,201,107,.3)' }}>
+            <span className="pb-icon">◈</span>
+            <span>
+              <strong>Try skill-first.</strong> Public sources respond better to specific technical skills
+              than job titles. Add React, Python, Kubernetes, or another tool to your search.
+            </span>
+          </div>
+        )}
+
+        {chipContext?.hasLocation && !chipContext?.hasClearance && (
+          <div className="preview-banner" style={{ marginBottom: '14px', borderColor: 'rgba(246,201,107,.3)' }}>
+            <span className="pb-icon">◈</span>
+            <span>
+              <strong>Location data is sparse on public sources.</strong>{' '}
+              Try searching skill-only, then use location as a manual review filter.
+            </span>
+          </div>
+        )}
+
         {noResultsSources.length > 0 && (
           <p className="muted" style={{ fontSize: '13px', marginBottom: '12px' }}>
             Sources returning no results: {noResultsSources.join(', ')}
           </p>
         )}
+
         {suggestions.length > 0 && (
-          <div className="card" style={{ marginTop: '12px' }}>
+          <div className="card" style={{ marginTop: '4px', marginBottom: '16px' }}>
             <div className="kicker" style={{ marginBottom: '10px' }}>Suggestions</div>
             <ul style={{ padding: '0 0 0 16px', margin: 0 }}>
               {suggestions.map(s => (
@@ -60,8 +107,14 @@ export function WorkbenchResults({
             </ul>
           </div>
         )}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '16px' }}>
-          <Link className="btn secondary" href="/tools/xray-search">Try X-Ray Launcher →</Link>
+
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '4px' }}>
+          {onRetryComposer && (
+            <button className="btn secondary" onClick={onRetryComposer}>
+              ← Refine search
+            </button>
+          )}
+          <Link className="btn secondary" href="/tools/xray-search">Open X-Ray Launcher →</Link>
           <Link className="btn ghost" href="/tools/boolean-generator">Build Boolean string →</Link>
         </div>
       </div>
@@ -111,9 +164,9 @@ export function WorkbenchResults({
       <div className="preview-banner" style={{ marginBottom: '16px' }}>
         <span className="pb-icon">◈</span>
         <span>
-          <strong>Research only.</strong> Source profiles are not confirmed candidates.
-          Contact signals are unverified. Clearance mentions are unverified breadcrumbs.
-          No auto-merge. Save and confirm identity manually.
+          <strong>Research only.</strong> These are technical public-source profiles, not confirmed candidates.
+          Clearance is not verified. Location is not verified. Contact signals are unverified.
+          Save and confirm identity manually before any outreach.
         </span>
       </div>
 
@@ -137,10 +190,10 @@ export function WorkbenchResults({
 
           return (
             <div className="result-card" key={result.id}>
-              {/* ── Header: source + identity ─────────────────── */}
               <div className="result-head">
                 <div className="result-identity">
-                  <span className="result-source-badge" style={{ background: `${color}18`, color, borderColor: `${color}40` }}>
+                  <span className="result-source-badge"
+                    style={{ background: `${color}18`, color, borderColor: `${color}40` }}>
                     {result.source}
                   </span>
                   <div>
@@ -153,20 +206,20 @@ export function WorkbenchResults({
                     <>
                       <span className="status-live">Saved</span>
                       {candidateId && (
-                        <a className="btn ghost" href={`/app/candidate/${candidateId}`} style={{ fontSize: '12px', padding: '5px 12px' }}>
-                          View 360 →
-                        </a>
+                        <a className="btn ghost" href={`/app/candidate/${candidateId}`}
+                          style={{ fontSize: '12px', padding: '5px 12px' }}>View 360 →</a>
                       )}
                     </>
                   ) : (
-                    <button className="btn secondary" onClick={() => saveProfile(result)} disabled={isSaving} style={{ fontSize: '12px', padding: '6px 14px' }}>
+                    <button className="btn secondary" onClick={() => saveProfile(result)}
+                      disabled={isSaving} style={{ fontSize: '12px', padding: '6px 14px' }}>
                       {isSaving ? 'Saving…' : '+ Save profile'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* ── Meta ──────────────────────────────────────── */}
+              {/* Meta */}
               {(result.location || result.organization) && (
                 <div className="result-meta">
                   {result.organization && <span>{result.organization}</span>}
@@ -174,13 +227,25 @@ export function WorkbenchResults({
                 </div>
               )}
 
-              {/* ── Why matched — evidence snippets ───────────── */}
+              {/* Compliance badges */}
+              <div className="result-compliance-badges">
+                {chipContext?.hasClearance && (
+                  <span className="result-compliance-badge">Clearance not verified</span>
+                )}
+                {result.location && chipContext?.hasLocation && (
+                  <span className="result-compliance-badge">Location not verified</span>
+                )}
+                <span className="result-compliance-badge result-badge-public">Public evidence match</span>
+              </div>
+
+              {/* Why matched — evidence-first */}
               {result.evidence.length > 0 && (
                 <div className="result-why-matched">
                   <div className="result-section-label">Why matched</div>
                   {result.evidence.slice(0, 3).map(e => (
                     <div key={e.id} className="result-evidence-item">
-                      <span className="result-evidence-conf" style={{ color: CONF_COLOR[e.confidence] || CONF_COLOR.medium }}>
+                      <span className="result-evidence-conf"
+                        style={{ color: CONF_COLOR[e.confidence] || CONF_COLOR.medium }}>
                         {e.confidence}
                       </span>
                       <span className="evidence-label">{e.label}</span>
@@ -192,15 +257,17 @@ export function WorkbenchResults({
                 </div>
               )}
 
-              {/* ── Detected skills ───────────────────────────── */}
+              {/* Skills */}
               {result.skills.length > 0 && (
                 <div className="result-skills">
                   {result.skills.slice(0, 8).map(s => <span key={s} className="tag">{s}</span>)}
-                  {result.skills.length > 8 && <span className="muted" style={{ fontSize: '11px' }}>+{result.skills.length - 8}</span>}
+                  {result.skills.length > 8 && (
+                    <span className="muted" style={{ fontSize: '11px' }}>+{result.skills.length - 8}</span>
+                  )}
                 </div>
               )}
 
-              {/* ── Contact signals — always unverified ───────── */}
+              {/* Contact — always unverified */}
               {result.contactSignals.length > 0 && (
                 <div className="result-contacts">
                   <span className="contact-unverified">⚠ Unverified</span>
@@ -210,8 +277,8 @@ export function WorkbenchResults({
                 </div>
               )}
 
-              {/* ── Missing info ──────────────────────────────── */}
-              {result.evidence.length > 0 && (result.location === '' || !result.organization) && (
+              {/* Missing info */}
+              {result.evidence.length > 0 && (!result.location || !result.organization) && (
                 <div className="result-missing">
                   <span className="result-section-label" style={{ color: 'var(--muted)' }}>Missing</span>
                   {!result.location && <span className="result-missing-item">Location</span>}
@@ -219,9 +286,9 @@ export function WorkbenchResults({
                 </div>
               )}
 
-              {/* ── Profile link ──────────────────────────────── */}
               {result.profileUrl && (
-                <a className="kicker" href={result.profileUrl} target="_blank" rel="noreferrer noopener" style={{ marginTop: '8px', display: 'inline-block' }}>
+                <a className="kicker" href={result.profileUrl} target="_blank" rel="noreferrer noopener"
+                  style={{ marginTop: '8px', display: 'inline-block' }}>
                   Open source profile →
                 </a>
               )}

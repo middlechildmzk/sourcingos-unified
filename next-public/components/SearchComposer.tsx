@@ -38,13 +38,18 @@ interface SearchComposerProps {
 // ─── Sample searches ──────────────────────────────────────────────────────────
 
 const SAMPLE_SEARCHES = [
-  { label: 'Cleared DevSecOps / NorVa',           query: 'DevSecOps Kubernetes Terraform TS/SCI Northern Virginia' },
-  { label: 'AI/ML engineer — PyTorch',             query: 'ML Engineer PyTorch Hugging Face LLM Remote' },
-  { label: 'Nurse recruiter / Epic',               query: 'Nurse Recruiter Epic Minnesota healthcare' },
-  { label: 'Technical sourcer — remote SaaS',      query: 'Technical Sourcer remote SaaS' },
-  { label: 'Cyber engineer / Splunk SIEM',         query: 'Cybersecurity Engineer Splunk SIEM Remote' },
-  { label: 'Federal proposal recruiter',           query: 'Proposal Manager GovCon federal cleared' },
-  { label: 'Healthcare data / Epic Azure',         query: 'Data Engineer Epic Azure healthcare Minnesota' },
+  // Skill-first (best for live source results)
+  { label: 'React TypeScript Next.js',          query: 'React TypeScript Next.js frontend' },
+  { label: 'Kubernetes Terraform AWS platform', query: 'Kubernetes Terraform AWS platform engineer' },
+  { label: 'PyTorch Hugging Face LLM',          query: 'PyTorch Hugging Face LLM NLP' },
+  { label: 'Python FastAPI PostgreSQL',         query: 'Python FastAPI PostgreSQL backend' },
+  // Cleared (clearance strips automatically, skills drive live search)
+  { label: 'DevSecOps Kubernetes TS/SCI',       query: 'DevSecOps Kubernetes Terraform TS/SCI Northern Virginia' },
+  { label: 'Splunk SIEM cyber DC',              query: 'Cybersecurity Splunk SIEM Secret clearance DC' },
+  // Healthcare
+  { label: 'Epic Azure healthcare data',        query: 'Epic Azure healthcare data engineer Minnesota' },
+  // AI/ML
+  { label: 'MLOps Kubernetes Python',           query: 'MLOps Kubernetes Python AWS' },
 ]
 
 // ─── Entity recognition engine ────────────────────────────────────────────────
