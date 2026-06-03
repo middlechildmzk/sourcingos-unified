@@ -1,10 +1,13 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { SearchComposer, type ComposerOutput } from '@/components/SearchComposer'
 import { WorkbenchResults, type SavedEntry } from '@/components/WorkbenchResults'
 import { CandidateDrawer } from '@/components/CandidateDrawer'
 import { parseJobDescription } from '@/lib/jd-parser'
+import { SourceLaneStatus, type SourceLane } from '@/components/SourceLaneStatus'
+import { fetchWithTimeout, SOURCE_TIMEOUTS_MS, DEFAULT_TIMEOUT_MS, MANUAL_SAFE_LANES } from '@/lib/search/source-timeout'
+import { saveSession, listSessions, type SavedSearchSession } from '@/lib/search/saved-sessions'
 import type { SourceResult } from '@/lib/source-types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -55,6 +58,9 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const [jdText, setJdText] = useState('')
   const [jdParsed, setJdParsed] = useState(false)
   const [jdSummary, setJdSummary] = useState<ReturnType<typeof parseJobDescription> | null>(null)
+  const [sourceLanes, setSourceLanes] = useState<SourceLane[]>([])
+  const [recentSessions, setRecentSessions] = useState<SavedSearchSession[]>([])
+  useEffect(() => { setRecentSessions(listSessions()) }, [])
 
   const setField = (f: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setIntake(prev => ({ ...prev, [f]: e.target.value }))
@@ -89,40 +95,111 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const handleSearch = useCallback(async (output: ComposerOutput) => {
     if (!output.rawQuery.trim()) return
     setSearching(true); setSearchError('')
-    setSearchResults([]); setNoResultsMeta({ sources: [], suggestions: [] }); setChipContext(null)
-    // Auto-switch to results tab immediately so user sees loading state
+    setSearchResults([]); setNoResultsMeta({ sources: [], suggestions: [] })
     setTab('results')
-    try {
-      const res = await fetch('/api/workbench/search', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          query: output.rawQuery,
-          chips: output.chips.map(c => ({ canonical: c.canonical, type: c.type })),
-          sources: output.recommendedSourceIds.filter(id =>
-            ['github', 'npm', 'pypi', 'openalex', 'huggingface', 'crates', 'rubygems'].includes(id)
-          ),
-          limit: 5,
-          projectId: currentProject?.id,
-        }),
-      })
-      const json = await res.json()
-      if (json.ok) {
-        setSearchResults(json.results || [])
-        setChipContext(json.chipContext || null)
-        if ((json.results || []).length === 0) {
-          setNoResultsMeta({
-            sources: json.noResultsSources || [],
-            suggestions: json.suggestions || [],
-            broadQuery: json.broadQuery,
-            usedBroadQuery: json.usedBroadQuery,
+
+    const chips = output.chips.map(c => ({ canonical: c.canonical, type: c.type }))
+
+    // Derive chip context for the UI (clearance/location/skill-light banners)
+    const hardTerms = chips.filter(c => c.type === 'skill' || c.type === 'tool').map(c => c.canonical)
+    const softFilters = chips.filter(c => ['title', 'seniority', 'location', 'company'].includes(c.type)).map(c => ({ canonical: c.canonical, type: c.type }))
+    const manualSafe = chips.filter(c => c.type === 'clearance').map(c => c.canonical)
+    setChipContext({
+      hardTerms, softFilters, manualSafe,
+      hasClearance: manualSafe.length > 0,
+      hasLocation: softFilters.some(f => f.type === 'location'),
+      isSkillLight: hardTerms.length === 0,
+    })
+
+    // Fast-mode live sources, best-first
+    const FAST_ORDER = ['github', 'npm', 'pypi', 'openalex', 'huggingface']
+    const requested = (output.recommendedSourceIds.filter(id => FAST_ORDER.includes(id)))
+    const liveSources = (requested.length > 0 ? requested : FAST_ORDER.slice(0, 4))
+      .sort((a, b) => FAST_ORDER.indexOf(a) - FAST_ORDER.indexOf(b))
+
+    // Seed lane statuses: queued for live, manual-safe lane if clearance present
+    const initialLanes: SourceLane[] = liveSources.map(s => ({ source: s, status: 'queued' as const }))
+    if (manualSafe.length > 0) {
+      initialLanes.push(...MANUAL_SAFE_LANES.slice(0, 2).map(l => ({ source: l.label, status: 'manual_safe' as const, href: l.href })))
+    }
+    setSourceLanes(initialLanes)
+
+    const runSource = async (source: string) => {
+      setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'searching' } : l))
+      const timeout = SOURCE_TIMEOUTS_MS[source] || DEFAULT_TIMEOUT_MS
+      try {
+        const { timedOut, data } = await fetchWithTimeout('/api/workbench/search-source',
+          { query: output.rawQuery, source, chips, limit: 5 }, timeout)
+        if (timedOut) {
+          setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'timed_out' } : l))
+          return
+        }
+        const json = data as { ok: boolean; results?: SourceResult[]; status?: string }
+        const results = json.results || []
+        // Merge + dedupe by id as each source returns (progressive)
+        if (results.length > 0) {
+          setSearchResults(prev => {
+            const seen = new Set(prev.map(r => r.id))
+            return [...prev, ...results.filter(r => !seen.has(r.id))]
           })
         }
-      } else {
-        setSearchError(json.error || 'Search failed.')
+        setSourceLanes(prev => prev.map(l => l.source === source
+          ? { ...l, status: results.length > 0 ? 'found' : 'no_results', count: results.length }
+          : l))
+      } catch {
+        setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'error' } : l))
       }
-    } catch { setSearchError('Search request failed — check your network connection.') }
-    finally { setSearching(false) }
-  }, [currentProject?.id])
+    }
+
+    // Fire all live sources in parallel — one slow source never blocks others
+    await Promise.allSettled(liveSources.map(runSource))
+    setSearching(false)
+
+    // Persist the search session (localStorage; schema-ready for Supabase later)
+    try {
+      saveSession({
+        projectId: currentProject?.id,
+        roleTitle: jdSummary?.roleTitle || intake.jobTitle || output.rawQuery.slice(0, 60),
+        rawQuery: output.rawQuery,
+        liveSearchTerms: hardTerms,
+        reviewFilters: softFilters.map(f => f.canonical),
+        manualSafeConstraints: manualSafe,
+        exclusions: output.falsePosWarnings || [],
+        sourceLanes: liveSources,
+        resultCount: 0, // updated below via state; sessions are advisory
+      })
+      setRecentSessions(listSessions())
+    } catch { /* non-fatal */ }
+  }, [currentProject?.id, jdSummary, intake.jobTitle])
+
+  // Retry a single timed-out / errored source
+  const retrySource = useCallback(async (source: string) => {
+    if (!composerOutput) return
+    const chips = composerOutput.chips.map(c => ({ canonical: c.canonical, type: c.type }))
+    setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'searching' } : l))
+    const timeout = SOURCE_TIMEOUTS_MS[source] || DEFAULT_TIMEOUT_MS
+    try {
+      const { timedOut, data } = await fetchWithTimeout('/api/workbench/search-source',
+        { query: composerOutput.rawQuery, source, chips, limit: 5 }, timeout)
+      if (timedOut) {
+        setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'timed_out' } : l))
+        return
+      }
+      const json = data as { results?: SourceResult[] }
+      const results = json.results || []
+      if (results.length > 0) {
+        setSearchResults(prev => {
+          const seen = new Set(prev.map(r => r.id))
+          return [...prev, ...results.filter(r => !seen.has(r.id))]
+        })
+      }
+      setSourceLanes(prev => prev.map(l => l.source === source
+        ? { ...l, status: results.length > 0 ? 'found' : 'no_results', count: results.length }
+        : l))
+    } catch {
+      setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'error' } : l))
+    }
+  }, [composerOutput])
 
   const TAB_LABELS: Record<Tab, string> = {
     intake:   '01  Role Intake',
@@ -404,6 +481,40 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 </div>
               )}
 
+              {recentSessions.length > 0 && (
+                <div className="recent-searches">
+                  <span className="recent-searches-label">Recent searches</span>
+                  <div className="recent-searches-list">
+                    {recentSessions.slice(0, 5).map(s => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        className="recent-search-chip"
+                        title={`${s.liveSearchTerms.join(' ')}${s.manualSafeConstraints.length ? ' · manual-safe: ' + s.manualSafeConstraints.join(', ') : ''}`}
+                        onClick={() => {
+                          const out: ComposerOutput = {
+                            rawQuery: s.rawQuery,
+                            chips: [
+                              ...(s.roleTitle ? [{ canonical: s.roleTitle, type: 'title' as const }] : []),
+                              ...s.liveSearchTerms.map(t => ({ canonical: t, type: 'skill' as const })),
+                              ...s.manualSafeConstraints.map(c => ({ canonical: c, type: 'clearance' as const })),
+                            ] as ComposerOutput['chips'],
+                            booleanString: '', xRayString: '', githubQuery: '', openAlexQuery: '', npmQuery: '',
+                            recommendedSourceIds: s.sourceLanes,
+                            candidateScorecardHints: [], verifyNextItems: [], falsePosWarnings: s.exclusions,
+                          }
+                          setComposerOutput(out)
+                          handleSearch(out)
+                        }}
+                      >
+                        <span className="recent-search-title">{s.roleTitle || s.rawQuery.slice(0, 40)}</span>
+                        <span className="recent-search-terms">{s.liveSearchTerms.slice(0, 3).join(' · ') || s.rawQuery.slice(0, 40)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <SearchComposer
                 onOutput={setComposerOutput}
                 onSearch={handleSearch}
@@ -447,11 +558,21 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
           {/* ── 03 Results ─────────────────────────────────────────────────── */}
           {tab === 'results' && (
             <div className="wb-section">
-              {searching && (
-                <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '3px solid rgba(72,217,255,.2)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+              {/* Per-source status dashboard — visible during and after search */}
+              {sourceLanes.length > 0 && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div className="wb-section-title" style={{ marginBottom: '8px' }}>
+                    Source lanes {searching && <span className="muted" style={{ fontWeight: 400, fontSize: '12px' }}>— results stream in as each source returns</span>}
+                  </div>
+                  <SourceLaneStatus lanes={sourceLanes} onRetry={retrySource} />
+                </div>
+              )}
+
+              {searching && searchResults.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '3px solid rgba(72,217,255,.2)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
                   <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-                  <p className="muted">Searching live sources…</p>
+                  <p className="muted">Querying fast sources…</p>
                 </div>
               )}
 
@@ -489,7 +610,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 </div>
               )}
 
-              {(searchResults.length > 0 || noResultsMeta.suggestions.length > 0) && !searching && (
+              {(searchResults.length > 0 || (!searching && noResultsMeta.suggestions.length > 0)) && (
                 <WorkbenchResults
                   results={searchResults}
                   noResultsSources={noResultsMeta.sources}

@@ -102,7 +102,7 @@ export function FindContactButton({ source, isAuthenticated = true, compact }: F
         style={compact ? { fontSize: '11px', padding: '4px 10px' } : { fontSize: '12px', padding: '5px 12px' }}
         title="Find contact info via configured provider"
       >
-        {phase === 'loading' ? '⟳ Finding…' : '✉ Find contact'}
+        {phase === 'loading' ? '⟳ Checking…' : '✉ Check contact signals'}
       </button>
 
       {/* Returned signals */}
