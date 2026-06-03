@@ -42,6 +42,9 @@ export function WorkbenchResults({
   chipContext, projectId, publicMode, onProfileSaved, onRetryComposer, onOpenDrawer,
 }: WorkbenchResultsProps) {
   const [saving, setSaving] = useState<Set<string>>(new Set())
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
+  const [contactFilter, setContactFilter] = useState<'all' | 'has' | 'none'>('all')
+  const [sortBy, setSortBy] = useState<'relevance' | 'evidence' | 'source'>('relevance')
   const [saved, setSaved] = useState<Map<string, string>>(new Map())
   const [notices, setNotices] = useState<Map<string, string>>(new Map())
   const [authRequired, setAuthRequired] = useState(false)
@@ -159,11 +162,43 @@ export function WorkbenchResults({
     }
   }
 
+  // Apply filters + sort
+  const availableSources = [...new Set(results.map(r => r.source))]
+  const filtered = results.filter(r => {
+    if (sourceFilter !== 'all' && r.source !== sourceFilter) return false
+    if (contactFilter === 'has' && r.contactSignals.length === 0) return false
+    if (contactFilter === 'none' && r.contactSignals.length > 0) return false
+    return true
+  })
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === 'evidence') return b.evidence.length - a.evidence.length
+    if (sortBy === 'source') return a.source.localeCompare(b.source)
+    return 0 // relevance = original order
+  })
+
   return (
     <div className="wb-results">
       <div className="wb-results-header">
         <span className="wb-section-title">Source profile results</span>
-        <span className="status-preview">{results.length} profile{results.length !== 1 ? 's' : ''} — unconfirmed</span>
+        <span className="status-preview">{sorted.length} of {results.length} profile{results.length !== 1 ? 's' : ''} — unconfirmed</span>
+      </div>
+
+      {/* Filter / sort bar */}
+      <div className="results-filter-bar">
+        <select className="results-filter" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
+          <option value="all">All sources</option>
+          {availableSources.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="results-filter" value={contactFilter} onChange={e => setContactFilter(e.target.value as 'all' | 'has' | 'none')}>
+          <option value="all">Any contact state</option>
+          <option value="has">Has contact signal</option>
+          <option value="none">No contact signal</option>
+        </select>
+        <select className="results-filter" value={sortBy} onChange={e => setSortBy(e.target.value as 'relevance' | 'evidence' | 'source')}>
+          <option value="relevance">Sort: Relevance</option>
+          <option value="evidence">Sort: Evidence count</option>
+          <option value="source">Sort: Source</option>
+        </select>
       </div>
 
       <div className="preview-banner" style={{ marginBottom: '16px' }}>
@@ -186,7 +221,7 @@ export function WorkbenchResults({
       )}
 
       <div className="result-cards">
-        {results.map(result => {
+        {sorted.map(result => {
           const color = SOURCE_COLORS[result.source] || SOURCE_COLORS.default
           const isSaved = saved.has(result.id)
           const isSaving = saving.has(result.id)

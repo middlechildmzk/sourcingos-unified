@@ -321,3 +321,13 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .jd-summary-live{color:#8ef5c4}
 .jd-summary-manual{color:#f88}
 @media(max-width:560px){.jd-summary-item{grid-template-columns:1fr}}
+
+/* ─── Sprint 2.10: Results filter bar ─────────────────────────────────────── */
+.results-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.results-filter{background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;padding:6px 10px;cursor:pointer;transition:border-color .15s}
+.results-filter:hover{border-color:rgba(72,217,255,.4)}
+.results-filter:focus{outline:none;border-color:var(--accent)}
+/* Drawer-first framing banners */
+.drawer-preview-note{font-size:12px;line-height:1.5;border-radius:10px;padding:10px 12px;margin-bottom:4px}
+.drawer-preview-unsaved{background:rgba(72,217,255,.05);border:1px solid rgba(72,217,255,.2);color:var(--muted)}
+.drawer-preview-saved{background:rgba(93,242,163,.06);border:1px solid rgba(93,242,163,.25);color:#8ef5c4}

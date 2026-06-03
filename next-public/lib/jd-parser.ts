@@ -64,13 +64,19 @@ function recognizeEntities(text: string): Recognized[] {
 }
 
 // ── Section detection for must-have vs preferred ──────────────────────────────
-function extractSection(text: string, headers: string[]): string {
+function extractSection(text: string, headers: string[], stopHeaders: string[] = []): string {
   const lower = text.toLowerCase()
   for (const header of headers) {
     const idx = lower.indexOf(header)
     if (idx !== -1) {
-      // Grab text from this header to the next blank-line block or 600 chars
-      const section = text.slice(idx, idx + 600)
+      // Section runs from this header until the next stop-header or blank line or 600 chars
+      let end = idx + 600
+      // Stop at the next opposing section header (e.g. must-have stops at "preferred")
+      for (const stop of stopHeaders) {
+        const stopIdx = lower.indexOf(stop, idx + header.length)
+        if (stopIdx !== -1 && stopIdx < end) end = stopIdx
+      }
+      const section = text.slice(idx, Math.min(end, idx + 600))
       const nextBreak = section.search(/\n\s*\n/)
       return nextBreak > 0 ? section.slice(0, nextBreak) : section
     }
@@ -121,10 +127,12 @@ export function parseJobDescription(text: string): ParsedJD {
   const titles = recognized.filter(r => r.type === 'title').map(r => r.canonical)
 
   // Must-have vs preferred by section
-  const mustSection = extractSection(text, ['required', 'must have', 'must-have', 'qualifications', 'requirements'])
-  const prefSection = extractSection(text, ['preferred', 'nice to have', 'nice-to-have', 'bonus', 'plus'])
+  const mustSection = extractSection(text, ['required', 'must have', 'must-have', 'qualifications', 'requirements'], ['preferred', 'nice to have', 'nice-to-have', 'bonus'])
+  const prefSection = extractSection(text, ['preferred', 'nice to have', 'nice-to-have', 'bonus', 'plus'], ['required', 'responsibilities', 'about'])
   const mustEntities = mustSection ? recognizeEntities(mustSection).filter(r => r.type === 'skill' || r.type === 'tool').map(r => r.canonical) : []
-  const prefEntities = prefSection ? recognizeEntities(prefSection).filter(r => r.type === 'skill' || r.type === 'tool').map(r => r.canonical) : []
+  const prefEntitiesRaw = prefSection ? recognizeEntities(prefSection).filter(r => r.type === 'skill' || r.type === 'tool').map(r => r.canonical) : []
+  // Preferred excludes anything already in must-have
+  const prefEntities = prefEntitiesRaw.filter(p => !mustEntities.includes(p))
 
   const allTech = [...new Set([...skills, ...tools])]
   const mustHaveSkills = mustEntities.length > 0 ? mustEntities : allTech.slice(0, Math.ceil(allTech.length / 2))
@@ -138,22 +146,27 @@ export function parseJobDescription(text: string): ParsedJD {
   const relatedTitles = titles.flatMap(t => (EXPANSIONS[t.toLowerCase()] || []).slice(0, 4))
 
   // False positives based on detected entities
-  const likelyFalsePositives: string[] = []
+  const likelyFalsePositives: string[] = ['bootcamp', 'tutorial', 'course', 'job posting', 'hiring']
   if (clearance.length > 0) likelyFalsePositives.push('Public clearance mentions are unverified — confirm directly')
   if (allTech.includes('Epic')) likelyFalsePositives.push('"Epic" may mean the word, not Epic Systems')
+  if (roleTitle.toLowerCase().includes('front end') || roleTitle.toLowerCase().includes('frontend')) {
+    likelyFalsePositives.push('WordPress-only', 'UI designer-only (non-engineering)')
+  }
 
-  // Suggested Boolean terms
-  const suggestedBooleanTerms = allTech.slice(0, 6)
+  // Suggested Boolean terms — prefer must-haves
+  const suggestedBooleanTerms = (mustHaveSkills.length > 0 ? mustHaveSkills : allTech).slice(0, 6)
 
   // Source lanes
   const suggestedSourceLanes: string[] = ['github']
   if (industries.includes('Healthcare') || tools.includes('Epic')) suggestedSourceLanes.push('npi', 'pubmed')
   if (industries.includes('AI/ML') || tools.includes('PyTorch') || tools.includes('Hugging Face')) suggestedSourceLanes.push('huggingface', 'openalex')
-  if (allTech.some(s => ['React', 'TypeScript', 'Node.js'].includes(s))) suggestedSourceLanes.push('npm')
+  if (allTech.some(s => ['React', 'TypeScript', 'Node.js', 'JavaScript', 'Vue', 'Angular'].includes(s))) suggestedSourceLanes.push('npm')
   if (allTech.includes('Python')) suggestedSourceLanes.push('pypi')
 
-  // Composer query — hard terms only (skills/tools), clearance/location excluded
-  const composerQuery = [roleTitle, location, ...clearance, ...allTech.slice(0, 4)].filter(Boolean).join(' ')
+  // Composer query — title + location + clearance + MUST-HAVE SKILLS.
+  // Skills are what drive the live source query (query builder strips clearance/location).
+  const skillTerms = (mustHaveSkills.length > 0 ? mustHaveSkills : allTech).slice(0, 4)
+  const composerQuery = [roleTitle, location, ...clearance, ...skillTerms].filter(Boolean).join(' ')
 
   return {
     roleTitle,

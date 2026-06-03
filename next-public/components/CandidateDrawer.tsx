@@ -116,6 +116,17 @@ export function CandidateDrawer({
             {result.location && <span className="result-compliance-badge">Location not verified</span>}
           </div>
 
+          {/* Drawer-first framing: preview vs saved */}
+          {isSaved ? (
+            <div className="drawer-preview-note drawer-preview-saved">
+              ✓ Saved to Candidate Graph. This is now a recruiter-confirmed record — open the full Candidate 360 for the deep-dive dossier.
+            </div>
+          ) : (
+            <div className="drawer-preview-note drawer-preview-unsaved">
+              This is a source profile preview. Review the evidence here, then save it to create a recruiter-confirmed Candidate 360 record. Saving is optional — you can keep reviewing without it.
+            </div>
+          )}
+
           {/* External source links */}
           {result.profileUrl && (
             <a className="btn secondary drawer-external" href={result.profileUrl} target="_blank" rel="noreferrer noopener">
@@ -225,10 +236,13 @@ export function CandidateDrawer({
               )}
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
               <button className="btn" style={{ flex: 1 }} onClick={saveSourceProfile} disabled={saving}>
                 {saving ? 'Saving…' : publicMode ? 'Save (sign in)' : projectId ? '+ Save & add to project' : '+ Save source profile'}
               </button>
+              <span className="muted" style={{ fontSize: '11px', textAlign: 'center' }}>
+                Save to create a Candidate 360 record
+              </span>
             </div>
           )}
           <p className="muted" style={{ fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>

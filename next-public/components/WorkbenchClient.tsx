@@ -131,11 +131,15 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
     saved:    '04  Saved',
   }
 
-  // The initial query for the SearchComposer — pre-populated from Role Intake
-  const composerInitialQuery = [
+  // The initial query for the SearchComposer — pre-populated from Role Intake.
+  // CRITICAL: include must-have skills so the live source query has real skill terms.
+  // A parsed JD provides jdSummary.composerQuery (title + location + clearance + skills).
+  const composerInitialQuery = jdSummary?.composerQuery || [
     intake.jobTitle,
     intake.location,
     intake.clearanceNeeds,
+    // Pull skills out of the must-haves field (comma or newline separated)
+    ...(intake.mustHaves ? intake.mustHaves.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).slice(0, 4) : []),
   ].filter(Boolean).join(' ')
 
   return (
@@ -241,6 +245,14 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                           <div className="jd-summary-item"><span className="jd-summary-label">Source lanes</span><span>{jdSummary.suggestedSourceLanes.join(', ')}</span></div>
                         )}
                       </div>
+                      <button
+                        type="button"
+                        className="btn"
+                        style={{ marginTop: '12px', fontSize: '13px' }}
+                        onClick={() => setTab('composer')}
+                      >
+                        Use this search plan → Search Composer
+                      </button>
                     </div>
                   )}
                 </div>
