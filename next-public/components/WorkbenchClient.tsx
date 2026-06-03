@@ -3,6 +3,8 @@ import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import { SearchComposer, type ComposerOutput } from '@/components/SearchComposer'
 import { WorkbenchResults, type SavedEntry } from '@/components/WorkbenchResults'
+import { CandidateDrawer } from '@/components/CandidateDrawer'
+import { parseJobDescription } from '@/lib/jd-parser'
 import type { SourceResult } from '@/lib/source-types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ const STRATEGY_SECTIONS = [
   { id: 'scorecard', label: 'Candidate Scorecard' }, { id: 'calibration', label: 'HM Calibration Questions' },
 ]
 
-export function WorkbenchClient() {
+export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }) {
   const [tab, setTab] = useState<Tab>('intake')
   const [intake, setIntake] = useState<IntakeData>(defaultIntake)
   const [currentProject, setCurrentProject] = useState<ProjectRecord | null>(null)
@@ -48,6 +50,10 @@ export function WorkbenchClient() {
   const [noResultsMeta, setNoResultsMeta] = useState<{ sources: string[]; suggestions: string[]; broadQuery?: string; usedBroadQuery?: boolean }>({ sources: [], suggestions: [] })
   const [savedEntries, setSavedEntries] = useState<SavedEntry[]>([])
   const [showAiStrategy, setShowAiStrategy] = useState(false)
+  const [drawerResult, setDrawerResult] = useState<SourceResult | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [jdText, setJdText] = useState('')
+  const [jdParsed, setJdParsed] = useState(false)
 
   const setField = (f: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setIntake(prev => ({ ...prev, [f]: e.target.value }))
@@ -179,9 +185,36 @@ export function WorkbenchClient() {
                     placeholder="e.g. DevSecOps Engineer, Staff ML Engineer, Cleared Cyber Analyst" />
                 </div>
                 <div className="wb-form-row full">
-                  <label>Job description</label>
+                  <label>Job description <span className="muted" style={{ fontWeight: 400, fontSize: '11px' }}>— paste a JD and click Parse to auto-fill fields</span></label>
                   <textarea value={intake.jobDescription} onChange={setField('jobDescription')}
-                    placeholder="Paste the full JD." />
+                    placeholder="Paste the full JD here, then click 'Parse JD' to extract title, skills, location, clearance, and source lanes." />
+                  {intake.jobDescription.trim().length > 40 && (
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      style={{ marginTop: '8px', fontSize: '12px', alignSelf: 'flex-start' }}
+                      onClick={() => {
+                        const parsed = parseJobDescription(intake.jobDescription)
+                        setIntake(prev => ({
+                          ...prev,
+                          jobTitle: parsed.roleTitle || prev.jobTitle,
+                          location: parsed.location || prev.location,
+                          clearanceNeeds: parsed.clearance.join(', ') || prev.clearanceNeeds,
+                          mustHaves: parsed.mustHaveSkills.join(', ') || prev.mustHaves,
+                          niceToHaves: parsed.preferredSkills.join(', ') || prev.niceToHaves,
+                          targetCompanies: parsed.targetCompanies.join('\n') || prev.targetCompanies,
+                        }))
+                        setJdParsed(true)
+                      }}
+                    >
+                      ⚡ Parse JD → auto-fill fields
+                    </button>
+                  )}
+                  {jdParsed && (
+                    <p className="muted" style={{ fontSize: '12px', marginTop: '6px', color: 'var(--green)' }}>
+                      ✓ Parsed — title, skills, location, and clearance populated below. Review and edit, then open Search Composer.
+                    </p>
+                  )}
                 </div>
                 <div className="wb-form-row">
                   <label>Must-haves</label>
@@ -397,8 +430,10 @@ export function WorkbenchClient() {
                   searchedQuery={composerOutput?.rawQuery}
                   chipContext={chipContext}
                   projectId={currentProject?.id}
+                  publicMode={publicMode}
                   onProfileSaved={entry => setSavedEntries(prev => [...prev, entry])}
                   onRetryComposer={() => setTab('composer')}
+                  onOpenDrawer={r => { setDrawerResult(r); setDrawerOpen(true) }}
                 />
               )}
             </div>
@@ -453,6 +488,18 @@ export function WorkbenchClient() {
 
         </div>
       </div>
+
+      {/* ── Right-side candidate/profile drawer ──────────────────────────── */}
+      <CandidateDrawer
+        result={drawerResult}
+        open={drawerOpen}
+        publicMode={publicMode}
+        projectId={currentProject?.id}
+        onClose={() => setDrawerOpen(false)}
+        onSaved={(id, displayName, source) => setSavedEntries(prev =>
+          prev.some(e => e.id === id) ? prev : [...prev, { id, displayName, source }]
+        )}
+      />
     </div>
   )
 }

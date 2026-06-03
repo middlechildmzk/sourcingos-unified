@@ -22,8 +22,10 @@ interface WorkbenchResultsProps {
   searchedQuery?: string
   chipContext?: ChipContext | null
   projectId?: string
+  publicMode?: boolean
   onProfileSaved?: (entry: SavedEntry) => void
   onRetryComposer?: () => void
+  onOpenDrawer?: (result: SourceResult) => void
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -37,7 +39,7 @@ const CONF_COLOR: Record<string, string> = {
 
 export function WorkbenchResults({
   results, noResultsSources = [], suggestions = [], searchedQuery,
-  chipContext, projectId, onProfileSaved, onRetryComposer,
+  chipContext, projectId, publicMode, onProfileSaved, onRetryComposer, onOpenDrawer,
 }: WorkbenchResultsProps) {
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [saved, setSaved] = useState<Map<string, string>>(new Map())
@@ -124,6 +126,8 @@ export function WorkbenchResults({
 
   async function saveProfile(result: SourceResult) {
     if (saving.has(result.id) || saved.has(result.id)) return
+    // Public demo mode — prompt sign-in instead of saving
+    if (publicMode) { setAuthRequired(true); return }
     setSaving(prev => new Set(prev).add(result.id))
     setAuthRequired(false)
 
@@ -198,11 +202,24 @@ export function WorkbenchResults({
                     {result.source}
                   </span>
                   <div>
-                    <div className="result-name">{result.displayName}</div>
+                    <button
+                      className="result-name result-name-btn"
+                      onClick={() => onOpenDrawer?.(result)}
+                      title="Open profile drawer"
+                    >
+                      {result.displayName}
+                    </button>
                     {result.headline && <div className="result-headline">{result.headline}</div>}
                   </div>
                 </div>
                 <div className="result-actions">
+                  <button
+                    className="btn ghost"
+                    onClick={() => onOpenDrawer?.(result)}
+                    style={{ fontSize: '12px', padding: '5px 12px' }}
+                  >
+                    View details
+                  </button>
                   {isSaved ? (
                     <>
                       <span className="status-live">Saved</span>
@@ -214,7 +231,7 @@ export function WorkbenchResults({
                   ) : (
                     <button className="btn secondary" onClick={() => saveProfile(result)}
                       disabled={isSaving} style={{ fontSize: '12px', padding: '6px 14px' }}>
-                      {isSaving ? 'Saving…' : '+ Save profile'}
+                      {isSaving ? 'Saving…' : publicMode ? 'Save (sign in)' : '+ Save profile'}
                     </button>
                   )}
                 </div>

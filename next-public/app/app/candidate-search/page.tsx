@@ -28,7 +28,7 @@ export default function CandidateSearchPage() {
         </span>
       </div>
 
-      <WorkbenchClient />
+      <WorkbenchClient publicMode={false} />
 
       <div className="card" style={{ marginTop: '32px' }}>
         <span className="kicker">Also in the beta workflow</span>

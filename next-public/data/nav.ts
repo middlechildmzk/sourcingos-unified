@@ -10,7 +10,7 @@ export type NavItem = {
 export const publicNav: NavItem[] = [
   { label: 'Free Tools', href: '/tools' },
   { label: 'Sourcing Vault', href: '/methods' },
-  { label: 'Candidate Search', href: '/app/candidate-search' },
+  { label: 'Candidate Search', href: '/candidate-search' },
   { label: 'Jobs', href: '/jobs' },
   { label: 'Directory', href: '/directory' },
   { label: 'Guides', href: '/blog' },
