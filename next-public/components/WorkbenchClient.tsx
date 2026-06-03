@@ -54,6 +54,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [jdText, setJdText] = useState('')
   const [jdParsed, setJdParsed] = useState(false)
+  const [jdSummary, setJdSummary] = useState<ReturnType<typeof parseJobDescription> | null>(null)
 
   const setField = (f: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setIntake(prev => ({ ...prev, [f]: e.target.value }))
@@ -195,6 +196,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                       style={{ marginTop: '8px', fontSize: '12px', alignSelf: 'flex-start' }}
                       onClick={() => {
                         const parsed = parseJobDescription(intake.jobDescription)
+                        setJdSummary(parsed)
                         setIntake(prev => ({
                           ...prev,
                           jobTitle: parsed.roleTitle || prev.jobTitle,
@@ -210,10 +212,36 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                       ⚡ Parse JD → auto-fill fields
                     </button>
                   )}
-                  {jdParsed && (
-                    <p className="muted" style={{ fontSize: '12px', marginTop: '6px', color: 'var(--green)' }}>
-                      ✓ Parsed — title, skills, location, and clearance populated below. Review and edit, then open Search Composer.
-                    </p>
+                  {jdParsed && jdSummary && (
+                    <div className="jd-summary">
+                      <div className="jd-summary-head">✓ Parsed — review and edit below, then open Search Composer</div>
+                      <div className="jd-summary-grid">
+                        {jdSummary.roleTitle && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Title</span><span>{jdSummary.roleTitle}</span></div>
+                        )}
+                        {jdSummary.mustHaveSkills.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Must-haves</span><span>{jdSummary.mustHaveSkills.join(', ')}</span></div>
+                        )}
+                        {jdSummary.preferredSkills.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Nice-to-haves</span><span>{jdSummary.preferredSkills.join(', ')}</span></div>
+                        )}
+                        {(jdSummary.seniority || jdSummary.location) && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Review filters</span><span>{[jdSummary.seniority, jdSummary.location].filter(Boolean).join(' · ')}</span></div>
+                        )}
+                        {jdSummary.clearance.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label jd-summary-manual">Manual-safe</span><span>{jdSummary.clearance.join(', ')} (not verified)</span></div>
+                        )}
+                        {jdSummary.suggestedBooleanTerms.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label jd-summary-live">Live search terms</span><span>{jdSummary.suggestedBooleanTerms.join(', ')}</span></div>
+                        )}
+                        {jdSummary.relatedTitles.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Adjacent titles</span><span>{jdSummary.relatedTitles.slice(0, 5).join(', ')}</span></div>
+                        )}
+                        {jdSummary.suggestedSourceLanes.length > 0 && (
+                          <div className="jd-summary-item"><span className="jd-summary-label">Source lanes</span><span>{jdSummary.suggestedSourceLanes.join(', ')}</span></div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <div className="wb-form-row">

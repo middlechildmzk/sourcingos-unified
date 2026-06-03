@@ -4,35 +4,44 @@ import Link from 'next/link'
 import {
   buildEnrichmentRequest,
   enrichmentInputHint,
-  getActiveProviderStatus,
+  type ContactSignal,
   type EnrichmentSource,
 } from '@/lib/contact-enrichment'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FindContactButton — future-ready, gated contact enrichment affordance.
+// FindContactButton — user-triggered contact enrichment.
 //
-// FOUNDATION ONLY (Sprint 2.7 prep). No live provider call. The provider stub
-// returns providerConfigured: false, so this always shows the not-configured
-// message. Sprint 2.8 will POST to /api/contact-enrichment/find.
+// Calls POST /api/contact-enrichment/find (server-side PDL). The browser never
+// sees the API key or raw provider payload. Every signal is shown as unverified.
 //
-// Gating order:
-//   1. Logged out          → "Sign in to find contact info."
-//   2. Insufficient inputs → "Add name/company/domain/profile URL…"
-//   3. Provider not set     → "Contact enrichment provider not configured yet."
+// Response handling:
+//   401 auth_required        → "Sign in to find contact info."
+//   503 provider_not_configured → "Contact enrichment provider not configured yet."
+//   200 + signals            → render signals (unverified, permission unknown)
+//   200 + empty              → "No contact signal found yet."
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface FindContactButtonProps {
   source: EnrichmentSource
-  /** When false, clicking prompts sign-in. Defaults true (page is auth-gated today). */
+  /** When false, prompts sign-in without calling the API. */
   isAuthenticated?: boolean
   compact?: boolean
 }
 
-export function FindContactButton({ source, isAuthenticated = true, compact }: FindContactButtonProps) {
-  const [message, setMessage] = useState<{ text: string; tone: 'info' | 'warn' | 'auth' } | null>(null)
+type Phase = 'idle' | 'loading' | 'done' | 'error'
 
-  function handleClick() {
-    // 1. Auth gate
+const SIGNAL_LABEL: Record<string, string> = {
+  email: 'Email', phone: 'Phone', profile_url: 'Profile',
+  social_url: 'Social', company_domain: 'Company domain', unknown: 'Signal',
+}
+
+export function FindContactButton({ source, isAuthenticated = true, compact }: FindContactButtonProps) {
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [message, setMessage] = useState<{ text: string; tone: 'info' | 'warn' | 'auth' } | null>(null)
+  const [signals, setSignals] = useState<ContactSignal[]>([])
+
+  async function handleClick() {
+    // 1. Auth gate (client-side fast path — server also enforces)
     if (!isAuthenticated) {
       setMessage({ text: 'Sign in to find contact info and build your Candidate Graph.', tone: 'auth' })
       return
@@ -46,15 +55,41 @@ export function FindContactButton({ source, isAuthenticated = true, compact }: F
       return
     }
 
-    // 3. Provider status (stub → not configured)
-    const status = getActiveProviderStatus()
-    if (!status.providerConfigured) {
-      setMessage({ text: status.message, tone: 'info' })
-      return
-    }
+    // 3. Call live API
+    setPhase('loading'); setMessage(null); setSignals([])
+    try {
+      const res = await fetch('/api/contact-enrichment/find', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(request),
+      })
 
-    // (Sprint 2.8) — POST to /api/contact-enrichment/find would go here.
-    setMessage({ text: 'Contact enrichment will be available in a future release.', tone: 'info' })
+      if (res.status === 401) {
+        setPhase('idle')
+        setMessage({ text: 'Sign in to find contact info.', tone: 'auth' })
+        return
+      }
+      if (res.status === 503) {
+        setPhase('idle')
+        setMessage({ text: 'Contact enrichment provider not configured yet.', tone: 'info' })
+        return
+      }
+
+      const json = await res.json()
+      if (json.ok) {
+        setSignals(json.signals || [])
+        setPhase('done')
+        if (!json.signals || json.signals.length === 0) {
+          setMessage({ text: json.message || 'No contact signal found yet.', tone: 'info' })
+        }
+      } else {
+        setPhase('error')
+        setMessage({ text: json.error || 'Enrichment failed.', tone: 'warn' })
+      }
+    } catch {
+      setPhase('error')
+      setMessage({ text: 'Could not reach the enrichment service.', tone: 'warn' })
+    }
   }
 
   return (
@@ -63,18 +98,45 @@ export function FindContactButton({ source, isAuthenticated = true, compact }: F
         type="button"
         className="btn ghost find-contact-btn"
         onClick={handleClick}
+        disabled={phase === 'loading'}
         style={compact ? { fontSize: '11px', padding: '4px 10px' } : { fontSize: '12px', padding: '5px 12px' }}
-        title="Find contact info (enrichment provider not connected yet)"
+        title="Find contact info via configured provider"
       >
-        ✉ Find contact
+        {phase === 'loading' ? '⟳ Finding…' : '✉ Find contact'}
       </button>
 
+      {/* Returned signals */}
+      {phase === 'done' && signals.length > 0 && (
+        <div className="enrich-results">
+          <div className="enrich-warning">
+            ⚠ Contact signals are unverified and do not imply permission to contact.
+          </div>
+          {signals.map((s, i) => (
+            <div key={i} className="enrich-signal">
+              <div className="enrich-signal-head">
+                <span className="enrich-signal-type">{SIGNAL_LABEL[s.type] || s.type}</span>
+                <span className="enrich-signal-value">{s.value}</span>
+              </div>
+              <div className="enrich-signal-meta">
+                <span className="enrich-badge enrich-badge-unverified">Unverified</span>
+                <span className="enrich-badge">Permission unknown</span>
+                <span className="enrich-badge">People Data Labs</span>
+                {s.discoveredAt && (
+                  <span className="enrich-badge-date">
+                    {new Date(s.discoveredAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Status / gating messages */}
       {message && (
         <div className={`find-contact-msg find-contact-${message.tone}`}>
           {message.tone === 'auth' ? (
-            <span>
-              {message.text} <Link href="/login" style={{ textDecoration: 'underline' }}>Sign in →</Link>
-            </span>
+            <span>{message.text} <Link href="/login" style={{ textDecoration: 'underline' }}>Sign in →</Link></span>
           ) : (
             <span>{message.text}</span>
           )}

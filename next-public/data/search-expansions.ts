@@ -45,7 +45,11 @@ export const EXPANSIONS: Record<string, string[]> = {
   'python':                 ['PyPI', 'pandas', 'NumPy', 'FastAPI', 'Django', 'Flask', 'scikit-learn'],
   'go':                     ['Golang', 'gRPC', 'Go microservices'],
   'rust':                   ['crates.io', 'WebAssembly', 'Rust systems programming'],
-  'react':                  ['Next.js', 'TypeScript', 'Node.js', 'frontend', 'UI engineer'],
+  'react':                  ['TypeScript', 'JavaScript', 'Next.js', 'Redux', 'GraphQL', 'Tailwind', 'Vite', 'frontend'],
+  'front end developer':    ['Frontend Engineer', 'Front End Engineer', 'UI Engineer', 'React Engineer', 'JavaScript Engineer', 'Web Engineer', 'Senior Frontend Engineer'],
+  'frontend engineer':      ['Front End Engineer', 'UI Engineer', 'React Engineer', 'JavaScript Engineer', 'Web Engineer'],
+  'backend engineer':       ['Backend Developer', 'API Engineer', 'Server Engineer', 'Python Engineer', 'Node.js Engineer', 'Go Engineer'],
+  'platform engineer':      ['DevOps Engineer', 'Infrastructure Engineer', 'SRE', 'Cloud Engineer', 'Kubernetes Engineer'],
 
   // ── Certifications
   'cissp':                  ['CISM', 'Security+', 'GIAC', 'CEH', 'CCSP', 'SSCP'],

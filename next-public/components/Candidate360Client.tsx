@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { FindContactButton } from '@/components/FindContactButton'
 
 type Dossier = any
 
@@ -235,6 +236,21 @@ export function Candidate360Client({ candidateId }: { candidateId: string }) {
         ) : (
           <p className="muted" style={{ fontSize: '14px' }}>No contact signals collected yet.</p>
         )}
+
+        {/* Find contact — user-triggered enrichment (signed-in beta) */}
+        <div style={{ marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--line)' }}>
+          <FindContactButton
+            isAuthenticated={true}
+            source={{
+              candidateId,
+              displayName: c.canonicalName,
+              headline: c.headline,
+              organization: c.currentCompany,
+              location: c.location,
+              source: 'github',
+            }}
+          />
+        </div>
       </div>
 
       {/* ── Open-to-work signals ───────────────────────────────── */}
