@@ -94,12 +94,84 @@ function detectSeniority(text: string): string {
   return ''
 }
 
-// ── Extract a role title from the first lines ─────────────────────────────────
+// ── Guidance sections that must NEVER yield a job title ───────────────────────
+const GUIDANCE_HEADERS = [
+  'search guidance', 'nice-to-have source signals', 'source signals',
+  'likely false positives', 'false positives', 'source lanes', 'source lane',
+  'approved workflows', 'how to search', 'sourcing notes', 'recruiter notes',
+  'tools to use', 'tooling', 'boolean', 'x-ray', 'xray',
+]
+
+// ── Phrases where a title match must be IGNORED (operational tools/instructions) ─
+const OPERATIONAL_TITLE_PHRASES = [
+  'linkedin recruiter', 'internal recruiter', 'recruiter should', 'recruiter will',
+  'sourcer should', 'sourcer will', 'clearancejobs', 'internal ats', 'job posting',
+  'staffing ads', 'boolean generator', 'x-ray search', 'xray search',
+  'hireez', 'seekout', 'gem', 'ashby', 'apollo', 'lusha', 'contactout', 'gem.com',
+]
+
+/** Returns the portion of the JD before any guidance/sourcing section. */
+function titleSearchRegion(text: string): string {
+  const lower = text.toLowerCase()
+  let cut = text.length
+  for (const h of GUIDANCE_HEADERS) {
+    const idx = lower.indexOf(h)
+    if (idx !== -1 && idx < cut) cut = idx
+  }
+  return text.slice(0, cut)
+}
+
+/** True when a title alias appears only inside an operational-tool phrase. */
+function isOperationalContext(text: string, alias: string): boolean {
+  const lower = text.toLowerCase()
+  for (const phrase of OPERATIONAL_TITLE_PHRASES) {
+    if (phrase.includes(alias) && lower.includes(phrase)) {
+      // The alias only appears as part of an operational phrase — check if it ever appears standalone
+      const standalone = new RegExp(`(^|[^a-z])${alias}([^a-z]|$)`, 'i')
+      // Remove all operational phrase occurrences, then test for standalone
+      let stripped = lower
+      for (const p of OPERATIONAL_TITLE_PHRASES) stripped = stripped.split(p).join(' ')
+      if (!standalone.test(stripped)) return true
+    }
+  }
+  return false
+}
+
+// ── Extract a role title from the JD (section-aware, position-aware) ──────────
 function detectRoleTitle(text: string, recognized: Recognized[]): string {
-  const titleEntity = recognized.find(r => r.type === 'title')
-  if (titleEntity) return titleEntity.canonical
-  // Fallback: first non-empty line, trimmed
-  const firstLine = text.split('\n').map(l => l.trim()).find(l => l.length > 3 && l.length < 80)
+  // 1. Explicit labeled title — highest priority
+  const labelMatch = text.match(/(?:^|\n)\s*(?:job\s*title|role|position|title)\s*[:\-]\s*(.+)/i)
+  if (labelMatch && labelMatch[1].trim().length > 2) {
+    return labelMatch[1].trim().split(/\s{2,}|[|•]/)[0].trim().slice(0, 80)
+  }
+
+  // 2. First meaningful line at the very top of the JD (before any guidance section)
+  const region = titleSearchRegion(text)
+  const topLines = region.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 4)
+  for (const line of topLines) {
+    if (line.length < 4 || line.length > 80) continue
+    const lower = line.toLowerCase()
+    // Skip lines that are headers or contain operational phrases
+    if (OPERATIONAL_TITLE_PHRASES.some(p => lower.includes(p))) continue
+    if (/^(about|overview|summary|responsibilities|requirements|qualifications)\b/.test(lower)) continue
+    // A title line usually has role-ish words or matches a taxonomy title
+    const looksLikeTitle = /(engineer|developer|recruiter|sourcer|manager|analyst|architect|designer|scientist|lead|specialist|administrator|consultant)/i.test(line)
+    if (looksLikeTitle) return line
+  }
+
+  // 3. Taxonomy title — but ONLY from the non-guidance region and not operational context
+  const regionLower = region.toLowerCase()
+  for (const r of recognized) {
+    if (r.type !== 'title') continue
+    // Must actually appear in the title region (not just guidance)
+    const aliasInRegion = regionLower.includes(r.canonical.toLowerCase())
+    if (!aliasInRegion) continue
+    if (isOperationalContext(text, r.canonical.toLowerCase())) continue
+    return r.canonical
+  }
+
+  // 4. Last resort: first non-empty meaningful line
+  const firstLine = region.split('\n').map(l => l.trim()).find(l => l.length > 3 && l.length < 80)
   return firstLine || ''
 }
 

@@ -245,14 +245,41 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                           <div className="jd-summary-item"><span className="jd-summary-label">Source lanes</span><span>{jdSummary.suggestedSourceLanes.join(', ')}</span></div>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ marginTop: '12px', fontSize: '13px' }}
-                        onClick={() => setTab('composer')}
-                      >
-                        Use this search plan → Search Composer
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ fontSize: '13px', flex: '1 1 auto' }}
+                          onClick={() => {
+                            // Build a ComposerOutput directly from the parsed plan and run search
+                            const chips = [
+                              ...(jdSummary.roleTitle ? [{ canonical: jdSummary.roleTitle, type: 'title' as const }] : []),
+                              ...jdSummary.mustHaveSkills.map(s => ({ canonical: s, type: 'skill' as const })),
+                              ...(jdSummary.location ? [{ canonical: jdSummary.location, type: 'location' as const }] : []),
+                              ...jdSummary.clearance.map(c => ({ canonical: c, type: 'clearance' as const })),
+                            ]
+                            const output: ComposerOutput = {
+                              rawQuery: jdSummary.composerQuery,
+                              chips: chips as ComposerOutput['chips'],
+                              booleanString: '', xRayString: '', githubQuery: '', openAlexQuery: '', npmQuery: '',
+                              recommendedSourceIds: jdSummary.suggestedSourceLanes,
+                              candidateScorecardHints: [], verifyNextItems: [], falsePosWarnings: jdSummary.likelyFalsePositives,
+                            }
+                            setComposerOutput(output)
+                            handleSearch(output)
+                          }}
+                        >
+                          ⚡ Accept &amp; Search
+                        </button>
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          style={{ fontSize: '13px' }}
+                          onClick={() => setTab('composer')}
+                        >
+                          Refine in Composer →
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

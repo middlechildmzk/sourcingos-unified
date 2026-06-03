@@ -95,12 +95,15 @@ function titleToImpliedSkills(titleCanonical: string): string[] {
 // These terms produce zero results on technical public sources.
 const STOP_WORDS_FOR_LIVE_SEARCH = new Set([
   'ts', 'sci', 'ts/sci', 'tssci', 'secret', 'top', 'clearance', 'cleared',
-  'polygraph', 'poly', 'public', 'trust',
+  'polygraph', 'poly', 'public', 'trust', 'ci', 'fs', 'fullscope', 'q',
   'senior', 'sr', 'junior', 'jr', 'lead', 'staff', 'principal', 'distinguished',
   'dc', 'washington', 'virginia', 'maryland', 'northern', 'nova',
   'remote', 'hybrid', 'onsite', 'metro',
   'candidate', 'recruiter', 'hiring', 'job', 'position', 'opening',
   'developer', 'engineer', 'manager',  // too generic alone
+  // Operational sourcing tools — never belong in a public technical API query
+  'linkedin', 'clearancejobs', 'hireez', 'seekout', 'gem', 'ashby',
+  'apollo', 'lusha', 'contactout', 'ats', 'boolean', 'x-ray', 'xray',
 ])
 
 function cleanRawQuery(rawQuery: string, removeChips: ComposerChip[]): string {
