@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { FindContactButton } from '@/components/FindContactButton'
 import { DrawerCopilot } from '@/components/DrawerCopilot'
+import { FeedbackButtons } from '@/components/FeedbackButtons'
 import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
 
@@ -212,6 +213,18 @@ export function CandidateDrawer({
               {result.location && <li>Confirm location and remote eligibility</li>}
               <li>Confirm identity before merging with any existing candidate</li>
             </ul>
+          </section>
+
+          {/* Recruiter feedback → project memory */}
+          <section className="drawer-section">
+            <FeedbackButtons
+              projectId={projectId}
+              sourceProfileId={result.sourceProfileId}
+              searchQuery={plan?.rawQuery}
+              matchedSkills={result.skills}
+              source={result.source}
+              title={result.headline}
+            />
           </section>
 
           {/* AI Copilot — user-triggered, draft, review-required */}

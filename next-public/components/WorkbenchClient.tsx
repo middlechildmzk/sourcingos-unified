@@ -6,6 +6,7 @@ import { WorkbenchResults, type SavedEntry } from '@/components/WorkbenchResults
 import { CandidateDrawer } from '@/components/CandidateDrawer'
 import { parseJobDescription } from '@/lib/jd-parser'
 import { SourceLaneStatus, type SourceLane } from '@/components/SourceLaneStatus'
+import { ComposerCopilotPanel } from '@/components/ComposerCopilotPanel'
 import { fetchWithTimeout, SOURCE_TIMEOUTS_MS, DEFAULT_TIMEOUT_MS, MANUAL_SAFE_LANES } from '@/lib/search/source-timeout'
 import { saveSession, listSessions, type SavedSearchSession } from '@/lib/search/saved-sessions'
 import type { SourceResult } from '@/lib/source-types'
@@ -514,6 +515,20 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                   </div>
                 </div>
               )}
+
+              <ComposerCopilotPanel
+                publicMode={publicMode}
+                plan={{
+                  roleTitle: jdSummary?.roleTitle || intake.jobTitle,
+                  rawQuery: composerInitialQuery,
+                  mustHaveSkills: jdSummary?.mustHaveSkills || [],
+                  niceToHaveSkills: jdSummary?.preferredSkills || [],
+                  location: jdSummary?.location || intake.location,
+                  manualSafeConstraints: jdSummary?.clearance || (intake.clearanceNeeds ? [intake.clearanceNeeds] : []),
+                  exclusions: jdSummary?.likelyFalsePositives || [],
+                  sourceLanes: jdSummary?.suggestedSourceLanes || [],
+                }}
+              />
 
               <SearchComposer
                 onOutput={setComposerOutput}

@@ -382,3 +382,30 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .copilot-meta{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
 .copilot-meta-label{font-weight:800;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
 .copilot-warning{font-size:11px;color:#f6c96b;background:rgba(246,201,107,.06);border:1px solid rgba(246,201,107,.2);border-radius:8px;padding:7px 10px;margin-top:8px;line-height:1.45}
+
+/* ─── V3.1: Composer AI Copilot panel ─────────────────────────────────────── */
+.composer-copilot{margin-bottom:16px}
+.composer-copilot-trigger{display:inline-flex;align-items:center;gap:8px;background:rgba(138,124,255,.08);border:1px solid rgba(138,124,255,.3);border-radius:10px;color:#cfc4ff;font-size:13px;font-weight:700;padding:9px 14px;cursor:pointer;transition:all .15s}
+.composer-copilot-trigger:hover:not(:disabled){background:rgba(138,124,255,.14);border-color:rgba(138,124,255,.5)}
+.composer-copilot-trigger:disabled{opacity:.6;cursor:default}
+.composer-copilot-body{margin-top:12px;background:rgba(138,124,255,.04);border:1px solid rgba(138,124,255,.18);border-radius:12px;padding:14px}
+.cc-block{padding:10px 0;border-top:1px solid rgba(138,124,255,.12)}
+.cc-block:first-child{border-top:none}
+.cc-label{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:7px}
+.cc-label-manual{color:#f88}
+.cc-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.cc-chip{font-size:12px;background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:7px;padding:3px 9px;color:var(--text)}
+.cc-code{display:block;background:rgba(2,8,18,.6);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:12px;color:#8ef5c4;word-break:break-all;margin-bottom:8px}
+.cc-actions{display:flex;gap:6px;flex-wrap:wrap}
+.cc-apply{background:rgba(138,124,255,.12);border:1px solid rgba(138,124,255,.4);border-radius:6px;color:#cfc4ff;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;cursor:pointer}
+.cc-apply:hover{background:rgba(138,124,255,.2)}
+
+/* ─── V3.1: Feedback buttons ──────────────────────────────────────────────── */
+.feedback-buttons{}
+.feedback-label{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+.feedback-row{display:flex;flex-wrap:wrap;gap:6px}
+.feedback-btn{background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:600;padding:6px 11px;cursor:pointer;transition:all .15s;color:var(--text)}
+.feedback-pos:hover,.feedback-pos.active{border-color:rgba(93,242,163,.5);background:rgba(93,242,163,.1);color:#8ef5c4}
+.feedback-neg:hover,.feedback-neg.active{border-color:rgba(246,100,100,.5);background:rgba(246,100,100,.08);color:#f88}
+.feedback-neutral:hover,.feedback-neutral.active{border-color:rgba(246,201,107,.5);background:rgba(246,201,107,.08);color:#f6c96b}
+.feedback-confirm{display:block;font-size:11px;color:var(--green);margin-top:8px}
