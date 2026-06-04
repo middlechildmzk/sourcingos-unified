@@ -2,6 +2,8 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { FindContactButton } from '@/components/FindContactButton'
+import { DrawerCopilot } from '@/components/DrawerCopilot'
+import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
 
 export interface DrawerSavedState {
@@ -14,6 +16,7 @@ interface CandidateDrawerProps {
   open: boolean
   publicMode: boolean
   projectId?: string
+  plan?: CopilotPlanInput
   saved?: DrawerSavedState | null
   onClose: () => void
   onSaved?: (candidateId: string, displayName: string, source: string) => void
@@ -33,7 +36,7 @@ const SOURCE_OPEN_LABEL: Record<string, string> = {
 }
 
 export function CandidateDrawer({
-  result, open, publicMode, projectId, saved, onClose, onSaved,
+  result, open, publicMode, projectId, plan, saved, onClose, onSaved,
 }: CandidateDrawerProps) {
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
@@ -210,6 +213,23 @@ export function CandidateDrawer({
               <li>Confirm identity before merging with any existing candidate</li>
             </ul>
           </section>
+
+          {/* AI Copilot — user-triggered, draft, review-required */}
+          <DrawerCopilot
+            publicMode={publicMode}
+            candidate={{
+              displayName: result.displayName,
+              headline: result.headline,
+              source: result.source,
+              organization: result.organization,
+              location: result.location,
+              profileUrl: result.profileUrl,
+              matchedSkills: result.skills,
+              evidenceSnippets: result.evidence.map(e => e.label),
+              contactSignalCount: result.contactSignals.length,
+            }}
+            plan={plan || {}}
+          />
         </div>
 
         {/* Sticky action footer */}

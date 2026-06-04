@@ -351,3 +351,34 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .recent-search-title{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:196px}
 .recent-search-terms{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:196px}
 @media(max-width:560px){.recent-searches-list{overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px}.recent-search-chip{flex-shrink:0}}
+
+/* ─── V3: AI Copilot ──────────────────────────────────────────────────────── */
+.copilot-section{background:rgba(138,124,255,.04);border:1px solid rgba(138,124,255,.18);border-radius:12px;padding:14px;margin-top:4px}
+.ai-draft-badge{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:#b8a8ff;background:rgba(138,124,255,.12);border:1px solid rgba(138,124,255,.3);border-radius:5px;padding:2px 6px;margin-left:8px;vertical-align:middle}
+.copilot-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.copilot-tool-btn{background:rgba(7,18,34,.7);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:12px;font-weight:600;padding:6px 11px;cursor:pointer;transition:all .15s}
+.copilot-tool-btn:hover:not(:disabled){border-color:rgba(138,124,255,.5)}
+.copilot-tool-btn.active{background:rgba(138,124,255,.12);border-color:rgba(138,124,255,.5);color:#cfc4ff}
+.copilot-tool-btn:disabled{opacity:.5;cursor:default}
+.copilot-msg{font-size:12px;border-radius:8px;padding:8px 11px;line-height:1.5}
+.copilot-msg-auth{background:rgba(138,124,255,.06);border:1px solid rgba(138,124,255,.25);color:#b8a8ff}
+.copilot-skeleton{height:60px;border-radius:8px;background:linear-gradient(90deg,rgba(138,124,255,.05),rgba(138,124,255,.12),rgba(138,124,255,.05));background-size:200% 100%;animation:shimmer 1.3s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.copilot-output{font-size:13px;line-height:1.55}
+.copilot-output-head{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.ai-source-badge{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;border-radius:5px;padding:2px 7px}
+.ai-source-badge.ai-live{color:#8ef5c4;background:rgba(93,242,163,.1);border:1px solid rgba(93,242,163,.3)}
+.ai-source-badge.ai-fallback{color:var(--muted);background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.ai-conf{font-size:11px;color:var(--muted)}
+.copilot-summary{margin:0 0 8px}
+.copilot-fit{display:flex;align-items:baseline;gap:6px;margin:6px 0}
+.copilot-fit-score{font-size:28px;font-weight:900;color:#b8a8ff;font-family:'Syne',sans-serif}
+.copilot-fit-label{font-size:12px;color:var(--muted)}
+.copilot-block{background:rgba(7,18,34,.5);border-radius:8px;padding:10px;margin:6px 0}
+.copilot-block p{margin:0 0 6px}
+.copilot-copy{background:none;border:1px solid rgba(72,217,255,.3);border-radius:6px;color:var(--accent);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;cursor:pointer}
+.copilot-list{margin:6px 0;padding-left:18px}
+.copilot-list li{margin-bottom:4px}
+.copilot-meta{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+.copilot-meta-label{font-weight:800;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
+.copilot-warning{font-size:11px;color:#f6c96b;background:rgba(246,201,107,.06);border:1px solid rgba(246,201,107,.2);border-radius:8px;padding:7px 10px;margin-top:8px;line-height:1.45}

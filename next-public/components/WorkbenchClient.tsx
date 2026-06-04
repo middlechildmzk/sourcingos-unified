@@ -683,6 +683,16 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
         open={drawerOpen}
         publicMode={publicMode}
         projectId={currentProject?.id}
+        plan={{
+          roleTitle: jdSummary?.roleTitle || intake.jobTitle,
+          rawQuery: composerOutput?.rawQuery,
+          mustHaveSkills: jdSummary?.mustHaveSkills || (chipContext?.hardTerms ?? []),
+          niceToHaveSkills: jdSummary?.preferredSkills || [],
+          location: jdSummary?.location || intake.location,
+          manualSafeConstraints: jdSummary?.clearance || (chipContext?.manualSafe ?? []),
+          exclusions: jdSummary?.likelyFalsePositives || [],
+          sourceLanes: sourceLanes.map(l => l.source),
+        }}
         onClose={() => setDrawerOpen(false)}
         onSaved={(id, displayName, source) => setSavedEntries(prev =>
           prev.some(e => e.id === id) ? prev : [...prev, { id, displayName, source }]
