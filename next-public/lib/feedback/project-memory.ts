@@ -106,3 +106,19 @@ export function clearProjectMemory(projectId = 'default') {
 export function hasFeedback(projectId = 'default'): boolean {
   return read().some(e => e.projectId === projectId)
 }
+
+/** Map project memory to the AI plan's projectMemory shape (for prompts/fallback). */
+export function toCopilotMemory(projectId = 'default') {
+  const m = getProjectMemory(projectId)
+  const fp = read().filter(e => e.projectId === projectId && e.feedbackType === 'false_positive').length
+  return {
+    preferredSkills: m.preferredSkills,
+    rejectedSkills: m.rejectedSkills,
+    preferredTitles: m.preferredTitles,
+    rejectedTitles: m.rejectedTitles,
+    positivePatterns: m.positivePatterns,
+    negativePatterns: m.negativePatterns,
+    cautionPatterns: m.cautionPatterns,
+    falsePositiveCount: fp,
+  }
+}

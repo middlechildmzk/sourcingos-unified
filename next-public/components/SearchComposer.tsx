@@ -33,6 +33,8 @@ interface SearchComposerProps {
   onSearch?: (output: ComposerOutput) => void
   initialQuery?: string
   compact?: boolean
+  /** Programmatic append from AI Copilot Apply actions. Bump nonce to trigger. */
+  externalAppend?: { terms: string[]; nonce: number }
 }
 
 // ─── Sample searches ──────────────────────────────────────────────────────────
@@ -276,7 +278,7 @@ function getVerifyNext(chips: RecognizedChip[]): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact }: SearchComposerProps) {
+export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact, externalAppend }: SearchComposerProps) {
   const [rawQuery, setRawQuery] = useState(initialQuery)
   const [chips, setChips] = useState<RecognizedChip[]>([])
   const [lockedIds, setLockedIds] = useState<Set<string>>(new Set())
@@ -285,6 +287,18 @@ export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact 
   const [showImprovements, setShowImprovements] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastAppendNonce = useRef<number>(0)
+
+  // Apply external terms (from AI Copilot) by appending any not already present
+  useEffect(() => {
+    if (!externalAppend || externalAppend.nonce === lastAppendNonce.current) return
+    lastAppendNonce.current = externalAppend.nonce
+    setRawQuery(prev => {
+      const existing = prev.toLowerCase()
+      const toAdd = externalAppend.terms.filter(t => t && !existing.includes(t.toLowerCase()))
+      return toAdd.length ? `${prev} ${toAdd.join(' ')}`.trim() : prev
+    })
+  }, [externalAppend])
 
   // Debounced entity recognition
   useEffect(() => {

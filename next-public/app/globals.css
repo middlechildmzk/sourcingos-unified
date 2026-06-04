@@ -409,3 +409,13 @@ h1,h2,h3,.brand{font-family:'Syne',ui-sans-serif,system-ui,sans-serif}
 .feedback-neg:hover,.feedback-neg.active{border-color:rgba(246,100,100,.5);background:rgba(246,100,100,.08);color:#f88}
 .feedback-neutral:hover,.feedback-neutral.active{border-color:rgba(246,201,107,.5);background:rgba(246,201,107,.08);color:#f6c96b}
 .feedback-confirm{display:block;font-size:11px;color:var(--green);margin-top:8px}
+
+/* ─── V3.1b: Project memory summary + apply toast ─────────────────────────── */
+.cc-memory{background:rgba(93,242,163,.04);border:1px solid rgba(93,242,163,.18);border-radius:10px;padding:11px;margin-bottom:12px}
+.cc-memory-row{font-size:12px;line-height:1.6;color:var(--text)}
+.cc-memory-pos{font-weight:800;color:#8ef5c4;text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-right:4px}
+.cc-memory-neg{font-weight:800;color:#f88;text-transform:uppercase;font-size:10px;letter-spacing:.05em;margin-right:4px}
+.cc-memory-reset{margin-top:8px;background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 9px;cursor:pointer}
+.cc-memory-reset:hover{border-color:rgba(246,100,100,.4);color:#f88}
+.apply-toast{margin:10px 0;background:rgba(93,242,163,.08);border:1px solid rgba(93,242,163,.3);border-radius:10px;padding:9px 13px;font-size:13px;color:#8ef5c4;font-weight:600;animation:toastIn .2s ease}
+@keyframes toastIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}

@@ -57,21 +57,37 @@ export async function generateSearchStrategy(plan: CopilotPlanInput): Promise<Se
   }
   // Deterministic fallback
   const skills = plan.mustHaveSkills || []
+  const mem = plan.projectMemory
+  const memPreferred = mem?.preferredSkills || []
+  const memRejected = mem?.rejectedSkills || []
+  // Skills to emphasize: must-haves + preferred from feedback, minus rejected
+  const emphasized = [...new Set([...skills, ...memPreferred])].filter(s => !memRejected.includes(s))
+  const memExclusions = [
+    ...(plan.exclusions || []),
+    ...(mem?.negativePatterns || []),
+    ...(mem?.rejectedTitles || []).map(t => `${t} (rejected in this project)`),
+  ]
+  if (mem?.falsePositiveCount && mem.falsePositiveCount > 0) {
+    memExclusions.push('profile-only / no-code-evidence', 'tutorial/course-only')
+  }
+  const memNote = (memPreferred.length || memRejected.length)
+    ? ` Based on your feedback, emphasizing ${memPreferred.slice(0, 3).join(', ') || 'strong technical evidence'}${memRejected.length ? ` and avoiding ${memRejected.slice(0, 3).join(', ')}` : ''}.`
+    : ''
   return {
     mode: 'search_strategy', ...base(false),
-    summary: `Deterministic plan for ${plan.roleTitle || 'role'} — skill-first public search.`,
-    roleSummary: `${plan.roleTitle || 'Role'} — drive public search from must-have skills.`,
+    summary: `Deterministic plan for ${plan.roleTitle || 'role'} — skill-first public search.${memNote}`,
+    roleSummary: `${plan.roleTitle || 'Role'} — drive public search from must-have skills.${memNote}`,
     searchRisks: plan.manualSafeConstraints?.length ? ['Clearance not visible on public sources — confirm manually.'] : [],
-    similarTitles: [], adjacentTitles: [], skillSynonyms: skills,
+    similarTitles: mem?.preferredTitles || [], adjacentTitles: [], skillSynonyms: emphasized,
     sourceLanePlan: (plan.sourceLanes || ['github']).map(s => ({ source: s, rationale: 'Recommended by deterministic routing.' })),
-    firstSearchRecommendation: skills.slice(0, 4).join(' '),
-    booleanSuggestion: skills.map(s => `"${s}"`).join(' AND '),
-    xRaySuggestion: `site:github.com ${skills.slice(0, 3).join(' ')}`,
-    githubQuery: skills.slice(0, 4).join(' '),
+    firstSearchRecommendation: emphasized.slice(0, 4).join(' '),
+    booleanSuggestion: emphasized.map(s => `"${s}"`).join(' AND '),
+    xRaySuggestion: `site:github.com ${emphasized.slice(0, 3).join(' ')}`,
+    githubQuery: emphasized.slice(0, 4).join(' '),
     manualSafeWorkflow: plan.manualSafeConstraints?.length ? ['Use ClearanceJobs / LinkedIn Recruiter workflow for clearance verification.'] : [],
-    likelyFalsePositives: plan.exclusions || [],
+    likelyFalsePositives: [...new Set(memExclusions)],
     calibrationQuestions: ['What are the true non-negotiables vs nice-to-haves?', 'Is the clearance active and required day one?'],
-    evidenceUsed: [], assumptions: ['Deterministic fallback — no AI key configured.'],
+    evidenceUsed: memPreferred, assumptions: ['Deterministic fallback — no AI key configured.', ...(memNote ? ['Applied project feedback memory.'] : [])],
     missingInfo: ['AI provider not configured.'], confidence: 'low',
     warnings: ['AI Copilot not configured — showing deterministic strategy.', ...COMPLIANCE_WARNINGS],
   }
@@ -233,16 +249,32 @@ export async function generateSearchNext(context: Record<string, unknown>): Prom
     }
   }
   const skills = (context.mustHaveSkills as string[]) || []
+  const mem = (context.projectMemory as Record<string, unknown>) || {}
+  const preferred = (mem.preferredSkills as string[]) || []
+  const rejected = (mem.rejectedSkills as string[]) || []
+  const fpCount = (mem.falsePositiveCount as number) || 0
+  const emphasized = [...new Set([...preferred, ...skills])].filter(s => !rejected.includes(s))
   const hasClearance = Boolean((context.manualSafeConstraints as string[])?.length)
   const moves = [
-    { label: 'Skill-first retry', query: skills.slice(0, 4).join(' '), reason: 'Public sources respond best to skill terms.' },
-    { label: 'Remove location', query: skills.slice(0, 3).join(' '), reason: 'Location data is sparse on public technical sources.' },
+    {
+      label: preferred.length ? 'Search your preferred patterns' : 'Skill-first retry',
+      query: emphasized.slice(0, 4).join(' '),
+      reason: preferred.length ? `Based on your feedback, you rated ${preferred.slice(0, 3).join(', ')} profiles stronger.` : 'Public sources respond best to skill terms.',
+    },
+    { label: 'Remove location', query: emphasized.slice(0, 3).join(' '), reason: 'Location data is sparse on public technical sources.' },
   ]
+  if (fpCount > 0 || rejected.length) {
+    moves.push({
+      label: 'Add exclusions from feedback',
+      query: `${emphasized.slice(0, 3).join(' ')} -tutorial -course -portfolio-only`,
+      reason: `You marked ${fpCount || rejected.length} result(s) as not-a-fit/false-positive — excluding design-only / no-code-evidence noise.`,
+    })
+  }
   if (hasClearance) moves.push({ label: 'Manual-safe clearance lane', query: 'ClearanceJobs / LinkedIn Recruiter workflow', reason: 'Clearance is not visible on public APIs.' })
   return {
     mode: 'search_next', ...base(false),
-    summary: 'Deterministic next-move suggestions.', moves,
-    evidenceUsed: [], assumptions: ['Deterministic fallback — no AI key configured.'],
+    summary: 'Deterministic next-move suggestions.', moves: moves.slice(0, 4),
+    evidenceUsed: preferred, assumptions: ['Deterministic fallback — no AI key configured.', ...(preferred.length || rejected.length ? ['Applied project feedback memory.'] : [])],
     missingInfo: ['AI provider not configured.'], confidence: 'low',
     warnings: ['AI Copilot not configured — deterministic suggestions.'],
   }

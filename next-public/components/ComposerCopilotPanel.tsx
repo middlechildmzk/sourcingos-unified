@@ -1,38 +1,59 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { CopilotPlanInput } from '@/lib/ai/types'
+import { getProjectMemory, toCopilotMemory, clearProjectMemory, hasFeedback } from '@/lib/feedback/project-memory'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ComposerCopilotPanel — AI Search Strategy in the composer (V3.1 Package 1).
-// Calls /api/ai/search-strategy (auth-gated). Suggestions never overwrite the
-// parser output — the user clicks Apply. Falls back to deterministic when no key.
+// ComposerCopilotPanel — AI Search Strategy in the composer (V3.1 + V3.1b).
+// Now feeds local project memory into the AI request and the deterministic
+// fallback, and shows a memory summary the recruiter can inspect/reset.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface ComposerCopilotPanelProps {
   plan: CopilotPlanInput
   publicMode: boolean
+  projectId?: string
   onApplyTitles?: (titles: string[]) => void
   onApplySkills?: (skills: string[]) => void
   onApplyQuery?: (query: string) => void
 }
 
-export function ComposerCopilotPanel({ plan, publicMode, onApplyTitles, onApplySkills, onApplyQuery }: ComposerCopilotPanelProps) {
+export function ComposerCopilotPanel({ plan, publicMode, projectId, onApplyTitles, onApplySkills, onApplyQuery }: ComposerCopilotPanelProps) {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [strategy, setStrategy] = useState<Record<string, unknown> | null>(null)
   const [authPrompt, setAuthPrompt] = useState(false)
+  const [memorySummary, setMemorySummary] = useState<{ preferred: string[]; rejected: string[]; fp: number } | null>(null)
+
+  const pid = projectId || 'default'
+  useEffect(() => {
+    if (hasFeedback(pid)) {
+      const m = getProjectMemory(pid)
+      const fp = toCopilotMemory(pid).falsePositiveCount || 0
+      setMemorySummary({ preferred: m.preferredSkills, rejected: m.rejectedSkills, fp })
+    } else {
+      setMemorySummary(null)
+    }
+  }, [pid, open])
 
   async function generate() {
     if (publicMode) { setAuthPrompt(true); setOpen(true); return }
     setOpen(true); setLoading(true); setStrategy(null); setAuthPrompt(false)
+    // Attach local project memory so AI + deterministic fallback both use it
+    const planWithMemory: CopilotPlanInput = { ...plan, projectMemory: hasFeedback(pid) ? toCopilotMemory(pid) : undefined }
     try {
       const res = await fetch('/api/ai/search-strategy', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(plan),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(planWithMemory),
       })
       if (res.status === 401) { setAuthPrompt(true); setLoading(false); return }
       const json = await res.json()
       setStrategy(json.ok ? json.result : null)
     } catch { setStrategy(null) } finally { setLoading(false) }
+  }
+
+  function resetMemory() {
+    clearProjectMemory(pid)
+    setMemorySummary(null)
   }
 
   const copy = (t: string) => navigator.clipboard?.writeText(t).catch(() => {})
@@ -47,6 +68,15 @@ export function ComposerCopilotPanel({ plan, publicMode, onApplyTitles, onApplyS
 
       {open && (
         <div className="composer-copilot-body">
+          {memorySummary && (memorySummary.preferred.length > 0 || memorySummary.rejected.length > 0 || memorySummary.fp > 0) && (
+            <div className="cc-memory">
+              <span className="cc-label">Project memory (from your feedback)</span>
+              {memorySummary.preferred.length > 0 && <div className="cc-memory-row"><span className="cc-memory-pos">Prefers:</span> {memorySummary.preferred.slice(0, 6).join(', ')}</div>}
+              {memorySummary.rejected.length > 0 && <div className="cc-memory-row"><span className="cc-memory-neg">Avoids:</span> {memorySummary.rejected.slice(0, 6).join(', ')}</div>}
+              {memorySummary.fp > 0 && <div className="cc-memory-row"><span className="cc-memory-neg">False positives flagged:</span> {memorySummary.fp}</div>}
+              <button className="cc-memory-reset" onClick={resetMemory}>Reset project memory</button>
+            </div>
+          )}
           {authPrompt && <div className="copilot-msg copilot-msg-auth">AI Copilot is available in signed-in beta.</div>}
           {loading && <div className="copilot-skeleton" />}
 

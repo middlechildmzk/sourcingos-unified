@@ -61,7 +61,16 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const [jdSummary, setJdSummary] = useState<ReturnType<typeof parseJobDescription> | null>(null)
   const [sourceLanes, setSourceLanes] = useState<SourceLane[]>([])
   const [recentSessions, setRecentSessions] = useState<SavedSearchSession[]>([])
+  const [composerAppend, setComposerAppend] = useState<{ terms: string[]; nonce: number }>({ terms: [], nonce: 0 })
+  const [applyToast, setApplyToast] = useState('')
   useEffect(() => { setRecentSessions(listSessions()) }, [])
+
+  function applyTerms(terms: string[], label: string) {
+    if (!terms.length) return
+    setComposerAppend(prev => ({ terms, nonce: prev.nonce + 1 }))
+    setApplyToast(`Added ${terms.slice(0, 4).join(', ')}${terms.length > 4 ? '…' : ''}`)
+    setTimeout(() => setApplyToast(''), 2600)
+  }
 
   const setField = (f: keyof IntakeData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setIntake(prev => ({ ...prev, [f]: e.target.value }))
@@ -518,6 +527,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
 
               <ComposerCopilotPanel
                 publicMode={publicMode}
+                projectId={currentProject?.id}
                 plan={{
                   roleTitle: jdSummary?.roleTitle || intake.jobTitle,
                   rawQuery: composerInitialQuery,
@@ -528,9 +538,15 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                   exclusions: jdSummary?.likelyFalsePositives || [],
                   sourceLanes: jdSummary?.suggestedSourceLanes || [],
                 }}
+                onApplyTitles={(t) => applyTerms(t, 'titles')}
+                onApplySkills={(s) => applyTerms(s, 'skills')}
+                onApplyQuery={(q) => applyTerms(q.split(/\s+/), 'query')}
               />
 
+              {applyToast && <div className="apply-toast">✓ {applyToast} — added to your search</div>}
+
               <SearchComposer
+                externalAppend={composerAppend}
                 onOutput={setComposerOutput}
                 onSearch={handleSearch}
                 initialQuery={composerInitialQuery}

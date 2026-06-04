@@ -26,6 +26,11 @@ export const STRATEGY_PROMPT = (planJson: string) => `${SYSTEM_GUARDRAILS}
 TASK: Review this deterministic search plan and improve the sourcing strategy.
 Keep public technical searches SKILL-FIRST. Keep clearance MANUAL-SAFE (never in public API queries). Keep location as a review filter.
 
+If the SEARCH PLAN contains a "projectMemory" object, treat it as the recruiter's project-specific feedback (local, user-owned — not universal truth):
+- Emphasize preferredSkills and preferredTitles; reflect positivePatterns in your strategy.
+- Steer away from rejectedSkills and rejectedTitles; add negativePatterns and false-positive patterns to likelyFalsePositives/exclusions.
+- Reference the feedback explicitly in roleSummary, e.g. "Based on your feedback, this strategy emphasizes X and avoids Y."
+
 SEARCH PLAN:
 ${planJson}
 
@@ -147,6 +152,7 @@ export const SEARCH_NEXT_PROMPT = (contextJson: string) => `${SYSTEM_GUARDRAILS}
 
 TASK: Recommend the next 3 search moves based on current results and source statuses.
 Keep public searches skill-first. Strip clearance/location from public API queries.
+If CONTEXT contains "projectMemory", use it: favor preferredSkills/preferredTitles, avoid rejectedSkills/rejectedTitles, and turn false-positive/negative patterns into exclusions. Reference the feedback in each move's reason where relevant.
 
 CONTEXT:
 ${contextJson}

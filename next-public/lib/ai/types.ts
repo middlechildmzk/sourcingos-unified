@@ -120,6 +120,17 @@ export interface CopilotCandidateInput {
   contactSignalCount?: number
 }
 
+export interface CopilotProjectMemory {
+  preferredSkills?: string[]
+  rejectedSkills?: string[]
+  preferredTitles?: string[]
+  rejectedTitles?: string[]
+  positivePatterns?: string[]
+  negativePatterns?: string[]
+  cautionPatterns?: string[]
+  falsePositiveCount?: number
+}
+
 export interface CopilotPlanInput {
   roleTitle?: string
   rawQuery?: string
@@ -129,4 +140,6 @@ export interface CopilotPlanInput {
   manualSafeConstraints?: string[]
   exclusions?: string[]
   sourceLanes?: string[]
+  /** Local, project-scoped recruiter feedback. Never used to train external models. */
+  projectMemory?: CopilotProjectMemory
 }
