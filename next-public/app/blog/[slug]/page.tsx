@@ -9,7 +9,7 @@ export function generateMetadata({ params }: { params: { slug: string } }){
   description: article.description,
   keywords: [article.keyword, article.category, 'SourcingOS'],
   alternates: { canonical: `/blog/${article.slug}` },
-  openGraph: { title: article.title, description: article.description, url: `/blog/${article.slug}` },
+  openGraph: { title: article.title, description: article.description, url: `/blog/${article.slug}`, type: 'article', publishedTime: article.publishedAt, authors: article.author ? [article.author] : undefined },
   twitter: { title: article.title, description: article.description }
  }
 }

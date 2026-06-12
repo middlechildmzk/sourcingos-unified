@@ -17,8 +17,8 @@ export default function Tools() {
       <div className="grid">
         <Link className="card" href="/tools/boolean-generator">
           <span className="kicker">Hero tool</span>
-          <h3>BooleanOS</h3>
-          <p className="muted">Role-specific Boolean search strings for technical, cleared, cyber, healthcare, AI/ML, and GovCon roles.</p>
+          <h3>JD-to-Boolean Search Builder</h3>
+          <p className="muted">Paste a JD → three search lanes (Precision, Balanced, Market Map) with LinkedIn, Google/Bing X-Ray, and GitHub strings. Strips JD noise automatically.</p>
         </Link>
         <Link className="card" href="/tools/xray-search">
           <span className="kicker">Open-web search</span>
@@ -29,6 +29,11 @@ export default function Tools() {
           <span className="kicker">Cleared / GovCon</span>
           <h3>Clearance Search Builder</h3>
           <p className="muted">Compliant Boolean and X-Ray for TS/SCI, poly, and cert lanes — clearance terms kept out of public X-Ray on purpose.</p>
+        </Link>
+        <Link className="card" href="/tools/aging-req-rescue">
+          <span className="kicker">Req triage</span>
+          <h3>Aging Req Rescue Planner</h3>
+          <p className="muted">Diagnose why a req is stuck — ghost req, lane exhaustion, calibration drift, comp, or outreach — and get a rescue plan plus an HM note.</p>
         </Link>
         <Link className="card" href="/tools/jd-search-strategy">
           <span className="kicker">Search strategy</span>

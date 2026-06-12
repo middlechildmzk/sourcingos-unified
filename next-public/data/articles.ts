@@ -1,4 +1,4 @@
-export type Article = { slug: string; title: string; description: string; keyword: string; tool: string; cta: string; category: string; sections: [string,string][]; bullets: string[]; strings: string[]; faq: [string,string][] };
+export type Article = { slug: string; title: string; description: string; keyword: string; tool: string; cta: string; category: string; sections: [string,string][]; bullets: string[]; strings: string[]; faq: [string,string][]; author?: string; publishedAt?: string; updatedAt?: string };
 
 export const articles: Article[] = [
   {
@@ -9,6 +9,8 @@ export const articles: Article[] = [
     "tool": "/tools/jd-search-strategy",
     "cta": "Build a source pack",
     "category": "Methodology",
+    "author": "Dan — Senior Technical Sourcer",
+    "publishedAt": "2026-02-18",
     "sections": [
       [
         "Direct answer",
@@ -61,6 +63,8 @@ export const articles: Article[] = [
     "tool": "/tools/xray-search",
     "cta": "Open the X-Ray Launcher",
     "category": "Technical Sourcing",
+    "author": "Dan — Senior Technical Sourcer",
+    "publishedAt": "2026-03-04",
     "sections": [
       [
         "Direct answer",
@@ -113,6 +117,8 @@ export const articles: Article[] = [
     "tool": "/tools/boolean-generator",
     "cta": "Generate cyber Boolean strings",
     "category": "Boolean Library",
+    "author": "Dan — Senior Technical Sourcer",
+    "publishedAt": "2026-03-19",
     "sections": [
       [
         "Direct answer",
@@ -165,6 +171,8 @@ export const articles: Article[] = [
     "tool": "/tools/boolean-generator",
     "cta": "Generate cleared DevSecOps strings",
     "category": "GovCon Sourcing",
+    "author": "Dan — Senior Technical Sourcer",
+    "publishedAt": "2026-04-08",
     "sections": [
       [
         "Direct answer",
@@ -217,6 +225,8 @@ export const articles: Article[] = [
     "tool": "/directory",
     "cta": "Browse the tool directory",
     "category": "Tool Comparisons",
+    "author": "Dan — Senior Technical Sourcer",
+    "publishedAt": "2026-05-02",
     "sections": [
       [
         "Direct answer",
