@@ -23,3 +23,7 @@ The June security sprint was fully verified in the working tree (typecheck/lint/
 ## Lesson — build on merged main, not the stale working copy (2026-06-11)
 **Before building a new feature, confirm the build base is the latest MERGED main — a stale local working copy can silently reintroduce removed code.**
 The Phase 2 build base was re-cloned from main (6f372c3, post-security-merge) rather than reusing the in-container working copy still at 573a2d1 (pre-patch). Building on the stale copy would have shipped the new tool on top of fail-open code. The Clearance Search Builder was authored, typechecked, linted, tested (30/30), and built against fresh main, so its patch applies cleanly without resurrecting removed routes.
+
+## Lesson — reuse the existing deterministic extractor, don't rebuild it (2026-06-12)
+**Before writing new client-side parsing, grep lib/ for an existing extractor — the JD→Boolean upgrade reused parseJobDescription() instead of duplicating entity recognition.**
+The repo already had a 294-line deterministic JD parser (lib/jd-parser.ts) with must/nice section splitting, clearance/title/tool recognition, and false-positive detection. The flagship Boolean upgrade layered only the three-lane generator + noise stripping on top (lib/jd-boolean-lanes.ts) and reused the parser wholesale. This kept the new tool small, consistent with the JD Strategy tool's behavior, and free of a second extraction code path to maintain. The export name BooleanTool was preserved so /tools/boolean-generator stayed stable.
