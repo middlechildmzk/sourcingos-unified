@@ -1,4 +1,6 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -16,6 +18,11 @@ const ALLOWED_UPDATE_FIELDS = [
 type AllowedField = typeof ALLOWED_UPDATE_FIELDS[number]
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(_req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   const session = await getRouteSession()
   if (!isSupabaseConfigured()) return NextResponse.json({ ok: false, error: 'Supabase not configured.' }, { status: 503 })
   if (!session.authenticated) return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })
@@ -32,6 +39,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   const session = await getRouteSession()
   if (!isSupabaseConfigured()) return NextResponse.json({ ok: false, error: 'Supabase not configured.' }, { status: 503 })
   if (!session.authenticated) return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })

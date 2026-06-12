@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 
 const schema = z.object({
   email: z.string().email(),
@@ -11,6 +12,9 @@ const schema = z.object({
 })
 
 export async function POST(req: NextRequest) {
+  const rl = await rateLimit(req, 'waitlist')
+  if (!rl.ok) return rl.response
+
   const body = await req.json().catch(() => null)
   const parsed = schema.safeParse(body)
   if (!parsed.success) {

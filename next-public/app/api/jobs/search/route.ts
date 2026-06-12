@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { atsTargets } from '@/data/ats-targets'
+import { z } from 'zod'
+import { rateLimit } from '@/lib/rate-limit'
 import { dedupeJobs, fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs, isRecruitingRole, cleanText, NormalizedJob } from '@/lib/jobs-ingestion'
 
 type LiveJob = NormalizedJob
@@ -109,9 +111,21 @@ function queryMatches(job: LiveJob, query: string, location: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const rl = await rateLimit(req, 'public')
+  if (!rl.ok) return rl.response
+
+  // Query-param validation: bounded, control-chars stripped (zod).
+  const qpSchema = z.object({
+    q: z.string().max(120).optional().default(''),
+    location: z.string().max(120).optional().default(''),
+  })
+  const sp = req.nextUrl.searchParams
+  const qp = qpSchema.safeParse({ q: sp.get('q') ?? undefined, location: sp.get('location') ?? undefined })
+  if (!qp.success) return NextResponse.json({ ok: false, code: 'invalid_query', error: 'Invalid query parameters.' }, { status: 400 })
+
   const { searchParams } = new URL(req.url)
-  const query = searchParams.get('q') || 'recruiter sourcer talent acquisition'
-  const location = searchParams.get('location') || ''
+  const query = qp.data.q || 'recruiter sourcer talent acquisition'
+  const location = qp.data.location
   const selectedSources = (searchParams.get('sources') || 'ats,remotive,arbeitnow,usajobs').split(',')
   const limit = Math.min(Number(searchParams.get('limit') || 250), 250)
 

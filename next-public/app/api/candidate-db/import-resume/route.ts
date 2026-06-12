@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import {
   buildCandidateSummary,
   contactsFromText,
@@ -14,6 +16,11 @@ import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { getUserIdFromHeader } from '@/lib/supabase/auth'
 
 export async function POST(req: NextRequest) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   try {
     const body = await req.json()
     const text = String(body.text || '')

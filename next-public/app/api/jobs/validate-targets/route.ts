@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { atsTargets } from '@/data/ats-targets'
 import { fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs } from '@/lib/jobs-ingestion'
 
@@ -39,6 +41,11 @@ async function validateTarget(target: (typeof atsTargets)[number]) {
 }
 
 export async function GET() {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(null, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   const limit = 80
   const selected = atsTargets.slice(0, limit)
   const results = [] as Awaited<ReturnType<typeof validateTarget>>[]

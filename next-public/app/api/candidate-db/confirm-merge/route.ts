@@ -1,4 +1,6 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCandidateDb, nowIso } from '@/lib/candidate-db-v18'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -10,6 +12,11 @@ export const dynamic = 'force-dynamic'
 // 'confirmed' = link source profiles to candidate; 'rejected' = keep separate.
 
 export async function POST(req: NextRequest) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   try {
     const body = await req.json()
     const reviewId = String(body.reviewId || '')

@@ -1,16 +1,17 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
-import { getRouteSession } from '@/lib/supabase/route-session'
+import { requireSession } from '@/lib/auth-gate'
+import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 
 // Must be dynamic — reads cookies/session on every request
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  const session = await getRouteSession()
-  if (!session.authenticated && session.mode === 'supabase') {
-    return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })
-  }
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
 
   try {
     const body = await req.json()
@@ -46,8 +47,8 @@ export async function POST(req: NextRequest) {
     const sb = createServerSupabaseClient()
     if (!sb) return NextResponse.json({ ok: false, error: 'Supabase client unavailable.' }, { status: 500 })
 
-    const ownerId = session.userId ?? process.env.SUPABASE_DEFAULT_OWNER_ID
-    if (!ownerId) return NextResponse.json({ ok: false, error: 'No owner_id available. Set SUPABASE_DEFAULT_OWNER_ID for testing.' }, { status: 400 })
+    // Security sprint: writes are always scoped to the authenticated user.
+    const ownerId = gate.userId
 
     const { data, error } = await sb.from('projects').insert({ owner_id: ownerId, ...projectData }).select('*').single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
