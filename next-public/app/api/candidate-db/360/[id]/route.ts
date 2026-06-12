@@ -1,4 +1,6 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCandidateDb } from '@/lib/candidate-db-v18'
 import { buildCandidate360, scoreContactSignal, scoreOpenToWorkSignal, staleStatus } from '@/lib/candidate-intelligence-v18'
@@ -98,6 +100,11 @@ function buildDossierFromSupabase(
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(_req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   const candidateId = params.id
 
   // ── Supabase mode ──────────────────────────────────────────────────────────

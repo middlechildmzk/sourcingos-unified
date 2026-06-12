@@ -4,7 +4,7 @@
 // All writes include owner_id; production routes should extract from auth token.
 // ─────────────────────────────────────────────────────────────────────────────
 import { CandidateDbSnapshot } from './candidate-db-v18'
-import { createServerSupabaseClient, getDefaultOwnerId, isSupabaseConfigured } from './supabase/server'
+import { createServerSupabaseClient, isSupabaseConfigured } from './supabase/server'
 
 export { isSupabaseConfigured as hasSupabaseCandidateGraphEnv }
 
@@ -46,20 +46,18 @@ export async function persistCandidateGraphSnapshot(
     return {
       ok: false,
       mode: 'preview',
-      message:
-        'Supabase env vars not configured. Candidate Graph is in preview memory mode. ' +
-        'Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable persistence.',
+      message: 'Candidate Graph persistence is not available in this environment.',
     }
   }
 
-  const owner = ownerId || getDefaultOwnerId()
+  // Security sprint: no implicit owner fallback. Callers MUST pass the
+  // authenticated user's ID. SUPABASE_DEFAULT_OWNER_ID is no longer honored here.
+  const owner = ownerId
   if (!owner) {
     return {
       ok: false,
       mode: 'supabase',
-      message:
-        'No owner_id available. Pass an authenticated user ID, or set SUPABASE_DEFAULT_OWNER_ID ' +
-        'for admin/testing operations.',
+      message: 'Persistence requires an authenticated user.',
     }
   }
 

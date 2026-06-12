@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { buildCandidateSummary, contactsFromText, evidenceFromText, getCandidateDb, inferOpenToWorkSignals, nowIso, SourceProfileRecord, uid } from '@/lib/candidate-db-v18'
 
 function parseCsv(text: string) {
@@ -12,6 +14,11 @@ function parseCsv(text: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   try {
     const body = await req.json()
     const csv = String(body.csv || '')

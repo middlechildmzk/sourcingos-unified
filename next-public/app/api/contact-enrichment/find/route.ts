@@ -1,6 +1,7 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
-import { getRouteSession } from '@/lib/supabase/route-session'
+import { requireSession } from '@/lib/auth-gate'
+import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { enrichWithPeopleDataLabs } from '@/lib/contact-enrichment/providers/people-data-labs'
 import { getProviderStatus } from '@/lib/contact-enrichment/provider-status'
@@ -9,18 +10,14 @@ import { ContactEnrichmentRequest, ContactSignal } from '@/lib/contact-enrichmen
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  // ── 1. Auth gate (when Supabase configured) ────────────────────────────────
-  let ownerId: string | null = null
-  if (isSupabaseConfigured()) {
-    const session = await getRouteSession()
-    if (!session.authenticated) {
-      return NextResponse.json(
-        { ok: false, code: 'auth_required', error: 'Sign in to find contact info.' },
-        { status: 401 }
-      )
-    }
-    ownerId = session.userId
-  }
+  // ── 1. Auth gate — FAIL CLOSED. Enrichment is a paid, per-lookup provider. ──
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rlMinute = await rateLimit(req, 'enrichment', gate.userId)
+  if (!rlMinute.ok) return rlMinute.response
+  const rlDaily = await rateLimit(req, 'enrichmentDaily', gate.userId)
+  if (!rlDaily.ok) return rlDaily.response
+  const ownerId: string | null = gate.preview ? null : gate.userId
 
   // ── 2. Provider configured? ────────────────────────────────────────────────
   const status = getProviderStatus()

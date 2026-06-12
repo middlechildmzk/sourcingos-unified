@@ -69,6 +69,8 @@ export function createUserSupabaseClient(accessToken: string): SupabaseClient | 
 }
 
 /** The default owner_id to use when no user session is available (dev/preview). */
+/** @deprecated Security sprint 2026-06: implicit owner fallback removed.
+ *  All candidate/project writes must be scoped to the authenticated user. */
 export function getDefaultOwnerId(): string | null {
-  return process.env.SUPABASE_DEFAULT_OWNER_ID || null
+  return null
 }

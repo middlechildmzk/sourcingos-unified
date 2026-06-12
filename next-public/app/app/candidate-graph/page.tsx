@@ -22,7 +22,7 @@ export default function CandidateGraphPage() {
         <span>
           <strong>Note:</strong> The user-facing product is called <strong>Candidate Search</strong>.
           Candidate Graph is the internal term for the data architecture. Public nav and marketing copy
-          uses "Candidate Search." This page describes the internal model.
+          uses &ldquo;Candidate Search.&rdquo; This page describes the internal model.
         </span>
       </div>
       <div className="grid" style={{ marginTop: '24px' }}>

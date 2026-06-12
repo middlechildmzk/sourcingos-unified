@@ -1,4 +1,6 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { searchSources } from '@/lib/source-connectors'
 import { allSourceNames, SourceName } from '@/lib/source-types'
@@ -20,6 +22,11 @@ const schema = z.object({
 const LIVE_SOURCES: SourceName[] = ['github', 'openalex', 'npm', 'pypi', 'huggingface', 'crates', 'rubygems']
 
 export async function POST(req: NextRequest) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   try {
     const body = schema.parse(await req.json())
     const chips = body.chips as ComposerChip[]

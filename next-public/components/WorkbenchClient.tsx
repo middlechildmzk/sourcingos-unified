@@ -40,9 +40,41 @@ const STRATEGY_SECTIONS = [
   { id: 'scorecard', label: 'Candidate Scorecard' }, { id: 'calibration', label: 'HM Calibration Questions' },
 ]
 
+const DRAFT_KEY = 'sourcingos.workbench.intake-draft.v1'
+
 export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }) {
   const [tab, setTab] = useState<Tab>('intake')
   const [intake, setIntake] = useState<IntakeData>(defaultIntake)
+  const [draftRestored, setDraftRestored] = useState(false)
+  const [saveDurability, setSaveDurability] = useState<'durable' | 'preview' | null>(null)
+
+  // ── Intake draft persistence (this browser only — never sent anywhere) ────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (raw) {
+        const draft = JSON.parse(raw) as Partial<IntakeData>
+        if (draft && typeof draft === 'object' && Object.values(draft).some(v => String(v || '').trim())) {
+          setIntake(prev => ({ ...prev, ...draft }))
+          setDraftRestored(true)
+        }
+      }
+    } catch { /* corrupted draft — ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    try {
+      const hasContent = Object.values(intake).some(v => String(v || '').trim() && v !== 'any')
+      if (hasContent) localStorage.setItem(DRAFT_KEY, JSON.stringify(intake))
+    } catch { /* storage full/blocked — non-fatal */ }
+  }, [intake])
+
+  function clearDraft() {
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* noop */ }
+    setIntake(defaultIntake)
+    setDraftRestored(false)
+  }
   const [currentProject, setCurrentProject] = useState<ProjectRecord | null>(null)
   const [projectSaving, setProjectSaving] = useState(false)
   const [projectError, setProjectError] = useState('')
@@ -96,8 +128,16 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
         }),
       })
       const json = await res.json()
-      if (json.ok) setCurrentProject({ id: json.project.id, name: json.project.name, role_title: json.project.role_title, mode: json.mode })
-      else setProjectError(json.error || 'Project save failed.')
+      if (json.ok) {
+        setCurrentProject({ id: json.project.id, name: json.project.name, role_title: json.project.role_title, mode: json.mode })
+        setSaveDurability(json.mode === 'supabase' ? 'durable' : 'preview')
+      } else if (res.status === 401) {
+        setProjectError('Sign in to save projects. Your intake draft stays in this browser.')
+      } else if (res.status === 503) {
+        setProjectError('Saving is unavailable in this environment. Your intake draft stays in this browser.')
+      } else {
+        setProjectError(json.error || 'Project save failed.')
+      }
     } catch { setProjectError('Failed to reach /api/projects/create.') }
     finally { setProjectSaving(false) }
   }
@@ -439,9 +479,28 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
               </div>
               {currentProject && (
                 <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
-                  Project: <strong>{currentProject.name}</strong> ({currentProject.mode === 'supabase' ? 'persisted to Supabase' : 'preview mode — not durable'})
+                  Project: <strong>{currentProject.name}</strong> ({currentProject.mode === 'supabase' ? 'persisted to your account' : 'preview mode — not durable'})
                 </p>
               )}
+              {saveDurability === 'preview' && (
+                <div className="cta" style={{ marginTop: '10px', fontSize: '13px' }}>
+                  <strong>Heads up:</strong> this environment is in preview mode — your saved project
+                  will <strong>not</strong> survive a restart. Your intake draft is kept in this
+                  browser only. Sign in on the production app for durable saves.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '10px' }}>
+                {draftRestored && (
+                  <span className="muted" style={{ fontSize: '12px' }}>
+                    ✓ Draft restored from this browser (saved locally as you type — never uploaded).
+                  </span>
+                )}
+                {(draftRestored || Object.values(intake).some(v => String(v || '').trim() && v !== 'any')) && (
+                  <button className="btn ghost" style={{ fontSize: '12px', padding: '4px 10px' }} onClick={clearDraft}>
+                    Clear draft
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -625,7 +684,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
               {!searching && !searchError && searchResults.length === 0 && !composerOutput && (
                 <div className="wb-empty">
                   <h3>No search run yet</h3>
-                  <p>Go to Search Composer, enter your search, and click "Search →".</p>
+                  <p>Go to Search Composer, enter your search, and click &ldquo;Search →&rdquo;.</p>
                   <button className="btn secondary" onClick={() => setTab('composer')}>
                     Open Search Composer →
                   </button>

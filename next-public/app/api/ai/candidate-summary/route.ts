@@ -1,17 +1,18 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
-import { getRouteSession } from '@/lib/supabase/route-session'
-import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { generateCandidateSummary } from '@/lib/ai/sourcing-copilot'
 import type { CopilotCandidateInput, CopilotPlanInput } from '@/lib/ai/types'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
-  if (isSupabaseConfigured()) {
-    const s = await getRouteSession()
-    if (!s.authenticated) return NextResponse.json({ ok: false, code: 'auth_required', error: 'Sign in to use AI Copilot.' }, { status: 401 })
-  }
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'ai', gate.userId)
+  if (!rl.ok) return rl.response
+
   let body: { candidate?: CopilotCandidateInput; plan?: CopilotPlanInput }
   try { body = await req.json() } catch { return NextResponse.json({ ok: false, error: 'Invalid body.' }, { status: 400 }) }
   const result = await generateCandidateSummary(body.candidate || {}, body.plan || {})

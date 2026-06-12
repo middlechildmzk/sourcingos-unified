@@ -7,8 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "qa": "node scripts/qa.mjs",
-    "seo:export": "node scripts/generate-seo-pages.mjs"
+    "seo:export": "node scripts/generate-seo-pages.mjs",
+    "source-presence-check": "node scripts/source-presence-check.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "6.0.2",

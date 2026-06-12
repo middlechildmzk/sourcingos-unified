@@ -1,44 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { addJobSubmission, getJobSubmissions } from '@/lib/job-board-db'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth-gate'
+import { rateLimit } from '@/lib/rate-limit'
+import { parseBody } from '@/lib/validate'
+
+const submitSchema = z.object({
+  email: z.string().email().max(200),
+  companyName: z.string().min(1).max(200),
+  jobTitle: z.string().min(1).max(200),
+  jobUrl: z.string().url().max(500).regex(/^https?:\/\//i),
+  salaryRange: z.string().max(120).optional().default(''),
+  location: z.string().max(200).optional().default(''),
+  remoteType: z.string().max(60).optional().default(''),
+  notes: z.string().max(2000).optional().default(''),
+}).strip()
 
 export async function GET() {
-  // Preview only: list submissions from in-memory store.
-  // Production: submissions are readable only via admin-gated /api/jobs/review.
+  // Security sprint: submissions contain submitter emails — admin only.
+  const gate = await requireAdmin()
+  if (!gate.ok) return gate.response
   return NextResponse.json({ ok: true, mode: 'preview', submissions: getJobSubmissions() })
 }
 
 export async function POST(req: NextRequest) {
+  const rl = await rateLimit(req, 'submit')
+  if (!rl.ok) return rl.response
+
+  const parsed = await parseBody(req, submitSchema, 8 * 1024)
+  if (!parsed.ok) return parsed.response
+
   try {
-    const body = await req.json()
-    const email = String(body.email || '').trim()
-    const companyName = String(body.companyName || '').trim()
-    const jobTitle = String(body.jobTitle || '').trim()
-    const jobUrl = String(body.jobUrl || '').trim()
-
-    if (!email || !companyName || !jobTitle || !jobUrl) {
-      return NextResponse.json(
-        { ok: false, error: 'Email, company name, job title, and apply URL are required.' },
-        { status: 400 }
-      )
-    }
-    if (!/^https?:\/\//i.test(jobUrl)) {
-      return NextResponse.json(
-        { ok: false, error: 'Apply URL must start with https://. No fake or placeholder URLs.' },
-        { status: 400 }
-      )
-    }
-
-    const submissionPayload = {
-      email,
-      companyName,
-      jobTitle,
-      jobUrl,
-      salaryRange: String(body.salaryRange || '').trim(),
-      location: String(body.location || '').trim(),
-      remoteType: String(body.remoteType || '').trim(),
-      notes: String(body.notes || '').trim(),
-    }
+    const { email, companyName, jobTitle, jobUrl } = parsed.data
+    const submissionPayload = { ...parsed.data }
 
     // ── Supabase persistence when configured ────────────────────────────────
     if (isSupabaseConfigured()) {

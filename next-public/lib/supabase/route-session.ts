@@ -30,7 +30,7 @@ export interface RouteSession {
  *   if (!session.authenticated && session.mode === 'supabase') {
  *     return NextResponse.json({ ok: false, error: 'Authentication required' }, { status: 401 })
  *   }
- *   const ownerId = session.userId ?? process.env.SUPABASE_DEFAULT_OWNER_ID
+ *   const ownerId = session.userId  // never fall back to a shared/default owner
  */
 export async function getRouteSession(): Promise<RouteSession> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL

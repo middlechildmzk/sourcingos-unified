@@ -1,4 +1,6 @@
 import 'server-only'
+import { rateLimit } from '@/lib/rate-limit'
+import { requireSession } from '@/lib/auth-gate'
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
@@ -7,6 +9,11 @@ import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(null, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
   const session = await getRouteSession()
 
   if (!isSupabaseConfigured()) {

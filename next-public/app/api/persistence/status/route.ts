@@ -1,4 +1,18 @@
 import { NextResponse } from 'next/server'
-import { supabaseConfigured } from '@/lib/supabase-adapter'
-export async function GET() { return NextResponse.json({ ok: true, persistence: supabaseConfigured() ? 'supabase_configured' : 'preview_memory_only', requiredEnv: ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'], note: supabaseConfigured() ? 'Candidate Graph can persist to Supabase.' : 'Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable durable Candidate Graph persistence.' }) }
-// Route: /api/persistence/status
+import { requireSession } from '@/lib/auth-gate'
+import { isSupabaseConfigured } from '@/lib/supabase/server'
+
+export const dynamic = 'force-dynamic'
+
+export async function GET() {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const durable = isSupabaseConfigured() && !gate.preview
+  return NextResponse.json({
+    ok: true,
+    persistence: durable ? 'durable' : 'preview',
+    note: durable
+      ? 'Saved work is persisted to your account.'
+      : 'Preview mode: saved work will NOT survive a restart.',
+  })
+}

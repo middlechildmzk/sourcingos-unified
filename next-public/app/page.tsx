@@ -47,6 +47,7 @@ export default function Home() {
         <div className="hero-actions">
           <Link className="btn" href="/tools/boolean-generator">Try BooleanOS</Link>
           <Link className="btn secondary" href="/waitlist">Request Candidate Search beta</Link>
+          <Link className="btn ghost" href="/sample-candidate-360">See a sample Candidate 360 →</Link>
         </div>
         <div className="cta">
           <strong>Human-approved sourcing intelligence:</strong> public evidence, source provenance,
