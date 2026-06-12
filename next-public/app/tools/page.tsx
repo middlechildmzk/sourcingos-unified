@@ -25,6 +25,11 @@ export default function Tools() {
           <h3>X-Ray Launcher</h3>
           <p className="muted">Google X-Ray search builder for GitHub, LinkedIn, public resumes, Stack Overflow, Hugging Face, and open sources.</p>
         </Link>
+        <Link className="card" href="/tools/clearance-search">
+          <span className="kicker">Cleared / GovCon</span>
+          <h3>Clearance Search Builder</h3>
+          <p className="muted">Compliant Boolean and X-Ray for TS/SCI, poly, and cert lanes — clearance terms kept out of public X-Ray on purpose.</p>
+        </Link>
         <Link className="card" href="/tools/jd-search-strategy">
           <span className="kicker">Search strategy</span>
           <h3>JD Strategy Tool</h3>
