@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ALL_TAXONOMY, EntityType, TaxonomyEntry } from '@/data/search-taxonomy'
 import { ALL_SOURCE_LANES, EXPANSIONS, SOURCE_LANES_BY_ENTITY } from '@/data/search-expansions'
+import { SearchAssistDropdown } from '@/components/SearchAssistDropdown'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -286,8 +287,18 @@ export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact,
   const [showOutputs, setShowOutputs] = useState(false)
   const [showImprovements, setShowImprovements] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const [assistOpen, setAssistOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const lastAppendNonce = useRef<number>(0)
+
+  // Append a term picked from the assist dropdown (space-delimited, dedup-safe).
+  const addAssistTerm = useCallback((term: string) => {
+    setRawQuery(prev => {
+      const exists = ` ${prev.toLowerCase()} `.includes(` ${term.toLowerCase()} `)
+      return exists ? prev : `${prev} ${term}`.trim()
+    })
+    inputRef.current?.focus()
+  }, [])
 
   // Apply external terms (from AI Copilot) by appending any not already present
   useEffect(() => {
@@ -382,6 +393,8 @@ export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact,
           type="text"
           value={rawQuery}
           onChange={e => setRawQuery(e.target.value)}
+          onFocus={() => setAssistOpen(true)}
+          onBlur={() => setTimeout(() => setAssistOpen(false), 180)}
           placeholder="e.g. DevSecOps Kubernetes TS/SCI Northern Virginia — or try a sample above"
           onKeyDown={e => {
             if (e.key === 'Enter' && rawQuery.trim()) {
@@ -406,6 +419,15 @@ export function SearchComposer({ onOutput, onSearch, initialQuery = '', compact,
           Search →
         </button>
       </div>
+
+      {/* ── Smart assist typeahead ────────────────────────────────── */}
+      <SearchAssistDropdown
+        query={rawQuery}
+        onAddTerm={addAssistTerm}
+        selectedLaneId={output.recommendedSourceIds[0]}
+        open={assistOpen && rawQuery.trim().length >= 2}
+        onRequestClose={() => setAssistOpen(false)}
+      />
 
       {/* ── Recognized chips ─────────────────────────────────────── */}
       {chips.length > 0 && (
