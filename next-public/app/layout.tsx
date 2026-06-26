@@ -3,28 +3,41 @@ import './globals.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://sourcingos-unified.vercel.app'
+export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.getsourcingos.com'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
     default: 'SourcingOS — Find who your search missed.',
-    template: '%s | SourcingOS',
+    template: '%s',
   },
   description:
     'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free sourcing tools for technical, cleared, healthcare, and AI roles.',
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     title: 'SourcingOS — Find who your search missed.',
     description:
-      'Free sourcing tools and private Candidate Search beta for senior sourcers.',
+      'Human-approved sourcing intelligence for hard-to-fill technical, cleared, healthcare, and AI roles. No silent merges. No fake verification.',
     type: 'website',
     url: siteUrl,
+    siteName: 'SourcingOS',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'SourcingOS — Find who your search missed.',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'SourcingOS — Find who your search missed.',
     description:
-      'Free sourcing tools and private Candidate Search beta for senior sourcers.',
+      'Human-approved sourcing intelligence for hard-to-fill technical, cleared, healthcare, and AI roles.',
+    images: ['/opengraph-image'],
   },
 }
 
