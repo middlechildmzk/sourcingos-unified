@@ -66,7 +66,7 @@ export const useSourcingStore = create<SourcingStore>()(
       pipeline: [],
       feedbackEvents: [],
       projectMemory: initialMemory,
-      notes: ['Start by analyzing the JD, review the market map, source candidates, then enrich with linked public profiles.'],
+      notes: ['Start by analyzing the JD, review the Search Intelligence lanes, source only from real public APIs, then enrich with linked public profiles.'],
       profileLinkStatus: 'idle',
       profileLinkError: null,
       aiSettings: { provider: 'local_only', apiKeyStored: false, privacyMode: 'strict_local' },
@@ -77,12 +77,12 @@ export const useSourcingStore = create<SourcingStore>()(
       loadSampleJD: (id) => {
         const sample = sampleJDs.find(s => s.id === id) || starter;
         const roleAnalysis = analyzeRole(sample.jd, sample.mode);
-        set({ jdText: sample.jd, mode: sample.mode, roleAnalysis, activeTab: 'intake', sourcedCandidates: [], selectedCandidateId: null, currentRunStatus: 'idle', sourceError: null, profileLinkError: null });
+        set({ jdText: sample.jd, mode: sample.mode, roleAnalysis, activeTab: 'intake', sourcedCandidates: [], selectedCandidateId: null, currentRunStatus: 'idle', sourceError: null, profileLinkError: null, notes: [`Loaded sample: ${sample.name}`, ...get().notes].slice(0, 14) });
       },
       analyzeCurrentRole: () => {
         const { jdText, mode } = get();
         const roleAnalysis = analyzeRole(jdText, mode);
-        set({ roleAnalysis, activeTab: 'intake', sourcedCandidates: [], selectedCandidateId: null, sourceError: null, notes: [`Parsed role: ${roleAnalysis.roleTitle}`, ...get().notes].slice(0, 14) });
+        set({ roleAnalysis, activeTab: 'intake', sourcedCandidates: [], selectedCandidateId: null, sourceError: null, notes: [`Search Intelligence built for: ${roleAnalysis.roleTitle}`, ...get().notes].slice(0, 14) });
       },
       sourceCandidates: async () => {
         const { roleAnalysis } = get();
@@ -90,7 +90,7 @@ export const useSourcingStore = create<SourcingStore>()(
         set({ currentRunStatus: 'running', sourceError: null, activeTab: 'results' });
         try {
           const { run, candidates } = await sourceCandidatesFromPublicApis(roleAnalysis);
-          set(state => ({ currentRunStatus: run.status === 'error' ? 'error' : 'complete', sourceRuns: [run, ...state.sourceRuns], sourcedCandidates: candidates, selectedCandidateId: candidates[0]?.id || null, sourceError: run.errors.length ? run.errors.join(' | ') : null, notes: [`Source run complete: ${candidates.length} candidates from public APIs.`, ...state.notes].slice(0, 14) }));
+          set(state => ({ currentRunStatus: run.status === 'error' ? 'error' : 'complete', sourceRuns: [run, ...state.sourceRuns], sourcedCandidates: candidates, selectedCandidateId: candidates[0]?.id || null, sourceError: run.errors.length ? run.errors.join(' | ') : null, notes: [`Public API source run complete: ${candidates.length} real candidate record(s). No demo fallback used.`, ...run.notes, ...state.notes].slice(0, 14) }));
         } catch (error) {
           set({ currentRunStatus: 'error', sourceError: error instanceof Error ? error.message : 'Candidate sourcing failed.' });
         }
@@ -99,13 +99,16 @@ export const useSourcingStore = create<SourcingStore>()(
         const { roleAnalysis } = get();
         if (!roleAnalysis) return;
         const { run, candidates } = demoSourceCandidates(roleAnalysis);
-        set(state => ({ sourcedCandidates: candidates, selectedCandidateId: candidates[0]?.id || null, sourceRuns: [run, ...state.sourceRuns], currentRunStatus: 'complete', sourceError: null, activeTab: 'results', notes: [`Demo source results loaded: ${candidates.length} candidates.`, ...state.notes].slice(0, 14) }));
+        set(state => ({ sourcedCandidates: candidates, selectedCandidateId: candidates[0]?.id || null, sourceRuns: [run, ...state.sourceRuns], currentRunStatus: 'complete', sourceError: null, activeTab: 'results', notes: [`Demo-only test records loaded: ${candidates.length}. These are synthetic and not real candidates.`, ...state.notes].slice(0, 14) }));
       },
       selectCandidate: (selectedCandidateId) => set({ selectedCandidateId, activeTab: 'candidate' }),
       updateCandidateStage: (id, stage) => set(state => ({ sourcedCandidates: state.sourcedCandidates.map(c => c.id === id ? { ...c, stage } : c) })),
       promoteToPipeline: (candidateId) => {
         const candidate = get().sourcedCandidates.find(c => c.id === candidateId);
-        if (!candidate) return;
+        if (!candidate || candidate.demoOnly) {
+          set(state => ({ notes: ['Demo-only records cannot be saved to the real pipeline.', ...state.notes].slice(0, 14) }));
+          return;
+        }
         const exists = get().pipeline.some(p => p.candidateId === candidateId);
         const entry: PipelineEntry = { id: `pipe-${Date.now()}`, candidateId, stage: 'saved', notes: 'Recruiter-confirmed save. Review contact signals before outreach.', updatedAt: new Date().toISOString() };
         set(state => ({ pipeline: exists ? state.pipeline : [entry, ...state.pipeline], sourcedCandidates: state.sourcedCandidates.map(c => c.id === candidateId ? { ...c, stage: 'saved' } : c), activeTab: 'pipeline', notes: [`Saved ${candidate.name} to pipeline for manual review.`, ...state.notes].slice(0, 14) }));
@@ -143,7 +146,7 @@ export const useSourcingStore = create<SourcingStore>()(
         const reranked = rediscoverCandidates(sourcedCandidates, projectMemory, roleAnalysis || undefined);
         set(state => ({ sourcedCandidates: reranked, selectedCandidateId: reranked[0]?.id || state.selectedCandidateId, activeTab: 'memory', notes: ['Rediscovery pass complete. Candidate pool re-ranked using local project memory.', ...state.notes].slice(0, 14) }));
       },
-      resetWorkspace: () => set({ activeTab: 'intake', jdText: starter.jd, mode: starter.mode, roleAnalysis: starterAnalysis, sourcedCandidates: [], selectedCandidateId: null, sourceRuns: [], currentRunStatus: 'idle', sourceError: null, pipeline: [], feedbackEvents: [], projectMemory: initialMemory, profileLinkStatus: 'idle', profileLinkError: null, synthesisPrompt: '', notes: ['Workspace reset. Analyze the JD, source candidates, then enrich profiles.'] })
+      resetWorkspace: () => set({ activeTab: 'intake', jdText: starter.jd, mode: starter.mode, roleAnalysis: starterAnalysis, sourcedCandidates: [], selectedCandidateId: null, sourceRuns: [], currentRunStatus: 'idle', sourceError: null, pipeline: [], feedbackEvents: [], projectMemory: initialMemory, profileLinkStatus: 'idle', profileLinkError: null, synthesisPrompt: '', notes: ['Workspace reset. Analyze the JD, review Search Intelligence lanes, source real public candidates, then enrich profiles.'] })
     }),
     { name: 'sourcingos-core-v15-9' }
   )
