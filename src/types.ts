@@ -164,6 +164,7 @@ export interface SourcedCandidate {
   evidenceMatrix: EvidenceMatrixRow[];
   synthesis?: CandidateSynthesis;
   lastRediscoveredAt?: string;
+  demoOnly?: boolean;
 }
 export interface SourceRun {
   id: string;
