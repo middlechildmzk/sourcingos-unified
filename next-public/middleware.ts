@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
-const CANONICAL_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.getsourcingos.com'
+const CANONICAL_SITE_URL = 'https://www.getsourcingos.com'
 
 const ALWAYS_PUBLIC = ['/login', '/auth/callback', '/waitlist']
 function isAlwaysPublic(pathname: string): boolean {
