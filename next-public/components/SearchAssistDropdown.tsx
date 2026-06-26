@@ -43,17 +43,18 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
   // Reset highlight when the suggestion set changes.
   useEffect(() => { setActiveIdx(0) }, [query, selectedLaneId])
 
-  // Keyboard navigation on the document while open.
+  // Keyboard navigation while open. Capture phase lets Enter pick a suggestion
+  // before the parent search input treats Enter as “run search”.
   useEffect(() => {
     if (!open || flat.length === 0) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, flat.length - 1)) }
       else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)) }
-      else if (e.key === 'Tab' && flat[activeIdx]) { e.preventDefault(); pick(flat[activeIdx]) }
+      else if ((e.key === 'Tab' || e.key === 'Enter') && flat[activeIdx]) { e.preventDefault(); e.stopPropagation(); pick(flat[activeIdx]) }
       else if (e.key === 'Escape') { onRequestClose?.() }
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
   }, [open, flat, activeIdx]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function pick(s: Suggestion) {
@@ -124,6 +125,12 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
             Start typing a title, skill, clearance, or market — suggestions appear here.
           </p>
         )
+      )}
+
+      {flat.length > 0 && (
+        <p className="muted" style={{ fontSize: 11, margin: '8px 0 0' }}>
+          Use ↑/↓ to move, Enter to add, Esc to close. Press Enter again in the search box to run the search.
+        </p>
       )}
 
       {/* Trust notes */}
