@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import './ui-polish.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
 import { siteUrl } from '@/lib/site'
