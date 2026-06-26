@@ -1,9 +1,10 @@
 import type { MetadataRoute } from 'next'
-import { siteUrl } from './layout'
+import { siteUrl } from '@/lib/site'
 
 export default function robots(): MetadataRoute.Robots {
+  const privateRoutes = ['/admin/', '/app/', '/login/']
   return {
-    rules: [{ userAgent: '*', allow: '/', disallow: ['/admin/', '/app/', '/login/'] }],
+    rules: [{ userAgent: '*', allow: '/', disallow: privateRoutes }],
     sitemap: `${siteUrl}/sitemap.xml`,
   }
 }
