@@ -2,8 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
-
-export const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.getsourcingos.com'
+import { siteUrl } from '@/lib/site'
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
