@@ -20,7 +20,14 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!email.trim() || status === 'sending') return
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail || status === 'sending') return
+
+    if (!trimmedEmail.includes('@')) {
+      setStatus('error')
+      setMessage('Use the email address that was invited to the beta. Usernames like dllarson1991 will not work here.')
+      return
+    }
 
     if (!configured) {
       setStatus('error')
@@ -43,26 +50,31 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
     const callbackUrl = new URL('/auth/callback', siteUrl)
     if (from) callbackUrl.searchParams.set('next', from)
 
-    const { error } = await sb.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        emailRedirectTo: callbackUrl.toString(),
-        shouldCreateUser: false, // invite-only: don't auto-create accounts
-      },
-    })
+    try {
+      const { error } = await sb.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: callbackUrl.toString(),
+          shouldCreateUser: false, // invite-only: don't auto-create accounts
+        },
+      })
 
-    if (error) {
+      if (error) {
+        setStatus('error')
+        setMessage(
+          error.message === 'Signups not allowed for this instance'
+            ? 'Your email is not on the beta access list. Request access below.'
+            : error.message
+        )
+        return
+      }
+
+      setStatus('sent')
+      setMessage('')
+    } catch {
       setStatus('error')
-      setMessage(
-        error.message === 'Signups not allowed for this instance'
-          ? 'Your email is not on the beta access list. Request access below.'
-          : error.message
-      )
-      return
+      setMessage('Could not reach the auth service. Refresh and try again. If this continues, check the Supabase URL/key and allowed redirect URLs for getsourcingos.com.')
     }
-
-    setStatus('sent')
-    setMessage('')
   }
 
   if (status === 'sent') {
@@ -116,7 +128,7 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
 
       <form onSubmit={handleSubmit}>
         <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: 'var(--muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-          Work email
+          Beta email
         </label>
         <input
           className="input"
@@ -139,7 +151,7 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
       </form>
 
       <p className="muted" style={{ fontSize: '13px', marginTop: '18px', textAlign: 'center', lineHeight: '1.6' }}>
-        No password required. We send a one-click sign-in link to your email.
+        No password required. We send a one-click sign-in link to your invited beta email.
         <br />
         Don&rsquo;t have beta access?{' '}
         <Link href="/waitlist" style={{ color: 'var(--accent)' }}>
