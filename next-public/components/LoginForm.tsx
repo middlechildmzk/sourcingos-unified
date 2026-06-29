@@ -8,6 +8,16 @@ interface LoginFormProps {
   error?: string
 }
 
+function readableLoginError(message: string) {
+  if (message === 'Signups not allowed for this instance') {
+    return 'Your email is not on the beta access list. Request access below.'
+  }
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return 'Could not reach Supabase Auth. Check NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in Vercel, then verify Supabase Auth URL Configuration for getsourcingos.com.'
+  }
+  return message
+}
+
 export function LoginForm({ from, error: initialError }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -61,19 +71,15 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
 
       if (error) {
         setStatus('error')
-        setMessage(
-          error.message === 'Signups not allowed for this instance'
-            ? 'Your email is not on the beta access list. Request access below.'
-            : error.message
-        )
+        setMessage(readableLoginError(error.message))
         return
       }
 
       setStatus('sent')
       setMessage('')
-    } catch {
+    } catch (err) {
       setStatus('error')
-      setMessage('Could not reach the auth service. Refresh and try again. If this continues, check the Supabase URL/key and allowed redirect URLs for getsourcingos.com.')
+      setMessage(readableLoginError(err instanceof Error ? err.message : 'Failed to fetch'))
     }
   }
 
