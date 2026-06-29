@@ -87,46 +87,82 @@ function toRows(csv: string): ImportRow[] {
   }).filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
 }
 
+function handleToLinkedInUrl(value: string): string {
+  const raw = value.trim()
+  if (!raw) return ''
+  if (/^https?:\/\//i.test(raw)) return raw
+  const cleaned = raw.replace(/^@/, '').replace(/^linkedin\.com\/in\//i, '').replace(/^www\.linkedin\.com\/in\//i, '').replace(/^\/in\//i, '').replace(/\/+$/, '')
+  return `https://www.linkedin.com/in/${cleaned}/`
+}
+
+function handleToName(value: string): string {
+  const raw = value.trim()
+  if (!raw) return ''
+  if (/linkedin\.com\/in\//i.test(raw)) return raw.split('/in/')[1]?.replace(/[/?#].*$/, '').replace(/^\//, '') || raw
+  if (/^https?:\/\//i.test(raw)) return raw.replace(/^https?:\/\//i, '').replace(/\/+$/, '')
+  return raw.replace(/^@/, '')
+}
+
+function quickRowFromHandle(value: string): ImportRow | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return {
+    firstName: '',
+    lastName: '',
+    fullName: handleToName(trimmed),
+    company: '',
+    position: 'Manual network/profile import',
+    url: handleToLinkedInUrl(trimmed),
+    email: '',
+    connectedOn: 'manual add',
+  }
+}
+
 export function LinkedInImportClient() {
   const [csvText, setCsvText] = useState('')
+  const [quickProfile, setQuickProfile] = useState('')
   const [status, setStatus] = useState('')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ created?: number; skipped?: number; rowsSeen?: number; warnings?: string[]; mode?: string; note?: string } | null>(null)
 
-  const rows = useMemo(() => toRows(csvText).slice(0, 500), [csvText])
+  const csvRows = useMemo(() => toRows(csvText).slice(0, 500), [csvText])
+  const quickRow = useMemo(() => quickRowFromHandle(quickProfile), [quickProfile])
+  const rows = quickRow ? [quickRow] : csvRows
   const preview = rows.slice(0, 8)
 
   async function loadFile(file?: File) {
     if (!file) return
     const text = await file.text()
     setCsvText(text)
+    setQuickProfile('')
     setResult(null)
     setStatus(`Loaded ${file.name}`)
   }
 
   async function importRows() {
     if (!rows.length) {
-      setStatus('No LinkedIn connection rows found. Export your LinkedIn connections as CSV, then upload or paste it here.')
+      setStatus('Add a LinkedIn handle/profile URL, or upload/paste your LinkedIn connections CSV first.')
       return
     }
     setImporting(true)
-    setStatus('Importing LinkedIn connections...')
+    setStatus(quickRow ? 'Adding profile to your private network...' : 'Importing LinkedIn connections...')
     setResult(null)
     try {
       const res = await fetch('/api/network/import-linkedin', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rows, importLabel: 'LinkedIn connections export' }),
+        body: JSON.stringify({ rows, importLabel: quickRow ? 'Manual LinkedIn/profile add' : 'LinkedIn connections export' }),
       })
-      const json = await res.json()
-      if (!res.ok || !json.ok) {
-        setStatus(json.error || 'Import failed.')
+      let json: any = null
+      try { json = await res.json() } catch { json = null }
+      if (!res.ok || !json?.ok) {
+        setStatus(json?.error || `Import failed with status ${res.status}. Make sure you are signed in.`)
         return
       }
       setResult(json)
-      setStatus(`Imported ${json.created || 0} connection record(s)${json.skipped ? `, skipped ${json.skipped}` : ''}.`)
+      setStatus(`${quickRow ? 'Added' : 'Imported'} ${json.created || 0} record(s)${json.skipped ? `, skipped ${json.skipped}` : ''}.`)
     } catch {
-      setStatus('Import failed. Check your network connection and try again.')
+      setStatus('Could not reach the import API. Refresh the page, confirm you are signed in, and try again.')
     } finally {
       setImporting(false)
     }
@@ -135,48 +171,65 @@ export function LinkedInImportClient() {
   return (
     <div className="interactive-tool">
       <div className="cta">
-        <strong>Relationship data only.</strong> Your LinkedIn export is imported as private network context.
+        <strong>Relationship data only.</strong> Your LinkedIn export or manually added profile is imported as private network context.
         It does not mean someone is looking, qualified, contactable, or approved for outreach.
       </div>
 
       <div className="grid two">
         <div className="card">
-          <span className="kicker">Step 1</span>
+          <span className="kicker">Quick add</span>
+          <h3>Add one LinkedIn/profile handle</h3>
+          <p className="muted" style={{ fontSize: '14px' }}>
+            Paste a LinkedIn URL or handle like <code>dllarson1991</code>. This creates a pending private record you can enrich/review later.
+          </p>
+          <input
+            type="text"
+            value={quickProfile}
+            onChange={e => { setQuickProfile(e.target.value); setResult(null) }}
+            placeholder="dllarson1991 or https://www.linkedin.com/in/name/"
+          />
+          {quickRow ? (
+            <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+              Will save as: {quickRow.fullName} · {quickRow.url}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="card">
+          <span className="kicker">Bulk CSV</span>
           <h3>Upload LinkedIn connections CSV</h3>
           <p className="muted" style={{ fontSize: '14px' }}>
-            LinkedIn usually exports columns like First Name, Last Name, URL, Email Address, Company,
-            Position, and Connected On.
+            LinkedIn exports columns like First Name, Last Name, URL, Email Address, Company, Position, and Connected On.
           </p>
           <input type="file" accept=".csv,text/csv" onChange={e => loadFile(e.target.files?.[0])} />
           <textarea
             className="textarea big"
             value={csvText}
-            onChange={e => { setCsvText(e.target.value); setResult(null) }}
+            onChange={e => { setCsvText(e.target.value); setQuickProfile(''); setResult(null) }}
             placeholder="Or paste your LinkedIn connections CSV here..."
             style={{ marginTop: '12px' }}
           />
         </div>
+      </div>
 
-        <div className="card">
-          <span className="kicker">Step 2</span>
-          <h3>Review before import</h3>
-          <p className="muted" style={{ fontSize: '14px' }}>
-            SourcingOS will create pending private records with unverified contact signals and evidence that the row came from your LinkedIn export.
-          </p>
-          <div className="grid" style={{ margin: '12px 0' }}>
-            <div className="card"><span className="kicker">Rows detected</span><div className="big-number">{rows.length}</div></div>
-          </div>
-          <button className="btn" onClick={importRows} disabled={importing || !rows.length}>
-            {importing ? 'Importing...' : 'Import LinkedIn connections'}
-          </button>
-          {status ? <div className="cta" style={{ marginTop: '12px' }}>{status}</div> : null}
-          {result?.warnings?.length ? (
-            <div className="preview-banner" style={{ marginTop: '12px' }}>
-              <span className="pb-icon">◈</span>
-              <span>{result.warnings.slice(0, 3).join(' ')}</span>
-            </div>
-          ) : null}
+      <div className="card" style={{ marginTop: '16px' }}>
+        <span className="kicker">Review before import</span>
+        <p className="muted" style={{ fontSize: '14px' }}>
+          SourcingOS creates pending private records with unverified contact signals and evidence that the row came from your export or manual add.
+        </p>
+        <div className="grid" style={{ margin: '12px 0' }}>
+          <div className="card"><span className="kicker">Rows detected</span><div className="big-number">{rows.length}</div></div>
         </div>
+        <button className="btn" onClick={importRows} disabled={importing || !rows.length}>
+          {importing ? 'Importing...' : quickRow ? 'Add profile' : 'Import LinkedIn connections'}
+        </button>
+        {status ? <div className="cta" style={{ marginTop: '12px' }}>{status}</div> : null}
+        {result?.warnings?.length ? (
+          <div className="preview-banner" style={{ marginTop: '12px' }}>
+            <span className="pb-icon">◈</span>
+            <span>{result.warnings.slice(0, 3).join(' ')}</span>
+          </div>
+        ) : null}
       </div>
 
       {preview.length > 0 && (
@@ -191,7 +244,7 @@ export function LinkedInImportClient() {
                 </div>
                 <h3>{row.fullName || [row.firstName, row.lastName].filter(Boolean).join(' ') || 'Unnamed connection'}</h3>
                 <p className="muted">{[row.position, row.company].filter(Boolean).join(' at ') || 'No title/company in CSV'}</p>
-                {row.url ? <a className="kicker" href={row.url} target="_blank" rel="noreferrer noopener">Open LinkedIn profile →</a> : null}
+                {row.url ? <a className="kicker" href={row.url} target="_blank" rel="noreferrer noopener">Open profile →</a> : null}
                 {row.email ? <p className="muted" style={{ fontSize: '12px' }}>Email signal imported as unverified: {row.email}</p> : null}
               </div>
             ))}
