@@ -1,4 +1,5 @@
 import { WorkbenchClient } from '@/components/WorkbenchClient'
+import { PublicComposerDefault } from '@/components/PublicComposerDefault'
 import Link from 'next/link'
 
 export const metadata = {
@@ -37,6 +38,7 @@ export default function PublicCandidateSearchPage() {
         </span>
       </div>
 
+      <PublicComposerDefault />
       <WorkbenchClient publicMode={true} />
     </main>
   )
