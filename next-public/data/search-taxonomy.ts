@@ -27,9 +27,9 @@ export interface TaxonomyEntry {
 // ─── Titles ──────────────────────────────────────────────────────────────────
 export const TITLES: TaxonomyEntry[] = [
   { canonical: 'Technical Sourcer',      type: 'title', color: 'title',
-    aliases: ['technical sourcer', 'tech sourcer', 'engineering sourcer', 'talent sourcer', 'sourcer', 'recruiting researcher', 'research sourcer'] },
+    aliases: ['technical sourcer', 'tech sourcer', 'talent sourcer', 'sourcer', 'recruiting researcher', 'research sourcer'] },
   { canonical: 'Technical Recruiter',    type: 'title', color: 'title',
-    aliases: ['technical recruiter', 'tech recruiter', 'engineering recruiter', 'ta partner', 'talent acquisition partner'] },
+    aliases: ['technical recruiter', 'tech recruiter', 'ta partner', 'talent acquisition partner'] },
   { canonical: 'DevSecOps Engineer',     type: 'title', color: 'title',
     aliases: ['devsecops', 'devsecops engineer', 'devops engineer', 'devops', 'platform engineer', 'sre', 'site reliability engineer'] },
   { canonical: 'Cybersecurity Engineer', type: 'title', color: 'title',
