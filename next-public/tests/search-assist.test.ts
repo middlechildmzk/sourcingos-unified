@@ -9,6 +9,13 @@ function values(input: string, opts?: { selectedLaneId?: string }) {
 function kinds(input: string, opts?: { selectedLaneId?: string }) {
   return new Set(getSearchAssistSuggestions(input, opts).suggestions.map(s => s.kind))
 }
+function titleValues(input: string) {
+  return getSearchAssistSuggestions(input).suggestions.filter(s => s.kind === 'title').map(s => s.value.toLowerCase())
+}
+function expectNoRecruitingTitles(input: string) {
+  const titles = titleValues(input)
+  expect(titles.some(x => /recruiter|sourcer|talent acquisition|ta partner|recruiting coordinator/.test(x))).toBe(false)
+}
 
 describe('getSearchAssistSuggestions — recognition', () => {
   it('recognizes title, clearance, skill, and market from a cleared query', () => {
@@ -75,8 +82,7 @@ describe('case 3 — SOC analyst Splunk Secret Huntsville', () => {
 describe('case 4 — Senior technical sourcer AI recruiting remote', () => {
   const q = 'Senior technical sourcer AI recruiting remote'
   it('suggests TA/recruiting title variants, not engineering skills', () => {
-    const sugg = getSearchAssistSuggestions(q).suggestions
-    const titleVals = sugg.filter(s => s.kind === 'title').map(s => s.value.toLowerCase())
+    const titleVals = titleValues(q)
     expect(titleVals.some(x => /recruiter|talent|sourcer|ta /.test(x))).toBe(true)
     const v = values(q)
     expect(v).not.toContain('kubernetes')
@@ -93,6 +99,74 @@ describe('case 5 — Data engineer Python Spark AWS', () => {
   it('does not emit clearance notes for a non-cleared search', () => {
     const notes = getSearchAssistSuggestions(q).notes.join(' ').toLowerCase()
     expect(notes).not.toContain('clearance must be confirmed')
+  })
+})
+
+describe('V2 intent calibration matrix', () => {
+  it('Machine Learning Engineer stays in the AI/ML lane and does not leak recruiting titles', () => {
+    const v = values('Machine Learning Engineer')
+    expect(v).toContain('ai engineer')
+    expect(v).toContain('mlops engineer')
+    expect(v.some(x => /research engineer|data scientist|applied scientist/.test(x))).toBe(true)
+    expectNoRecruitingTitles('Machine Learning Engineer')
+  })
+
+  it('Data Scientist PyTorch LLM stays in the AI/ML lane', () => {
+    const v = values('Data Scientist PyTorch LLM')
+    expect(v).toContain('ml engineer')
+    expect(v).toContain('hugging face')
+    expect(v.some(x => /arxiv|hugging face/.test(x))).toBe(true)
+    expectNoRecruitingTitles('Data Scientist PyTorch LLM')
+  })
+
+  it('Technical Sourcer still gets recruiting variants', () => {
+    const titles = titleValues('Technical Sourcer')
+    expect(titles).toContain('technical recruiter')
+    expect(titles).toContain('talent sourcer')
+    expect(titles.some(x => /ta researcher|recruiting researcher|talent acquisition/.test(x))).toBe(true)
+  })
+
+  it('Technical Recruiter still gets recruiting variants', () => {
+    const titles = titleValues('Technical Recruiter')
+    expect(titles).toContain('technical sourcer')
+    expect(titles.some(x => /engineering recruiter|ta partner|talent acquisition partner/.test(x))).toBe(true)
+  })
+
+  it('DevSecOps Engineer Kubernetes TS/SCI Northern Virginia preserves cleared-market guidance', () => {
+    const r = getSearchAssistSuggestions('DevSecOps Engineer Kubernetes TS/SCI Northern Virginia')
+    const v = r.suggestions.map(s => s.value.toLowerCase())
+    expect(v).toContain('platform engineer')
+    expect(v).toContain('terraform')
+    expect(v).toContain('clearancejobs')
+    expect(v.some(x => /chantilly|reston|herndon/.test(x))).toBe(true)
+    expect(r.notes.join(' ').toLowerCase()).toContain('clearance must be confirmed')
+  })
+
+  it('Nurse Recruiter keeps healthcare recruiting variants', () => {
+    const v = values('Nurse Recruiter')
+    expect(v).toContain('rn recruiter')
+    expect(v).toContain('clinical recruiter')
+    expect(v).toContain('healthcare recruiter')
+    expect(v).toContain('provider recruiter')
+  })
+
+  it('Epic Analyst stays in the healthcare IT lane', () => {
+    const v = values('Epic Analyst')
+    expect(v).toContain('cerner')
+    expect(v).toContain('hl7')
+    expect(v).toContain('fhir')
+    expect(v).toContain('emr')
+    expectNoRecruitingTitles('Epic Analyst')
+  })
+
+  it('Cybersecurity Engineer Splunk Secret stays in the cyber lane with clearance caution', () => {
+    const r = getSearchAssistSuggestions('Cybersecurity Engineer Splunk Secret')
+    const v = r.suggestions.map(s => s.value.toLowerCase())
+    expect(v).toContain('security engineer')
+    expect(v).toContain('siem')
+    expect(v).toContain('clearancejobs')
+    expect(r.notes.join(' ').toLowerCase()).toContain('clearance must be confirmed')
+    expectNoRecruitingTitles('Cybersecurity Engineer Splunk Secret')
   })
 })
 
