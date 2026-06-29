@@ -1,17 +1,17 @@
 import 'server-only'
 import { rateLimit } from '@/lib/rate-limit'
-import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { searchSources } from '@/lib/source-connectors'
 import { allSourceNames, SourceName } from '@/lib/source-types'
-import { buildSourceQueries, classifyChips, type ComposerChip } from '@/lib/search-query-builder'
+import { buildSourceQueries, type ComposerChip } from '@/lib/search-query-builder'
 import { z } from 'zod'
 
 export const dynamic = 'force-dynamic'
 
-// Single-source search — enables the client to run sources in parallel with
-// independent timeouts and per-source status. Backward-compatible: the existing
-// /api/workbench/search (all-sources) route remains for non-progressive callers.
+// Public-safe single-source search.
+// This route powers the public Candidate Search demo, so it must not require sign-in.
+// It only searches public source connectors and never saves, enriches, verifies,
+// contacts, or merges candidates. Write actions remain gated elsewhere.
 const sourceEnum = z.enum(allSourceNames as [SourceName, ...SourceName[]])
 const schema = z.object({
   query: z.string().min(1).max(200),
@@ -20,6 +20,11 @@ const schema = z.object({
   location: z.string().max(100).optional().default(''),
   limit: z.number().int().min(1).max(8).optional().default(5),
 })
+
+const LIVE_PUBLIC_SOURCES = new Set<SourceName>([
+  'github', 'openalex', 'npm', 'pypi', 'huggingface', 'stackoverflow',
+  'npi', 'pubmed', 'orcid', 'crates', 'rubygems',
+])
 
 // Per-source query selection — same routing logic as the all-sources route.
 function queryForSource(source: SourceName, chips: ComposerChip[], rawQuery: string): string {
@@ -33,13 +38,24 @@ function queryForSource(source: SourceName, chips: ComposerChip[], rawQuery: str
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireSession()
-  if (!gate.ok) return gate.response
-  const rl = await rateLimit(req, 'workbench', gate.userId)
+  const rl = await rateLimit(req, 'sources')
   if (!rl.ok) return rl.response
 
   try {
     const body = schema.parse(await req.json())
+
+    if (!LIVE_PUBLIC_SOURCES.has(body.source)) {
+      return NextResponse.json({
+        ok: true,
+        source: body.source,
+        status: 'manual_safe',
+        results: [],
+        effectiveQuery: '',
+        resultCount: 0,
+        warnings: ['This source lane is manual-safe or planned. Open it manually from the source lane card.'],
+      })
+    }
+
     const chips = body.chips as ComposerChip[]
     const effectiveQuery = queryForSource(body.source, chips, body.query)
 
@@ -68,6 +84,11 @@ export async function POST(req: NextRequest) {
       results,
       resultCount: results.length,
       warnings,
+      guardrails: [
+        'Source profiles are unconfirmed and require recruiter review.',
+        'Contact signals are unverified by default.',
+        'Public clearance mentions are unverified breadcrumbs only.',
+      ],
     })
   } catch (err) {
     return NextResponse.json(
