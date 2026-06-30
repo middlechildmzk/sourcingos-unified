@@ -14,6 +14,7 @@ export type CandidateSourceName =
   | 'dockerhub'
   | 'crates'
   | 'rubygems'
+  | 'resume_xray'
   | 'public_resume'
   | 'uploaded_resume'
   | 'csv_import'
@@ -223,21 +224,5 @@ export function scoreIdentityMatch(a: SourceProfileRecord, b: SourceProfileRecor
     if (a.organization.toLowerCase() === b.organization.toLowerCase()) { score += 15; reasons.push('Organization matches') }
     else conflicts.push(`Organization differs: ${a.organization} vs ${b.organization}`)
   }
-  const domainA = (a.profileUrl || '').split('/')[2]
-  const domainB = (b.profileUrl || '').split('/')[2]
-  if (domainA && domainB && domainA === domainB) { score += 5; reasons.push('Same profile domain') }
-  return { score: Math.min(score, 100), reasons, conflicts }
-}
-
-export function buildCandidateSummary(sourceProfile: SourceProfileRecord, evidence: EvidenceItemRecord[]) {
-  const skills = Array.from(new Set(evidence.filter(item => item.label === 'Skill signal').map(item => item.detail))).slice(0, 12)
-  return {
-    canonicalName: sourceProfile.displayName || 'Unknown candidate',
-    headline: sourceProfile.headline || sourceProfile.organization || 'Candidate profile',
-    location: sourceProfile.location,
-    currentCompany: sourceProfile.organization,
-    currentTitle: sourceProfile.headline,
-    summary: evidence.find(item => item.label === 'Profile summary text')?.detail || 'Candidate record created from source evidence.',
-    skills
-  }
+  return { score, reasons, conflicts }
 }
