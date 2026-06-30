@@ -65,26 +65,93 @@ function pick(row: Record<string, string>, names: string[]): string {
   return ''
 }
 
+function looksLikeLinkedInHeader(cells: string[]): boolean {
+  const headers = cells.map(normalizeHeader)
+  const joined = headers.join('|')
+  return (
+    joined.includes('firstname') ||
+    joined.includes('lastname') ||
+    joined.includes('connectedon') ||
+    joined.includes('profileurl') ||
+    joined.includes('emailaddress')
+  )
+}
+
+function looksLikeConnectionRow(cells: string[]): boolean {
+  const nonEmpty = cells.map(c => c.trim()).filter(Boolean)
+  if (nonEmpty.length < 2) return false
+  if (cells.some(c => /linkedin\.com\/in\//i.test(c))) return true
+  if (cells.some(c => /@/.test(c)) && nonEmpty.length >= 3) return true
+  return /^[a-z][a-z .'-]+$/i.test(nonEmpty[0] || '') && /^[a-z][a-z .'-]+$/i.test(nonEmpty[1] || '') && nonEmpty.length >= 4
+}
+
+function rowFromHeaders(headers: string[], cells: string[]): ImportRow {
+  const row = Object.fromEntries(headers.map((h, i) => [h, cells[i] || '']))
+  const firstName = pick(row, ['First Name', 'FirstName', 'Given Name'])
+  const lastName = pick(row, ['Last Name', 'LastName', 'Surname'])
+  const fullName = pick(row, ['Full Name', 'Name']) || [firstName, lastName].filter(Boolean).join(' ')
+  return {
+    firstName,
+    lastName,
+    fullName,
+    company: pick(row, ['Company', 'Current Company', 'Organization']),
+    position: pick(row, ['Position', 'Title', 'Current Position', 'Job Title']),
+    url: pick(row, ['URL', 'Profile URL', 'LinkedIn URL', 'Public Profile URL', 'ProfileLink']),
+    email: pick(row, ['Email Address', 'Email', 'E-mail Address']),
+    connectedOn: pick(row, ['Connected On', 'Connected Date', 'Connection Date', 'ConnectedOn']),
+  }
+}
+
+function rowFromLinkedInCells(cells: string[]): ImportRow {
+  const values = cells.map(c => c.trim())
+  const firstName = values[0] || ''
+  const lastName = values[1] || ''
+  const urlIndex = values.findIndex(v => /linkedin\.com\/in\//i.test(v))
+  const emailIndex = values.findIndex(v => /@/.test(v))
+  const url = urlIndex >= 0 ? values[urlIndex] : ''
+  const email = emailIndex >= 0 ? values[emailIndex] : ''
+
+  const used = new Set([0, 1])
+  if (urlIndex >= 0) used.add(urlIndex)
+  if (emailIndex >= 0) used.add(emailIndex)
+
+  const tail = values
+    .map((value, index) => ({ value, index }))
+    .filter(item => item.value && !used.has(item.index))
+
+  const dateIndex = tail.findIndex(item => /\b\d{4}\b/.test(item.value) || /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(item.value))
+  const connectedOn = dateIndex >= 0 ? tail[dateIndex].value : ''
+  const remaining = tail.filter((_, index) => index !== dateIndex).map(item => item.value)
+
+  return {
+    firstName,
+    lastName,
+    fullName: [firstName, lastName].filter(Boolean).join(' '),
+    company: remaining[0] || '',
+    position: remaining[1] || '',
+    url,
+    email,
+    connectedOn,
+  }
+}
+
 function toRows(csv: string): ImportRow[] {
   const parsed = parseCsv(csv)
-  if (parsed.length < 2) return []
-  const headers = parsed[0].map(normalizeHeader)
-  return parsed.slice(1).map(cells => {
-    const row = Object.fromEntries(headers.map((h, i) => [h, cells[i] || '']))
-    const firstName = pick(row, ['First Name', 'FirstName', 'Given Name'])
-    const lastName = pick(row, ['Last Name', 'LastName', 'Surname'])
-    const fullName = pick(row, ['Full Name', 'Name']) || [firstName, lastName].filter(Boolean).join(' ')
-    return {
-      firstName,
-      lastName,
-      fullName,
-      company: pick(row, ['Company', 'Current Company', 'Organization']),
-      position: pick(row, ['Position', 'Title', 'Current Position', 'Job Title']),
-      url: pick(row, ['URL', 'Profile URL', 'LinkedIn URL', 'Public Profile URL']),
-      email: pick(row, ['Email Address', 'Email', 'E-mail Address']),
-      connectedOn: pick(row, ['Connected On', 'Connected Date', 'Connection Date']),
-    }
-  }).filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
+  if (parsed.length < 1) return []
+
+  const headerIndex = parsed.findIndex(looksLikeLinkedInHeader)
+  if (headerIndex >= 0 && parsed.length > headerIndex + 1) {
+    const headers = parsed[headerIndex].map(normalizeHeader)
+    return parsed.slice(headerIndex + 1)
+      .map(cells => rowFromHeaders(headers, cells))
+      .filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
+  }
+
+  // Fallback for LinkedIn exports where the header was stripped or the file starts directly with rows.
+  return parsed
+    .filter(looksLikeConnectionRow)
+    .map(rowFromLinkedInCells)
+    .filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
 }
 
 export function LinkedInImportClient() {
@@ -95,18 +162,20 @@ export function LinkedInImportClient() {
 
   const rows = useMemo(() => toRows(csvText).slice(0, 500), [csvText])
   const preview = rows.slice(0, 8)
+  const hasLoadedCsvButNoRows = Boolean(csvText.trim()) && rows.length === 0
 
   async function loadFile(file?: File) {
     if (!file) return
     const text = await file.text()
+    const detectedRows = toRows(text)
     setCsvText(text)
     setResult(null)
-    setStatus(`Loaded ${file.name}`)
+    setStatus(detectedRows.length ? `Loaded ${file.name}. Detected ${detectedRows.length} connection row(s).` : `Loaded ${file.name}, but no connection rows were detected yet.`)
   }
 
   async function importRows() {
     if (!rows.length) {
-      setStatus('No LinkedIn connection rows found. Export your LinkedIn connections as CSV, then upload or paste it here.')
+      setStatus('No LinkedIn connection rows found. Try exporting Connections from LinkedIn, or paste a CSV with First Name, Last Name, URL, Company, Position, and Connected On columns.')
       return
     }
     setImporting(true)
@@ -145,7 +214,7 @@ export function LinkedInImportClient() {
           <h3>Upload LinkedIn connections CSV</h3>
           <p className="muted" style={{ fontSize: '14px' }}>
             LinkedIn usually exports columns like First Name, Last Name, URL, Email Address, Company,
-            Position, and Connected On.
+            Position, and Connected On. SourcingOS also handles exports with intro lines or missing headers.
           </p>
           <input type="file" accept=".csv,text/csv" onChange={e => loadFile(e.target.files?.[0])} />
           <textarea
@@ -170,6 +239,15 @@ export function LinkedInImportClient() {
             {importing ? 'Importing...' : 'Import LinkedIn connections'}
           </button>
           {status ? <div className="cta" style={{ marginTop: '12px' }}>{status}</div> : null}
+          {hasLoadedCsvButNoRows ? (
+            <div className="preview-banner" style={{ marginTop: '12px', borderColor: 'rgba(246,201,107,.35)' }}>
+              <span className="pb-icon">◈</span>
+              <span>
+                No rows detected yet. Your file may not include the standard LinkedIn Connections columns, or the first visible lines may be export notes.
+                Try opening the CSV and make sure it includes names and LinkedIn profile URLs.
+              </span>
+            </div>
+          ) : null}
           {result?.warnings?.length ? (
             <div className="preview-banner" style={{ marginTop: '12px' }}>
               <span className="pb-icon">◈</span>
