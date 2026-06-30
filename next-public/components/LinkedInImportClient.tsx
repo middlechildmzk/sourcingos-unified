@@ -69,14 +69,20 @@ function pick(row: Record<string, string>, names: string[]): string {
 
 function looksLikeLinkedInHeader(cells: string[]): boolean {
   const headers = cells.map(normalizeHeader)
-  const joined = headers.join('|')
-  return (
-    joined.includes('firstname') ||
-    joined.includes('lastname') ||
-    joined.includes('connectedon') ||
-    joined.includes('profileurl') ||
-    joined.includes('emailaddress')
-  )
+  const headerSet = new Set(headers)
+  const compactCells = cells.map(c => c.trim()).filter(Boolean)
+
+  // Real LinkedIn exports use a compact row like:
+  // First Name,Last Name,URL,Email Address,Company,Position,Connected On
+  // Do not treat surrounding instructions or notes as the header just because
+  // they contain words like "First Name" or "Email Address".
+  const hasNames = headerSet.has('firstname') && headerSet.has('lastname')
+  const hasProfile = headerSet.has('url') || headerSet.has('profileurl') || headerSet.has('linkedinurl') || headerSet.has('publicprofileurl')
+  const hasWorkContext = headerSet.has('company') || headerSet.has('position') || headerSet.has('connectedon')
+  const headerSized = compactCells.length >= 5 && compactCells.length <= 10
+  const cellsLookLikeLabels = compactCells.every(cell => cell.length <= 40 && !/https?:\/\//i.test(cell))
+
+  return hasNames && hasProfile && hasWorkContext && headerSized && cellsLookLikeLabels
 }
 
 function looksLikeConnectionRow(cells: string[]): boolean {
