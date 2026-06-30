@@ -13,6 +13,8 @@ type ImportRow = {
   connectedOn: string
 }
 
+const IMPORT_BATCH_SIZE = 50
+
 function parseCsv(text: string): string[][] {
   const rows: string[][] = []
   let row: string[] = []
@@ -147,11 +149,19 @@ function toRows(csv: string): ImportRow[] {
       .filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
   }
 
-  // Fallback for LinkedIn exports where the header was stripped or the file starts directly with rows.
   return parsed
     .filter(looksLikeConnectionRow)
     .map(rowFromLinkedInCells)
     .filter(row => row.fullName || row.firstName || row.lastName || row.url || row.email)
+}
+
+async function readJsonOrText(res: Response) {
+  const text = await res.text()
+  try {
+    return text ? JSON.parse(text) : {}
+  } catch {
+    return { ok: false, error: text || `Request failed with status ${res.status}` }
+  }
 }
 
 export function LinkedInImportClient() {
@@ -160,9 +170,10 @@ export function LinkedInImportClient() {
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ created?: number; skipped?: number; rowsSeen?: number; warnings?: string[]; mode?: string; note?: string } | null>(null)
 
-  const rows = useMemo(() => toRows(csvText).slice(0, 500), [csvText])
-  const preview = rows.slice(0, 8)
-  const hasLoadedCsvButNoRows = Boolean(csvText.trim()) && rows.length === 0
+  const allRows = useMemo(() => toRows(csvText), [csvText])
+  const rowsToImport = useMemo(() => allRows.slice(0, IMPORT_BATCH_SIZE), [allRows])
+  const preview = allRows.slice(0, 8)
+  const hasLoadedCsvButNoRows = Boolean(csvText.trim()) && allRows.length === 0
 
   async function loadFile(file?: File) {
     if (!file) return
@@ -170,32 +181,33 @@ export function LinkedInImportClient() {
     const detectedRows = toRows(text)
     setCsvText(text)
     setResult(null)
-    setStatus(detectedRows.length ? `Loaded ${file.name}. Detected ${detectedRows.length} connection row(s).` : `Loaded ${file.name}, but no connection rows were detected yet.`)
+    setStatus(detectedRows.length ? `Loaded ${file.name}. Detected ${detectedRows.length} connection row(s). The first ${Math.min(IMPORT_BATCH_SIZE, detectedRows.length)} will import in this safety batch.` : `Loaded ${file.name}, but no connection rows were detected yet.`)
   }
 
   async function importRows() {
-    if (!rows.length) {
+    if (!rowsToImport.length) {
       setStatus('No LinkedIn connection rows found. Try exporting Connections from LinkedIn, or paste a CSV with First Name, Last Name, URL, Company, Position, and Connected On columns.')
       return
     }
     setImporting(true)
-    setStatus('Importing LinkedIn connections...')
+    setStatus(`Importing first ${rowsToImport.length} LinkedIn connection(s)...`)
     setResult(null)
     try {
       const res = await fetch('/api/network/import-linkedin', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rows, importLabel: 'LinkedIn connections export' }),
+        body: JSON.stringify({ rows: rowsToImport, importLabel: 'LinkedIn connections export' }),
       })
-      const json = await res.json()
+      const json = await readJsonOrText(res)
       if (!res.ok || !json.ok) {
-        setStatus(json.error || 'Import failed.')
+        setStatus(json.error || `Import failed with status ${res.status}.`)
         return
       }
       setResult(json)
-      setStatus(`Imported ${json.created || 0} connection record(s)${json.skipped ? `, skipped ${json.skipped}` : ''}.`)
-    } catch {
-      setStatus('Import failed. Check your network connection and try again.')
+      const warningText = Array.isArray(json.warnings) && json.warnings.length ? ` First issue: ${json.warnings[0]}` : ''
+      setStatus(`Imported ${json.created || 0} connection record(s) from this safety batch${json.skipped ? `, skipped ${json.skipped}` : ''}.${warningText}`)
+    } catch (err) {
+      setStatus(err instanceof Error ? `Import request failed: ${err.message}` : 'Import request failed. Check your network connection and try again.')
     } finally {
       setImporting(false)
     }
@@ -233,11 +245,17 @@ export function LinkedInImportClient() {
             SourcingOS will create pending private records with unverified contact signals and evidence that the row came from your LinkedIn export.
           </p>
           <div className="grid" style={{ margin: '12px 0' }}>
-            <div className="card"><span className="kicker">Rows detected</span><div className="big-number">{rows.length}</div></div>
+            <div className="card"><span className="kicker">Rows detected</span><div className="big-number">{allRows.length}</div></div>
+            <div className="card"><span className="kicker">This batch</span><div className="big-number">{rowsToImport.length}</div></div>
           </div>
-          <button className="btn" onClick={importRows} disabled={importing || !rows.length}>
-            {importing ? 'Importing...' : 'Import LinkedIn connections'}
+          <button className="btn" onClick={importRows} disabled={importing || !rowsToImport.length}>
+            {importing ? 'Importing...' : `Import first ${rowsToImport.length || IMPORT_BATCH_SIZE}`}
           </button>
+          {allRows.length > IMPORT_BATCH_SIZE ? (
+            <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+              Safety mode imports the first {IMPORT_BATCH_SIZE} records only. Full batch paging is the next step after this test import succeeds.
+            </p>
+          ) : null}
           {status ? <div className="cta" style={{ marginTop: '12px' }}>{status}</div> : null}
           {hasLoadedCsvButNoRows ? (
             <div className="preview-banner" style={{ marginTop: '12px', borderColor: 'rgba(246,201,107,.35)' }}>
