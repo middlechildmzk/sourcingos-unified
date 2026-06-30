@@ -208,6 +208,29 @@ export function contactsFromText(text: string, source: CandidateSourceName, sour
   return contacts
 }
 
+export function buildCandidateSummary(sourceProfile: SourceProfileRecord, evidence: EvidenceItemRecord[] = []) {
+  const evidenceText = evidence.map(item => `${item.label}: ${item.detail}`).join(' ')
+  const rawText = [sourceProfile.rawText, evidenceText].filter(Boolean).join(' ')
+  const skills = splitSkills(rawText)
+  const headline = sourceProfile.headline || sourceProfile.organization || 'Imported candidate'
+  const summaryParts = [
+    sourceProfile.displayName ? `Imported profile for ${sourceProfile.displayName}.` : 'Imported profile.',
+    headline ? `Headline: ${headline}.` : '',
+    sourceProfile.organization ? `Organization: ${sourceProfile.organization}.` : '',
+    'Review required before treating this as a candidate match.',
+  ].filter(Boolean)
+
+  return {
+    canonicalName: sourceProfile.displayName || 'Imported candidate',
+    headline,
+    location: sourceProfile.location || '',
+    currentCompany: sourceProfile.organization || '',
+    currentTitle: sourceProfile.headline || '',
+    summary: summaryParts.join(' '),
+    skills,
+  }
+}
+
 export function scoreIdentityMatch(a: SourceProfileRecord, b: SourceProfileRecord) {
   let score = 0
   const reasons: string[] = []
