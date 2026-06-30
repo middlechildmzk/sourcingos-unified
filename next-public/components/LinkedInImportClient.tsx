@@ -13,7 +13,19 @@ type ImportRow = {
   connectedOn: string
 }
 
+type ImportStats = {
+  created: number
+  skipped: number
+  batches: number
+  failed: number
+}
+
 const IMPORT_BATCH_SIZE = 50
+const IMPORT_BATCH_PAUSE_MS = 2300
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
 
 function parseCsv(text: string): string[][] {
   const rows: string[][] = []
@@ -72,10 +84,6 @@ function looksLikeLinkedInHeader(cells: string[]): boolean {
   const headerSet = new Set(headers)
   const compactCells = cells.map(c => c.trim()).filter(Boolean)
 
-  // Real LinkedIn exports use a compact row like:
-  // First Name,Last Name,URL,Email Address,Company,Position,Connected On
-  // Do not treat surrounding instructions or notes as the header just because
-  // they contain words like "First Name" or "Email Address".
   const hasNames = headerSet.has('firstname') && headerSet.has('lastname')
   const hasProfile = headerSet.has('url') || headerSet.has('profileurl') || headerSet.has('linkedinurl') || headerSet.has('publicprofileurl')
   const hasWorkContext = headerSet.has('company') || headerSet.has('position') || headerSet.has('connectedon')
@@ -174,49 +182,144 @@ export function LinkedInImportClient() {
   const [csvText, setCsvText] = useState('')
   const [status, setStatus] = useState('')
   const [importing, setImporting] = useState(false)
+  const [batchStart, setBatchStart] = useState(0)
+  const [stats, setStats] = useState<ImportStats>({ created: 0, skipped: 0, batches: 0, failed: 0 })
   const [result, setResult] = useState<{ created?: number; skipped?: number; rowsSeen?: number; warnings?: string[]; mode?: string; note?: string } | null>(null)
 
   const allRows = useMemo(() => toRows(csvText), [csvText])
-  const rowsToImport = useMemo(() => allRows.slice(0, IMPORT_BATCH_SIZE), [allRows])
-  const preview = allRows.slice(0, 8)
+  const safeBatchStart = Math.min(batchStart, Math.max(0, allRows.length - (allRows.length % IMPORT_BATCH_SIZE || IMPORT_BATCH_SIZE)))
+  const rowsToImport = useMemo(() => allRows.slice(safeBatchStart, safeBatchStart + IMPORT_BATCH_SIZE), [allRows, safeBatchStart])
+  const preview = allRows.slice(safeBatchStart, safeBatchStart + 8)
   const hasLoadedCsvButNoRows = Boolean(csvText.trim()) && allRows.length === 0
+  const totalBatches = allRows.length ? Math.ceil(allRows.length / IMPORT_BATCH_SIZE) : 0
+  const currentBatch = allRows.length ? Math.floor(safeBatchStart / IMPORT_BATCH_SIZE) + 1 : 0
+  const importedThrough = Math.min(safeBatchStart, allRows.length)
 
   async function loadFile(file?: File) {
     if (!file) return
     const text = await file.text()
     const detectedRows = toRows(text)
     setCsvText(text)
+    setBatchStart(0)
+    setStats({ created: 0, skipped: 0, batches: 0, failed: 0 })
     setResult(null)
-    setStatus(detectedRows.length ? `Loaded ${file.name}. Detected ${detectedRows.length} connection row(s). The first ${Math.min(IMPORT_BATCH_SIZE, detectedRows.length)} will import in this safety batch.` : `Loaded ${file.name}, but no connection rows were detected yet.`)
+    setStatus(detectedRows.length ? `Loaded ${file.name}. Detected ${detectedRows.length} connection row(s). Ready to import in safe ${IMPORT_BATCH_SIZE}-record batches.` : `Loaded ${file.name}, but no connection rows were detected yet.`)
   }
 
-  async function importRows() {
+  async function postBatch(startIndex: number) {
+    const batchRows = allRows.slice(startIndex, startIndex + IMPORT_BATCH_SIZE)
+    if (!batchRows.length) return { ok: true, created: 0, skipped: 0, warnings: [] as string[] }
+
+    const res = await fetch('/api/network/import-linkedin', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rows: batchRows, importLabel: 'LinkedIn connections export' }),
+    })
+    const json = await readJsonOrText(res)
+    if (!res.ok || !json.ok) {
+      return { ok: false, error: json.error || `Import failed with status ${res.status}.`, created: 0, skipped: 0, warnings: Array.isArray(json.warnings) ? json.warnings : [] }
+    }
+    return { ok: true, created: Number(json.created || 0), skipped: Number(json.skipped || 0), warnings: Array.isArray(json.warnings) ? json.warnings : [] }
+  }
+
+  async function importCurrentBatch() {
     if (!rowsToImport.length) {
-      setStatus('No LinkedIn connection rows found. Try exporting Connections from LinkedIn, or paste a CSV with First Name, Last Name, URL, Company, Position, and Connected On columns.')
+      setStatus('No rows left in the current batch. Load a CSV or move the batch selector back to the start.')
       return
     }
     setImporting(true)
-    setStatus(`Importing first ${rowsToImport.length} LinkedIn connection(s)...`)
+    setStatus(`Importing rows ${safeBatchStart + 1}-${safeBatchStart + rowsToImport.length} of ${allRows.length}...`)
     setResult(null)
     try {
-      const res = await fetch('/api/network/import-linkedin', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ rows: rowsToImport, importLabel: 'LinkedIn connections export' }),
-      })
-      const json = await readJsonOrText(res)
-      if (!res.ok || !json.ok) {
-        setStatus(json.error || `Import failed with status ${res.status}.`)
+      const batchResult = await postBatch(safeBatchStart)
+      if (!batchResult.ok) {
+        setStats(prev => ({ ...prev, failed: prev.failed + 1 }))
+        setStatus(batchResult.error || 'Import failed.')
         return
       }
-      setResult(json)
-      const warningText = Array.isArray(json.warnings) && json.warnings.length ? ` First issue: ${json.warnings[0]}` : ''
-      setStatus(`Imported ${json.created || 0} connection record(s) from this safety batch${json.skipped ? `, skipped ${json.skipped}` : ''}.${warningText}`)
+      setStats(prev => ({
+        created: prev.created + batchResult.created,
+        skipped: prev.skipped + batchResult.skipped,
+        batches: prev.batches + 1,
+        failed: prev.failed,
+      }))
+      setResult({ created: batchResult.created, skipped: batchResult.skipped, warnings: batchResult.warnings })
+      const nextStart = Math.min(safeBatchStart + IMPORT_BATCH_SIZE, allRows.length)
+      setBatchStart(nextStart)
+      const warningText = batchResult.warnings.length ? ` First issue: ${batchResult.warnings[0]}` : ''
+      setStatus(`Imported current batch. Created ${batchResult.created}, skipped ${batchResult.skipped}. Next batch starts at row ${nextStart + 1}.${warningText}`)
     } catch (err) {
+      setStats(prev => ({ ...prev, failed: prev.failed + 1 }))
       setStatus(err instanceof Error ? `Import request failed: ${err.message}` : 'Import request failed. Check your network connection and try again.')
     } finally {
       setImporting(false)
     }
+  }
+
+  async function importAllRemaining() {
+    if (!allRows.length) {
+      setStatus('No LinkedIn connection rows found. Upload or paste the LinkedIn connections CSV first.')
+      return
+    }
+
+    setImporting(true)
+    setResult(null)
+    let created = 0
+    let skipped = 0
+    let batches = 0
+    let failed = 0
+    let start = safeBatchStart
+
+    try {
+      while (start < allRows.length) {
+        const end = Math.min(start + IMPORT_BATCH_SIZE, allRows.length)
+        setStatus(`Importing rows ${start + 1}-${end} of ${allRows.length}. Keep this tab open.`)
+        setBatchStart(start)
+        const batchResult = await postBatch(start)
+
+        if (!batchResult.ok) {
+          failed++
+          setStats(prev => ({ ...prev, failed: prev.failed + 1 }))
+          setStatus(`${batchResult.error || 'Import failed.'} Imported through row ${start}. You can retry from this batch.`)
+          return
+        }
+
+        created += batchResult.created
+        skipped += batchResult.skipped
+        batches++
+        start = end
+        setBatchStart(start)
+        setStats(prev => ({
+          created: prev.created + batchResult.created,
+          skipped: prev.skipped + batchResult.skipped,
+          batches: prev.batches + 1,
+          failed: prev.failed,
+        }))
+        setResult({ created: batchResult.created, skipped: batchResult.skipped, warnings: batchResult.warnings })
+
+        if (start < allRows.length) await sleep(IMPORT_BATCH_PAUSE_MS)
+      }
+
+      setStatus(`Finished import run. Created ${created}, skipped ${skipped}, processed ${batches} batch(es). If earlier batches were already imported, skipped records are expected.`)
+    } catch (err) {
+      failed++
+      setStats(prev => ({ ...prev, failed: prev.failed + 1 }))
+      setStatus(err instanceof Error ? `Import run failed: ${err.message}` : 'Import run failed. You can retry from the current batch.')
+    } finally {
+      if (failed === 0) setBatchStart(allRows.length)
+      setImporting(false)
+    }
+  }
+
+  function jumpToNextBatch() {
+    setBatchStart(prev => Math.min(prev + IMPORT_BATCH_SIZE, allRows.length))
+  }
+
+  function restartBatches() {
+    setBatchStart(0)
+    setStats({ created: 0, skipped: 0, batches: 0, failed: 0 })
+    setResult(null)
+    setStatus(allRows.length ? 'Reset to the first batch. Duplicate rows should be skipped by the backend if they were already imported.' : '')
   }
 
   return (
@@ -238,7 +341,7 @@ export function LinkedInImportClient() {
           <textarea
             className="textarea big"
             value={csvText}
-            onChange={e => { setCsvText(e.target.value); setResult(null) }}
+            onChange={e => { setCsvText(e.target.value); setBatchStart(0); setStats({ created: 0, skipped: 0, batches: 0, failed: 0 }); setResult(null) }}
             placeholder="Or paste your LinkedIn connections CSV here..."
             style={{ marginTop: '12px' }}
           />
@@ -246,22 +349,32 @@ export function LinkedInImportClient() {
 
         <div className="card">
           <span className="kicker">Step 2</span>
-          <h3>Review before import</h3>
+          <h3>Review and import</h3>
           <p className="muted" style={{ fontSize: '14px' }}>
-            SourcingOS will create pending private records with unverified contact signals and evidence that the row came from your LinkedIn export.
+            Imports run in safe {IMPORT_BATCH_SIZE}-record batches. For a 29k-row export, Import all remaining may take 20-30 minutes. Keep this tab open.
           </p>
           <div className="grid" style={{ margin: '12px 0' }}>
             <div className="card"><span className="kicker">Rows detected</span><div className="big-number">{allRows.length}</div></div>
-            <div className="card"><span className="kicker">This batch</span><div className="big-number">{rowsToImport.length}</div></div>
+            <div className="card"><span className="kicker">Current batch</span><div className="big-number">{currentBatch}/{totalBatches}</div></div>
+            <div className="card"><span className="kicker">Processed through</span><div className="big-number">{importedThrough}</div></div>
           </div>
-          <button className="btn" onClick={importRows} disabled={importing || !rowsToImport.length}>
-            {importing ? 'Importing...' : `Import first ${rowsToImport.length || IMPORT_BATCH_SIZE}`}
-          </button>
-          {allRows.length > IMPORT_BATCH_SIZE ? (
-            <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
-              Safety mode imports the first {IMPORT_BATCH_SIZE} records only. Full batch paging is the next step after this test import succeeds.
-            </p>
-          ) : null}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button className="btn" onClick={importCurrentBatch} disabled={importing || !rowsToImport.length}>
+              {importing ? 'Importing...' : `Import this batch (${rowsToImport.length})`}
+            </button>
+            <button className="btn secondary" onClick={importAllRemaining} disabled={importing || !allRows.length || safeBatchStart >= allRows.length}>
+              Import all remaining
+            </button>
+            <button className="btn ghost" onClick={jumpToNextBatch} disabled={importing || safeBatchStart >= allRows.length}>
+              Skip to next batch
+            </button>
+            <button className="btn ghost" onClick={restartBatches} disabled={importing || !allRows.length}>
+              Reset to start
+            </button>
+          </div>
+          <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+            Current rows: {rowsToImport.length ? `${safeBatchStart + 1}-${safeBatchStart + rowsToImport.length}` : 'none'} of {allRows.length}. Created this session: {stats.created}. Skipped: {stats.skipped}. Batches: {stats.batches}. Failed: {stats.failed}.
+          </p>
           {status ? <div className="cta" style={{ marginTop: '12px' }}>{status}</div> : null}
           {hasLoadedCsvButNoRows ? (
             <div className="preview-banner" style={{ marginTop: '12px', borderColor: 'rgba(246,201,107,.35)' }}>
@@ -283,13 +396,13 @@ export function LinkedInImportClient() {
 
       {preview.length > 0 && (
         <section>
-          <h2>Import preview</h2>
+          <h2>Current batch preview</h2>
           <div className="results">
             {preview.map((row, idx) => (
-              <div className="result-card" key={`${row.fullName}-${idx}`}>
+              <div className="result-card" key={`${row.fullName}-${safeBatchStart + idx}`}>
                 <div className="result-head">
                   <span>{row.connectedOn || 'LinkedIn connection'}</span>
-                  <span>pending review</span>
+                  <span>row {safeBatchStart + idx + 1}</span>
                 </div>
                 <h3>{row.fullName || [row.firstName, row.lastName].filter(Boolean).join(' ') || 'Unnamed connection'}</h3>
                 <p className="muted">{[row.position, row.company].filter(Boolean).join(' at ') || 'No title/company in CSV'}</p>
