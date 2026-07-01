@@ -17,6 +17,7 @@ type LiveJob = {
 }
 
 const sourceOptions = [
+  { id: 'persisted', label: 'SourcingOS reviewed/cache layer' },
   { id: 'ats', label: 'Curated company ATS feeds' },
   { id: 'remotive', label: 'Remotive' },
   { id: 'arbeitnow', label: 'Arbeitnow' },
@@ -46,7 +47,7 @@ export function LiveJobsClient({
   const [jobs, setJobs] = useState<LiveJob[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [sources, setSources] = useState<Record<string, boolean>>({ ats: true, remotive: true, arbeitnow: true, usajobs: true })
+  const [sources, setSources] = useState<Record<string, boolean>>({ persisted: true, ats: true, remotive: true, arbeitnow: true, usajobs: true })
   const [remoteOnly, setRemoteOnly] = useState(false)
   const [salaryOnly, setSalaryOnly] = useState(false)
 
@@ -58,16 +59,23 @@ export function LiveJobsClient({
   }), [jobs, remoteOnly, salaryOnly])
 
   async function searchJobs(nextQuery = query) {
-    const selected = activeSources.length ? activeSources : ['ats', 'remotive', 'arbeitnow', 'usajobs']
+    const selected = activeSources.length ? activeSources : ['persisted', 'ats', 'remotive', 'arbeitnow', 'usajobs']
     setLoading(true)
     setMessage('')
     try {
-      const params = new URLSearchParams({ q: nextQuery, location, sources: selected.join(','), limit: '150' })
+      const params = new URLSearchParams({
+        q: nextQuery,
+        location,
+        sources: selected.join(','),
+        remoteOnly: remoteOnly ? 'true' : 'false',
+        salaryOnly: salaryOnly ? 'true' : 'false',
+        limit: '150',
+      })
       const res = await fetch(`/api/jobs/search?${params.toString()}`)
       const json = await res.json()
       const nextJobs = Array.isArray(json.jobs) ? json.jobs : []
       setJobs(nextJobs)
-      setMessage(nextJobs.length ? `Found ${nextJobs.length} live listings from public/free job sources. Always confirm details on the original source.` : 'No live recruiter listings returned from the free sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
+      setMessage(nextJobs.length ? `Found ${nextJobs.length} listings from selected sources. Always confirm details on the original source.` : 'No recruiter listings returned from the selected sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
     } catch {
       setMessage('Live job search is temporarily unavailable. The curated category pages are still available.')
     } finally {
@@ -78,7 +86,7 @@ export function LiveJobsClient({
   useEffect(() => { searchJobs().catch(() => undefined) }, [])
 
   return <div className="interactive-tool">
-    <div className="cta"><b>Live job source note:</b> this search uses public/free job sources and curated employer ATS feeds where available. Apply buttons link back to the original posting. SourcingOS does not copy third-party job descriptions or present them as owned listings.</div>
+    <div className="cta"><b>Job source note:</b> this search combines SourcingOS-reviewed jobs when available, public/free job sources, and curated employer ATS feeds. Apply buttons link back to the original posting. SourcingOS does not copy third-party job descriptions or present them as owned listings.</div>
 
     <div className="chips" style={{ marginBottom: '12px' }}>
       {presets.map(preset => <button
@@ -110,7 +118,7 @@ export function LiveJobsClient({
       </div>
     </div>
 
-    <div className="button-row"><button className="btn" onClick={() => searchJobs()} disabled={loading}>{loading ? 'Searching...' : 'Search live job sources'}</button></div>
+    <div className="button-row"><button className="btn" onClick={() => searchJobs()} disabled={loading}>{loading ? 'Searching...' : 'Search job sources'}</button></div>
     {message ? <div className="cta">{message}{visibleJobs.length !== jobs.length ? ` Showing ${visibleJobs.length} after filters.` : ''}</div> : null}
 
     <div className="job-list">
