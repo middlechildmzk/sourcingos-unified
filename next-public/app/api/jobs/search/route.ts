@@ -3,8 +3,14 @@ import { atsTargets } from '@/data/ats-targets'
 import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limit'
 import { dedupeJobs, fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs, isRecruitingRole, cleanText, NormalizedJob } from '@/lib/jobs-ingestion'
+import { fetchPersistedJobs, jobMatches } from '@/lib/jobs-v2'
+import { sourceLabelsFor } from '@/lib/job-source-registry'
 
 type LiveJob = NormalizedJob
+
+function toBool(value: string | null) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase())
+}
 
 async function fetchRemotive(query: string): Promise<LiveJob[]> {
   try {
@@ -28,7 +34,7 @@ async function fetchRemotive(query: string): Promise<LiveJob[]> {
       postedDate: cleanText(j.publication_date || '', 80),
       lastCheckedAt: new Date().toISOString(),
       description: cleanText(j.description, 360),
-      tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'remote job feed'])),
+      tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'remote job feed', 'source: Remotive'])),
       category: 'recruiter'
     }))
   } catch { return [] }
@@ -104,30 +110,30 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
   } catch { return [] }
 }
 
-function queryMatches(job: LiveJob, query: string, location: string) {
-  const loc = location.toLowerCase().trim()
-  const locOk = !loc || job.location.toLowerCase().includes(loc) || job.remoteType.toLowerCase().includes('remote')
-  return isRecruitingRole(job.title, job.description) && locOk
-}
-
 export async function GET(req: NextRequest) {
   const rl = await rateLimit(req, 'public')
   if (!rl.ok) return rl.response
 
-  // Query-param validation: bounded, control-chars stripped (zod).
   const qpSchema = z.object({
     q: z.string().max(120).optional().default(''),
     location: z.string().max(120).optional().default(''),
+    category: z.string().max(120).optional().default(''),
   })
   const sp = req.nextUrl.searchParams
-  const qp = qpSchema.safeParse({ q: sp.get('q') ?? undefined, location: sp.get('location') ?? undefined })
+  const qp = qpSchema.safeParse({ q: sp.get('q') ?? undefined, location: sp.get('location') ?? undefined, category: sp.get('category') ?? undefined })
   if (!qp.success) return NextResponse.json({ ok: false, code: 'invalid_query', error: 'Invalid query parameters.' }, { status: 400 })
 
-  const { searchParams } = new URL(req.url)
   const query = qp.data.q || 'recruiter sourcer talent acquisition'
   const location = qp.data.location
-  const selectedSources = (searchParams.get('sources') || 'ats,remotive,arbeitnow,usajobs').split(',')
-  const limit = Math.min(Number(searchParams.get('limit') || 250), 250)
+  const category = qp.data.category
+  const selectedSources = (sp.get('sources') || 'persisted,ats,remotive,arbeitnow,usajobs').split(',').map(s => s.trim()).filter(Boolean)
+  const limit = Math.min(Number(sp.get('limit') || 250), 250)
+  const remoteOnly = toBool(sp.get('remoteOnly'))
+  const salaryOnly = toBool(sp.get('salaryOnly'))
+
+  const persisted = selectedSources.includes('persisted')
+    ? await fetchPersistedJobs({ query, location, category, remoteOnly, salaryOnly, limit })
+    : []
 
   const atsJobs = selectedSources.includes('ats') ? await Promise.all(atsTargets.map(target => {
     if (target.ats === 'greenhouse') return fetchGreenhouseJobs(target)
@@ -141,21 +147,26 @@ export async function GET(req: NextRequest) {
     selectedSources.includes('usajobs') ? fetchUsaJobs(query, location) : Promise.resolve([])
   ])
 
-  const jobs = dedupeJobs([...atsJobs, ...remotive, ...arbeitnow, ...usajobs]).filter(job => queryMatches(job, query, location)).slice(0, limit)
+  const jobs = dedupeJobs([...persisted, ...atsJobs, ...remotive, ...arbeitnow, ...usajobs])
+    .filter(job => jobMatches(job, { query, location, category, remoteOnly, salaryOnly }))
+    .slice(0, limit)
 
   return NextResponse.json({
     ok: true,
     query,
     location,
+    category,
     count: jobs.length,
     targetPoolSize: atsTargets.length,
+    persistence: persisted.length ? 'hybrid' : 'live',
     jobs,
-    sources: ['Greenhouse', 'Lever', 'Ashby', 'Remotive', 'Arbeitnow', 'USAJOBS optional via env'],
+    sources: sourceLabelsFor(selectedSources),
     notes: [
-      'Only job titles that match recruiter, sourcer, talent acquisition, recruiting operations, people operations, healthcare recruiter, or GovCon recruiter roles are shown.',
+      'Only recruiter, sourcer, talent acquisition, recruiting operations, healthcare recruiting, GovCon recruiting, AI recruiting, and related TA roles are shown.',
       'Uses metadata and short snippets only.',
       'Apply buttons link to the original job source.',
-      'ATS targets are curated public job-board feeds, not scraped pages.'
+      'Persisted jobs are a hybrid cache layer when Supabase job_postings exists.',
+      'ATS targets are curated public job-board feeds, not protected sources.'
     ]
   })
 }
