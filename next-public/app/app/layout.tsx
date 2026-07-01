@@ -22,6 +22,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <Link href="/app/candidate-database" className="app-session-link">
               Candidate Database
             </Link>
+            <Link href="/app/network" className="app-session-link">
+              Network
+            </Link>
             <Link href="/sources" className="app-session-link">
               Source Search
             </Link>
