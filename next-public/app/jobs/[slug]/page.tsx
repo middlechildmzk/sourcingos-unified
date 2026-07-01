@@ -7,7 +7,9 @@ type Props = {
   params: { slug: string }
 }
 
-const categorySearch: Record<string, { query: string; location?: string; titles: string[]; skills: string[]; tips: string[] }> = {
+type CategoryGuide = { query: string; location?: string; titles: string[]; skills: string[]; tips: string[] }
+
+const categorySearch: Record<string, CategoryGuide> = {
   'remote-recruiter-jobs': {
     query: 'remote recruiter talent acquisition partner full cycle recruiter',
     location: 'Remote',
@@ -76,8 +78,9 @@ export function generateMetadata({ params }: Props) {
 export default function JobCategoryPage({ params }: Props) {
   const category = getCategoryBySlug(params.slug)
   if (!category) notFound()
-  const guide = categorySearch[category.slug] || {
+  const guide: CategoryGuide = categorySearch[category.slug] || {
     query: category.name,
+    location: '',
     titles: [category.name.replace(' Jobs', '')],
     skills: ['sourcing', 'recruiting', 'candidate experience'],
     tips: ['Start broad, then narrow by title, location, and source.', 'Always verify the original source before applying.'],
@@ -119,7 +122,7 @@ export default function JobCategoryPage({ params }: Props) {
       </section>
 
       <section className="wrap">
-        <div className="grid three">
+        <div className="grid">
           <div className="card">
             <span className="kicker">Common titles</span>
             <h2>Search beyond one title.</h2>
