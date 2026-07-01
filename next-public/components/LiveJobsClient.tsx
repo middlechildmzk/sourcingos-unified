@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 type LiveJob = {
   id: string
@@ -16,22 +16,58 @@ type LiveJob = {
   tags: string[]
 }
 
-export function LiveJobsClient({ initialQuery = 'recruiter sourcer talent acquisition' }: { initialQuery?: string }) {
+const sourceOptions = [
+  { id: 'ats', label: 'Curated company ATS feeds' },
+  { id: 'remotive', label: 'Remotive' },
+  { id: 'arbeitnow', label: 'Arbeitnow' },
+  { id: 'usajobs', label: 'USAJOBS' },
+]
+
+const presets = [
+  'remote recruiter',
+  'technical sourcer',
+  'talent acquisition partner',
+  'recruiting operations',
+  'healthcare recruiter',
+  'cleared recruiter',
+  'AI recruiter',
+  'contract recruiter',
+]
+
+export function LiveJobsClient({
+  initialQuery = 'recruiter sourcer talent acquisition',
+  initialLocation = '',
+}: {
+  initialQuery?: string
+  initialLocation?: string
+}) {
   const [query, setQuery] = useState(initialQuery)
-  const [location, setLocation] = useState('')
+  const [location, setLocation] = useState(initialLocation)
   const [jobs, setJobs] = useState<LiveJob[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
+  const [sources, setSources] = useState<Record<string, boolean>>({ ats: true, remotive: true, arbeitnow: true, usajobs: true })
+  const [remoteOnly, setRemoteOnly] = useState(false)
+  const [salaryOnly, setSalaryOnly] = useState(false)
 
-  async function searchJobs() {
+  const activeSources = useMemo(() => sourceOptions.filter(s => sources[s.id]).map(s => s.id), [sources])
+  const visibleJobs = useMemo(() => jobs.filter(job => {
+    if (remoteOnly && !`${job.remoteType} ${job.location}`.toLowerCase().includes('remote')) return false
+    if (salaryOnly && (!job.salaryRange || job.salaryRange.toLowerCase().includes('not listed'))) return false
+    return true
+  }), [jobs, remoteOnly, salaryOnly])
+
+  async function searchJobs(nextQuery = query) {
+    const selected = activeSources.length ? activeSources : ['ats', 'remotive', 'arbeitnow', 'usajobs']
     setLoading(true)
     setMessage('')
     try {
-      const params = new URLSearchParams({ q: query, location })
+      const params = new URLSearchParams({ q: nextQuery, location, sources: selected.join(','), limit: '150' })
       const res = await fetch(`/api/jobs/search?${params.toString()}`)
       const json = await res.json()
-      setJobs(json.jobs || [])
-      setMessage(json.jobs?.length ? `Found ${json.jobs.length} live listings from public/free job sources.` : 'No live recruiter listings returned from the free sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
+      const nextJobs = Array.isArray(json.jobs) ? json.jobs : []
+      setJobs(nextJobs)
+      setMessage(nextJobs.length ? `Found ${nextJobs.length} live listings from public/free job sources. Always confirm details on the original source.` : 'No live recruiter listings returned from the free sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
     } catch {
       setMessage('Live job search is temporarily unavailable. The curated category pages are still available.')
     } finally {
@@ -42,25 +78,53 @@ export function LiveJobsClient({ initialQuery = 'recruiter sourcer talent acquis
   useEffect(() => { searchJobs().catch(() => undefined) }, [])
 
   return <div className="interactive-tool">
-    <div className="cta"><b>Live job source note:</b> Google Jobs does not provide a simple free public pull API for job-board aggregation. This search uses free/public sources where available and links back to the original posting source. SourcingOS does not copy or host third-party job descriptions as its own.</div>
+    <div className="cta"><b>Live job source note:</b> this search uses public/free job sources and curated employer ATS feeds where available. Apply buttons link back to the original posting. SourcingOS does not copy third-party job descriptions or present them as owned listings.</div>
+
+    <div className="chips" style={{ marginBottom: '12px' }}>
+      {presets.map(preset => <button
+        type="button"
+        className="tag"
+        key={preset}
+        onClick={() => { setQuery(preset); searchJobs(preset).catch(() => undefined) }}
+        style={{ cursor: 'pointer' }}
+      >{preset}</button>)}
+    </div>
+
     <div className="grid two">
       <div><label>Search</label><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="technical sourcer remote" /></div>
       <div><label>Location</label><input className="input" value={location} onChange={e=>setLocation(e.target.value)} placeholder="Remote, United States, Minnesota" /></div>
     </div>
-    <div className="button-row"><button className="btn" onClick={searchJobs} disabled={loading}>{loading ? 'Searching...' : 'Search live job sources'}</button></div>
-    {message ? <div className="cta">{message}</div> : null}
+
+    <div className="card" style={{ marginTop: '12px' }}>
+      <span className="kicker">Sources and filters</span>
+      <div className="chips" style={{ marginTop: '8px' }}>
+        {sourceOptions.map(source => <button
+          type="button"
+          className="tag"
+          key={source.id}
+          onClick={() => setSources(prev => ({ ...prev, [source.id]: !prev[source.id] }))}
+          style={{ cursor: 'pointer', opacity: sources[source.id] ? 1 : 0.48 }}
+        >{sources[source.id] ? '✓ ' : ''}{source.label}</button>)}
+        <button type="button" className="tag" onClick={() => setRemoteOnly(v => !v)} style={{ cursor: 'pointer', opacity: remoteOnly ? 1 : 0.48 }}>{remoteOnly ? '✓ ' : ''}Remote only</button>
+        <button type="button" className="tag" onClick={() => setSalaryOnly(v => !v)} style={{ cursor: 'pointer', opacity: salaryOnly ? 1 : 0.48 }}>{salaryOnly ? '✓ ' : ''}Salary listed</button>
+      </div>
+    </div>
+
+    <div className="button-row"><button className="btn" onClick={() => searchJobs()} disabled={loading}>{loading ? 'Searching...' : 'Search live job sources'}</button></div>
+    {message ? <div className="cta">{message}{visibleJobs.length !== jobs.length ? ` Showing ${visibleJobs.length} after filters.` : ''}</div> : null}
+
     <div className="job-list">
-      {jobs.map(job => <article className="card" key={job.id}>
+      {visibleJobs.map(job => <article className="card" key={job.id}>
         <div className="job-row">
           <div>
             <span className="kicker">{job.source} · {job.remoteType}</span>
             <h3>{job.title}</h3>
-            <p className="muted"><strong>{job.company}</strong> · {job.location} · {job.employmentType}</p>
+            <p className="muted"><strong>{job.company}</strong> · {job.location || 'Location not listed'} · {job.employmentType}</p>
             <p>{job.description || 'View the original posting for full job details.'}</p>
             <div className="chips">{job.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}</div>
           </div>
           <aside className="job-side">
-            <div className="salary">{job.salaryRange}</div>
+            <div className="salary">{job.salaryRange || 'Not listed'}</div>
             <a className="btn secondary" href={job.applyUrl} target="_blank" rel="noreferrer">View source</a>
           </aside>
         </div>
