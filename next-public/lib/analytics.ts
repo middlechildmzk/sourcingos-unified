@@ -17,7 +17,7 @@ export type AnalyticsEventName =
 
 type AnalyticsPayload = Record<string, string | number | boolean | null | undefined>
 
-type StoredAnalyticsEvent = {
+export type AnalyticsEvent = {
   type: AnalyticsEventName | string
   path?: string
   label?: string
@@ -45,7 +45,7 @@ export function trackEvent(eventName: AnalyticsEventName, payload: AnalyticsPayl
   window.plausible?.(eventName, { props: cleanPayload })
   window.posthog?.capture?.(eventName, cleanPayload)
 
-  const event: StoredAnalyticsEvent = {
+  const event: AnalyticsEvent = {
     type: eventName,
     path: window.location.pathname,
     label: typeof cleanPayload.label === 'string' ? cleanPayload.label : undefined,
@@ -55,7 +55,7 @@ export function trackEvent(eventName: AnalyticsEventName, payload: AnalyticsPayl
 
   const key = 'sourcingos.public.analytics'
   try {
-    const existing = JSON.parse(localStorage.getItem(key) || '[]') as StoredAnalyticsEvent[]
+    const existing = JSON.parse(localStorage.getItem(key) || '[]') as AnalyticsEvent[]
     localStorage.setItem(key, JSON.stringify([event, ...existing].slice(0, 400)))
   } catch {
     // Local storage is non-critical.
