@@ -13,9 +13,9 @@ export const metadata: Metadata = {
   },
   description:
     'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free sourcing tools for technical, cleared, healthcare, and AI roles.',
-  alternates: {
-    canonical: '/',
-  },
+  // NOTE: no site-wide alternates.canonical here. A root-layout canonical of '/'
+  // is inherited by every page that does not override it, which told search
+  // engines the whole site was a duplicate of the homepage. Pages set their own.
   openGraph: {
     title: 'SourcingOS — Find who your search missed.',
     description:
@@ -59,7 +59,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <footer className="footer">
           Human-approved sourcing intelligence. Public evidence, recruiter confirmation, no silent profile merges.{' '}
-          <a href="/privacy">Privacy</a>
+          <a href="/trust">Trust</a> · <a href="/methodology">Methodology</a> · <a href="/data-sources">Data sources</a> ·{' '}
+          <a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/contact">Contact</a>
         </footer>
       </body>
     </html>
