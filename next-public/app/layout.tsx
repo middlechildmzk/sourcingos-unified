@@ -3,6 +3,7 @@ import './globals.css'
 import './ui-polish.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
+import { OrganizationJsonLd, WebsiteJsonLd } from '@/components/StructuredData'
 import { siteUrl } from '@/lib/site'
 
 export const metadata: Metadata = {
@@ -52,11 +53,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,900;1,9..40,400&family=Syne:wght@700;800;900&display=swap"
           rel="stylesheet"
         />
+        <OrganizationJsonLd />
+        <WebsiteJsonLd />
       </head>
       <body>
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <PageTracker />
         <Nav />
-        {children}
+        <div id="main-content" tabIndex={-1}>{children}</div>
         <footer className="footer">
           Human-approved sourcing intelligence. Public evidence, recruiter confirmation, no silent profile merges.{' '}
           <a href="/trust">Trust</a> · <a href="/methodology">Methodology</a> · <a href="/training">Training</a> · <a href="/data-sources">Data sources</a> ·{' '}
