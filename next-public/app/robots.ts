@@ -7,6 +7,7 @@ export default function robots(): MetadataRoute.Robots {
     '/',
     '/candidate-search/',
     '/tools/',
+    '/guides/',
     '/training/',
     '/blog/',
     '/methodology/',
