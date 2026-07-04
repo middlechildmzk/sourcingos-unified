@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/about' },
+  alternates: { canonical: '/about/' },
   title: 'About | SourcingOS',
   description: 'SourcingOS is a human-approved sourcing intelligence layer built by a working senior technical and cleared sourcer. Evidence first, recruiter in charge, no fake data.'
 }
