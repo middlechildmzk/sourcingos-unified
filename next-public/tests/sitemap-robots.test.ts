@@ -10,15 +10,15 @@ describe('sitemap', () => {
 
   it('includes the flagship demo and trust/company pages', () => {
     for (const path of [
-      '/candidate-search',
-      '/about',
-      '/methodology',
-      '/trust',
-      '/data-sources',
-      '/terms',
-      '/contact',
-      '/privacy',
-      '/waitlist',
+      '/candidate-search/',
+      '/about/',
+      '/methodology/',
+      '/trust/',
+      '/data-sources/',
+      '/terms/',
+      '/contact/',
+      '/privacy/',
+      '/waitlist/',
     ]) {
       expect(urls).toContain(siteUrl + path)
     }
