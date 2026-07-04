@@ -1,3 +1,5 @@
+import { extraAuthorityPages } from './authority-pages-extra'
+
 export type AuthorityPage = {
   slug: string
   title: string
@@ -11,7 +13,7 @@ export type AuthorityPage = {
   ctaLabel: string
 }
 
-export const authorityPages: AuthorityPage[] = [
+const baseAuthorityPages: AuthorityPage[] = [
   {
     slug: 'source-pack-template-library',
     title: 'Source Pack Template Library for Recruiters',
@@ -113,3 +115,5 @@ export const authorityPages: AuthorityPage[] = [
     ctaLabel: 'View Candidate 360 sample',
   },
 ]
+
+export const authorityPages: AuthorityPage[] = [...baseAuthorityPages, ...extraAuthorityPages]
