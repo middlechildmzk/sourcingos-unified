@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/data-sources' },
+  alternates: { canonical: '/data-sources/' },
   title: 'Data Sources | SourcingOS',
   description: 'The public sources behind SourcingOS Candidate Search: GitHub, Stack Overflow, OpenAlex, PubMed, ORCID, NPI, Hugging Face, npm, PyPI, crates.io, and RubyGems. And what SourcingOS never touches.'
 }
