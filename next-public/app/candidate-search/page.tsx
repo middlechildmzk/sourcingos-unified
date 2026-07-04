@@ -4,6 +4,7 @@ import { CandidateSearchV25Builder } from '@/components/CandidateSearchV25Builde
 import Link from 'next/link'
 
 export const metadata = {
+  alternates: { canonical: '/candidate-search' },
   title: 'Candidate Search Demo — SourcingOS',
   description:
     'Try SourcingOS Candidate Search free. Smart composer, source-aware query routing, live public-source search, and an evidence-first profile drawer. Sign in to save candidates and build your Candidate Graph.',
