@@ -84,9 +84,9 @@ const osintTools: ToolRecord[] = [
 
 export const toolRecords: ToolRecord[] = [
   ...baseTools.map(tool => ({
-    ...tool,
     affiliateStatus: 'not_configured' as const,
     pricingNote: tool.cost,
+    ...tool,
     ...(meta[tool.id] || {}),
   })),
   ...osintTools,
