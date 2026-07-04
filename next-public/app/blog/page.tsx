@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { articles } from '@/data/articles'
 
 export const metadata = {
-  alternates: { canonical: '/blog' },
+  alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
   description: 'Senior-sourcer guides, source packs, Boolean strings, X-Ray playbooks, contact finder comparisons, AI sourcing workflows, and recruiting tool strategy.',
 }
