@@ -59,7 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <footer className="footer">
           Human-approved sourcing intelligence. Public evidence, recruiter confirmation, no silent profile merges.{' '}
-          <a href="/trust">Trust</a> · <a href="/methodology">Methodology</a> · <a href="/data-sources">Data sources</a> ·{' '}
+          <a href="/trust">Trust</a> · <a href="/methodology">Methodology</a> · <a href="/training">Training</a> · <a href="/data-sources">Data sources</a> ·{' '}
           <a href="/about">About</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/contact">Contact</a>
         </footer>
       </body>
