@@ -21,7 +21,7 @@ export const EXPANSIONS: Record<string, string[]> = {
   'kubernetes engineer':    ['K8s Engineer', 'Container Engineer', 'Cloud Native Engineer', 'Platform Engineer'],
 
   // ── Skills / Tools
-  'kubernetes':             ['K8s', 'EKS', 'AKS', 'GKE', 'Helm', 'ArgoCD', 'containers', 'Docker', 'Rancher', 'OpenShift'],
+  'kubernetes':             ['K8s', 'Terraform', 'Helm', 'ArgoCD', 'EKS', 'AKS', 'GKE', 'containers', 'Docker', 'Rancher', 'OpenShift'],
   'terraform':              ['Pulumi', 'IaC', 'CloudFormation', 'CDK', 'Ansible', 'infrastructure as code'],
   'aws':                    ['EC2', 'S3', 'Lambda', 'EKS', 'GovCloud', 'AWS GovCloud', 'Amazon Web Services'],
   'azure':                  ['Azure DevOps', 'Azure Government', 'MSFT Azure', 'AKS', 'Microsoft 365'],
