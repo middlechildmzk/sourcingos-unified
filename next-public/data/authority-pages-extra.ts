@@ -26,7 +26,7 @@ export const extraAuthorityPages: AuthorityPage[] = [
     title: 'How to Source Candidates Without LinkedIn Recruiter',
     description: 'A practical open-web sourcing workflow for recruiters who need discovery paths beyond LinkedIn Recruiter.',
     intent: 'source candidates without LinkedIn Recruiter, LinkedIn Recruiter alternatives, open web sourcing',
-    format: 'How-To' as AuthorityPage['format'],
+    format: 'Guide',
     sections: [
       { heading: 'Direct answer', body: 'You can source without LinkedIn Recruiter by combining manual-safe X-Ray, technical evidence sources, research databases, package ecosystems, registries, donor companies, and structured evidence review.' },
       { heading: 'Where to search first', body: 'Use GitHub for code, package registries for maintainers, research sources for papers, registries for healthcare signals, and public X-Ray for portfolios and resumes.' },
