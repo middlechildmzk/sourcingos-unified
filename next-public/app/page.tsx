@@ -33,6 +33,27 @@ const tools = [
   },
 ]
 
+const trainingModules = [
+  {
+    href: '/training/ai-sourcing-prompts',
+    label: 'AI sourcing',
+    title: 'Build source packs with AI',
+    desc: 'Prompts that structure the search without inventing candidates, links, or verification.',
+  },
+  {
+    href: '/training/evidence-review-checklist',
+    label: 'Evidence review',
+    title: 'Facts, signals, assumptions',
+    desc: 'A checklist for reviewing public evidence before saving or pitching a source profile.',
+  },
+  {
+    href: '/training/candidate-360-workshop',
+    label: 'Candidate 360',
+    title: 'Build HM-ready dossiers',
+    desc: 'Turn source evidence into a recruiter-confirmed dossier with gaps and verify-next steps.',
+  },
+]
+
 const latestArticles = [...articles].slice(-6).reverse()
 
 export default function Home() {
@@ -49,7 +70,7 @@ export default function Home() {
         <div className="hero-actions">
           <Link className="btn" href="/candidate-search">Try Candidate Search</Link>
           <Link className="btn secondary" href="/tools/boolean-generator">Try BooleanOS</Link>
-          <Link className="btn ghost" href="/sample-candidate-360">See a sample Candidate 360 →</Link>
+          <Link className="btn ghost" href="/training">Start training →</Link>
         </div>
         <div className="trust-strip">
           <span>No fake candidates</span>
@@ -83,7 +104,7 @@ export default function Home() {
         <h2 className="section-title">Clear value before the login wall.</h2>
         <p className="section-body">SourcingOS should feel useful immediately, then make the private beta obvious when the workflow becomes durable.</p>
         <div className="grid two">
-          <div className="card featured"><span className="kicker">Free, no account</span><h3>Tools and public demo</h3><p className="muted">BooleanOS, X-Ray Launcher, JD Strategy Tool, Clearance Search, Aging Req Rescue, Candidate Search demo, and sample Candidate 360.</p></div>
+          <div className="card featured"><span className="kicker">Free, no account</span><h3>Tools, training, and public demo</h3><p className="muted">BooleanOS, X-Ray Launcher, JD Strategy Tool, Clearance Search, Aging Req Rescue, Candidate Search demo, training modules, and sample Candidate 360.</p></div>
           <div className="card"><span className="kicker">Private beta</span><h3>Durable sourcing cockpit</h3><p className="muted">Projects, saved candidates, contact enrichment, Candidate Graph, Candidate 360 dossiers, project memory, and admin workflows.</p></div>
         </div>
       </section>
@@ -123,8 +144,27 @@ export default function Home() {
           <div className="home-cta-row" style={{ marginTop: '24px' }}>
             <Link className="btn" href="/candidate-search">Try public demo</Link>
             <Link className="btn secondary" href="/waitlist">Request beta access</Link>
+            <Link className="btn ghost" href="/sample-candidate-360">See sample Candidate 360 →</Link>
           </div>
         </div>
+      </section>
+
+      <hr className="section-divider" />
+
+      <section className="section">
+        <div className="section-eyebrow"><span className="section-tag">Training hub</span></div>
+        <h2 className="section-title">Teach the workflow, then let the product prove it.</h2>
+        <p className="section-body">Short recruiter training modules that explain AI sourcing, evidence review, HM calibration, cleared sourcing guardrails, and Candidate 360.</p>
+        <div className="grid">
+          {trainingModules.map(module => (
+            <Link className="card authority-card" href={module.href} key={module.href}>
+              <span className="kicker">{module.label}</span>
+              <h3>{module.title}</h3>
+              <p className="muted">{module.desc}</p>
+            </Link>
+          ))}
+        </div>
+        <div className="home-cta-row" style={{ marginTop: '20px' }}><Link className="btn secondary" href="/training">Open training hub</Link></div>
       </section>
 
       <hr className="section-divider" />
