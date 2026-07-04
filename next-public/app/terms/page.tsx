@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/terms' },
+  alternates: { canonical: '/terms/' },
   title: 'Terms of Use | SourcingOS',
   description: 'Plain-language beta terms for SourcingOS: what the product promises, what it does not, and acceptable use.'
 }
