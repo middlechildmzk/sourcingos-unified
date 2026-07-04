@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next'
 import { articles } from '@/data/articles'
 import { comparisons } from '@/data/comparisons'
 import { jobCategories, jobs } from '@/data/jobs'
+import { authorityPages } from '@/data/authority-pages'
 import { siteUrl } from '@/lib/site'
 import { toolRecords } from '@/lib/tool-directory'
 
@@ -22,6 +23,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ['/tools/aging-req-rescue/', 0.78, 'weekly'],
     ['/tools/xray-search/', 0.82, 'weekly'],
     ['/tools/jd-search-strategy/', 0.84, 'weekly'],
+    ['/guides/', 0.88, 'weekly'],
     ['/sources/', 0.72, 'weekly'],
     ['/sample-candidate-360/', 0.78, 'weekly'],
     ['/methods/', 0.75, 'weekly'],
@@ -50,6 +52,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticRoutes.map(([r, priority, changeFrequency]) => entry(siteUrl + r, priority, changeFrequency)),
+    ...authorityPages.map(p => entry(`${siteUrl}/guides/${p.slug}/`, 0.72, 'weekly')),
     ...toolRecords.map(t => entry(`${siteUrl}/directory/${t.id}/`, 0.58, 'monthly')),
     ...articles.map(a => entry(`${siteUrl}/blog/${a.slug}/`, 0.62, 'monthly')),
     ...comparisons.map(c => entry(`${siteUrl}/comparisons/${c.slug}/`, 0.6, 'monthly')),
