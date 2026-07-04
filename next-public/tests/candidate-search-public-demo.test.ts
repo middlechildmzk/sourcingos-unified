@@ -12,6 +12,9 @@ describe('Candidate Search public demo', () => {
   const trustLayer = read('components/CandidateSearchTrustLayer.tsx')
   const drawer = read('components/CandidateDrawer.tsx')
   const results = read('components/WorkbenchResults.tsx')
+  const workbench = read('components/WorkbenchClient.tsx')
+  const marketMap = read('components/MarketMapSummary.tsx')
+  const route = read('app/api/workbench/search-source/route.ts')
 
   it('renders public trust disclaimers and confidence framing', () => {
     expect(page).toContain('Public evidence matches only')
@@ -65,5 +68,24 @@ describe('Candidate Search public demo', () => {
     expect(results).toContain('Risk flags')
     expect(results).toContain('Recommended next verification step')
     expect(results).not.toContain('verified candidate')
+  })
+
+  it('adds search modes, market map summary, and low-result rescue', () => {
+    expect(workbench).toContain('SearchModeSelector')
+    expect(workbench).toContain('MarketMapSummary')
+    expect(marketMap).toContain('Market map summary')
+    expect(marketMap).toContain('Low-result rescue')
+    expect(marketMap).toContain('public-source discovery, not confirmed candidates')
+  })
+
+  it('raises public source caps and broadens public-safe source coverage', () => {
+    expect(route).toContain('max(12)')
+    expect(route).toContain("'stackoverflow'")
+    expect(route).toContain("'devto'")
+    expect(route).toContain("'dockerhub'")
+    expect(route).toContain("'semantic_scholar'")
+    expect(route).toContain("'arxiv'")
+    expect(route).toContain("'resume_xray'")
+    expect(route).toContain('Confidence means source relevance only')
   })
 })
