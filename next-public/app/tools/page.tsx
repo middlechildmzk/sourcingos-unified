@@ -3,7 +3,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Free Sourcing Tools | SourcingOS',
   description:
-    'BooleanOS, X-Ray Launcher, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
+    'BooleanOS, X-Ray Launcher, Search Lane Expander, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
 }
 
 export default function Tools() {
@@ -15,6 +15,11 @@ export default function Tools() {
         Start with utility. Build the source pack. Then request access to the private Candidate Search beta.
       </p>
       <div className="grid">
+        <Link className="card featured" href="/tools/search-lane-expander">
+          <span className="kicker">New volume tool</span>
+          <h3>Search Lane Expander</h3>
+          <p className="muted">Turn a rough role target into Precision, Balanced, Broad, and Market Map lanes with live sources, manual-safe X-Ray links, and low-result rescue actions.</p>
+        </Link>
         <Link className="card" href="/tools/boolean-generator">
           <span className="kicker">Hero tool</span>
           <h3>JD-to-Boolean Search Builder</h3>
@@ -40,19 +45,17 @@ export default function Tools() {
           <h3>JD Strategy Tool</h3>
           <p className="muted">Turn a messy JD into source lanes, Boolean strings, target titles, and HM calibration questions.</p>
         </Link>
-        <Link className="card featured" href="/app/candidate-search">
-          <span className="kicker">Private beta</span>
+        <Link className="card" href="/candidate-search">
+          <span className="kicker">Public demo</span>
           <h3>Candidate Search</h3>
           <p className="muted">
-            The full workbench: role intake → search strategy → multi-source discovery → Candidate 360.
-            Powered by Candidate Graph under the hood.
+            Public-source search, source coverage, market-map summary, evidence review, and beta-gated Candidate 360 workflow.
           </p>
         </Link>
       </div>
       <div className="cta" style={{ marginTop: '32px' }}>
-        <strong>Free tools → Candidate Search beta:</strong> BooleanOS and X-Ray Launcher wire
-        directly into the Candidate Search workflow. Generate a Boolean string or X-Ray query here,
-        then take it into the workbench.
+        <strong>Free tools → Candidate Search beta:</strong> Search Lane Expander, BooleanOS, and X-Ray Launcher wire
+        directly into the Candidate Search workflow. Build the lane here, then take it into the workbench.
       </div>
     </main>
   )
