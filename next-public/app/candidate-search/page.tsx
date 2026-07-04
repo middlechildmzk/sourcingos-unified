@@ -8,7 +8,7 @@ export const metadata = {
   alternates: { canonical: '/candidate-search/' },
   title: 'Candidate Search Demo — SourcingOS',
   description:
-    'Try SourcingOS Candidate Search free. Smart composer, source-lane routing, public-source search, evidence-first result cards, and a recruiter-safe profile drawer.',
+    'Try SourcingOS Candidate Search free. Search modes, source-lane routing, public-source search, evidence-first result cards, market-map summaries, and recruiter-safe profile review.',
 }
 
 // Public demo — search and review work without sign-in.
@@ -39,6 +39,12 @@ export default function PublicCandidateSearchPage() {
           <Link href="/login" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>Sign in</Link>
           {' '}or <Link href="/waitlist" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>request access</Link>.
         </span>
+      </div>
+
+      <div className="cta" style={{ marginBottom: '20px' }}>
+        <strong>Need more coverage before you search?</strong> Use the free{' '}
+        <Link href="/tools/search-lane-expander" style={{ textDecoration: 'underline' }}>Search Lane Expander</Link>{' '}
+        to compare Precision, Balanced, Broad, and Market Map lanes.
       </div>
 
       <CandidateSearchV25Builder />

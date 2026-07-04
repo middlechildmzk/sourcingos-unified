@@ -8,9 +8,10 @@ import { siteUrl } from '../lib/site'
 describe('sitemap', () => {
   const urls = sitemap().map(e => e.url)
 
-  it('includes the flagship demo, trust/company pages, and training hub', () => {
+  it('includes the flagship demo, tools, trust/company pages, and training hub', () => {
     for (const path of [
       '/candidate-search/',
+      '/tools/search-lane-expander/',
       '/about/',
       '/methodology/',
       '/training/',

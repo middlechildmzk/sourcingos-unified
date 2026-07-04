@@ -7,8 +7,11 @@ import { CandidateDrawer } from '@/components/CandidateDrawer'
 import { parseJobDescription } from '@/lib/jd-parser'
 import { SourceLaneStatus, type SourceLane } from '@/components/SourceLaneStatus'
 import { ComposerCopilotPanel } from '@/components/ComposerCopilotPanel'
-import { fetchWithTimeout, SOURCE_TIMEOUTS_MS, DEFAULT_TIMEOUT_MS, MANUAL_SAFE_LANES } from '@/lib/search/source-timeout'
+import { SearchModeSelector } from '@/components/SearchModeSelector'
+import { MarketMapSummary } from '@/components/MarketMapSummary'
+import { fetchWithTimeout, SOURCE_TIMEOUTS_MS, DEFAULT_TIMEOUT_MS } from '@/lib/search/source-timeout'
 import { saveSession, listSessions, type SavedSearchSession } from '@/lib/search/saved-sessions'
+import { buildVolumeSearchPlan, UNVERIFIED_ITEMS, type MarketMapSnapshot, type SearchMode } from '@/lib/search/volume-plan'
 import type { SourceResult } from '@/lib/source-types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -88,13 +91,14 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const [showAiStrategy, setShowAiStrategy] = useState(false)
   const [drawerResult, setDrawerResult] = useState<SourceResult | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [jdText, setJdText] = useState('')
   const [jdParsed, setJdParsed] = useState(false)
   const [jdSummary, setJdSummary] = useState<ReturnType<typeof parseJobDescription> | null>(null)
   const [sourceLanes, setSourceLanes] = useState<SourceLane[]>([])
   const [recentSessions, setRecentSessions] = useState<SavedSearchSession[]>([])
   const [composerAppend, setComposerAppend] = useState<{ terms: string[]; nonce: number }>({ terms: [], nonce: 0 })
   const [applyToast, setApplyToast] = useState('')
+  const [searchMode, setSearchMode] = useState<SearchMode>('balanced')
+  const [marketMap, setMarketMap] = useState<MarketMapSnapshot | null>(null)
   useEffect(() => { setRecentSessions(listSessions()) }, [])
 
   function applyTerms(terms: string[], label: string) {
@@ -145,7 +149,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const handleSearch = useCallback(async (output: ComposerOutput) => {
     if (!output.rawQuery.trim()) return
     setSearching(true); setSearchError('')
-    setSearchResults([]); setNoResultsMeta({ sources: [], suggestions: [] })
+    setSearchResults([]); setNoResultsMeta({ sources: [], suggestions: [] }); setMarketMap(null)
     setTab('results')
 
     const chips = output.chips.map(c => ({ canonical: c.canonical, type: c.type }))
@@ -161,17 +165,21 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       isSkillLight: hardTerms.length === 0,
     })
 
-    // Fast-mode live sources, best-first
-    const FAST_ORDER = ['github', 'npm', 'pypi', 'openalex', 'huggingface']
-    const requested = (output.recommendedSourceIds.filter(id => FAST_ORDER.includes(id)))
-    const liveSources = (requested.length > 0 ? requested : FAST_ORDER.slice(0, 4))
-      .sort((a, b) => FAST_ORDER.indexOf(a) - FAST_ORDER.indexOf(b))
+    const volumePlan = buildVolumeSearchPlan({
+      rawQuery: output.rawQuery,
+      chips,
+      recommendedSourceIds: output.recommendedSourceIds,
+      mode: searchMode,
+    })
 
-    // Seed lane statuses: queued for live, manual-safe lane if clearance present
-    const initialLanes: SourceLane[] = liveSources.map(s => ({ source: s, status: 'queued' as const }))
-    if (manualSafe.length > 0) {
-      initialLanes.push(...MANUAL_SAFE_LANES.slice(0, 2).map(l => ({ source: l.label, status: 'manual_safe' as const, href: l.href })))
-    }
+    const liveSources = volumePlan.liveSources
+    const sourceBreakdown: Record<string, number> = Object.fromEntries(liveSources.map(source => [source, 0]))
+
+    // Seed lane statuses: queued for live sources plus manual-safe lanes.
+    const initialLanes: SourceLane[] = [
+      ...liveSources.map(s => ({ source: s, status: 'queued' as const })),
+      ...volumePlan.manualSafeLanes.map(l => ({ source: l.label, status: 'manual_safe' as const, href: l.href })),
+    ]
     setSourceLanes(initialLanes)
 
     const runSource = async (source: string) => {
@@ -179,18 +187,23 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       const timeout = SOURCE_TIMEOUTS_MS[source] || DEFAULT_TIMEOUT_MS
       try {
         const { timedOut, data } = await fetchWithTimeout('/api/workbench/search-source',
-          { query: output.rawQuery, source, chips, limit: 5 }, timeout)
+          { query: output.rawQuery, source, chips, limit: volumePlan.sourceLimit }, timeout)
         if (timedOut) {
           setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'timed_out' } : l))
           return
         }
         const json = data as { ok: boolean; results?: SourceResult[]; status?: string }
         const results = json.results || []
-        // Merge + dedupe by id as each source returns (progressive)
+        sourceBreakdown[source] = results.length
+        // Merge + dedupe by exact result id or exact source URL only. Do not merge identities across sources.
         if (results.length > 0) {
           setSearchResults(prev => {
-            const seen = new Set(prev.map(r => r.id))
-            return [...prev, ...results.filter(r => !seen.has(r.id))]
+            const seenIds = new Set(prev.map(r => r.id))
+            const seenUrls = new Set(prev.map(r => r.profileUrl).filter(Boolean))
+            return [
+              ...prev,
+              ...results.filter(r => !seenIds.has(r.id) && (!r.profileUrl || !seenUrls.has(r.profileUrl))),
+            ]
           })
         }
         setSourceLanes(prev => prev.map(l => l.source === source
@@ -201,9 +214,32 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       }
     }
 
-    // Fire all live sources in parallel — one slow source never blocks others
+    // Fire all live sources in parallel. One slow source never blocks the rest.
     await Promise.allSettled(liveSources.map(runSource))
     setSearching(false)
+
+    const totalResults = Object.values(sourceBreakdown).reduce((sum, count) => sum + count, 0)
+    const noResultSources = Object.entries(sourceBreakdown).filter(([, count]) => count === 0).map(([source]) => source)
+    const lowVolume = totalResults < 3
+    setMarketMap({
+      mode: searchMode,
+      modeLabel: volumePlan.modeLabel,
+      totalResults,
+      liveSources,
+      manualSafeLanes: volumePlan.manualSafeLanes,
+      sourceBreakdown,
+      queryVariants: volumePlan.queryVariants,
+      lowResultActions: volumePlan.lowResultActions,
+      unverified: UNVERIFIED_ITEMS,
+    })
+    if (lowVolume || noResultSources.length > 0) {
+      setNoResultsMeta({
+        sources: noResultSources,
+        suggestions: volumePlan.lowResultActions,
+        broadQuery: volumePlan.queryVariants.find(v => v.id === 'skills-only')?.query,
+        usedBroadQuery: false,
+      })
+    }
 
     // Persist the search session (localStorage; schema-ready for Supabase later)
     try {
@@ -216,21 +252,22 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
         manualSafeConstraints: manualSafe,
         exclusions: output.falsePosWarnings || [],
         sourceLanes: liveSources,
-        resultCount: 0, // updated below via state; sessions are advisory
+        resultCount: totalResults,
       })
       setRecentSessions(listSessions())
     } catch { /* non-fatal */ }
-  }, [currentProject?.id, jdSummary, intake.jobTitle])
+  }, [currentProject?.id, jdSummary, intake.jobTitle, searchMode])
 
   // Retry a single timed-out / errored source
   const retrySource = useCallback(async (source: string) => {
     if (!composerOutput) return
     const chips = composerOutput.chips.map(c => ({ canonical: c.canonical, type: c.type }))
+    const retryPlan = buildVolumeSearchPlan({ rawQuery: composerOutput.rawQuery, chips, recommendedSourceIds: composerOutput.recommendedSourceIds, mode: searchMode })
     setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'searching' } : l))
     const timeout = SOURCE_TIMEOUTS_MS[source] || DEFAULT_TIMEOUT_MS
     try {
       const { timedOut, data } = await fetchWithTimeout('/api/workbench/search-source',
-        { query: composerOutput.rawQuery, source, chips, limit: 5 }, timeout)
+        { query: composerOutput.rawQuery, source, chips, limit: retryPlan.sourceLimit }, timeout)
       if (timedOut) {
         setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'timed_out' } : l))
         return
@@ -239,8 +276,9 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       const results = json.results || []
       if (results.length > 0) {
         setSearchResults(prev => {
-          const seen = new Set(prev.map(r => r.id))
-          return [...prev, ...results.filter(r => !seen.has(r.id))]
+          const seenIds = new Set(prev.map(r => r.id))
+          const seenUrls = new Set(prev.map(r => r.profileUrl).filter(Boolean))
+          return [...prev, ...results.filter(r => !seenIds.has(r.id) && (!r.profileUrl || !seenUrls.has(r.profileUrl)))]
         })
       }
       setSourceLanes(prev => prev.map(l => l.source === source
@@ -249,7 +287,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
     } catch {
       setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'error' } : l))
     }
-  }, [composerOutput])
+  }, [composerOutput, searchMode])
 
   const TAB_LABELS: Record<Tab, string> = {
     intake:   '01  Role Intake',
@@ -265,13 +303,11 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
     intake.jobTitle,
     intake.location,
     intake.clearanceNeeds,
-    // Pull skills out of the must-haves field (comma or newline separated)
     ...(intake.mustHaves ? intake.mustHaves.split(/[\n,]+/).map(s => s.trim()).filter(Boolean).slice(0, 4) : []),
   ].filter(Boolean).join(' ')
 
   return (
     <div>
-      {/* ── Project bar ──────────────────────────────────────────────────── */}
       {currentProject && (
         <div className="project-bar">
           <span className="project-bar-label">Project:</span>
@@ -285,7 +321,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       )}
 
       <div className="workbench">
-        {/* ── Tabs ──────────────────────────────────────────────────────────── */}
         <div className="wb-tabs">
           {(['intake', 'composer', 'results', 'saved'] as Tab[]).map(t => (
             <button key={t} className={`wb-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
@@ -305,8 +340,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
         </div>
 
         <div className="wb-content">
-
-          {/* ── 01 Role Intake ─────────────────────────────────────────────── */}
           {tab === 'intake' && (
             <div className="wb-section">
               <div className="wb-section-title">Role intake</div>
@@ -378,7 +411,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                           className="btn"
                           style={{ fontSize: '13px', flex: '1 1 auto' }}
                           onClick={() => {
-                            // Build a ComposerOutput directly from the parsed plan and run search
                             const chips = [
                               ...(jdSummary.roleTitle ? [{ canonical: jdSummary.roleTitle, type: 'title' as const }] : []),
                               ...jdSummary.mustHaveSkills.map(s => ({ canonical: s, type: 'skill' as const })),
@@ -504,7 +536,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
             </div>
           )}
 
-          {/* ── 02 Search Composer ─────────────────────────────────────────── */}
           {tab === 'composer' && (
             <div className="wb-section">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px', marginBottom: '4px' }}>
@@ -530,12 +561,14 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 )}
               </div>
 
+              <SearchModeSelector mode={searchMode} onChange={setSearchMode} />
+
               {chipContext?.hasClearance && (
                 <div className="preview-banner" style={{ marginBottom: '14px', borderColor: 'rgba(138,124,255,.35)' }}>
                   <span className="pb-icon">◈</span>
                   <span>
                     <strong>Clearance detected.</strong> Clearance is not visible on public sources like GitHub, npm, or OpenAlex —
-                    those will search for technical skills only. For clearance-specific sourcing, use ClearanceJobs (manual-safe) after finding technical matches.
+                    those will search for technical skills only. Clearance-specific sourcing stays manual-safe and must be verified through approved channels.
                   </span>
                 </div>
               )}
@@ -611,7 +644,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 initialQuery={composerInitialQuery}
               />
 
-              {/* ── Collapsed AI Strategy section ────────────────────────── */}
               <div style={{ marginTop: '20px', borderTop: '1px solid var(--line)', paddingTop: '14px' }}>
                 <button
                   className="composer-toggle-btn"
@@ -645,10 +677,8 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
             </div>
           )}
 
-          {/* ── 03 Results ─────────────────────────────────────────────────── */}
           {tab === 'results' && (
             <div className="wb-section">
-              {/* Per-source status dashboard — visible during and after search */}
               {sourceLanes.length > 0 && (
                 <div style={{ marginBottom: '16px' }}>
                   <div className="wb-section-title" style={{ marginBottom: '8px' }}>
@@ -658,11 +688,13 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 </div>
               )}
 
+              <MarketMapSummary snapshot={marketMap} />
+
               {searching && searchResults.length === 0 && (
                 <div style={{ textAlign: 'center', padding: '32px 0' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '3px solid rgba(72,217,255,.2)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
                   <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-                  <p className="muted">Querying fast sources…</p>
+                  <p className="muted">Querying public source lanes…</p>
                 </div>
               )}
 
@@ -672,7 +704,7 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                 </div>
               )}
 
-              {!searching && !searchError && searchResults.length === 0 && composerOutput && (
+              {!searching && !searchError && searchResults.length === 0 && composerOutput && noResultsMeta.suggestions.length === 0 && (
                 <div style={{ marginBottom: '8px' }}>
                   <p className="muted" style={{ fontSize: '13px' }}>No results yet. Run a search in the Search Composer tab.</p>
                   <button className="btn secondary" onClick={() => setTab('composer')} style={{ marginTop: '10px' }}>
@@ -717,7 +749,6 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
             </div>
           )}
 
-          {/* ── 04 Saved ───────────────────────────────────────────────────── */}
           {tab === 'saved' && (
             <div className="wb-section">
               {savedEntries.length === 0 ? (
@@ -763,11 +794,9 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
               )}
             </div>
           )}
-
         </div>
       </div>
 
-      {/* ── Right-side candidate/profile drawer ──────────────────────────── */}
       <CandidateDrawer
         result={drawerResult}
         open={drawerOpen}
