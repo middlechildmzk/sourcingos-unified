@@ -13,6 +13,11 @@ describe('sitemap', () => {
     for (const path of [
       '/candidate-search/',
       '/tools/search-lane-expander/',
+      '/directory/',
+      '/directory/contactout/',
+      '/directory/lusha/',
+      '/directory/apollo/',
+      '/directory/google-dorks/',
       '/about/',
       '/methodology/',
       '/training/',
