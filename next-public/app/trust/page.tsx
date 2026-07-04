@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/trust' },
+  alternates: { canonical: '/trust/' },
   title: 'Trust Rules | SourcingOS',
   description: 'The non-negotiable rules SourcingOS is built on: no fake candidates, public evidence only, no auto-outreach, no silent merges, and human verification required.'
 }
