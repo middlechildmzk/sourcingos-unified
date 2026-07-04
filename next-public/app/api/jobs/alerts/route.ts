@@ -35,11 +35,26 @@ export async function POST(req: NextRequest) {
         consent_at: new Date().toISOString(),
       })
       if (!error) return NextResponse.json({ ok: true, mode: 'supabase' })
+      // HONEST FAILURE: the alert was not saved. Never claim it was.
       console.error('[SourcingOS jobs/alerts] Supabase write error:', error.message)
+      return NextResponse.json(
+        { ok: false, error: 'We could not save this alert just now. Nothing was stored. Please try again in a minute.' },
+        { status: 503 }
+      )
     }
   }
 
+  if (process.env.VERCEL_ENV === 'production') {
+    // Production must never fake an alert signup with an in-memory sink.
+    console.error('[SourcingOS jobs/alerts] Persistence unavailable in production (Supabase not configured)')
+    return NextResponse.json(
+      { ok: false, error: 'We could not save this alert just now. Nothing was stored. Please try again in a minute.' },
+      { status: 503 }
+    )
+  }
+
+  // Preview/dev fallback only (never reachable in production).
   if (!globalAlerts.__sourcingosJobAlerts) globalAlerts.__sourcingosJobAlerts = []
   globalAlerts.__sourcingosJobAlerts.unshift({ ...parsed.data, createdAt: new Date().toISOString() })
-  return NextResponse.json({ ok: true, mode: 'preview' })
+  return NextResponse.json({ ok: true, mode: 'preview', persisted: false })
 }

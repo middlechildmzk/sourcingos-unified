@@ -153,7 +153,9 @@ export function getSearchAssistSuggestions(
 
   // 2) Adjacent titles + skills from EXPANSIONS for each recognized entity.
   for (const r of recognized) {
-    const exps = EXPANSIONS[r.canonical.toLowerCase()] || []
+    const exps = (EXPANSIONS[r.canonical.toLowerCase()] || []).filter(
+      e => e.toLowerCase() !== r.canonical.toLowerCase()
+    )
     exps.slice(0, 5).forEach((e, i) => {
       const kind: SuggestionKind = r.type === 'title' ? 'title' : (r.type === 'skill' || r.type === 'tool') ? 'skill' : 'related'
       push({ value: e, kind, reason: `adjacent to ${r.canonical}`, rank: 2 + i * 0.1 })
@@ -164,7 +166,9 @@ export function getSearchAssistSuggestions(
   if (hasTitle && !hasSkill) {
     // Title with no skills yet — pull the title's strongest skill adjacents.
     for (const r of recognized.filter(r => r.type === 'title')) {
-      (EXPANSIONS[r.canonical.toLowerCase()] || []).slice(0, 4).forEach((e, i) =>
+      (EXPANSIONS[r.canonical.toLowerCase()] || [])
+        .filter(e => e.toLowerCase() !== r.canonical.toLowerCase())
+        .slice(0, 4).forEach((e, i) =>
         push({ value: e, kind: 'skill', reason: `common for ${r.canonical}`, rank: 1.5 + i * 0.1 }))
     }
   }
@@ -224,9 +228,13 @@ export function getSearchAssistSuggestions(
   if (isGithubLane) notes.push('GitHub signals technical evidence, not full candidate fit. Clearance, location, and HR terms are excluded from this lane.')
 
   out.sort((a, b) => a.rank - b.rank)
+  const CAP = 28
+  const lanes = out.filter(s => s.kind === 'source-lane')
+  const rest = out.filter(s => s.kind !== 'source-lane').slice(0, Math.max(0, CAP - lanes.length))
+  const capped = [...lanes, ...rest].sort((a, b) => a.rank - b.rank)
   return {
     recognized: recognized.map(r => ({ canonical: r.canonical, type: r.type })),
-    suggestions: out.slice(0, 28),
+    suggestions: capped,
     notes,
   }
 }

@@ -3,6 +3,7 @@ import { articles } from '@/data/articles'
 import { methods } from '@/data/methods'
 
 export const metadata = {
+  alternates: { canonical: '/' },
   title: 'SourcingOS — Find who your search missed.',
   description:
     'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free tools for technical, cleared, healthcare, and AI recruiting.',

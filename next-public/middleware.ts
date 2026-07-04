@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    if (process.env.ALLOW_PREVIEW_BYPASS === 'true') {
+    if (process.env.ALLOW_PREVIEW_BYPASS === 'true' && process.env.VERCEL_ENV !== 'production') {
       const res = NextResponse.next()
       res.headers.set('x-sourcingos-auth-mode', 'preview-bypass')
       res.headers.set('x-sourcingos-persistence', 'preview')

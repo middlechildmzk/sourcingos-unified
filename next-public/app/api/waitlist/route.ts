@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { email, role, focus, intent, source_page } = parsed.data
+  const isProduction = process.env.VERCEL_ENV === 'production'
 
   // ── Supabase persistence when configured ──────────────────────────────────
   if (isSupabaseConfigured()) {
@@ -34,24 +35,46 @@ export async function POST(req: NextRequest) {
         { email, role: role || null, focus: focus || null, intent: intent || null, source_page: source_page || null },
         { onConflict: 'email' }   // idempotent — re-joins don't create duplicates
       )
-      if (error) {
-        console.error('[SourcingOS waitlist] Supabase write error:', error.message)
-        // Don't surface DB errors to the user — fall through to preview response
-      } else {
+      if (!error) {
         return NextResponse.json({
           ok: true,
           mode: 'supabase',
           message: 'You are on the list. We will reach out when your cohort opens.',
         })
       }
+      // HONEST FAILURE: the write did not happen. Never tell the user it did.
+      console.error('[SourcingOS waitlist] Supabase write error:', error.message)
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'We could not save your request just now, so you are not on the list yet. Please try again in a minute.',
+        },
+        { status: 503 }
+      )
     }
   }
 
-  // ── Preview fallback ───────────────────────────────────────────────────────
+  // ── No persistence backend available ──────────────────────────────────────
+  if (isProduction) {
+    // Production must never fake a signup. Fail honestly.
+    console.error('[SourcingOS waitlist] Persistence unavailable in production (Supabase not configured)')
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          'We could not save your request just now, so you are not on the list yet. Please try again in a minute.',
+      },
+      { status: 503 }
+    )
+  }
+
+  // ── Preview/dev fallback (never reachable in production) ──────────────────
   console.log('[SourcingOS waitlist] Preview signup:', { email, role, focus, intent, source_page })
   return NextResponse.json({
     ok: true,
     mode: 'preview',
+    persisted: false,
     message:
       'Captured in preview mode. Connect Supabase (or Resend/ConvertKit) to enable durable waitlist storage.',
   })

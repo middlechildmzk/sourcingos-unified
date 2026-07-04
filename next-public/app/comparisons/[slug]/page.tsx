@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
 import { comparisons } from '@/data/comparisons'
 export function generateStaticParams(){ return comparisons.map(c=>({slug:c.slug})) }
-export function generateMetadata({params}:{params:{slug:string}}){ const c=comparisons.find(x=>x.slug===params.slug); return c?{title:c.title,description:c.description}:{} }
+export function generateMetadata({params}:{params:{slug:string}}){ const c=comparisons.find(x=>x.slug===params.slug); return c?{title:c.title,description:c.description,alternates:{canonical:`/comparisons/${c.slug}/`}}:{} }
 export default function Page({params}:{params:{slug:string}}){ const c=comparisons.find(x=>x.slug===params.slug); if(!c)return notFound(); return <main className="wrap article"><span className="kicker">Comparison</span><h1>{c.title}</h1><p className="lead">{c.description}</p><h2>How to read this comparison</h2><p>Compare tools by the job they perform in a sourcing workflow: search breadth, evidence quality, contact data, outreach, CRM memory, rediscovery, and hiring-manager reporting. SourcingOS is designed to sit above individual tools as the workflow and evidence layer.</p><h2>Recommended next step</h2><p>Use the directory to map your stack, then request private beta access if you need Candidate 360, Evidence Matrix, project memory, and rediscovery.</p></main> }
