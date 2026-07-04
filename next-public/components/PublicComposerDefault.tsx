@@ -16,8 +16,12 @@ export function PublicComposerDefault() {
   }, [])
 
   return (
-    <p className="muted" style={{ fontSize: '13px', margin: '0 0 12px' }}>
-      Start typing a title, skill, clearance, or location. Search Assist will suggest related terms and source lanes.
-    </p>
+    <div className="preview-banner" style={{ margin: '0 0 12px', borderColor: 'rgba(72,217,255,.24)' }}>
+      <span className="pb-icon">◈</span>
+      <span>
+        Start with a title, skill, location, clearance breadcrumb, source lane, seniority, company, or certification.
+        Enter runs the search from the composer. Saving, contact enrichment, project actions, and Candidate 360 are beta-gated.
+      </span>
+    </div>
   )
 }
