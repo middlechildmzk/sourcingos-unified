@@ -49,10 +49,28 @@ export function CandidateDrawer({
   const color = SOURCE_COLORS[result.source] || SOURCE_COLORS.default
   const openLabel = SOURCE_OPEN_LABEL[result.source] || 'Open source profile'
   const isSaved = Boolean(localSaved)
+  const missingData = [
+    !result.location ? 'Location' : '',
+    !result.organization ? 'Current organization' : '',
+    result.contactSignals.length === 0 ? 'Contact path' : '',
+    'Current interest and availability',
+    'Identity match against other source profiles',
+  ].filter(Boolean)
+  const publicFacts = [
+    `Source: ${result.source}`,
+    result.profileUrl ? `Source URL: ${result.profileUrl}` : '',
+    result.headline ? `Headline: ${result.headline}` : '',
+    result.organization ? `Organization shown publicly: ${result.organization}` : '',
+    result.location ? `Location shown publicly: ${result.location}` : '',
+  ].filter(Boolean)
+  const publicSignals = [
+    ...result.skills.slice(0, 8).map(skill => `Skill/tool signal: ${skill}`),
+    ...result.evidence.slice(0, 5).map(e => `Evidence signal: ${e.label}`),
+    ...result.contactSignals.slice(0, 3).map(c => `Contact signal from ${c.source}: ${c.type.replace('_', ' ')}`),
+  ]
 
   async function saveSourceProfile() {
     if (!result) return
-    // Gate in public mode
     if (publicMode) {
       setAuthPrompt(true)
       return
@@ -70,7 +88,7 @@ export function CandidateDrawer({
       if (json.ok) {
         const state = { candidateId: json.candidateId, projectAssociated: Boolean(projectId) }
         setLocalSaved(state)
-        setNotice(json.note || 'Saved — pending recruiter review.')
+        setNotice(json.note || 'Saved source profile. Identity and fit still require recruiter review.')
         onSaved?.(json.candidateId, result.displayName, result.source)
       } else if (json.error === 'Authentication required.') {
         setAuthPrompt(true)
@@ -78,7 +96,7 @@ export function CandidateDrawer({
         setNotice(`Error: ${json.error}`)
       }
     } catch {
-      setNotice('Save failed — check your network connection.')
+      setNotice('Save failed. Check your network connection.')
     } finally {
       setSaving(false)
     }
@@ -86,15 +104,13 @@ export function CandidateDrawer({
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className={`drawer-backdrop ${open ? 'drawer-backdrop-open' : ''}`}
         onClick={onClose}
         aria-hidden="true"
       />
 
-      {/* Drawer panel */}
-      <aside className={`candidate-drawer ${open ? 'candidate-drawer-open' : ''}`} role="dialog" aria-label="Candidate profile">
+      <aside className={`candidate-drawer ${open ? 'candidate-drawer-open' : ''}`} role="dialog" aria-label="Candidate source profile">
         <div className="drawer-header">
           <span className="result-source-badge" style={{ background: `${color}18`, color, borderColor: `${color}40` }}>
             {result.source}
@@ -103,7 +119,6 @@ export function CandidateDrawer({
         </div>
 
         <div className="drawer-body">
-          {/* Identity */}
           <div className="drawer-identity">
             <h2 className="drawer-name">{result.displayName}</h2>
             {result.headline && <p className="drawer-headline">{result.headline}</p>}
@@ -113,35 +128,65 @@ export function CandidateDrawer({
             </div>
           </div>
 
-          {/* Compliance framing */}
           <div className="drawer-compliance">
             <span className="result-compliance-badge result-badge-public">Public evidence match</span>
             <span className="result-compliance-badge">Not a confirmed candidate</span>
+            <span className="result-compliance-badge">Confidence = source relevance only</span>
             {result.location && <span className="result-compliance-badge">Location not verified</span>}
           </div>
 
-          {/* Drawer-first framing: preview vs saved */}
           {isSaved ? (
             <div className="drawer-preview-note drawer-preview-saved">
-              ✓ Saved to Candidate Graph. This is now a recruiter-confirmed record — open the full Candidate 360 for the deep-dive dossier.
+              ✓ Saved as a source profile. This is still pending recruiter review, same-person confirmation, and Candidate 360 completion.
             </div>
           ) : (
             <div className="drawer-preview-note drawer-preview-unsaved">
-              This is a source profile preview. Review the evidence here, then save it to create a recruiter-confirmed Candidate 360 record. Saving is optional — you can keep reviewing without it.
+              This is a source profile preview. Review the evidence, missing data, and assumptions before saving. Saving does not verify identity, clearance, employment, or contact accuracy.
             </div>
           )}
 
-          {/* External source links */}
           {result.profileUrl && (
             <a className="btn secondary drawer-external" href={result.profileUrl} target="_blank" rel="noreferrer noopener">
               {openLabel} ↗
             </a>
           )}
 
-          {/* Why matched / evidence */}
+          <section className="drawer-section">
+            <div className="drawer-section-title">Public facts</div>
+            <ul className="verify-list">
+              {publicFacts.length ? publicFacts.map(fact => <li key={fact}>{fact}</li>) : <li>No public facts beyond the source result were returned.</li>}
+            </ul>
+          </section>
+
+          <section className="drawer-section">
+            <div className="drawer-section-title">Public signals</div>
+            <ul className="verify-list">
+              {publicSignals.length ? publicSignals.map(signal => <li key={signal}>{signal}</li>) : <li>No strong public signals were returned.</li>}
+            </ul>
+            <p className="muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+              Signals help prioritize review. They are not verification.
+            </p>
+          </section>
+
+          <section className="drawer-section">
+            <div className="drawer-section-title">Assumptions to avoid</div>
+            <ul className="verify-list">
+              <li>Do not assume this source profile is the same person as any other profile.</li>
+              <li>Do not assume current employment, current location, or availability from public text.</li>
+              <li>Do not treat clearance, open-to-work, or contact signals as verified claims.</li>
+            </ul>
+          </section>
+
+          <section className="drawer-section">
+            <div className="drawer-section-title">Missing data</div>
+            <ul className="verify-list">
+              {missingData.map(item => <li key={item}>{item}</li>)}
+            </ul>
+          </section>
+
           {result.evidence.length > 0 && (
             <section className="drawer-section">
-              <div className="drawer-section-title">Why matched — {result.evidence.length} evidence item{result.evidence.length !== 1 ? 's' : ''}</div>
+              <div className="drawer-section-title">Evidence snippets</div>
               {result.evidence.map(e => (
                 <div key={e.id} className="drawer-evidence">
                   <span className="result-evidence-conf" style={{ color: CONF_COLOR[e.confidence] || CONF_COLOR.medium }}>{e.confidence}</span>
@@ -152,25 +197,26 @@ export function CandidateDrawer({
                   </div>
                 </div>
               ))}
+              <p className="muted" style={{ fontSize: '12px', margin: '8px 0 0' }}>
+                Evidence confidence describes source relevance only. It does not verify the person.
+              </p>
             </section>
           )}
 
-          {/* Matched skills */}
           {result.skills.length > 0 && (
             <section className="drawer-section">
-              <div className="drawer-section-title">Matched skills & tools</div>
+              <div className="drawer-section-title">Matched skills and tools</div>
               <div className="result-skills">
                 {result.skills.map(s => <span key={s} className="tag">{s}</span>)}
               </div>
             </section>
           )}
 
-          {/* Contact signals */}
           <section className="drawer-section">
             <div className="drawer-section-title">Contact signals</div>
             {result.contactSignals.length > 0 ? (
               <>
-                <div className="contact-unverified" style={{ marginBottom: '6px' }}>⚠ Unverified — does not imply permission to contact</div>
+                <div className="contact-unverified" style={{ marginBottom: '6px' }}>⚠ Unverified. Does not imply permission to contact.</div>
                 {result.contactSignals.map((c, i) => (
                   <div key={i} className="drawer-contact-row">
                     <span className="drawer-contact-type">{c.type.replace('_', ' ')}</span>
@@ -195,27 +241,31 @@ export function CandidateDrawer({
             />
           </section>
 
-          {/* Open-to-work — explicit honest framing */}
           <section className="drawer-section">
             <div className="drawer-section-title">Open-to-work signal</div>
             <p className="muted" style={{ fontSize: '13px', margin: 0 }}>
-              No open-to-work signal detected. Open-to-work is a signal, never a verified claim —
-              confirm intent directly with the candidate.
+              No open-to-work signal detected. Open-to-work is a signal, never a verified claim. Confirm intent directly with the candidate.
             </p>
           </section>
 
-          {/* Verify next */}
           <section className="drawer-section">
-            <div className="drawer-section-title">Verify next</div>
+            <div className="drawer-section-title">Verify-next checklist</div>
             <ul className="verify-list">
-              <li>Confirm current title and employer from a primary source</li>
-              <li>Do not treat contact info as verified — confirm before outreach</li>
-              {result.location && <li>Confirm location and remote eligibility</li>}
-              <li>Confirm identity before merging with any existing candidate</li>
+              <li>Confirm current title and employer from a primary source.</li>
+              <li>Confirm identity before merging with any existing candidate record.</li>
+              <li>Confirm location, work authorization, remote eligibility, and compensation fit.</li>
+              <li>Confirm clearance or license status only through the appropriate authorized process.</li>
+              <li>Confirm contact path and outreach permission norms before outreach.</li>
             </ul>
           </section>
 
-          {/* Recruiter feedback → project memory */}
+          <section className="drawer-section">
+            <div className="drawer-section-title">Safe outreach angle draft</div>
+            <p className="muted" style={{ fontSize: '13px', margin: 0 }}>
+              Mention one specific public evidence item, ask a low-pressure relevance question, and avoid claims about current status, clearance, availability, or intent until confirmed.
+            </p>
+          </section>
+
           <section className="drawer-section">
             <FeedbackButtons
               projectId={projectId}
@@ -227,7 +277,6 @@ export function CandidateDrawer({
             />
           </section>
 
-          {/* AI Copilot — user-triggered, draft, review-required */}
           <DrawerCopilot
             publicMode={publicMode}
             candidate={{
@@ -245,12 +294,11 @@ export function CandidateDrawer({
           />
         </div>
 
-        {/* Sticky action footer */}
         <div className="drawer-footer">
           {authPrompt && (
             <div className="find-contact-msg find-contact-auth" style={{ marginBottom: '8px' }}>
-              Sign in to save this candidate and build your Candidate Graph.{' '}
-              <Link href="/login" style={{ textDecoration: 'underline' }}>Sign in →</Link>
+              This is available in the private beta. Request access to save evidence, build projects, and create Candidate 360 dossiers.{' '}
+              <Link href="/waitlist" style={{ textDecoration: 'underline' }}>Request access →</Link>
             </div>
           )}
           {notice && (
@@ -261,25 +309,25 @@ export function CandidateDrawer({
 
           {isSaved ? (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="status-live" style={{ alignSelf: 'center' }}>Saved</span>
+              <span className="status-live" style={{ alignSelf: 'center' }}>Saved source profile</span>
               {localSaved && (
                 <a className="btn secondary" href={`/app/candidate/${localSaved.candidateId}`} style={{ flex: 1, fontSize: '13px' }}>
-                  View full Candidate 360 →
+                  Continue Candidate 360 →
                 </a>
               )}
             </div>
           ) : (
             <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
               <button className="btn" style={{ flex: 1 }} onClick={saveSourceProfile} disabled={saving}>
-                {saving ? 'Saving…' : publicMode ? 'Save (sign in)' : projectId ? '+ Save & add to project' : '+ Save source profile'}
+                {saving ? 'Saving…' : publicMode ? 'Save source profile (beta)' : projectId ? '+ Save and add to project' : '+ Save source profile'}
               </button>
               <span className="muted" style={{ fontSize: '11px', textAlign: 'center' }}>
-                Save to create a Candidate 360 record
+                Saving creates a source profile record. Candidate 360 still requires recruiter confirmation.
               </span>
             </div>
           )}
           <p className="muted" style={{ fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>
-            Saving keeps this drawer open so you can continue reviewing.
+            Saving keeps this drawer open so you can continue reviewing evidence.
           </p>
         </div>
       </aside>
