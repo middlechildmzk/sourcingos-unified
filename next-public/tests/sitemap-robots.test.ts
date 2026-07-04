@@ -8,11 +8,17 @@ import { siteUrl } from '../lib/site'
 describe('sitemap', () => {
   const urls = sitemap().map(e => e.url)
 
-  it('includes the flagship demo and trust/company pages', () => {
+  it('includes the flagship demo, trust/company pages, and training hub', () => {
     for (const path of [
       '/candidate-search/',
       '/about/',
       '/methodology/',
+      '/training/',
+      '/training/ai-sourcing-prompts/',
+      '/training/evidence-review-checklist/',
+      '/training/hiring-manager-calibration-workshop/',
+      '/training/cleared-govcon-sourcing-safety/',
+      '/training/candidate-360-workshop/',
       '/trust/',
       '/data-sources/',
       '/terms/',
