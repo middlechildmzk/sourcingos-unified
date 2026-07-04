@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/contact' },
+  alternates: { canonical: '/contact/' },
   title: 'Contact | SourcingOS',
   description: 'How to reach SourcingOS during the private beta: access requests, product questions, and privacy or data requests.'
 }
