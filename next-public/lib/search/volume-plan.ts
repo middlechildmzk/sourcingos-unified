@@ -1,4 +1,4 @@
-import type { SourceName } from '@/lib/source-types'
+import { allSourceNames, type SourceName } from '@/lib/source-types'
 
 export type SearchMode = 'precision' | 'balanced' | 'broad' | 'market_map'
 
@@ -58,10 +58,13 @@ const MODE_LIMITS: Record<SearchMode, number> = {
   market_map: 12,
 }
 
+const SOURCE_NAME_SET = new Set<string>(allSourceNames)
 const CORE_FAST: SourceName[] = ['github', 'npm', 'pypi', 'openalex', 'huggingface']
+const BALANCED_EXTRA: SourceName[] = ['stackoverflow', 'devto']
 const TECHNICAL: SourceName[] = ['github', 'stackoverflow', 'devto', 'dockerhub', 'npm', 'pypi', 'crates', 'rubygems']
 const AI_ML: SourceName[] = ['github', 'huggingface', 'openalex', 'semantic_scholar', 'arxiv', 'pypi', 'kaggle']
 const HEALTHCARE: SourceName[] = ['npi', 'pubmed', 'openalex']
+const GOVCON_BASE: SourceName[] = ['github', 'stackoverflow', 'devto', 'dockerhub', 'npm', 'pypi', 'resume_xray']
 const MARKET_MAP: SourceName[] = ['github', 'stackoverflow', 'devto', 'dockerhub', 'npm', 'pypi', 'crates', 'rubygems', 'openalex', 'semantic_scholar', 'arxiv', 'huggingface', 'npi', 'pubmed', 'orcid', 'resume_xray', 'kaggle']
 
 const AI_TERMS = ['ai', 'ml', 'machine learning', 'llm', 'rag', 'pytorch', 'tensorflow', 'hugging face', 'transformer', 'nlp', 'model']
@@ -70,6 +73,14 @@ const GOVCON_TERMS = ['ts/sci', 'secret', 'top secret', 'poly', 'clearance', 'rm
 
 function unique<T>(items: T[]): T[] {
   return Array.from(new Set(items))
+}
+
+function isSourceName(value: string): value is SourceName {
+  return SOURCE_NAME_SET.has(value)
+}
+
+function toSourceNames(values: string[] = []): SourceName[] {
+  return unique(values.filter(isSourceName))
 }
 
 function lowerText(rawQuery: string, chips: VolumeChip[]): string {
@@ -208,21 +219,21 @@ export function buildQueryVariants(rawQuery: string, chips: VolumeChip[]): Query
 export function buildVolumeSearchPlan(input: { rawQuery: string; chips: VolumeChip[]; recommendedSourceIds?: string[]; mode: SearchMode }): VolumeSearchPlan {
   const { rawQuery, chips, mode } = input
   const text = lowerText(rawQuery, chips)
-  const recommended = (input.recommendedSourceIds || []).filter(Boolean) as SourceName[]
+  const recommended = toSourceNames(input.recommendedSourceIds)
   const manualSafeLanes = buildManualSafeLanes(rawQuery, chips)
   const variants = buildQueryVariants(rawQuery, chips)
 
   let sources: SourceName[] = mode === 'precision'
-    ? unique([...recommended, ...CORE_FAST]).slice(0, 5)
+    ? unique<SourceName>([...recommended, ...CORE_FAST]).slice(0, 5)
     : mode === 'balanced'
-      ? unique([...recommended, ...CORE_FAST, 'stackoverflow', 'devto']).slice(0, 8)
+      ? unique<SourceName>([...recommended, ...CORE_FAST, ...BALANCED_EXTRA]).slice(0, 8)
       : mode === 'broad'
-        ? unique([...recommended, ...TECHNICAL, ...(hasAny(text, AI_TERMS) ? AI_ML : []), ...(hasAny(text, HEALTH_TERMS) ? HEALTHCARE : [])]).slice(0, 12)
-        : MARKET_MAP
+        ? unique<SourceName>([...recommended, ...TECHNICAL, ...(hasAny(text, AI_TERMS) ? AI_ML : []), ...(hasAny(text, HEALTH_TERMS) ? HEALTHCARE : [])]).slice(0, 12)
+        : [...MARKET_MAP]
 
-  if (hasAny(text, AI_TERMS)) sources = unique([...sources, ...AI_ML])
-  if (hasAny(text, HEALTH_TERMS)) sources = unique([...sources, ...HEALTHCARE])
-  if (hasAny(text, GOVCON_TERMS)) sources = unique(['github', 'stackoverflow', 'devto', 'dockerhub', 'npm', 'pypi', ...sources, 'resume_xray'])
+  if (hasAny(text, AI_TERMS)) sources = unique<SourceName>([...sources, ...AI_ML])
+  if (hasAny(text, HEALTH_TERMS)) sources = unique<SourceName>([...sources, ...HEALTHCARE])
+  if (hasAny(text, GOVCON_TERMS)) sources = unique<SourceName>([...GOVCON_BASE, ...sources])
 
   const maxSources = mode === 'market_map' ? 16 : mode === 'broad' ? 12 : mode === 'balanced' ? 8 : 5
   sources = sources.slice(0, maxSources)
