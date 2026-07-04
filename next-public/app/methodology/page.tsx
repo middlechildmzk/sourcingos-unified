@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  alternates: { canonical: '/methodology' },
+  alternates: { canonical: '/methodology/' },
   title: 'Methodology | SourcingOS',
   description: 'How SourcingOS works: role intake, source lanes, open-web searches, evidence review, recruiter-confirmed Candidate Graph, and Candidate 360 dossiers. A human decides at every step.'
 }
