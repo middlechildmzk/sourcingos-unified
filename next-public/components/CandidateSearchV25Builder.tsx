@@ -27,9 +27,11 @@ const emptyStructured: StructuredState = {
 }
 
 const EXAMPLES = [
-  'Find cleared DevSecOps engineers in Northern Virginia with Kubernetes, Terraform, AWS, and TS/SCI.',
-  'Find Machine Learning Engineers with Python, PyTorch, Hugging Face, LLMs, and MLOps.',
-  'Find Epic analysts with HL7, FHIR, and healthcare data experience.',
+  'Find cleared DevSecOps engineers in Northern Virginia with Kubernetes, Terraform, AWS GovCloud, RMF, and TS/SCI.',
+  'Find senior Kubernetes platform engineers with Terraform, Helm, ArgoCD, EKS, and Linux infrastructure experience.',
+  'Find AI/ML researchers with PyTorch, transformers, Hugging Face, RAG, embeddings, and model evaluation work.',
+  'Find nurse recruiters with high-volume clinical hiring, ICU, ER, NICU, BLS, ACLS, and hospital talent acquisition experience.',
+  'Find healthcare data analysts with Epic, SQL, HL7, FHIR, Tableau, revenue cycle, and healthcare claims experience.',
 ]
 
 const TITLE_SKILL_HINTS: Record<string, string[]> = {
@@ -41,6 +43,9 @@ const TITLE_SKILL_HINTS: Record<string, string[]> = {
   'data scientist': ['Python', 'PyTorch', 'TensorFlow', 'LLM', 'MLOps'],
   'software engineer': ['Python', 'TypeScript', 'React', 'AWS', 'Git'],
   'kubernetes engineer': ['Kubernetes', 'Docker', 'Helm', 'Terraform', 'AWS'],
+  'platform engineer': ['Kubernetes', 'Terraform', 'Helm', 'ArgoCD', 'Linux'],
+  'nurse recruiter': ['RN', 'BLS', 'ACLS', 'ICU', 'ER'],
+  'healthcare data analyst': ['Epic', 'SQL', 'HL7', 'FHIR', 'Tableau'],
 }
 
 function splitTerms(value: string): string[] {
@@ -102,6 +107,8 @@ export function CandidateSearchV25Builder() {
   const titles = recognized.filter(r => r.type === 'title').map(r => r.canonical)
   const skills = recognized.filter(r => r.type === 'skill' || r.type === 'tool' || r.type === 'certification').map(r => r.canonical)
   const locations = recognized.filter(r => r.type === 'location').map(r => r.canonical)
+  const seniority = recognized.filter(r => r.type === 'seniority').map(r => r.canonical)
+  const companies = recognized.filter(r => r.type === 'company').map(r => r.canonical)
   const manualSafe = recognized.filter(r => r.type === 'clearance' || r.type === 'employment-signal').map(r => r.canonical)
   const reviewFilters = recognized.filter(r => ['title', 'seniority', 'location', 'company', 'industry'].includes(r.type)).map(r => r.canonical)
   const sourceLanes = suggestions.filter(s => s.kind === 'source-lane').map(s => labelForSource(s.value))
@@ -127,10 +134,10 @@ export function CandidateSearchV25Builder() {
 
   return (
     <section className="jd-summary" style={{ marginBottom: '18px' }}>
-      <div className="jd-summary-head">Candidate Search V2.5 — NLP sourcing builder</div>
+      <div className="jd-summary-head">Candidate Search V2.5 — Smart sourcing composer</div>
       <p className="muted" style={{ margin: '6px 0 12px', lineHeight: 1.6 }}>
-        Titles help frame the search. <strong>Skills and tools drive public-source results.</strong>
-        Clearance, open-to-work, and contact signals remain manual-safe and unverified.
+        Titles help frame the search. <strong>Skills and tools drive public-source results.</strong>{' '}
+        Clearance, open-to-work, and contact signals remain manual-safe and unverified. Confidence means source relevance only, never identity verification.
       </p>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
@@ -148,13 +155,14 @@ export function CandidateSearchV25Builder() {
           <textarea
             value={naturalQuery}
             onChange={e => setNaturalQuery(e.target.value)}
-            placeholder="Find cleared DevSecOps engineers in Northern Virginia with Kubernetes, Terraform, AWS, and TS/SCI."
+            placeholder="Find senior Kubernetes platform engineers with Terraform, Helm, ArgoCD, EKS, and Linux infrastructure experience."
             style={{ minHeight: '86px' }}
           />
+          <div className="composer-section-label" style={{ marginTop: '10px' }}>Try example searches</div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
             {EXAMPLES.map(example => (
               <button key={example} type="button" className="suggestion-tag" onClick={() => setNaturalQuery(example)}>
-                Try: {example.slice(0, 48)}…
+                {example.length > 76 ? `${example.slice(0, 76)}…` : example}
               </button>
             ))}
           </div>
@@ -162,13 +170,13 @@ export function CandidateSearchV25Builder() {
       ) : (
         <div className="wb-form-grid" style={{ marginBottom: '12px' }}>
           {([
-            ['titles', 'Titles', 'ML Engineer, DevSecOps Engineer'],
-            ['mustHaveSkills', 'Must-have skills/tools', 'Python, PyTorch, Kubernetes'],
-            ['keywords', 'Keywords', 'MLOps, model serving, platform'],
+            ['titles', 'Titles', 'Platform Engineer, DevSecOps Engineer, Nurse Recruiter'],
+            ['mustHaveSkills', 'Must-have skills/tools', 'Kubernetes, Terraform, PyTorch, Epic, SQL'],
+            ['keywords', 'Keywords', 'MLOps, model serving, revenue cycle, RMF'],
             ['location', 'Location / remote', 'Northern Virginia, Remote US'],
             ['clearance', 'Clearance / manual-safe', 'TS/SCI, Secret, Public Trust'],
-            ['companies', 'Target companies / domains', 'OpenAI, Anthropic, GovCon'],
-            ['exclusions', 'Exclusions', 'jobs, hiring, bootcamp'],
+            ['companies', 'Target companies / domains', 'OpenAI, Anthropic, GovCon, hospitals'],
+            ['exclusions', 'Exclusions', 'jobs, hiring, bootcamp, course'],
           ] as const).map(([key, label, placeholder]) => (
             <div key={key} className="wb-form-row">
               <label>{label}</label>
@@ -185,9 +193,18 @@ export function CandidateSearchV25Builder() {
 
       {activeQuery.trim() && (
         <>
+          <div className="preview-banner" style={{ marginBottom: '12px', borderColor: 'rgba(72,217,255,.3)' }}>
+            <span className="pb-icon">◈</span>
+            <span>
+              <strong>Search intent summary:</strong> SourcingOS will treat skills/tools as live public-source terms, titles and locations as review filters, and clearance or open-to-work language as unverified manual-safe breadcrumbs.
+            </span>
+          </div>
+
           <div className="jd-summary-grid" style={{ marginBottom: '12px' }}>
             <Bucket label="Role/title detected" items={titles} empty="Add a role or title" />
             <Bucket label="Skills/tools detected" items={skills} empty="Add concrete tools for stronger public-source results" />
+            <Bucket label="Seniority detected" items={seniority} empty="Optional review filter" />
+            <Bucket label="Company/domain detected" items={companies} empty="Optional donor or domain filter" />
             <Bucket label="Location detected" items={locations} empty="Optional review filter" />
             <Bucket label="Manual-safe constraints" items={manualSafe} empty="None detected" />
             <Bucket label="Recommended source lanes" items={sourceLanes.slice(0, 5)} empty="GitHub baseline until more signal is added" />
