@@ -3,6 +3,7 @@ import { articles } from '@/data/articles'
 import { comparisons } from '@/data/comparisons'
 import { jobCategories, jobs } from '@/data/jobs'
 import { siteUrl } from '@/lib/site'
+import { toolRecords } from '@/lib/tool-directory'
 
 const lastModified = new Date('2026-07-04T00:00:00.000Z')
 
@@ -24,7 +25,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ['/sources/', 0.72, 'weekly'],
     ['/sample-candidate-360/', 0.78, 'weekly'],
     ['/methods/', 0.75, 'weekly'],
-    ['/directory/', 0.65, 'weekly'],
+    ['/directory/', 0.86, 'weekly'],
     ['/blog/', 0.78, 'weekly'],
     ['/comparisons/', 0.7, 'weekly'],
     ['/playbooks/', 0.7, 'weekly'],
@@ -49,6 +50,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     ...staticRoutes.map(([r, priority, changeFrequency]) => entry(siteUrl + r, priority, changeFrequency)),
+    ...toolRecords.map(t => entry(`${siteUrl}/directory/${t.id}/`, 0.58, 'monthly')),
     ...articles.map(a => entry(`${siteUrl}/blog/${a.slug}/`, 0.62, 'monthly')),
     ...comparisons.map(c => entry(`${siteUrl}/comparisons/${c.slug}/`, 0.6, 'monthly')),
     ...jobCategories.map(c => entry(`${siteUrl}/jobs/${c.slug}/`, 0.6, 'daily')),
