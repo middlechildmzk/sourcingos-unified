@@ -64,7 +64,12 @@ export function trackEvent(eventName: AnalyticsEventName, payload: AnalyticsPayl
   fetch('/api/analytics', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(event),
+    body: JSON.stringify({
+      event: eventName,
+      label: event.label,
+      page: event.path,
+      ts: Date.now(),
+    }),
   }).catch(() => {})
 
   if (process.env.NODE_ENV !== 'production') {
