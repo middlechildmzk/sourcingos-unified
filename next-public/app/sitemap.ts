@@ -5,7 +5,7 @@ import { jobCategories, jobs } from '@/data/jobs'
 import { siteUrl } from '@/lib/site'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes=['','/tools','/tools/boolean-generator','/tools/clearance-search','/tools/aging-req-rescue','/tools/xray-search','/tools/jd-search-strategy','/sources','/sample-candidate-360','/methods','/directory','/blog','/comparisons','/playbooks','/jobs','/jobs/submit','/jobs/guides','/privacy','/waitlist']
+  const staticRoutes=['','/candidate-search','/tools','/tools/boolean-generator','/tools/clearance-search','/tools/aging-req-rescue','/tools/xray-search','/tools/jd-search-strategy','/sources','/sample-candidate-360','/methods','/directory','/blog','/comparisons','/playbooks','/jobs','/jobs/submit','/jobs/guides','/privacy','/waitlist','/about','/methodology','/trust','/data-sources','/terms','/contact']
   return [
     ...staticRoutes.map(r=>({url:siteUrl+r,lastModified:new Date()})),
     ...articles.map(a=>({url:`${siteUrl}/blog/${a.slug}`,lastModified:new Date()})),
