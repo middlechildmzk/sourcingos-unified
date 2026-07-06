@@ -2,7 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limit'
 import { parseRecruitingResumeProfile } from '@/lib/career-match/parse-profile'
-import { buildJobSearchQuery, rankJobMatches, suggestAdjacentRoles } from '@/lib/career-match/match-engine'
+import {
+  buildCareerMatchQueries,
+  buildRoleUniverse,
+  dedupeMatchableJobs,
+  groupJobMatches,
+  rankJobMatches,
+  suggestAdjacentRoles,
+} from '@/lib/career-match/match-engine'
 import { extractResumeTextFromUpload } from '@/lib/career-match/extract-upload'
 import type { CareerMatchErrorResponse, CareerMatchResponse, CareerPreferences, MatchableJob } from '@/lib/career-match/types'
 import { normalizeFamily } from '@/lib/career-match/role-taxonomy'
@@ -90,17 +97,28 @@ async function parseIncomingRequest(req: NextRequest): Promise<IncomingCareerMat
   return { resumeText: result.data.resumeText, preferences: result.data.preferences, uploadNotes: ['Pasted resume text parsed.'] }
 }
 
-async function fetchLiveRecruitingJobs(req: NextRequest, query: string, preferences: CareerPreferences): Promise<MatchableJob[]> {
+async function fetchLiveRecruitingJobs(req: NextRequest, query: string, preferences: CareerPreferences, relaxLocation = false): Promise<MatchableJob[]> {
   const url = new URL('/api/jobs/search', req.nextUrl.origin)
   url.searchParams.set('q', query)
   url.searchParams.set('limit', '120')
-  if (preferences.location) url.searchParams.set('location', preferences.location)
-  if (preferences.workMode === 'remote') url.searchParams.set('remoteOnly', 'true')
+  if (!relaxLocation && preferences.location) url.searchParams.set('location', preferences.location)
+  if (!relaxLocation && preferences.workMode === 'remote') url.searchParams.set('remoteOnly', 'true')
 
   const res = await fetch(url.toString(), { cache: 'no-store' })
   if (!res.ok) return []
   const data = (await res.json()) as JobsSearchResponse
   return Array.isArray(data.jobs) ? data.jobs : []
+}
+
+async function fetchJobsForQueries(req: NextRequest, queries: string[], preferences: CareerPreferences, relaxLocation = false): Promise<MatchableJob[]> {
+  const allJobs: MatchableJob[] = []
+  const batchSize = 6
+  for (let i = 0; i < queries.length; i += batchSize) {
+    const batch = queries.slice(i, i + batchSize)
+    const results = await Promise.all(batch.map(query => fetchLiveRecruitingJobs(req, query, preferences, relaxLocation)))
+    allJobs.push(...results.flat())
+  }
+  return allJobs
 }
 
 export async function POST(req: NextRequest) {
@@ -117,10 +135,33 @@ export async function POST(req: NextRequest) {
 
   const profile = parseRecruitingResumeProfile(incoming.resumeText)
   const preferences = normalizePreferences(incoming.preferences)
-  const query = buildJobSearchQuery(profile, preferences)
-  const jobs = await fetchLiveRecruitingJobs(req, query, preferences)
-  const matches = rankJobMatches(profile, preferences, jobs, 5)
+
+  let rescueTierUsed: 0 | 1 | 2 = 0
+  let queries = buildCareerMatchQueries(profile, preferences, 0)
+  let rawJobs = await fetchJobsForQueries(req, queries, preferences, false)
+  let dedupedJobs = dedupeMatchableJobs(rawJobs)
+
+  if (dedupedJobs.length < 15) {
+    rescueTierUsed = 1
+    const tierOneQueries = buildCareerMatchQueries(profile, preferences, 1).filter(query => !queries.includes(query))
+    rawJobs = [...rawJobs, ...(await fetchJobsForQueries(req, tierOneQueries, preferences, preferences.workMode === 'remote'))]
+    queries = [...queries, ...tierOneQueries]
+    dedupedJobs = dedupeMatchableJobs(rawJobs)
+  }
+
+  if (dedupedJobs.length < 30) {
+    rescueTierUsed = 2
+    const tierTwoQueries = buildCareerMatchQueries(profile, preferences, 2).filter(query => !queries.includes(query))
+    rawJobs = [...rawJobs, ...(await fetchJobsForQueries(req, tierTwoQueries, preferences, true))]
+    queries = [...queries, ...tierTwoQueries]
+    dedupedJobs = dedupeMatchableJobs(rawJobs)
+  }
+
+  const rankedMatches = rankJobMatches(profile, preferences, dedupedJobs, 25)
+  const visibleMatches = rankedMatches.slice(0, 10)
+  const matchGroups = groupJobMatches(rankedMatches, profile)
   const adjacentRoles = preferences.openToAdjacentRoles === false ? [] : suggestAdjacentRoles(profile, preferences, 6)
+  const roleUniverse = buildRoleUniverse(profile, preferences, rankedMatches, queries)
 
   const { rawText: _rawText, ...safeProfile } = profile
 
@@ -128,11 +169,22 @@ export async function POST(req: NextRequest) {
     ok: true,
     profile: safeProfile,
     preferences,
-    matches,
+    matches: visibleMatches,
+    matchGroups,
     adjacentRoles,
-    jobCount: jobs.length,
+    roleUniverse,
+    jobCount: dedupedJobs.length,
+    debug: {
+      queriesRun: queries,
+      rawJobsFound: rawJobs.length,
+      dedupedJobs: dedupedJobs.length,
+      scoredJobs: rankedMatches.length,
+      shownJobs: rankedMatches.length,
+      rescueTierUsed,
+    },
     notes: [
       'This free report uses deterministic parsing and transparent scoring. It does not invent resume facts.',
+      'V1.1 runs multi-query fan-out and low-result rescue across recruiter, sourcer, TA, ops, intelligence, RPO, and cleared lanes.',
       'Jobs are pulled from the existing SourcingOS recruiter job search surface and original apply links.',
       'Resume text and uploaded files are processed for this request only and raw resume text is not returned in the response.',
       ...incoming.uploadNotes,
