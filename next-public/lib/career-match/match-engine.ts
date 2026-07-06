@@ -1,8 +1,11 @@
 import type {
   AdjacentRole,
+  CareerMatchRoleUniverse,
   CareerPreferences,
   FitScoreBand,
   JobMatchResult,
+  MatchGroup,
+  MatchGroupId,
   MatchScoreBreakdown,
   MatchableJob,
   RecruitingRoleFamily,
@@ -10,6 +13,49 @@ import type {
   SeniorityLevel,
 } from './types'
 import { getAdjacentFamilies, getRoleFamilyLabel, recruitingRoleTaxonomy, roleFamilyOrder } from './role-taxonomy'
+
+const ROLE_QUERY_EXPANSIONS: Record<RecruitingRoleFamily, string[]> = {
+  recruiter: [
+    'recruiter', 'talent acquisition specialist', 'corporate recruiter', 'full cycle recruiter',
+    'talent partner', 'ta partner', 'recruiting specialist', 'talent acquisition partner',
+  ],
+  sourcer: [
+    'sourcer', 'talent sourcer', 'senior talent sourcer', 'technical sourcer', 'engineering sourcer',
+    'candidate sourcer', 'recruiting researcher', 'candidate researcher', 'pipeline specialist',
+  ],
+  'technical-sourcer': [
+    'technical sourcer', 'senior technical sourcer', 'engineering sourcer', 'technical recruiter',
+    'senior technical recruiter', 'engineering recruiter', 'software recruiter', 'ai recruiter',
+  ],
+  'remote-recruiter': [
+    'remote recruiter', 'remote sourcer', 'remote technical recruiter', 'distributed recruiter',
+    'global recruiter', 'contract recruiter',
+  ],
+  'recruiting-ops': [
+    'recruiting operations', 'recruiting ops', 'talent operations', 'ta operations',
+    'recruiting enablement', 'recruiting program manager', 'ats administrator', 'recruiting systems',
+  ],
+  'healthcare-recruiter': [
+    'healthcare recruiter', 'clinical recruiter', 'nurse recruiter', 'provider recruiter',
+    'allied health recruiter', 'medical recruiter',
+  ],
+  'govcon-recruiter': [
+    'federal recruiter', 'cleared recruiter', 'govcon recruiter', 'defense recruiter',
+    'security clearance recruiter', 'cleared sourcer',
+  ],
+  'ai-recruiter': [
+    'ai recruiter', 'machine learning recruiter', 'ml recruiter', 'ai sourcer',
+    'research recruiter', 'data science recruiter',
+  ],
+  'talent-intelligence': [
+    'talent intelligence', 'talent intelligence analyst', 'talent researcher', 'market intelligence',
+    'talent insights', 'workforce intelligence', 'sourcing intelligence',
+  ],
+  'rpo-recruiter': [
+    'rpo recruiter', 'embedded recruiter', 'contract recruiter', 'staffing recruiter',
+    'agency recruiter', 'recruitment consultant', 'onsite recruiter',
+  ],
+}
 
 function textForJob(job: MatchableJob): string {
   return [job.title, job.company, job.location, job.remoteType, job.employmentType, job.salaryRange, job.description, job.category, ...(job.tags || [])]
@@ -19,7 +65,7 @@ function textForJob(job: MatchableJob): string {
 }
 
 function unique<T extends string>(items: T[]): T[] {
-  return Array.from(new Set(items.filter(Boolean)))
+  return Array.from(new Set(items.map(item => item.trim()).filter(Boolean))) as T[]
 }
 
 function scoreTerms(text: string, terms: string[], weight: number): number {
@@ -55,7 +101,6 @@ export function inferJobRoleFamily(job: MatchableJob): RecruitingRoleFamily {
   const scored = roleFamilyOrder.map(family => {
     const entry = recruitingRoleTaxonomy[family]
     let score = 0
-    // Title signals should beat broad terms like "sourcer" or "recruiter".
     score += scoreTerms(title, entry.titleSignals, 9)
     score += scoreTerms(text, entry.titleSignals, 5)
     score += scoreTerms(text, entry.skillSignals, 2)
@@ -106,7 +151,7 @@ function locationFits(job: MatchableJob, preferences: CareerPreferences): boolea
   if (!pref) return true
   const jobText = `${job.location || ''} ${job.remoteType || ''}`.toLowerCase()
   if (jobText.includes('remote')) return true
-  return jobText.includes(pref) || pref.split(/[,.\s]+/).some(part => part.length > 2 && jobText.includes(part))
+  return jobText.includes(pref) || pref.split(/[,\.\s]+/).some(part => part.length > 2 && jobText.includes(part))
 }
 
 function salaryPresent(job: MatchableJob): boolean {
@@ -251,8 +296,8 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
   if (profile.clearance.status === 'unverified-breadcrumb') cautionNotes.push(profile.clearance.note)
 
   return {
-    fitReasons: fitReasons.slice(0, 6),
-    potentialGaps: potentialGaps.slice(0, 6),
+    fitReasons: unique(fitReasons).slice(0, 6),
+    potentialGaps: unique(potentialGaps).slice(0, 6),
     resumeAngle: {
       foundInResume: unique(foundInResume).slice(0, 6),
       suggestedPositioning: unique(suggestedPositioning).slice(0, 4),
@@ -283,21 +328,93 @@ export function scoreJobMatch(profile: ResumeProfile, preferences: CareerPrefere
   }
 }
 
-export function rankJobMatches(profile: ResumeProfile, preferences: CareerPreferences, jobs: MatchableJob[], limit = 5): JobMatchResult[] {
-  const matches = jobs
+export function dedupeMatchableJobs(jobs: MatchableJob[]): MatchableJob[] {
+  const seen = new Set<string>()
+  return jobs.filter(job => {
+    const urlKey = (job.applyUrl || job.sourceUrl || '').toLowerCase().replace(/\?.*$/, '')
+    const titleKey = `${job.company}-${job.title}-${job.location}`.toLowerCase().replace(/\s+/g, ' ').trim()
+    const key = urlKey || titleKey
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+export function rankJobMatches(profile: ResumeProfile, preferences: CareerPreferences, jobs: MatchableJob[], limit = 25): JobMatchResult[] {
+  const matches = dedupeMatchableJobs(jobs)
     .map(job => scoreJobMatch(profile, preferences, job))
     .filter((match): match is JobMatchResult => Boolean(match))
     .sort((a, b) => b.score - a.score)
 
-  const seen = new Set<string>()
-  const deduped = matches.filter(match => {
-    const key = `${match.job.company}-${match.job.title}-${match.job.location}`.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  return matches.slice(0, limit)
+}
 
-  return deduped.slice(0, limit)
+function queryFamilies(profile: ResumeProfile, preferences: CareerPreferences, rescueTier: 0 | 1 | 2): RecruitingRoleFamily[] {
+  const desired = preferences.desiredRoleType && preferences.desiredRoleType !== 'any' ? preferences.desiredRoleType : null
+  const base = unique<RecruitingRoleFamily>([
+    ...(desired ? [desired] : []),
+    profile.primaryFamily,
+    ...profile.roleFamilies,
+  ])
+
+  const tierOne = unique<RecruitingRoleFamily>([
+    ...base,
+    ...base.flatMap(getAdjacentFamilies),
+    'sourcer',
+    'technical-sourcer',
+    'recruiter',
+    'talent-intelligence',
+    'recruiting-ops',
+  ])
+
+  const tierTwo = unique<RecruitingRoleFamily>([
+    ...tierOne,
+    'remote-recruiter',
+    'rpo-recruiter',
+    'govcon-recruiter',
+    'healthcare-recruiter',
+    'ai-recruiter',
+  ])
+
+  if (rescueTier === 0) return base
+  if (rescueTier === 1) return tierOne
+  return tierTwo
+}
+
+export function buildCareerMatchQueries(profile: ResumeProfile, preferences: CareerPreferences, rescueTier: 0 | 1 | 2 = 0): string[] {
+  const families = queryFamilies(profile, preferences, rescueTier)
+  const querySet: string[] = []
+
+  for (const family of families) {
+    const entry = recruitingRoleTaxonomy[family]
+    querySet.push(...entry.searchTerms)
+    querySet.push(...ROLE_QUERY_EXPANSIONS[family])
+  }
+
+  if (profile.seniority === 'senior-ic' || profile.seniority === 'lead' || profile.seniority === 'manager') {
+    querySet.push('senior recruiter', 'senior sourcer', 'lead sourcer', 'sourcing manager')
+  }
+
+  if (profile.industries.includes('federal') || profile.clearance.status === 'unverified-breadcrumb' || preferences.clearedFederalInterest) {
+    querySet.push('federal recruiter', 'cleared recruiter', 'cleared sourcer', 'govcon recruiter')
+  }
+  if (profile.industries.includes('healthcare') || /healthcare|clinical|nurse/i.test(preferences.industryFocus || '')) {
+    querySet.push('healthcare recruiter', 'clinical recruiter', 'nurse recruiter')
+  }
+  if (profile.industries.includes('data') || /ai|machine learning|ml|data/i.test(preferences.industryFocus || '')) {
+    querySet.push('ai recruiter', 'machine learning recruiter', 'data recruiter', 'ai sourcer')
+  }
+  if (/rpo|agency|staffing|contract/i.test(`${preferences.industryFocus || ''} ${profile.specialties.join(' ')}`)) {
+    querySet.push('rpo recruiter', 'contract recruiter', 'staffing recruiter', 'agency recruiter')
+  }
+
+  // Tool-qualified broad queries help the existing jobs endpoint find descriptions that use tool language.
+  for (const tool of profile.tools.slice(0, 4)) {
+    querySet.push(`${tool} recruiter`, `${tool} sourcer`)
+  }
+
+  // Keep the query count bounded so the API stays fast and cheap.
+  return unique(querySet.map(query => query.toLowerCase())).slice(0, rescueTier === 0 ? 10 : rescueTier === 1 ? 22 : 38)
 }
 
 export function suggestAdjacentRoles(profile: ResumeProfile, preferences: CareerPreferences, limit = 6): AdjacentRole[] {
@@ -310,6 +427,8 @@ export function suggestAdjacentRoles(profile: ResumeProfile, preferences: Career
     ...profile.roleFamilies.flatMap(getAdjacentFamilies),
     'talent-intelligence',
     'recruiting-ops',
+    'rpo-recruiter',
+    'remote-recruiter',
   ])
     .filter(family => family !== primary)
     .filter(family => !profile.roleFamilies.includes(family) || family === 'talent-intelligence' || family === 'recruiting-ops')
@@ -338,10 +457,82 @@ export function suggestAdjacentRoles(profile: ResumeProfile, preferences: Career
 }
 
 export function buildJobSearchQuery(profile: ResumeProfile, preferences: CareerPreferences): string {
-  const family = preferences.desiredRoleType && preferences.desiredRoleType !== 'any'
-    ? preferences.desiredRoleType
-    : profile.primaryFamily
-  const terms = recruitingRoleTaxonomy[family].searchTerms.slice(0, 3)
-  const specialty = profile.industries.includes('federal') ? 'federal' : profile.industries.includes('healthcare') ? 'healthcare' : ''
-  return unique([...terms, specialty ? `${specialty} recruiter` : '']).join(' ')
+  return buildCareerMatchQueries(profile, preferences, 0).slice(0, 4).join(' ')
+}
+
+function groupForMatch(match: JobMatchResult, profile: ResumeProfile): MatchGroupId {
+  if (match.score >= 68 && (match.jobFamily === profile.primaryFamily || profile.roleFamilies.includes(match.jobFamily))) return 'best-fits'
+  if (match.jobFamily === 'sourcer' || match.jobFamily === 'technical-sourcer' || match.jobFamily === 'ai-recruiter') return 'sourcing'
+  if (match.jobFamily === 'recruiter' || match.jobFamily === 'remote-recruiter' || /talent acquisition|ta partner|full.?cycle/i.test(match.job.title)) return 'recruiting'
+  if (match.jobFamily === 'recruiting-ops' || match.jobFamily === 'talent-intelligence') return 'ops-intelligence'
+  if (match.jobFamily === 'govcon-recruiter') return 'federal-cleared'
+  if (match.jobFamily === 'rpo-recruiter' || /contract|rpo|agency|staffing|embedded/i.test(textForJob(match.job))) return 'rpo-contract-agency'
+  return 'domain-shift-stretch'
+}
+
+const GROUP_META: Record<MatchGroupId, { label: string; description: string }> = {
+  'best-fits': {
+    label: 'Best Fits',
+    description: 'Direct title, seniority, and signal matches for your current recruiting lane.',
+  },
+  sourcing: {
+    label: 'Sourcing Roles',
+    description: 'Talent sourcer, technical sourcer, engineering sourcer, AI sourcer, and sourcing-heavy roles.',
+  },
+  recruiting: {
+    label: 'Recruiting Roles',
+    description: 'Full-cycle recruiter, TA partner, corporate recruiter, and remote recruiter roles you may fit.',
+  },
+  'ops-intelligence': {
+    label: 'Ops & Intelligence',
+    description: 'Recruiting operations, talent intelligence, market mapping, enablement, and systems roles.',
+  },
+  'federal-cleared': {
+    label: 'Federal / Cleared',
+    description: 'GovCon, defense, federal, public sector, and cleared recruiting lanes. Clearance remains unverified.',
+  },
+  'rpo-contract-agency': {
+    label: 'RPO / Contract / Agency',
+    description: 'Embedded, RPO, staffing, agency, contract, and fractional recruiting roles.',
+  },
+  'domain-shift-stretch': {
+    label: 'Domain Shift / Stretch',
+    description: 'Roles with transferable recruiting signals but weaker direct alignment or higher stretch.',
+  },
+}
+
+export function groupJobMatches(matches: JobMatchResult[], profile: ResumeProfile): MatchGroup[] {
+  const grouped = new Map<MatchGroupId, JobMatchResult[]>()
+  for (const match of matches) {
+    const group = groupForMatch(match, profile)
+    grouped.set(group, [...(grouped.get(group) || []), match])
+  }
+  const order: MatchGroupId[] = ['best-fits', 'sourcing', 'recruiting', 'ops-intelligence', 'federal-cleared', 'rpo-contract-agency', 'domain-shift-stretch']
+  return order
+    .map(id => ({ id, ...GROUP_META[id], matches: grouped.get(id) || [] }))
+    .filter(group => group.matches.length > 0)
+}
+
+export function buildRoleUniverse(profile: ResumeProfile, preferences: CareerPreferences, matches: JobMatchResult[], queries: string[]): CareerMatchRoleUniverse {
+  const familyCounts = new Map<RecruitingRoleFamily, number>()
+  for (const match of matches) familyCounts.set(match.jobFamily, (familyCounts.get(match.jobFamily) || 0) + 1)
+  const viable = Array.from(familyCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([family]) => getRoleFamilyLabel(family))
+
+  const adjacentLabels = suggestAdjacentRoles(profile, preferences, 6).map(role => role.label)
+  const strongestSignals = unique([
+    ...profile.specialties.slice(0, 4),
+    ...profile.tools.slice(0, 6),
+    ...profile.industries.slice(0, 4),
+    profile.clearance.status === 'unverified-breadcrumb' ? 'Federal / clearance breadcrumbs' : '',
+  ])
+
+  return {
+    strongestLane: getRoleFamilyLabel(profile.primaryFamily),
+    alsoViable: unique([...viable.filter(label => label !== getRoleFamilyLabel(profile.primaryFamily)), ...adjacentLabels]).slice(0, 6),
+    stretchLanes: unique(['Sourcing Manager', 'TA Program Manager', 'Recruiting Enablement', 'Talent Intelligence'].filter(label => !viable.includes(label))).slice(0, 4),
+    strongestSignals: strongestSignals.slice(0, 10),
+    queryLanes: queries.slice(0, 18),
+  }
 }
