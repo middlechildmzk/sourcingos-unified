@@ -13,8 +13,8 @@ export function TrustBlock() {
           <p className="muted">The tool opens original job postings. It does not submit applications or contact employers for the user.</p>
         </div>
         <div>
-          <h3>Resume text stays out of the response</h3>
-          <p className="muted">The API uses resume text to parse a profile, but the raw resume text is not returned to the browser.</p>
+          <h3>Upload text is not shown back</h3>
+          <p className="muted">PDF, DOCX, TXT, or pasted resume text is processed for the report, but raw resume text is not returned in the response.</p>
         </div>
         <div>
           <h3>Clearance is never verified by AI</h3>

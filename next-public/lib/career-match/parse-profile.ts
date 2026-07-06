@@ -31,6 +31,9 @@ const CLEARANCE_TERMS = [
   'security clearance', 'cleared', 'clearancejobs', 'dod', 'govcon', 'federal cleared',
 ]
 
+const SECTION_HEADER_RE = /^(?:core\s+)?(?:tools?|tech(?:nology)?|tech\s+stack|tools\s*&\s*tech|skills?|systems?|platforms?|education|certifications?|certs?|summary|profile|professional\s+summary|experience|professional\s+experience|employment|projects?|portfolio|contact|links?)\b/i
+const BULLET_RE = /^[-•*\u2022\s]+/
+
 function normalizeText(text: string): string {
   return String(text || '')
     .replace(/\r/g, '\n')
@@ -59,7 +62,7 @@ function findTerms(text: string, terms: string[]): string[] {
 
 function cleanTitleCandidate(line: string): string {
   let value = line.trim()
-  value = value.replace(/^[-•*\u2022\s]+/, '')
+  value = value.replace(BULLET_RE, '')
   value = value.replace(/\s+/g, ' ')
   value = value.replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}\b.*$/i, '')
   value = value.replace(/\b\d{4}\s*(?:-|–|—|to)\s*(?:present|current|now|\d{4}).*$/i, '')
@@ -69,19 +72,55 @@ function cleanTitleCandidate(line: string): string {
   return value.trim().slice(0, 90)
 }
 
+function isSectionOrListLine(clean: string): boolean {
+  const normalized = clean.trim()
+  if (!normalized) return true
+  if (SECTION_HEADER_RE.test(normalized)) return true
+  if (/^(email|phone|linkedin|github|portfolio|website)\s*:/i.test(normalized)) return true
+  if (/^(built|created|founded|managed|supported|applied|generated|sourced|screened|partnered|led|trained)\b/i.test(normalized)) return true
+  if ((normalized.match(/,/g) || []).length >= 4) return true
+  if ((normalized.match(/\|/g) || []).length >= 4) return true
+  if (/\b(?:linkedin recruiter|hireez|seekout|greenhouse|lever|icims|github|gem|bullhorn|workday)\b/i.test(normalized) && !/\b(?:recruiter|sourcer|talent acquisition|recruiting|sourcing manager)\b/i.test(normalized.replace(/linkedin recruiter/ig, ''))) return true
+  return false
+}
+
+function titleConfidence(line: string): number {
+  const clean = line.trim()
+  const text = clean.toLowerCase()
+  let score = 0
+  for (const family of roleFamilyOrder) {
+    const entry = recruitingRoleTaxonomy[family]
+    for (const term of entry.titleSignals) {
+      const normalized = term.toLowerCase()
+      if (text === normalized) score += 25
+      else if (text.includes(normalized)) score += normalized.includes(' ') ? 12 : 5
+    }
+  }
+  if (/\b(senior|sr\.?|lead|principal|staff|manager|director|head of)\b/i.test(clean)) score += 4
+  if (/\b(?:20\d{2}|19\d{2}|present|current|now)\b/i.test(clean)) score += 3
+  if (/\b(?:tools?|skills?|education|certifications?|built|applied|generated|sourced)\b/i.test(clean)) score -= 20
+  if (clean.length > 80) score -= 8
+  if ((clean.match(/,/g) || []).length >= 2) score -= 8
+  return score
+}
+
 function looksLikeTitleLine(line: string): boolean {
   const clean = line.trim()
   if (!clean || clean.length < 5 || clean.length > 140) return false
-  if (/^(experience|professional experience|employment|skills|tools|education|certifications|summary|profile)$/i.test(clean)) return false
-  if (/^(email|phone|linkedin|github|portfolio|tools|skills)\s*:/i.test(clean)) return false
+  if (isSectionOrListLine(clean)) return false
   if (/https?:\/\//i.test(clean)) return false
   const titleTerms = roleFamilyOrder.flatMap(family => recruitingRoleTaxonomy[family].titleSignals)
-  return includesAny(clean, titleTerms)
+  return includesAny(clean, titleTerms) && titleConfidence(clean) > 0
 }
 
 function extractTitles(text: string): string[] {
   const lines = normalizeText(text).split('\n').map(line => line.trim()).filter(Boolean)
-  const candidates = lines.filter(looksLikeTitleLine).map(cleanTitleCandidate).filter(Boolean)
+  const candidates = lines
+    .filter(looksLikeTitleLine)
+    .map(line => ({ title: cleanTitleCandidate(line), score: titleConfidence(line) }))
+    .filter(row => row.title && !isSectionOrListLine(row.title))
+    .sort((a, b) => b.score - a.score)
+    .map(row => row.title)
   return unique(candidates).slice(0, 8)
 }
 
@@ -99,11 +138,16 @@ function extractYears(text: string): number | null {
 }
 
 function inferSeniority(titles: string[], years: number | null, text: string): SeniorityLevel {
-  const combined = `${titles.join(' ')} ${text}`.toLowerCase()
+  const titleText = titles.join(' ').toLowerCase()
+  const combined = `${titleText} ${text}`.toLowerCase()
+  if (/\b(vp|vice president|head of talent|chief people|director)\b/.test(titleText)) return 'director-plus'
+  if (/\b(manager|people manager)\b/.test(titleText)) return 'manager'
+  if (/\b(lead|principal|staff)\b/.test(titleText)) return 'lead'
+  if (/\b(senior|sr\.?|ii|iii)\b/.test(titleText)) return 'senior-ic'
   if (/\b(vp|vice president|head of talent|chief people|director)\b/.test(combined)) return 'director-plus'
-  if (/\b(manager|leadership|managed a team|people manager)\b/.test(combined)) return 'manager'
+  if (/\b(managed a team|people manager)\b/.test(combined)) return 'manager'
   if (/\b(lead|principal|staff)\b/.test(combined)) return 'lead'
-  if (/\b(senior|sr\.?|ii|iii)\b/.test(combined)) return 'senior-ic'
+  if (/\b(senior|sr\.?)\b/.test(combined)) return 'senior-ic'
   if (years !== null) {
     if (years >= 12) return 'director-plus'
     if (years >= 8) return 'lead'
