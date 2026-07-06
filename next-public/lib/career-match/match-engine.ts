@@ -57,11 +57,38 @@ const ROLE_QUERY_EXPANSIONS: Record<RecruitingRoleFamily, string[]> = {
   ],
 }
 
+const STRONG_RECRUITING_TITLE_TERMS = [
+  'technical sourcer', 'technical recruiter', 'engineering sourcer', 'engineering recruiter', 'talent sourcer',
+  'sourcer', 'sourcing partner', 'talent sourcing', 'recruiter', 'talent acquisition', 'ta partner',
+  'talent partner', 'recruiting manager', 'technical recruiting manager', 'talent intelligence',
+  'recruiting operations', 'recruiting ops', 'ai recruiter', 'machine learning recruiter', 'research recruiter',
+]
+
+const TECHNICAL_TITLE_TERMS = [
+  'technical sourcer', 'technical recruiter', 'engineering sourcer', 'engineering recruiter', 'software recruiter',
+  'tech recruiter', 'ai recruiter', 'machine learning recruiter', 'research recruiter', 'sourcer, tech',
+]
+
+const WEAK_OR_ADJACENT_TITLE_TERMS = [
+  'design recruiter', 'product recruiter', 'business recruiter', 'gtm recruiter', 'go to market recruiter',
+  'people operations', 'people ops', 'early talent', 'university recruiter', 'campus recruiter',
+  'associate recruiter', 'recruiting coordinator', 'talent coordinator', 'executive recruiter',
+]
+
+const INTERNATIONAL_LOCATION_TERMS = [
+  'united kingdom', 'serbia', 'belgrade', 'singapore', 'tokyo', 'japan', 'dublin', 'ireland', 'colombia',
+  'canada', 'vancouver', 'london', 'emea', 'apac', 'europe', 'india', 'mexico', 'brazil', 'australia',
+]
+
 function textForJob(job: MatchableJob): string {
   return [job.title, job.company, job.location, job.remoteType, job.employmentType, job.salaryRange, job.description, job.category, ...(job.tags || [])]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
+}
+
+function titleText(job: MatchableJob): string {
+  return String(job.title || '').toLowerCase()
 }
 
 function unique<T extends string>(items: T[]): T[] {
@@ -72,10 +99,119 @@ function scoreTerms(text: string, terms: string[], weight: number): number {
   return terms.reduce((score, term) => score + (text.includes(term.toLowerCase()) ? weight : 0), 0)
 }
 
+function normalizeTitle(title: string): string {
+  return String(title || '')
+    .toLowerCase()
+    .replace(/\b\(?(?:fixed term|contract|maternity cover|short term|temporary|temp|remote|amer|americas|us|usa|canada|emea|apac)\)?\b/g, ' ')
+    .replace(/[\[\]()/:,|–—-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizedCompanyTitleKey(job: MatchableJob): string {
+  return `${String(job.company || '').toLowerCase().trim()}::${normalizeTitle(job.title)}`
+}
+
+function isRemoteJob(job: MatchableJob): boolean {
+  return /\bremote\b/i.test(`${job.remoteType || ''} ${job.location || ''} ${job.description || ''}`)
+}
+
+function isOnsiteVague(job: MatchableJob): boolean {
+  const text = `${job.remoteType || ''} ${job.location || ''}`.toLowerCase()
+  return text.includes('onsite/varies') || text.includes('onsite') || text.includes('on-site') || text.includes('in-office')
+}
+
+function isInternationalForUsRemote(job: MatchableJob): boolean {
+  const text = `${job.location || ''} ${job.remoteType || ''}`.toLowerCase()
+  if (text.includes('united states') || text.includes(' us') || text.includes('usa') || text.includes('remote - us')) return false
+  return INTERNATIONAL_LOCATION_TERMS.some(term => text.includes(term))
+}
+
+function titleHasAny(job: MatchableJob, terms: string[]): boolean {
+  const title = titleText(job)
+  return terms.some(term => title.includes(term))
+}
+
+function hasStrongRecruitingTitle(job: MatchableJob): boolean {
+  return titleHasAny(job, STRONG_RECRUITING_TITLE_TERMS)
+}
+
+function hasTechnicalTitle(job: MatchableJob): boolean {
+  return titleHasAny(job, TECHNICAL_TITLE_TERMS)
+}
+
+function hasWeakOrAdjacentTitle(job: MatchableJob): boolean {
+  return titleHasAny(job, WEAK_OR_ADJACENT_TITLE_TERMS)
+}
+
+function hasTitleAlignment(profile: ResumeProfile, job: MatchableJob, jobFamily: RecruitingRoleFamily): boolean {
+  if (profile.primaryFamily === 'technical-sourcer' || profile.roleFamilies.includes('technical-sourcer')) {
+    return hasTechnicalTitle(job) || titleHasAny(job, ['sourcer', 'sourcing'])
+  }
+  const familyTerms = profile.roleFamilies.flatMap(family => recruitingRoleTaxonomy[family].titleSignals)
+  return titleHasAny(job, unique([...familyTerms, ...recruitingRoleTaxonomy[jobFamily].titleSignals]))
+}
+
+function isWeakForProfile(profile: ResumeProfile, job: MatchableJob, jobFamily: RecruitingRoleFamily): boolean {
+  if (!hasWeakOrAdjacentTitle(job)) return false
+  if (profile.primaryFamily === 'recruiting-ops' && jobFamily === 'recruiting-ops') return false
+  if (profile.primaryFamily === 'recruiter' && /full.?cycle|corporate recruiter|talent acquisition partner/i.test(job.title)) return false
+  return true
+}
+
+function preferenceQuality(profile: ResumeProfile, preferences: CareerPreferences, job: MatchableJob, jobFamily: RecruitingRoleFamily) {
+  const remotePreferred = preferences.workMode === 'remote'
+  const remote = isRemoteJob(job)
+  const onsiteOrVague = isOnsiteVague(job)
+  const internationalForRemote = remotePreferred && !remote && isInternationalForUsRemote(job)
+  const titleAligned = hasTitleAlignment(profile, job, jobFamily)
+  const technicalAligned = hasTechnicalTitle(job)
+  const weakForProfile = isWeakForProfile(profile, job, jobFamily)
+  const strongRecruitingTitle = hasStrongRecruitingTitle(job)
+  const entryLevelTitle = /\b(associate|coordinator|junior|entry|intern|early talent|university|campus)\b/i.test(job.title)
+  const seniorProfile = ['senior-ic', 'lead', 'manager', 'director-plus'].includes(profile.seniority)
+  const seniorityMismatch = seniorProfile && entryLevelTitle
+  const managerTitle = /\b(manager|director|head of|vp|vice president)\b/i.test(job.title)
+  const tooManagerial = managerTitle && !['manager', 'director-plus'].includes(profile.seniority)
+  const bestFitEligible = titleAligned && strongRecruitingTitle && !weakForProfile && !seniorityMismatch && !internationalForRemote && (!remotePreferred || remote)
+
+  const badges = unique([
+    remote ? 'Remote' : '',
+    remotePreferred && !remote ? 'Remote mismatch' : '',
+    titleAligned ? 'Title aligned' : 'Adjacent title',
+    technicalAligned ? 'Technical TA' : '',
+    weakForProfile ? 'Adjacent lane' : '',
+    seniorityMismatch ? 'Seniority mismatch' : '',
+    job.alternateLocations && job.alternateLocations.length > 1 ? `${job.alternateLocations.length} locations` : '',
+  ])
+
+  return {
+    remote,
+    onsiteOrVague,
+    internationalForRemote,
+    titleAligned,
+    technicalAligned,
+    weakForProfile,
+    strongRecruitingTitle,
+    seniorityMismatch,
+    tooManagerial,
+    bestFitEligible,
+    badges,
+  }
+}
+
 export function inferJobRoleFamily(job: MatchableJob): RecruitingRoleFamily {
   const text = textForJob(job)
-  const title = (job.title || '').toLowerCase()
+  const title = titleText(job)
   const category = (job.category || '').toLowerCase()
+
+  if (/people operations|people ops|recruiting operations|recruiting ops|talent operations|ats administrator|recruiting systems/.test(title)) return 'recruiting-ops'
+  if (/talent intelligence|talent insights|market intelligence|workforce intelligence|talent researcher/.test(title)) return 'talent-intelligence'
+  if (/sourcer|sourcing/.test(title)) return title.includes('technical') || title.includes('engineering') || title.includes('ai') ? 'technical-sourcer' : 'sourcer'
+  if (/technical recruiter|engineering recruiter|software recruiter|ai recruiter|machine learning recruiter|research recruiter/.test(title)) return 'technical-sourcer'
+  if (/healthcare|clinical|nurse|provider|physician/.test(title)) return 'healthcare-recruiter'
+  if (/federal|cleared|govcon|defense|clearance/.test(title)) return 'govcon-recruiter'
+  if (/rpo|embedded|staffing|agency|contract recruiter/.test(title)) return 'rpo-recruiter'
 
   const categoryAliases: Record<string, RecruitingRoleFamily> = {
     sourcer: 'sourcer',
@@ -101,8 +237,8 @@ export function inferJobRoleFamily(job: MatchableJob): RecruitingRoleFamily {
   const scored = roleFamilyOrder.map(family => {
     const entry = recruitingRoleTaxonomy[family]
     let score = 0
-    score += scoreTerms(title, entry.titleSignals, 9)
-    score += scoreTerms(text, entry.titleSignals, 5)
+    score += scoreTerms(title, entry.titleSignals, 10)
+    score += scoreTerms(text, entry.titleSignals, 4)
     score += scoreTerms(text, entry.skillSignals, 2)
     score += scoreTerms(text, entry.toolSignals, 1)
     score += scoreTerms(text, entry.industrySignals, 1)
@@ -132,15 +268,15 @@ function inferJobSeniority(job: MatchableJob): SeniorityLevel {
   if (/\b(manager|leadership|people manager|recruiting manager)\b/.test(text)) return 'manager'
   if (/\b(lead|principal|staff)\b/.test(text)) return 'lead'
   if (/\b(senior|sr\.?|ii|iii)\b/.test(text)) return 'senior-ic'
-  if (/\b(coordinator|associate|junior|entry)\b/.test(text)) return 'entry'
+  if (/\b(coordinator|associate|junior|entry|intern|early talent|university|campus)\b/.test(text)) return 'entry'
   return 'mid'
 }
 
 function workModeFits(job: MatchableJob, preferences: CareerPreferences): boolean {
   const preferred = preferences.workMode || 'any'
   if (preferred === 'any') return true
+  if (preferred === 'remote') return isRemoteJob(job)
   const text = `${job.remoteType || ''} ${job.location || ''} ${job.description || ''}`.toLowerCase()
-  if (preferred === 'remote') return text.includes('remote')
   if (preferred === 'hybrid') return text.includes('hybrid') || text.includes('remote')
   if (preferred === 'onsite') return !text.includes('remote') || text.includes('onsite') || text.includes('on-site')
   return true
@@ -159,10 +295,10 @@ function salaryPresent(job: MatchableJob): boolean {
   return Boolean(salary && !salary.includes('not listed') && !salary.includes('not provided'))
 }
 
-function bandForScore(score: number, familyAligned: boolean, adjacentAligned: boolean): FitScoreBand {
-  if (score >= 68 && familyAligned) return 'Strong Fit'
-  if (score >= 50) return 'Good Fit'
-  if (score >= 30 || adjacentAligned) return 'Adjacent Fit'
+function bandForScore(score: number, familyAligned: boolean, adjacentAligned: boolean, quality: ReturnType<typeof preferenceQuality>): FitScoreBand {
+  if (score >= 72 && familyAligned && quality.bestFitEligible) return 'Strong Fit'
+  if (score >= 58 && !quality.weakForProfile && !quality.seniorityMismatch && !quality.internationalForRemote) return 'Good Fit'
+  if (score >= 34 || adjacentAligned || quality.titleAligned) return 'Adjacent Fit'
   return 'Stretch'
 }
 
@@ -177,6 +313,7 @@ function buildBreakdown(profile: ResumeProfile, preferences: CareerPreferences, 
   const jobEntry = recruitingRoleTaxonomy[jobFamily]
   const exactFamily = profile.roleFamilies.includes(jobFamily) || preferences.desiredRoleType === jobFamily
   const adjacentFamily = profile.roleFamilies.some(family => getAdjacentFamilies(family).includes(jobFamily))
+  const quality = preferenceQuality(profile, preferences, job, jobFamily)
 
   const matchedTools = profile.tools.filter(tool => jobText.includes(tool.toLowerCase()))
   const matchedIndustries = profile.industries.filter(industry => jobText.includes(industry.toLowerCase()))
@@ -188,13 +325,13 @@ function buildBreakdown(profile: ResumeProfile, preferences: CareerPreferences, 
   const jobSeniority = inferJobSeniority(job)
   const userRank = seniorityRank(profile.seniority)
   const jobRank = seniorityRank(jobSeniority)
-  const seniority = userRank === 0 ? 2 : userRank >= jobRank ? 8 : Math.max(0, 5 - (jobRank - userRank) * 2)
+  const seniority = quality.seniorityMismatch ? -8 : userRank === 0 ? 2 : userRank >= jobRank ? 8 : Math.max(0, 5 - (jobRank - userRank) * 2)
 
-  const roleFamily = exactFamily ? 32 : adjacentFamily ? 18 : signalOverlap.length ? Math.min(14, signalOverlap.length * 2) : 0
-  const tools = Math.min(18, matchedTools.length * 6)
-  const industry = Math.min(13, matchedIndustries.length * 5)
-  const specialty = Math.min(14, matchedSpecialties.length * 5 + signalOverlap.length * 2)
-  const preference = (workModeFits(job, preferences) ? 4 : 0) + (locationFits(job, preferences) ? 3 : 0)
+  const roleFamily = exactFamily && quality.titleAligned ? 36 : exactFamily ? 26 : adjacentFamily ? 16 : signalOverlap.length ? Math.min(10, signalOverlap.length * 2) : 0
+  const tools = quality.titleAligned ? Math.min(14, matchedTools.length * 5) : Math.min(6, matchedTools.length * 2)
+  const industry = Math.min(7, matchedIndustries.length * 2)
+  const specialty = Math.min(16, matchedSpecialties.length * 4 + signalOverlap.length * 2 + (quality.titleAligned ? 4 : 0))
+  const preference = (workModeFits(job, preferences) ? 8 : preferences.workMode === 'remote' ? -10 : 0) + (locationFits(job, preferences) ? 4 : -3)
   const salary = salaryPresent(job) ? 3 : 0
   const clearance = jobFamily === 'govcon-recruiter'
     ? profile.clearance.status === 'unverified-breadcrumb' || profile.industries.includes('federal') ? 8 : -10
@@ -205,6 +342,21 @@ function buildBreakdown(profile: ResumeProfile, preferences: CareerPreferences, 
 
 function totalScore(breakdown: MatchScoreBreakdown): number {
   return Math.max(0, Math.min(100, Math.round(Object.values(breakdown).reduce((sum, value) => sum + value, 0))))
+}
+
+function qualityAdjustment(profile: ResumeProfile, preferences: CareerPreferences, job: MatchableJob, jobFamily: RecruitingRoleFamily): number {
+  const quality = preferenceQuality(profile, preferences, job, jobFamily)
+  let adjustment = 0
+  if (quality.titleAligned) adjustment += 8
+  if (quality.technicalAligned && (profile.primaryFamily === 'technical-sourcer' || profile.roleFamilies.includes('technical-sourcer'))) adjustment += 8
+  if (quality.remote && preferences.workMode === 'remote') adjustment += 8
+  if (preferences.workMode === 'remote' && !quality.remote) adjustment -= quality.onsiteOrVague ? 12 : 8
+  if (quality.internationalForRemote) adjustment -= 10
+  if (quality.weakForProfile) adjustment -= 14
+  if (quality.seniorityMismatch) adjustment -= 18
+  if (quality.tooManagerial) adjustment -= 6
+  if (!quality.strongRecruitingTitle) adjustment -= 12
+  return adjustment
 }
 
 function topMatchedTools(profile: ResumeProfile, job: MatchableJob): string[] {
@@ -231,6 +383,7 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
   const tools = topMatchedTools(profile, job)
   const industries = topMatchedIndustries(profile, job)
   const gaps = missingSignals(profile, job, jobFamily)
+  const quality = preferenceQuality(profile, preferences, job, jobFamily)
   const fitReasons: string[] = []
   const potentialGaps: string[] = []
   const foundInResume: string[] = []
@@ -241,6 +394,9 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
   fitReasons.push(`Your parsed profile maps closest to ${getRoleFamilyLabel(profile.primaryFamily)}, and this role maps to ${getRoleFamilyLabel(jobFamily)}.`)
   contributingSignals.push(`Profile family: ${getRoleFamilyLabel(profile.primaryFamily)}`)
   contributingSignals.push(`Job family: ${getRoleFamilyLabel(jobFamily)}`)
+
+  if (quality.titleAligned) fitReasons.push('The job title is aligned with your strongest recruiting lane.')
+  if (quality.remote && preferences.workMode === 'remote') fitReasons.push('The role appears remote-compatible, which matches your remote preference.')
 
   if (profile.yearsExperience !== null) {
     fitReasons.push(`Your resume indicates ${profile.yearsExperienceLabel.toLowerCase()}, which supports the ${profile.seniority} seniority read.`)
@@ -259,12 +415,16 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
     contributingSignals.push(`Matched industries: ${industries.join(', ')}`)
   }
 
-  if (workModeFits(job, preferences) && preferences.workMode && preferences.workMode !== 'any') {
-    fitReasons.push(`The work setup appears compatible with your ${preferences.workMode} preference.`)
-  }
-
   if (gaps.length) {
     potentialGaps.push(`The job includes signals not clearly found in the parsed resume: ${gaps.join(', ')}.`)
+  }
+
+  if (preferences.workMode === 'remote' && !quality.remote) {
+    potentialGaps.push('You selected remote, but this posting does not clearly present as remote. It is kept as adjacent/stretch unless other signals are strong.')
+  }
+
+  if (quality.weakForProfile) {
+    potentialGaps.push('The title is adjacent or less direct for your parsed technical sourcing lane, so it should not be treated as a first-priority exact match.')
   }
 
   if (jobFamily === 'govcon-recruiter' && profile.clearance.status !== 'unverified-breadcrumb') {
@@ -272,8 +432,8 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
     cautionNotes.push('Do not imply active clearance. Treat clearance language as a gap unless the candidate can verify it outside the tool.')
   }
 
-  if (breakdown.seniority < 5) {
-    potentialGaps.push('Seniority alignment may need review. The job may signal a higher level than the parsed resume supports.')
+  if (quality.seniorityMismatch || breakdown.seniority < 5) {
+    potentialGaps.push('Seniority alignment may need review. The job may signal a level below or above the parsed resume lane.')
   }
 
   if (!salaryPresent(job) && (preferences.salaryMin || preferences.salaryMax)) {
@@ -290,7 +450,7 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
   const familyAngle = recruitingRoleTaxonomy[jobFamily].resumeAngle
   suggestedPositioning.push(`If true, tailor the resume toward this lane: ${familyAngle}`)
   if (gaps.length) suggestedPositioning.push(`If you have real experience with ${gaps.slice(0, 3).join(', ')}, add it explicitly. Do not add these if they are not true.`)
-  if (score < 50) suggestedPositioning.push('Consider using this as an adjacent or stretch role rather than the main application lane.')
+  if (score < 50 || quality.weakForProfile) suggestedPositioning.push('Consider using this as an adjacent or stretch role rather than the main application lane.')
 
   cautionNotes.push('Match reasons are generated from parsed resume text and public job metadata. They are not a hiring decision or guarantee.')
   if (profile.clearance.status === 'unverified-breadcrumb') cautionNotes.push(profile.clearance.note)
@@ -311,13 +471,14 @@ export function scoreJobMatch(profile: ResumeProfile, preferences: CareerPrefere
   if (!job.title || !job.company || !job.applyUrl) return null
   const jobFamily = inferJobRoleFamily(job)
   const breakdown = buildBreakdown(profile, preferences, job, jobFamily)
-  const rawScore = totalScore(breakdown)
+  const quality = preferenceQuality(profile, preferences, job, jobFamily)
+  const rawScore = Math.max(0, Math.min(100, totalScore(breakdown) + qualityAdjustment(profile, preferences, job, jobFamily)))
   const familyAligned = profile.roleFamilies.includes(jobFamily) || preferences.desiredRoleType === jobFamily
   const adjacentAligned = profile.roleFamilies.some(family => getAdjacentFamilies(family).includes(jobFamily))
 
-  if (rawScore < 12 && !familyAligned && !adjacentAligned) return null
+  if (rawScore < 18 && !familyAligned && !adjacentAligned && !quality.titleAligned) return null
 
-  const band = capClearedBand(profile, jobFamily, bandForScore(rawScore, familyAligned, adjacentAligned))
+  const band = capClearedBand(profile, jobFamily, bandForScore(rawScore, familyAligned, adjacentAligned, quality))
   return {
     job,
     score: rawScore,
@@ -325,26 +486,58 @@ export function scoreJobMatch(profile: ResumeProfile, preferences: CareerPrefere
     jobFamily,
     scoreBreakdown: breakdown,
     explanation: buildExplanation(profile, preferences, job, jobFamily, rawScore, breakdown),
+    qualityBadges: quality.badges,
+  }
+}
+
+function mergeJobGroup(jobs: MatchableJob[]): MatchableJob {
+  const scored = jobs.map(job => {
+    let score = 0
+    if (isRemoteJob(job)) score += 30
+    if (/united states|\bus\b|usa|remote - us|within canada or united states/i.test(`${job.location} ${job.remoteType}`)) score += 12
+    if (salaryPresent(job)) score += 5
+    if (!isOnsiteVague(job)) score += 3
+    return { job, score }
+  }).sort((a, b) => b.score - a.score)
+
+  const base = { ...scored[0].job }
+  const locations = unique(jobs.map(job => job.location || '').filter(Boolean))
+  const sources = unique(jobs.map(job => job.source || '').filter(Boolean))
+  const tags = unique([...(base.tags || []), ...(locations.length > 1 ? [`${locations.length} locations`] : [])])
+  const displayLocations = locations.slice(0, 4).join(' | ')
+  return {
+    ...base,
+    location: locations.length > 4 ? `${displayLocations} | +${locations.length - 4} more` : displayLocations || base.location,
+    source: sources.length > 1 ? sources.slice(0, 3).join(' + ') : base.source,
+    tags,
+    alternateLocations: locations,
+    collapsedPostingCount: jobs.length,
   }
 }
 
 export function dedupeMatchableJobs(jobs: MatchableJob[]): MatchableJob[] {
-  const seen = new Set<string>()
-  return jobs.filter(job => {
+  const groups = new Map<string, MatchableJob[]>()
+  for (const job of jobs) {
+    const companyTitleKey = normalizedCompanyTitleKey(job)
     const urlKey = (job.applyUrl || job.sourceUrl || '').toLowerCase().replace(/\?.*$/, '')
-    const titleKey = `${job.company}-${job.title}-${job.location}`.toLowerCase().replace(/\s+/g, ' ').trim()
-    const key = urlKey || titleKey
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+    const key = companyTitleKey || urlKey
+    if (!key) continue
+    groups.set(key, [...(groups.get(key) || []), job])
+  }
+  return Array.from(groups.values()).map(mergeJobGroup)
 }
 
 export function rankJobMatches(profile: ResumeProfile, preferences: CareerPreferences, jobs: MatchableJob[], limit = 25): JobMatchResult[] {
   const matches = dedupeMatchableJobs(jobs)
     .map(job => scoreJobMatch(profile, preferences, job))
     .filter((match): match is JobMatchResult => Boolean(match))
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => {
+      const aq = preferenceQuality(profile, preferences, a.job, a.jobFamily)
+      const bq = preferenceQuality(profile, preferences, b.job, b.jobFamily)
+      if (aq.bestFitEligible !== bq.bestFitEligible) return aq.bestFitEligible ? -1 : 1
+      if (aq.remote !== bq.remote && preferences.workMode === 'remote') return aq.remote ? -1 : 1
+      return b.score - a.score
+    })
 
   return matches.slice(0, limit)
 }
@@ -408,12 +601,10 @@ export function buildCareerMatchQueries(profile: ResumeProfile, preferences: Car
     querySet.push('rpo recruiter', 'contract recruiter', 'staffing recruiter', 'agency recruiter')
   }
 
-  // Tool-qualified broad queries help the existing jobs endpoint find descriptions that use tool language.
   for (const tool of profile.tools.slice(0, 4)) {
     querySet.push(`${tool} recruiter`, `${tool} sourcer`)
   }
 
-  // Keep the query count bounded so the API stays fast and cheap.
   return unique(querySet.map(query => query.toLowerCase())).slice(0, rescueTier === 0 ? 10 : rescueTier === 1 ? 22 : 38)
 }
 
@@ -460,20 +651,22 @@ export function buildJobSearchQuery(profile: ResumeProfile, preferences: CareerP
   return buildCareerMatchQueries(profile, preferences, 0).slice(0, 4).join(' ')
 }
 
-function groupForMatch(match: JobMatchResult, profile: ResumeProfile): MatchGroupId {
-  if (match.score >= 68 && (match.jobFamily === profile.primaryFamily || profile.roleFamilies.includes(match.jobFamily))) return 'best-fits'
+function groupForMatch(match: JobMatchResult, profile: ResumeProfile, preferences?: CareerPreferences): MatchGroupId {
+  const quality = preferenceQuality(profile, preferences || {}, match.job, match.jobFamily)
+  if (match.score >= 68 && quality.bestFitEligible) return 'best-fits'
   if (match.jobFamily === 'sourcer' || match.jobFamily === 'technical-sourcer' || match.jobFamily === 'ai-recruiter') return 'sourcing'
-  if (match.jobFamily === 'recruiter' || match.jobFamily === 'remote-recruiter' || /talent acquisition|ta partner|full.?cycle/i.test(match.job.title)) return 'recruiting'
   if (match.jobFamily === 'recruiting-ops' || match.jobFamily === 'talent-intelligence') return 'ops-intelligence'
   if (match.jobFamily === 'govcon-recruiter') return 'federal-cleared'
   if (match.jobFamily === 'rpo-recruiter' || /contract|rpo|agency|staffing|embedded/i.test(textForJob(match.job))) return 'rpo-contract-agency'
+  if (quality.weakForProfile || quality.seniorityMismatch || quality.internationalForRemote || match.fitBand === 'Stretch') return 'domain-shift-stretch'
+  if (match.jobFamily === 'recruiter' || match.jobFamily === 'remote-recruiter' || /talent acquisition|ta partner|full.?cycle/i.test(match.job.title)) return 'recruiting'
   return 'domain-shift-stretch'
 }
 
 const GROUP_META: Record<MatchGroupId, { label: string; description: string }> = {
   'best-fits': {
     label: 'Best Fits',
-    description: 'Direct title, seniority, and signal matches for your current recruiting lane.',
+    description: 'Direct title, seniority, remote/location, and signal matches for your current recruiting lane.',
   },
   sourcing: {
     label: 'Sourcing Roles',
@@ -497,20 +690,24 @@ const GROUP_META: Record<MatchGroupId, { label: string; description: string }> =
   },
   'domain-shift-stretch': {
     label: 'Domain Shift / Stretch',
-    description: 'Roles with transferable recruiting signals but weaker direct alignment or higher stretch.',
+    description: 'Lower-priority roles with transferable recruiting signals, weaker title fit, location mismatch, or higher stretch.',
   },
 }
 
-export function groupJobMatches(matches: JobMatchResult[], profile: ResumeProfile): MatchGroup[] {
+export function groupJobMatches(matches: JobMatchResult[], profile: ResumeProfile, preferences: CareerPreferences = {}): MatchGroup[] {
   const grouped = new Map<MatchGroupId, JobMatchResult[]>()
   for (const match of matches) {
-    const group = groupForMatch(match, profile)
+    const group = groupForMatch(match, profile, preferences)
     grouped.set(group, [...(grouped.get(group) || []), match])
   }
   const order: MatchGroupId[] = ['best-fits', 'sourcing', 'recruiting', 'ops-intelligence', 'federal-cleared', 'rpo-contract-agency', 'domain-shift-stretch']
   return order
     .map(id => ({ id, ...GROUP_META[id], matches: grouped.get(id) || [] }))
     .filter(group => group.matches.length > 0)
+}
+
+function matchLabel(match: JobMatchResult): string {
+  return `${match.job.company} — ${match.job.title}`
 }
 
 export function buildRoleUniverse(profile: ResumeProfile, preferences: CareerPreferences, matches: JobMatchResult[], queries: string[]): CareerMatchRoleUniverse {
@@ -528,11 +725,22 @@ export function buildRoleUniverse(profile: ResumeProfile, preferences: CareerPre
     profile.clearance.status === 'unverified-breadcrumb' ? 'Federal / clearance breadcrumbs' : '',
   ])
 
+  const exact = matches.filter(match => preferenceQuality(profile, preferences, match.job, match.jobFamily).titleAligned).slice(0, 4).map(matchLabel)
+  const remote = matches.filter(match => isRemoteJob(match.job)).slice(0, 4).map(matchLabel)
+  const adjacent = Array.from(new Set(matches
+    .filter(match => !preferenceQuality(profile, preferences, match.job, match.jobFamily).bestFitEligible)
+    .map(match => getRoleFamilyLabel(match.jobFamily))))
+    .slice(0, 4)
+
   return {
     strongestLane: getRoleFamilyLabel(profile.primaryFamily),
     alsoViable: unique([...viable.filter(label => label !== getRoleFamilyLabel(profile.primaryFamily)), ...adjacentLabels]).slice(0, 6),
     stretchLanes: unique(['Sourcing Manager', 'TA Program Manager', 'Recruiting Enablement', 'Talent Intelligence'].filter(label => !viable.includes(label))).slice(0, 4),
     strongestSignals: strongestSignals.slice(0, 10),
     queryLanes: queries.slice(0, 18),
+    bestExactMatches: exact,
+    bestRemoteMatches: remote,
+    bestAdjacentLanes: adjacent,
+    stretchReason: 'Stretch results are included when rescue search finds transferable recruiting signals but weaker title, seniority, domain, or remote/location alignment.',
   }
 }
