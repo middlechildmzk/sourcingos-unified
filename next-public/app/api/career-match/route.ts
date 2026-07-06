@@ -184,9 +184,9 @@ export async function POST(req: NextRequest) {
     },
     notes: [
       'This free report uses deterministic parsing and transparent scoring. It does not invent resume facts.',
-      'V1.1.1 uses stronger dedupe, title relevance gating, remote preference scoring, and compact result grouping.',
+      'V1.1.2 uses stronger clearance cautioning, dedupe, title relevance gating, remote preference scoring, and compact result grouping.',
       'Jobs are pulled from the existing SourcingOS recruiter job search surface and original apply links.',
-      'Resume text and uploaded files are processed for this request only and raw resume text is not returned in the response.',
+      'Uploaded files are sent to the server, parsed in memory for this request only, and not stored. Raw resume text is not returned in the response.',
       ...incoming.uploadNotes,
     ],
   } satisfies CareerMatchResponse)

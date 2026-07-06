@@ -80,6 +80,8 @@ const INTERNATIONAL_LOCATION_TERMS = [
   'canada', 'vancouver', 'london', 'emea', 'apac', 'europe', 'india', 'mexico', 'brazil', 'australia',
 ]
 
+const CLEARANCE_REQUIREMENT_PATTERN = /\b(ts\/?sci|ts sci|top secret|secret clearance|security clearance|clearance required|clearance eligible|active clearance|active dod|dod clearance|polygraph|poly|ci poly|full scope|fsp|cleared|govcon|defense|department of defense|\bdod\b|federal)\b/i
+
 function textForJob(job: MatchableJob): string {
   return [job.title, job.company, job.location, job.remoteType, job.employmentType, job.salaryRange, job.description, job.category, ...(job.tags || [])]
     .filter(Boolean)
@@ -144,6 +146,14 @@ function hasWeakOrAdjacentTitle(job: MatchableJob): boolean {
   return titleHasAny(job, WEAK_OR_ADJACENT_TITLE_TERMS)
 }
 
+function hasClearanceRequirement(job: MatchableJob): boolean {
+  return CLEARANCE_REQUIREMENT_PATTERN.test(textForJob(job))
+}
+
+function profileHasFederalOrClearanceBreadcrumb(profile: ResumeProfile): boolean {
+  return profile.clearance.status === 'unverified-breadcrumb' || profile.industries.includes('federal')
+}
+
 function hasTitleAlignment(profile: ResumeProfile, job: MatchableJob, jobFamily: RecruitingRoleFamily): boolean {
   if (profile.primaryFamily === 'technical-sourcer' || profile.roleFamilies.includes('technical-sourcer')) {
     return hasTechnicalTitle(job) || titleHasAny(job, ['sourcer', 'sourcing'])
@@ -168,18 +178,20 @@ function preferenceQuality(profile: ResumeProfile, preferences: CareerPreference
   const technicalAligned = hasTechnicalTitle(job)
   const weakForProfile = isWeakForProfile(profile, job, jobFamily)
   const strongRecruitingTitle = hasStrongRecruitingTitle(job)
+  const clearanceRequired = hasClearanceRequirement(job) || jobFamily === 'govcon-recruiter'
   const entryLevelTitle = /\b(associate|coordinator|junior|entry|intern|early talent|university|campus)\b/i.test(job.title)
   const seniorProfile = ['senior-ic', 'lead', 'manager', 'director-plus'].includes(profile.seniority)
   const seniorityMismatch = seniorProfile && entryLevelTitle
   const managerTitle = /\b(manager|director|head of|vp|vice president)\b/i.test(job.title)
   const tooManagerial = managerTitle && !['manager', 'director-plus'].includes(profile.seniority)
-  const bestFitEligible = titleAligned && strongRecruitingTitle && !weakForProfile && !seniorityMismatch && !internationalForRemote && (!remotePreferred || remote)
+  const bestFitEligible = titleAligned && strongRecruitingTitle && !weakForProfile && !seniorityMismatch && !internationalForRemote && !clearanceRequired && (!remotePreferred || remote)
 
   const badges = unique([
     remote ? 'Remote' : '',
     remotePreferred && !remote ? 'Remote mismatch' : '',
     titleAligned ? 'Title aligned' : 'Adjacent title',
     technicalAligned ? 'Technical TA' : '',
+    clearanceRequired ? 'Clearance review' : '',
     weakForProfile ? 'Adjacent lane' : '',
     seniorityMismatch ? 'Seniority mismatch' : '',
     job.alternateLocations && job.alternateLocations.length > 1 ? `${job.alternateLocations.length} locations` : '',
@@ -193,6 +205,7 @@ function preferenceQuality(profile: ResumeProfile, preferences: CareerPreference
     technicalAligned,
     weakForProfile,
     strongRecruitingTitle,
+    clearanceRequired,
     seniorityMismatch,
     tooManagerial,
     bestFitEligible,
@@ -205,12 +218,12 @@ export function inferJobRoleFamily(job: MatchableJob): RecruitingRoleFamily {
   const title = titleText(job)
   const category = (job.category || '').toLowerCase()
 
+  if (hasClearanceRequirement(job)) return 'govcon-recruiter'
   if (/people operations|people ops|recruiting operations|recruiting ops|talent operations|ats administrator|recruiting systems/.test(title)) return 'recruiting-ops'
   if (/talent intelligence|talent insights|market intelligence|workforce intelligence|talent researcher/.test(title)) return 'talent-intelligence'
   if (/sourcer|sourcing/.test(title)) return title.includes('technical') || title.includes('engineering') || title.includes('ai') ? 'technical-sourcer' : 'sourcer'
   if (/technical recruiter|engineering recruiter|software recruiter|ai recruiter|machine learning recruiter|research recruiter/.test(title)) return 'technical-sourcer'
   if (/healthcare|clinical|nurse|provider|physician/.test(title)) return 'healthcare-recruiter'
-  if (/federal|cleared|govcon|defense|clearance/.test(title)) return 'govcon-recruiter'
   if (/rpo|embedded|staffing|agency|contract recruiter/.test(title)) return 'rpo-recruiter'
 
   const categoryAliases: Record<string, RecruitingRoleFamily> = {
@@ -302,9 +315,10 @@ function bandForScore(score: number, familyAligned: boolean, adjacentAligned: bo
   return 'Stretch'
 }
 
-function capClearedBand(profile: ResumeProfile, jobFamily: RecruitingRoleFamily, band: FitScoreBand): FitScoreBand {
-  if (jobFamily !== 'govcon-recruiter') return band
-  if (profile.clearance.status === 'unverified-breadcrumb' || profile.industries.includes('federal')) return band === 'Strong Fit' ? 'Good Fit' : band
+function capClearedBand(profile: ResumeProfile, job: MatchableJob, jobFamily: RecruitingRoleFamily, band: FitScoreBand): FitScoreBand {
+  const clearanceRequired = hasClearanceRequirement(job) || jobFamily === 'govcon-recruiter'
+  if (!clearanceRequired) return band
+  if (profileHasFederalOrClearanceBreadcrumb(profile)) return band === 'Strong Fit' ? 'Good Fit' : band
   return band === 'Strong Fit' || band === 'Good Fit' ? 'Adjacent Fit' : band
 }
 
@@ -333,8 +347,8 @@ function buildBreakdown(profile: ResumeProfile, preferences: CareerPreferences, 
   const specialty = Math.min(16, matchedSpecialties.length * 4 + signalOverlap.length * 2 + (quality.titleAligned ? 4 : 0))
   const preference = (workModeFits(job, preferences) ? 8 : preferences.workMode === 'remote' ? -10 : 0) + (locationFits(job, preferences) ? 4 : -3)
   const salary = salaryPresent(job) ? 3 : 0
-  const clearance = jobFamily === 'govcon-recruiter'
-    ? profile.clearance.status === 'unverified-breadcrumb' || profile.industries.includes('federal') ? 8 : -10
+  const clearance = quality.clearanceRequired
+    ? profileHasFederalOrClearanceBreadcrumb(profile) ? 8 : -14
     : 0
 
   return { roleFamily, tools, industry, specialty, seniority, preference, salary, clearance }
@@ -355,6 +369,7 @@ function qualityAdjustment(profile: ResumeProfile, preferences: CareerPreference
   if (quality.weakForProfile) adjustment -= 14
   if (quality.seniorityMismatch) adjustment -= 18
   if (quality.tooManagerial) adjustment -= 6
+  if (quality.clearanceRequired && !profileHasFederalOrClearanceBreadcrumb(profile)) adjustment -= 6
   if (!quality.strongRecruitingTitle) adjustment -= 12
   return adjustment
 }
@@ -427,8 +442,11 @@ function buildExplanation(profile: ResumeProfile, preferences: CareerPreferences
     potentialGaps.push('The title is adjacent or less direct for your parsed technical sourcing lane, so it should not be treated as a first-priority exact match.')
   }
 
-  if (jobFamily === 'govcon-recruiter' && profile.clearance.status !== 'unverified-breadcrumb') {
-    potentialGaps.push('This appears to be a federal or cleared recruiting lane, but no clearance or GovCon terms were found in the resume text.')
+  if (quality.clearanceRequired && !profileHasFederalOrClearanceBreadcrumb(profile)) {
+    potentialGaps.push('This role appears to require federal, GovCon, DoD, or security-clearance eligibility, but no clearance or GovCon signal was found in the resume text.')
+  }
+
+  if (quality.clearanceRequired) {
     cautionNotes.push('Do not imply active clearance. Treat clearance language as a gap unless the candidate can verify it outside the tool.')
   }
 
@@ -478,7 +496,7 @@ export function scoreJobMatch(profile: ResumeProfile, preferences: CareerPrefere
 
   if (rawScore < 18 && !familyAligned && !adjacentAligned && !quality.titleAligned) return null
 
-  const band = capClearedBand(profile, jobFamily, bandForScore(rawScore, familyAligned, adjacentAligned, quality))
+  const band = capClearedBand(profile, job, jobFamily, bandForScore(rawScore, familyAligned, adjacentAligned, quality))
   return {
     job,
     score: rawScore,
@@ -653,10 +671,10 @@ export function buildJobSearchQuery(profile: ResumeProfile, preferences: CareerP
 
 function groupForMatch(match: JobMatchResult, profile: ResumeProfile, preferences?: CareerPreferences): MatchGroupId {
   const quality = preferenceQuality(profile, preferences || {}, match.job, match.jobFamily)
+  if (quality.clearanceRequired || match.jobFamily === 'govcon-recruiter') return 'federal-cleared'
   if (match.score >= 68 && quality.bestFitEligible) return 'best-fits'
   if (match.jobFamily === 'sourcer' || match.jobFamily === 'technical-sourcer' || match.jobFamily === 'ai-recruiter') return 'sourcing'
   if (match.jobFamily === 'recruiting-ops' || match.jobFamily === 'talent-intelligence') return 'ops-intelligence'
-  if (match.jobFamily === 'govcon-recruiter') return 'federal-cleared'
   if (match.jobFamily === 'rpo-recruiter' || /contract|rpo|agency|staffing|embedded/i.test(textForJob(match.job))) return 'rpo-contract-agency'
   if (quality.weakForProfile || quality.seniorityMismatch || quality.internationalForRemote || match.fitBand === 'Stretch') return 'domain-shift-stretch'
   if (match.jobFamily === 'recruiter' || match.jobFamily === 'remote-recruiter' || /talent acquisition|ta partner|full.?cycle/i.test(match.job.title)) return 'recruiting'
@@ -741,6 +759,6 @@ export function buildRoleUniverse(profile: ResumeProfile, preferences: CareerPre
     bestExactMatches: exact,
     bestRemoteMatches: remote,
     bestAdjacentLanes: adjacent,
-    stretchReason: 'Stretch results are included when rescue search finds transferable recruiting signals but weaker title, seniority, domain, or remote/location alignment.',
+    stretchReason: 'Stretch results are included when rescue search finds transferable recruiting signals but weaker title, seniority, domain, remote/location, or clearance alignment.',
   }
 }

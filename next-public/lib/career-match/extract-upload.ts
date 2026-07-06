@@ -3,6 +3,7 @@ import { inflateRawSync, inflateSync } from 'node:zlib'
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 const MIN_EXTRACTED_CHARS = 180
+const MIN_EXTRACTED_WORDS = 35
 
 export interface UploadedResumeExtraction {
   text: string
@@ -19,6 +20,10 @@ function normalizeExtractedText(text: string): string {
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
+}
+
+function countResumeLikeWords(text: string): number {
+  return (text.match(/\b[A-Za-z][A-Za-z0-9+.#/&-]{2,}\b/g) || []).length
 }
 
 function decodeXmlEntities(text: string): string {
@@ -182,7 +187,7 @@ function extractPdfText(buffer: Buffer): string {
 
   const parts = chunks.flatMap(extractPdfTextFromContent)
   const text = normalizeExtractedText(parts.join('\n'))
-  if (text.length >= MIN_EXTRACTED_CHARS) return text
+  if (text.length >= MIN_EXTRACTED_CHARS && countResumeLikeWords(text) >= MIN_EXTRACTED_WORDS) return text
 
   // Last-resort fallback for simple text-based PDFs.
   return normalizeExtractedText(buffer.toString('utf8').replace(/[^\x09\x0a\x0d\x20-\x7e]+/g, ' '))
@@ -203,17 +208,22 @@ export async function extractResumeTextFromUpload(file: File): Promise<UploadedR
     notes.push('Plain-text resume upload parsed directly.')
   } else if (/\.docx$/i.test(lowerName) || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
     text = extractDocxText(buffer)
-    notes.push('DOCX resume text extracted server-side from document XML. The raw file is not returned to the browser.')
+    notes.push('DOCX resume text extracted server-side in memory from document XML. The uploaded file is not stored.')
   } else if (/\.pdf$/i.test(lowerName) || file.type === 'application/pdf') {
     text = extractPdfText(buffer)
-    notes.push('PDF resume text extracted server-side. Scanned/image-only PDFs may require pasting text instead.')
+    notes.push('PDF resume text extracted server-side in memory. The uploaded file is not stored.')
   } else {
     throw new Error('Unsupported resume file type. Upload PDF, DOCX, TXT, or paste the resume text.')
   }
 
   text = normalizeExtractedText(text)
-  if (text.length < MIN_EXTRACTED_CHARS) {
-    throw new Error('Could not extract enough resume text from that file. If it is scanned or image-based, paste the resume text instead.')
+  const wordCount = countResumeLikeWords(text)
+  if (text.length < MIN_EXTRACTED_CHARS || wordCount < MIN_EXTRACTED_WORDS) {
+    throw new Error('Could not read enough resume text from that file. Paste your resume text for the best match, especially if the PDF is scanned, image-based, Canva-exported, or heavily designed.')
+  }
+
+  if ((/\.pdf$/i.test(lowerName) || file.type === 'application/pdf') && wordCount < 80) {
+    notes.push('Only limited PDF text was detected. Review the parsed profile closely or paste resume text for a stronger match.')
   }
 
   return { text, sourceName: name, notes }

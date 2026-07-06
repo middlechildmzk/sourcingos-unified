@@ -79,7 +79,7 @@ export default function CareerMatchClient() {
     }
 
     setSelectedFile(file)
-    setFileMessage(`${file.name} attached. It will be extracted server-side when you generate the report.`)
+    setFileMessage(`${file.name} attached. It will be sent to the server, parsed in memory when you generate the report, and not stored.`)
   }
 
   function clearAttachedFile() {
@@ -130,9 +130,9 @@ export default function CareerMatchClient() {
   return (
     <div className="cm-flow">
       <section className="card cm-upload-card">
-        <span className="kicker">Free V1.1.1 report</span>
+        <span className="kicker">Free V1.1.2 report</span>
         <h2>Upload your resume or paste the text.</h2>
-        <p className="muted">PDF, DOCX, and TXT uploads work. V1.1.1 tightens dedupe, title relevance, remote preference scoring, and compact match review.</p>
+        <p className="muted">PDF, DOCX, and TXT uploads work. Uploaded files are sent to the server, parsed in memory for this report, and not stored. Paste text if a designed or scanned PDF cannot be read cleanly.</p>
 
         <label htmlFor="resume-file">Resume file</label>
         <input
@@ -335,7 +335,7 @@ export default function CareerMatchClient() {
             <div>
               <span className="kicker">Grouped match lanes</span>
               <h2>Top matches grouped by role path.</h2>
-              <p className="muted">V1.1.1 keeps the fan-out search but tightens ranking so exact title, remote compatibility, and seniority fit matter more than broad weak signals.</p>
+              <p className="muted">V1.1.2 keeps the fan-out search but tightens ranking so exact title, remote compatibility, seniority fit, and clearance cautioning matter more than broad weak signals.</p>
             </div>
             <label className="cm-filter-toggle">
               <input type="checkbox" checked={showStretch} onChange={event => setShowStretch(event.target.checked)} />
@@ -390,7 +390,7 @@ export default function CareerMatchClient() {
           <section className="card cm-upgrade-card">
             <span className="kicker">Next paid layer</span>
             <h2>Full Career Match Report comes after match quality is proven.</h2>
-            <p className="muted">Next paid layer should package the full role universe, PDF export, alerts, grounded rewrite suggestions, and saved jobs. V1.1.1 focuses on making the top matches feel obviously smarter first.</p>
+            <p className="muted">Next paid layer should package the full role universe, PDF export, alerts, grounded rewrite suggestions, and saved jobs. V1.1.2 focuses on making the top matches feel obviously smarter first.</p>
             <div className="chips">
               <span className="chip">Full role universe</span>
               <span className="chip">PDF report</span>
