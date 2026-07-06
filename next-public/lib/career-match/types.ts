@@ -16,6 +16,15 @@ export type FitScoreBand = 'Strong Fit' | 'Good Fit' | 'Adjacent Fit' | 'Stretch
 
 export type EvidenceStatus = 'found-in-resume' | 'inferred-from-resume' | 'unverified-breadcrumb' | 'not-present'
 
+export type MatchGroupId =
+  | 'best-fits'
+  | 'sourcing'
+  | 'recruiting'
+  | 'ops-intelligence'
+  | 'federal-cleared'
+  | 'rpo-contract-agency'
+  | 'domain-shift-stretch'
+
 export interface ParsedSignal {
   value: string
   evidence: string
@@ -123,6 +132,13 @@ export interface JobMatchResult {
   explanation: MatchExplanation
 }
 
+export interface MatchGroup {
+  id: MatchGroupId
+  label: string
+  description: string
+  matches: JobMatchResult[]
+}
+
 export interface AdjacentRole {
   family: RecruitingRoleFamily
   label: string
@@ -132,13 +148,33 @@ export interface AdjacentRole {
   searchTerms: string[]
 }
 
+export interface CareerMatchRoleUniverse {
+  strongestLane: string
+  alsoViable: string[]
+  stretchLanes: string[]
+  strongestSignals: string[]
+  queryLanes: string[]
+}
+
+export interface CareerMatchDebugStats {
+  queriesRun: string[]
+  rawJobsFound: number
+  dedupedJobs: number
+  scoredJobs: number
+  shownJobs: number
+  rescueTierUsed: 0 | 1 | 2
+}
+
 export interface CareerMatchResponse {
   ok: true
   profile: Omit<ResumeProfile, 'rawText'>
   preferences: CareerPreferences
   matches: JobMatchResult[]
+  matchGroups: MatchGroup[]
   adjacentRoles: AdjacentRole[]
+  roleUniverse: CareerMatchRoleUniverse
   jobCount: number
+  debug: CareerMatchDebugStats
   notes: string[]
 }
 
