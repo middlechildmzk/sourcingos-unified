@@ -27,26 +27,52 @@ function emptyPreferences(): CareerPreferences {
   }
 }
 
+function supportedUploadName(file: File): boolean {
+  const name = file.name.toLowerCase()
+  return /\.(pdf|docx|txt|md|text)$/i.test(name) || file.type === 'application/pdf' || file.type.startsWith('text/')
+}
+
 export default function CareerMatchClient() {
   const [resumeText, setResumeText] = useState('')
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileMessage, setFileMessage] = useState('')
   const [preferences, setPreferences] = useState<CareerPreferences>(emptyPreferences())
   const [status, setStatus] = useState<Status>('idle')
   const [result, setResult] = useState<CareerMatchResponse | null>(null)
   const [error, setError] = useState('')
   const charsRemaining = useMemo(() => Math.max(0, 180 - resumeText.trim().length), [resumeText])
+  const canSubmit = selectedFile !== null || resumeText.trim().length >= 180
 
-  async function handleTextFile(file: File | null) {
+  async function handleResumeFile(file: File | null) {
     if (!file) return
-    const name = file.name.toLowerCase()
-    if (name.endsWith('.pdf') || name.endsWith('.docx')) {
-      setError('PDF/DOCX extraction is intentionally not faked in V1. Paste resume text for now, then add client-side extraction with pdfjs-dist or mammoth in the next pass.')
-      setStatus('error')
-      return
-    }
-    const text = await file.text()
-    setResumeText(text)
     setError('')
     setStatus('idle')
+    setResult(null)
+
+    if (!supportedUploadName(file)) {
+      setSelectedFile(null)
+      setFileMessage('')
+      setStatus('error')
+      setError('Unsupported file type. Upload a PDF, DOCX, TXT, or paste resume text.')
+      return
+    }
+
+    const name = file.name.toLowerCase()
+    if (/\.(txt|md|text)$/i.test(name) || file.type.startsWith('text/')) {
+      const text = await file.text()
+      setResumeText(text)
+      setSelectedFile(null)
+      setFileMessage(`Loaded text from ${file.name}.`)
+      return
+    }
+
+    setSelectedFile(file)
+    setFileMessage(`${file.name} attached. It will be extracted server-side when you generate the report.`)
+  }
+
+  function clearAttachedFile() {
+    setSelectedFile(null)
+    setFileMessage('')
   }
 
   function updatePreference<K extends keyof CareerPreferences>(key: K, value: CareerPreferences[K]) {
@@ -59,11 +85,21 @@ export default function CareerMatchClient() {
     setResult(null)
 
     try {
-      const res = await fetch('/api/career-match', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeText, preferences }),
-      })
+      let res: Response
+      if (selectedFile) {
+        const form = new FormData()
+        form.append('resumeFile', selectedFile)
+        form.append('preferences', JSON.stringify(preferences))
+        if (resumeText.trim()) form.append('resumeText', resumeText.trim())
+        res = await fetch('/api/career-match', { method: 'POST', body: form })
+      } else {
+        res = await fetch('/api/career-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ resumeText, preferences }),
+        })
+      }
+
       const json = (await res.json()) as CareerMatchResponse | CareerMatchErrorResponse
       if (!res.ok || !json.ok) {
         setStatus('error')
@@ -82,27 +118,36 @@ export default function CareerMatchClient() {
     <div className="cm-flow">
       <section className="card cm-upload-card">
         <span className="kicker">Free V1 report</span>
-        <h2>Paste your recruiting resume text.</h2>
-        <p className="muted">This V1 avoids fake parsing. Paste text or upload a plain text file. PDF/DOCX extraction can be added client-side next so the raw file does not need to leave the browser.</p>
+        <h2>Upload your resume or paste the text.</h2>
+        <p className="muted">PDF, DOCX, and TXT uploads now work. You can also paste text directly. Scanned/image-only PDFs may still need pasted text.</p>
 
-        <label htmlFor="resume-text">Resume text</label>
-        <textarea
-          id="resume-text"
-          className="textarea big cm-resume-textarea"
-          value={resumeText}
-          onChange={event => setResumeText(event.target.value)}
-          placeholder="Paste your resume text here. Include titles, companies, dates, tools, industries, and sourcing/recruiting accomplishments."
-        />
-        <p className="muted">{resumeText.trim().length < 180 ? `${charsRemaining} more characters needed for a basic parse.` : 'Enough text for the deterministic parser.'}</p>
-
-        <label htmlFor="resume-file">Optional .txt upload</label>
+        <label htmlFor="resume-file">Resume file</label>
         <input
           id="resume-file"
           className="input"
           type="file"
-          accept=".txt,.md,.text,.pdf,.docx"
-          onChange={event => void handleTextFile(event.target.files?.[0] || null)}
+          accept=".pdf,.docx,.txt,.md,.text,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+          onChange={event => void handleResumeFile(event.target.files?.[0] || null)}
         />
+        {fileMessage ? (
+          <p className="cm-file-note">
+            {fileMessage}
+            {selectedFile ? <button type="button" onClick={clearAttachedFile}>Remove file</button> : null}
+          </p>
+        ) : null}
+
+        <label htmlFor="resume-text">Or paste resume text</label>
+        <textarea
+          id="resume-text"
+          className="textarea big cm-resume-textarea"
+          value={resumeText}
+          onChange={event => {
+            setResumeText(event.target.value)
+            if (selectedFile) clearAttachedFile()
+          }}
+          placeholder="Paste your resume text here. Include titles, companies, dates, tools, industries, and sourcing/recruiting accomplishments."
+        />
+        <p className="muted">{selectedFile ? 'Ready to extract from the attached file.' : resumeText.trim().length < 180 ? `${charsRemaining} more characters needed for a basic parse.` : 'Enough text for the deterministic parser.'}</p>
       </section>
 
       <section className="card cm-preferences-card">
@@ -194,8 +239,8 @@ export default function CareerMatchClient() {
           </label>
         </div>
 
-        <button className="btn cm-submit" type="button" onClick={() => void submit()} disabled={status === 'loading' || resumeText.trim().length < 180}>
-          {status === 'loading' ? 'Reading resume and matching jobs...' : 'Generate Career Match'}
+        <button className="btn cm-submit" type="button" onClick={() => void submit()} disabled={status === 'loading' || !canSubmit}>
+          {status === 'loading' ? 'Reading resume and matching jobs...' : selectedFile ? 'Upload and generate Career Match' : 'Generate Career Match'}
         </button>
         {status === 'error' && error ? <p className="cm-error">{error}</p> : null}
       </section>
@@ -213,6 +258,7 @@ export default function CareerMatchClient() {
             </div>
             <ul className="muted">
               {result.profile.confidenceNotes.map(note => <li key={note}>{note}</li>)}
+              {result.notes.slice(-3).map(note => <li key={note}>{note}</li>)}
             </ul>
           </div>
 
