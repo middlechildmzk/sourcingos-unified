@@ -99,6 +99,8 @@ export interface MatchableJob {
   description?: string
   tags?: string[]
   category?: string
+  alternateLocations?: string[]
+  collapsedPostingCount?: number
 }
 
 export interface MatchScoreBreakdown {
@@ -130,6 +132,7 @@ export interface JobMatchResult {
   jobFamily: RecruitingRoleFamily
   scoreBreakdown: MatchScoreBreakdown
   explanation: MatchExplanation
+  qualityBadges?: string[]
 }
 
 export interface MatchGroup {
@@ -154,6 +157,10 @@ export interface CareerMatchRoleUniverse {
   stretchLanes: string[]
   strongestSignals: string[]
   queryLanes: string[]
+  bestExactMatches: string[]
+  bestRemoteMatches: string[]
+  bestAdjacentLanes: string[]
+  stretchReason: string
 }
 
 export interface CareerMatchDebugStats {
