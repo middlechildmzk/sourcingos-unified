@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { CareerMatchErrorResponse, CareerMatchResponse, CareerPreferences, RecruitingRoleFamily } from '@/lib/career-match/types'
+import type { CareerMatchErrorResponse, CareerMatchResponse, CareerPreferences, MatchGroup, RecruitingRoleFamily } from '@/lib/career-match/types'
 import { recruitingRoleTaxonomy } from '@/lib/career-match/role-taxonomy'
 import { MatchCard } from './components/MatchCard'
+import { CompactMatchRow } from './components/CompactMatchRow'
 import { AdjacentRoleCard } from './components/AdjacentRoleCard'
 import { TrustBlock } from './components/TrustBlock'
 
@@ -32,6 +33,15 @@ function supportedUploadName(file: File): boolean {
   return /\.(pdf|docx|txt|md|text)$/i.test(name) || file.type === 'application/pdf' || file.type.startsWith('text/')
 }
 
+function compactGroups(groups: MatchGroup[], showStretch: boolean): MatchGroup[] {
+  return groups
+    .map(group => ({
+      ...group,
+      matches: group.matches.filter(match => showStretch || (match.fitBand !== 'Stretch' && !match.qualityBadges?.includes('Remote mismatch'))),
+    }))
+    .filter(group => group.matches.length > 0 && (showStretch || group.id !== 'domain-shift-stretch'))
+}
+
 export default function CareerMatchClient() {
   const [resumeText, setResumeText] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -40,8 +50,10 @@ export default function CareerMatchClient() {
   const [status, setStatus] = useState<Status>('idle')
   const [result, setResult] = useState<CareerMatchResponse | null>(null)
   const [error, setError] = useState('')
+  const [showStretch, setShowStretch] = useState(false)
   const charsRemaining = useMemo(() => Math.max(0, 180 - resumeText.trim().length), [resumeText])
   const canSubmit = selectedFile !== null || resumeText.trim().length >= 180
+  const visibleGroups = useMemo(() => result ? compactGroups(result.matchGroups, showStretch) : [], [result, showStretch])
 
   async function handleResumeFile(file: File | null) {
     if (!file) return
@@ -83,6 +95,7 @@ export default function CareerMatchClient() {
     setStatus('loading')
     setError('')
     setResult(null)
+    setShowStretch(false)
 
     try {
       let res: Response
@@ -117,9 +130,9 @@ export default function CareerMatchClient() {
   return (
     <div className="cm-flow">
       <section className="card cm-upload-card">
-        <span className="kicker">Free V1.1 report</span>
+        <span className="kicker">Free V1.1.1 report</span>
         <h2>Upload your resume or paste the text.</h2>
-        <p className="muted">PDF, DOCX, and TXT uploads work. V1.1 now runs multi-query fan-out and low-result rescue across recruiter, sourcer, TA, ops, RPO, and cleared lanes.</p>
+        <p className="muted">PDF, DOCX, and TXT uploads work. V1.1.1 tightens dedupe, title relevance, remote preference scoring, and compact match review.</p>
 
         <label htmlFor="resume-file">Resume file</label>
         <input
@@ -240,7 +253,7 @@ export default function CareerMatchClient() {
         </div>
 
         <button className="btn cm-submit" type="button" onClick={() => void submit()} disabled={status === 'loading' || !canSubmit}>
-          {status === 'loading' ? 'Expanding role lanes and matching jobs...' : selectedFile ? 'Upload and generate Career Match' : 'Generate Career Match'}
+          {status === 'loading' ? 'Improving match quality and ranking...' : selectedFile ? 'Upload and generate Career Match' : 'Generate Career Match'}
         </button>
         {status === 'error' && error ? <p className="cm-error">{error}</p> : null}
       </section>
@@ -298,6 +311,21 @@ export default function CareerMatchClient() {
             <span className="kicker">Your matched role universe</span>
             <h2>{result.debug.shownJobs} recruiter/TA matches scored across {result.debug.queriesRun.length} searches.</h2>
             <p className="muted">Low-result rescue tier used: {result.debug.rescueTierUsed}. Raw jobs found: {result.debug.rawJobsFound}. Deduped jobs: {result.debug.dedupedJobs}.</p>
+            <div className="cm-summary-grid">
+              <div>
+                <p className="cm-mini-label">Best exact matches</p>
+                <ul>{result.roleUniverse.bestExactMatches.length ? result.roleUniverse.bestExactMatches.map(item => <li key={item}>{item}</li>) : <li>No exact-title matches found yet.</li>}</ul>
+              </div>
+              <div>
+                <p className="cm-mini-label">Best remote matches</p>
+                <ul>{result.roleUniverse.bestRemoteMatches.length ? result.roleUniverse.bestRemoteMatches.map(item => <li key={item}>{item}</li>) : <li>No remote matches found yet.</li>}</ul>
+              </div>
+              <div>
+                <p className="cm-mini-label">Best adjacent lanes</p>
+                <ul>{result.roleUniverse.bestAdjacentLanes.length ? result.roleUniverse.bestAdjacentLanes.map(item => <li key={item}>{item}</li>) : <li>No adjacent lanes detected yet.</li>}</ul>
+              </div>
+            </div>
+            <p className="muted">{result.roleUniverse.stretchReason}</p>
             <div className="chips">
               {result.roleUniverse.queryLanes.map(query => <span className="chip" key={query}>{query}</span>)}
             </div>
@@ -307,31 +335,45 @@ export default function CareerMatchClient() {
             <div>
               <span className="kicker">Grouped match lanes</span>
               <h2>Top matches grouped by role path.</h2>
-              <p className="muted">The free result now uses fan-out search, dedupe, and transparent scoring. Paid report/export can come after the match depth feels strong.</p>
+              <p className="muted">V1.1.1 keeps the fan-out search but tightens ranking so exact title, remote compatibility, and seniority fit matter more than broad weak signals.</p>
             </div>
+            <label className="cm-filter-toggle">
+              <input type="checkbox" checked={showStretch} onChange={event => setShowStretch(event.target.checked)} />
+              Show stretch / weak-location matches
+            </label>
           </div>
 
-          {result.matchGroups.length ? (
+          {visibleGroups.length ? (
             <div className="cm-group-list">
-              {result.matchGroups.map(group => (
-                <section className="cm-match-group" key={group.id}>
-                  <div className="cm-group-heading">
-                    <div>
-                      <span className="kicker">{group.matches.length} matches</span>
-                      <h3>{group.label}</h3>
-                      <p className="muted">{group.description}</p>
+              {visibleGroups.map(group => {
+                const expanded = group.matches.slice(0, 3)
+                const compact = group.matches.slice(3)
+                return (
+                  <section className="cm-match-group" key={group.id}>
+                    <div className="cm-group-heading">
+                      <div>
+                        <span className="kicker">{group.matches.length} matches</span>
+                        <h3>{group.label}</h3>
+                        <p className="muted">{group.description}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="cm-match-list">
-                    {group.matches.map(match => <MatchCard key={`${group.id}-${match.job.id}`} match={match} />)}
-                  </div>
-                </section>
-              ))}
+                    <div className="cm-match-list">
+                      {expanded.map(match => <MatchCard key={`${group.id}-${match.job.id}`} match={match} />)}
+                      {compact.length ? (
+                        <div className="cm-compact-list">
+                          <p className="cm-mini-label">More in this lane</p>
+                          {compact.map(match => <CompactMatchRow key={`${group.id}-compact-${match.job.id}`} match={match} />)}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                )
+              })}
             </div>
           ) : (
             <div className="card">
               <h3>No strong matches surfaced yet.</h3>
-              <p className="muted">Try a broader role lane, remove strict location preferences, or add more resume text with tools, industries, and titles.</p>
+              <p className="muted">Try showing stretch matches, using a broader role lane, removing strict location preferences, or adding more resume text with tools, industries, and titles.</p>
             </div>
           )}
 
@@ -347,8 +389,8 @@ export default function CareerMatchClient() {
 
           <section className="card cm-upgrade-card">
             <span className="kicker">Next paid layer</span>
-            <h2>Full Career Match Report comes after match volume is proven.</h2>
-            <p className="muted">Next paid layer should package the full role universe, PDF export, alerts, grounded rewrite suggestions, and saved jobs. V1.1 focuses on getting the match depth right first.</p>
+            <h2>Full Career Match Report comes after match quality is proven.</h2>
+            <p className="muted">Next paid layer should package the full role universe, PDF export, alerts, grounded rewrite suggestions, and saved jobs. V1.1.1 focuses on making the top matches feel obviously smarter first.</p>
             <div className="chips">
               <span className="chip">Full role universe</span>
               <span className="chip">PDF report</span>

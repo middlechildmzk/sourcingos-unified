@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
 
   const rankedMatches = rankJobMatches(profile, preferences, dedupedJobs, 25)
   const visibleMatches = rankedMatches.slice(0, 10)
-  const matchGroups = groupJobMatches(rankedMatches, profile)
+  const matchGroups = groupJobMatches(rankedMatches, profile, preferences)
   const adjacentRoles = preferences.openToAdjacentRoles === false ? [] : suggestAdjacentRoles(profile, preferences, 6)
   const roleUniverse = buildRoleUniverse(profile, preferences, rankedMatches, queries)
 
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
     },
     notes: [
       'This free report uses deterministic parsing and transparent scoring. It does not invent resume facts.',
-      'V1.1 runs multi-query fan-out and low-result rescue across recruiter, sourcer, TA, ops, intelligence, RPO, and cleared lanes.',
+      'V1.1.1 uses stronger dedupe, title relevance gating, remote preference scoring, and compact result grouping.',
       'Jobs are pulled from the existing SourcingOS recruiter job search surface and original apply links.',
       'Resume text and uploaded files are processed for this request only and raw resume text is not returned in the response.',
       ...incoming.uploadNotes,

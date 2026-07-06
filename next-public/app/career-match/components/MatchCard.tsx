@@ -3,6 +3,7 @@ import { getRoleFamilyLabel } from '@/lib/career-match/role-taxonomy'
 
 type Props = {
   match: JobMatchResult
+  compactNested?: boolean
 }
 
 function scoreClass(score: number) {
@@ -12,10 +13,10 @@ function scoreClass(score: number) {
   return 'cm-score stretch'
 }
 
-export function MatchCard({ match }: Props) {
+export function MatchCard({ match, compactNested = false }: Props) {
   const job = match.job
   return (
-    <article className="cm-match-card">
+    <article className={compactNested ? 'cm-match-card cm-match-card-nested' : 'cm-match-card'}>
       <div className="cm-match-head">
         <div>
           <p className="cm-kicker">{match.fitBand} | {getRoleFamilyLabel(match.jobFamily)}</p>
@@ -29,11 +30,17 @@ export function MatchCard({ match }: Props) {
       </div>
 
       <div className="chips">
+        {match.qualityBadges?.slice(0, 6).map(badge => <span className="chip cm-quality-chip" key={badge}>{badge}</span>)}
+        {job.collapsedPostingCount && job.collapsedPostingCount > 1 ? <span className="chip">Collapsed {job.collapsedPostingCount} postings</span> : null}
         {job.remoteType ? <span className="chip">{job.remoteType}</span> : null}
         {job.employmentType ? <span className="chip">{job.employmentType}</span> : null}
         {job.salaryRange ? <span className="chip">{job.salaryRange}</span> : null}
         {job.source ? <span className="chip">Source: {job.source}</span> : null}
       </div>
+
+      {job.alternateLocations && job.alternateLocations.length > 1 ? (
+        <p className="cm-location-note">This card combines similar postings across: {job.alternateLocations.slice(0, 8).join(' | ')}{job.alternateLocations.length > 8 ? ` | +${job.alternateLocations.length - 8} more` : ''}</p>
+      ) : null}
 
       <div className="cm-panels">
         <section>
