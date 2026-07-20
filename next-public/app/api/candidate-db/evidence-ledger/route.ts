@@ -10,7 +10,7 @@ import { listEvidenceLedgerFromSupabase } from '@/lib/supabase-evidence-ledger'
 export const dynamic = 'force-dynamic'
 
 const querySchema = z.object({
-  candidateId: z.string().trim().min(1).max(120).optional(),
+  candidateId: z.string().uuid().optional(),
 })
 
 export async function GET(req: NextRequest) {
