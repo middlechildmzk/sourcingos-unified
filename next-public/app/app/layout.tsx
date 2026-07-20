@@ -1,6 +1,7 @@
 import { getSession } from '@/lib/supabase/session'
 import { AppShell } from '@/components/AppShell'
 import type { Metadata } from 'next'
+import './app-shell.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
