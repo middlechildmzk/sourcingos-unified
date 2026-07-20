@@ -12,10 +12,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <>
-      {/* ── In-app session bar ──────────────────────────────────── */}
       <div className="app-session-bar">
         <div className="app-session-inner">
           <div className="app-session-links">
+            <Link href="/app/roles" className="app-session-link">
+              Roles
+            </Link>
             <Link href="/app/candidate-search" className="app-session-link">
               Candidate Search
             </Link>
@@ -74,13 +76,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       </div>
 
-      {/* ── Compliance reminder (only once, in the shell) ────────── */}
       {session.mode === 'preview' && (
         <div style={{ background: 'rgba(246,201,107,.04)', borderBottom: '1px solid rgba(246,201,107,.18)', padding: '10px 7vw', fontSize: '12px', color: '#c8a84b', display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span>◈</span>
           <span>
-            <strong>Preview mode:</strong> Auth and persistence are inactive. Data resets on cold start.
-            Configure <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code> to enable durability.
+            <strong>Preview mode:</strong> Auth and server persistence are inactive. V20 Role Workspaces use browser-local storage so you can test the full flow without uploading candidate data to a shared preview database.
           </span>
         </div>
       )}
