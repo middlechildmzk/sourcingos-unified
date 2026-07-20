@@ -67,8 +67,7 @@ create table if not exists public.recruiter_memory_signals (
   active boolean not null default true,
   last_observed_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(owner_id, signal_scope, coalesce(role_id, '00000000-0000-0000-0000-000000000000'::uuid), signal_type, key, value)
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.talent_graph_edges (
@@ -112,6 +111,7 @@ create index if not exists agent_workflows_owner_status_idx on public.agent_work
 create index if not exists agent_steps_workflow_idx on public.agent_steps(workflow_id,status);
 create index if not exists agent_approvals_owner_status_idx on public.agent_approvals(owner_id,status,created_at desc);
 create index if not exists recruiter_memory_owner_idx on public.recruiter_memory_signals(owner_id,active,confidence desc);
+create unique index if not exists recruiter_memory_identity_idx on public.recruiter_memory_signals(owner_id,signal_scope,coalesce(role_id,'00000000-0000-0000-0000-000000000000'::uuid),signal_type,key,value);
 create index if not exists talent_graph_from_idx on public.talent_graph_edges(owner_id,from_type,from_id);
 create index if not exists talent_graph_to_idx on public.talent_graph_edges(owner_id,to_type,to_id);
 create index if not exists recruiter_briefs_owner_date_idx on public.recruiter_daily_briefs(owner_id,brief_date desc);
