@@ -178,8 +178,10 @@ export async function advanceWorkflow(ownerId: string, workflowId: string) {
   const result = await executeStep(ownerId, workflow, next)
   if (!result.waitingApproval) {
     const nextIndex = ROLE_LAUNCH_STEPS.findIndex(v => v.key === next.step_key) + 1
-    const nextKey = ROLE_LAUNCH_STEPS[nextIndex]?.key || 'complete'
-    await sb.from('agent_workflows').update({ status: nextKey === 'complete' ? 'completed' : 'queued', current_step: nextKey, completed_at: nextKey === 'complete' ? now() : null, next_run_at: nextKey === 'complete' ? null : now(), updated_at: now() }).eq('id', workflowId).eq('owner_id', ownerId)
+    const nextDefinition = ROLE_LAUNCH_STEPS[nextIndex]
+    const complete = !nextDefinition
+    const nextKey = nextDefinition?.key || 'complete'
+    await sb.from('agent_workflows').update({ status: complete ? 'completed' : 'queued', current_step: nextKey, completed_at: complete ? now() : null, next_run_at: complete ? null : now(), updated_at: now() }).eq('id', workflowId).eq('owner_id', ownerId)
   }
   return { workflowId, advanced: true, ...result }
 }
