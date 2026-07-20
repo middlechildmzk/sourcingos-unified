@@ -5,14 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ROLE_WORKSPACE_CHANGED_EVENT, readRoleWorkspaces } from '@/lib/role-workspace-storage'
 import type { RoleWorkspace } from '@/lib/role-workspace'
 
-type Candidate = {
-  id: string
-  canonicalName: string
-  headline?: string
-  currentCompany?: string
-  location?: string
-}
-
+type Candidate = { id: string; canonicalName: string; headline?: string; currentCompany?: string; location?: string }
 type Command = { label: string; detail: string; href: string; shortcut?: string }
 
 const commands: Command[] = [
@@ -25,7 +18,7 @@ const commands: Command[] = [
   { label: 'Open Acquisition', detail: 'Review sources, enrichment, and graph growth', href: '/app/acquisition' },
 ]
 
-export function CommandPalette({ triggerClassName = 'app-command-trigger' }: { triggerClassName?: string }) {
+export function CommandPalette({ triggerClassName = 'app-command-trigger', hotkey = true }: { triggerClassName?: string; hotkey?: boolean }) {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
@@ -36,7 +29,7 @@ export function CommandPalette({ triggerClassName = 'app-command-trigger' }: { t
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (hotkey && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
         setOpen(value => !value)
       }
@@ -44,7 +37,7 @@ export function CommandPalette({ triggerClassName = 'app-command-trigger' }: { t
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [hotkey])
 
   useEffect(() => {
     const refresh = () => setRoles(readRoleWorkspaces())
