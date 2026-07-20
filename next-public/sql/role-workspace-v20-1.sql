@@ -1,5 +1,5 @@
 -- SourcingOS V20.1 — Durable Role Workspace contract
--- Additive migration. Review against the active Supabase schema in a preview branch first.
+-- Additive migration reconciled against the active Supabase schema on 2026-07-20.
 -- Direct authenticated writes are intentionally not granted. Server APIs perform owner-scoped writes.
 
 create extension if not exists pgcrypto;
@@ -7,6 +7,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.role_workspaces (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
+  legacy_project_id uuid null references public.projects(id) on delete set null,
   status text not null default 'draft' check (status in ('draft','calibrating','active','paused','closed')),
   title text not null,
   location text not null default '',
@@ -16,7 +17,8 @@ create table if not exists public.role_workspaces (
   intake jsonb not null default '{}'::jsonb,
   version integer not null default 1 check (version > 0),
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique(owner_id, legacy_project_id)
 );
 
 create index if not exists role_workspaces_owner_updated_idx
@@ -44,8 +46,8 @@ create table if not exists public.role_candidates (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid not null references auth.users(id) on delete cascade,
   role_id uuid not null references public.role_workspaces(id) on delete cascade,
-  candidate_id uuid null,
-  source_profile_id uuid null,
+  candidate_id uuid null references public.candidates(id) on delete set null,
+  source_profile_id uuid null references public.source_profiles(id) on delete set null,
   identity_key text not null,
   name text not null,
   headline text not null default '',
@@ -76,6 +78,10 @@ create index if not exists role_candidates_owner_role_stage_idx
 create index if not exists role_candidates_candidate_idx
   on public.role_candidates(candidate_id)
   where candidate_id is not null;
+
+create index if not exists role_candidates_source_profile_idx
+  on public.role_candidates(source_profile_id)
+  where source_profile_id is not null;
 
 create table if not exists public.role_activity (
   id uuid primary key default gen_random_uuid(),
@@ -110,23 +116,24 @@ grant select on public.role_activity to authenticated;
 drop policy if exists role_workspaces_owner_select on public.role_workspaces;
 create policy role_workspaces_owner_select on public.role_workspaces
   for select to authenticated
-  using (owner_id = auth.uid());
+  using (owner_id = (select auth.uid()));
 
 drop policy if exists role_search_lanes_owner_select on public.role_search_lanes;
 create policy role_search_lanes_owner_select on public.role_search_lanes
   for select to authenticated
-  using (owner_id = auth.uid());
+  using (owner_id = (select auth.uid()));
 
 drop policy if exists role_candidates_owner_select on public.role_candidates;
 create policy role_candidates_owner_select on public.role_candidates
   for select to authenticated
-  using (owner_id = auth.uid());
+  using (owner_id = (select auth.uid()));
 
 drop policy if exists role_activity_owner_select on public.role_activity;
 create policy role_activity_owner_select on public.role_activity
   for select to authenticated
-  using (owner_id = auth.uid());
+  using (owner_id = (select auth.uid()));
 
 comment on table public.role_workspaces is 'Owner-scoped role workspaces. Writes occur only through reviewed server APIs.';
+comment on column public.role_workspaces.legacy_project_id is 'Optional compatibility link to the pre-V20 projects model.';
 comment on table public.role_candidates is 'Role-specific candidate state. Fit decisions are not global candidate ratings.';
 comment on column public.role_candidates.identity_key is 'Idempotency key derived from candidate id, source URL, or normalized profile identity.';
