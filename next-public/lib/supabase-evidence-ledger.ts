@@ -3,6 +3,7 @@ import { buildEvidenceLedger, type EvidenceLedgerSnapshot, type LegacyCandidateD
 import { createServerSupabaseClient, isSupabaseConfigured } from './supabase/server'
 
 type Row = Record<string, unknown>
+type PermissionStatus = LegacyCandidateDbSnapshot['contactSignals'][number]['permissionStatus']
 
 type EvidenceLedgerReadResult =
   | { ok: true; ledger: EvidenceLedgerSnapshot }
@@ -36,6 +37,12 @@ function confidenceValue(row: Row, key: string): 'low' | 'medium' | 'high' {
 function decisionValue(row: Row, key: string): 'pending' | 'confirmed' | 'rejected' {
   const value = row[key]
   return value === 'confirmed' || value === 'rejected' ? value : 'pending'
+}
+
+function permissionStatusValue(row: Row, key: string): PermissionStatus {
+  const value = row[key]
+  if (value === 'candidate_provided' || value === 'company_owned' || value === 'do_not_contact') return value
+  return 'unknown'
 }
 
 function rows(value: unknown): Row[] {
@@ -148,9 +155,7 @@ export async function listEvidenceLedgerFromSupabase(
     source: stringValue(row, 'source', 'unknown'),
     confidence: confidenceValue(row, 'confidence'),
     verified: false,
-    permissionStatus: row.permission_status === 'candidate_provided' || row.permission_status === 'company_owned' || row.permission_status === 'do_not_contact'
-      ? row.permission_status
-      : 'unknown',
+    permissionStatus: permissionStatusValue(row, 'permission_status'),
     createdAt: stringValue(row, 'created_at', new Date(0).toISOString()),
   }))
 
