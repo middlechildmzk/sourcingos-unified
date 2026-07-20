@@ -69,11 +69,22 @@ Candidates owns the canonical Candidate Graph and Candidate 360.
 
 Primary tasks:
 
-- Find a known person.
+- Search the durable Candidate Graph.
 - Review evidence and identity confidence.
 - Understand relationships and professional history.
 - Add the candidate to a role.
 - Request deeper enrichment.
+
+Completed in V25.1:
+
+- Server-side search and bounded pagination.
+- Exact graph-level counts.
+- Compact candidate rows.
+- Durable owner-scoped resume and CSV imports.
+- Identity decisions surfaced as recruiter work.
+- Evidence-first Candidate 360.
+- Direct role, enrichment, freshness, and graph actions.
+- Contact and availability internals hidden behind progressive disclosure.
 
 ## Interaction patterns
 
@@ -91,6 +102,8 @@ Use expandable sections for:
 - Source and connector controls.
 - Backup and synchronization.
 - Technical safety details.
+- Import and identity utilities.
+- Contact and availability signals.
 
 ### Action-oriented rows
 
@@ -152,10 +165,11 @@ Reference products reviewed during this sprint:
 
 ## Next UX milestones
 
-1. Convert Candidate Database to the shared shell and compact table/row system.
-2. Build a unified role detail route with tabs for Overview, Candidates, Strategy, and Activity.
-3. Add global search and command palette.
-4. Create a candidate-review drawer so users do not lose role context.
-5. Add empty-state onboarding and sample workflow guidance.
-6. Separate recruiter settings from admin and data operations.
-7. Run browser verification at desktop and mobile widths after every major flow change.
+1. Build a unified role detail route with tabs for Overview, Candidates, Strategy, and Activity.
+2. Add global search and a command palette.
+3. Create a candidate-review drawer so users do not lose role context.
+4. Add empty-state onboarding and guided first-role setup.
+5. Separate recruiter preferences from admin and data operations.
+6. Add saved Candidate Graph views and filters.
+7. Add browser verification using an authenticated test account at desktop and mobile widths.
+8. Continue consolidating remaining legacy pages into the shared shell and row system.
