@@ -1,6 +1,8 @@
 -- SourcingOS V19 Candidate Intelligence Spine
 -- Additive Supabase/Postgres migration. Review in Preview before Production.
 -- This migration does not backfill legacy evidence_items automatically.
+-- V19 is read-only for authenticated clients. Future writes must use the reviewed
+-- Safe Write Gateway with explicit authorization, approval, idempotency, and audit.
 
 create table if not exists public.evidence_claims (
   id uuid primary key default gen_random_uuid(),
@@ -83,43 +85,29 @@ alter table public.evidence_claims enable row level security;
 alter table public.evidence_claim_events enable row level security;
 alter table public.action_approval_requests enable row level security;
 
-revoke all on public.evidence_claims from anon;
-revoke all on public.evidence_claim_events from anon;
-revoke all on public.action_approval_requests from anon;
+revoke all on public.evidence_claims from anon, authenticated;
+revoke all on public.evidence_claim_events from anon, authenticated;
+revoke all on public.action_approval_requests from anon, authenticated;
 
-grant select, insert, update on public.evidence_claims to authenticated;
-grant select, insert on public.evidence_claim_events to authenticated;
-grant select, insert, update on public.action_approval_requests to authenticated;
+-- Authenticated users may read only their own records in V19. No direct client
+-- insert/update/delete grants are provided. Server-side service-role operations
+-- must remain owner-scoped and are reserved for the future Safe Write Gateway.
+grant select on public.evidence_claims to authenticated;
+grant select on public.evidence_claim_events to authenticated;
+grant select on public.action_approval_requests to authenticated;
 
 create policy "evidence claims owner select"
   on public.evidence_claims for select to authenticated
   using ((select auth.uid()) = owner_id);
-create policy "evidence claims owner insert"
-  on public.evidence_claims for insert to authenticated
-  with check ((select auth.uid()) = owner_id);
-create policy "evidence claims owner update"
-  on public.evidence_claims for update to authenticated
-  using ((select auth.uid()) = owner_id)
-  with check ((select auth.uid()) = owner_id);
 
 create policy "evidence events owner select"
   on public.evidence_claim_events for select to authenticated
   using ((select auth.uid()) = owner_id);
-create policy "evidence events owner insert"
-  on public.evidence_claim_events for insert to authenticated
-  with check ((select auth.uid()) = owner_id);
 
 create policy "approval requests owner select"
   on public.action_approval_requests for select to authenticated
   using ((select auth.uid()) = owner_id);
-create policy "approval requests owner insert"
-  on public.action_approval_requests for insert to authenticated
-  with check ((select auth.uid()) = owner_id and (select auth.uid()) = requested_by);
-create policy "approval requests owner update"
-  on public.action_approval_requests for update to authenticated
-  using ((select auth.uid()) = owner_id)
-  with check ((select auth.uid()) = owner_id);
 
-comment on table public.evidence_claims is 'Field-level candidate evidence with provenance, freshness, uncertainty, review state, and permitted use.';
-comment on table public.evidence_claim_events is 'Append-only audit history for evidence classification and review changes.';
-comment on table public.action_approval_requests is 'Human approval gate for consequential SourcingOS actions.';
+comment on table public.evidence_claims is 'Field-level candidate evidence with provenance, freshness, uncertainty, review state, and permitted use. Authenticated clients are read-only in V19.';
+comment on table public.evidence_claim_events is 'Append-only audit history for evidence classification and review changes. Writes are reserved for the Safe Write Gateway.';
+comment on table public.action_approval_requests is 'Human approval contract for consequential SourcingOS actions. V19 exposes no autonomous action execution.';
