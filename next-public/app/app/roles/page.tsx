@@ -4,19 +4,18 @@ import { RoleSearchLaunchPanel } from '@/components/RoleSearchLaunchPanel'
 import { RoleWorkspaceBackupPanel } from '@/components/RoleWorkspaceBackupPanel'
 
 export const metadata = {
-  title: 'Role Workspaces — SourcingOS Daily Driver',
-  description: 'Create calibrated sourcing projects, approve search lanes, launch connected candidate discovery, review candidates, manage role-specific pipelines, back up local workspaces, and sync safely to durable storage.',
+  title: 'Roles — SourcingOS',
+  description: 'Create calibrated roles, review candidates, approve sourcing strategy, and manage role-specific pipelines from one workspace.',
   robots: { index: false, follow: false },
 }
 
 export default function RolesPage() {
-  return (
-    <main className="wrap">
-      <div className="eyebrow">SourcingOS V20.2 — Connected and Portable</div>
-      <RoleWorkspaceSyncPanel />
-      <RoleWorkspaceBackupPanel />
-      <RoleSearchLaunchPanel />
-      <RoleWorkspaceClient />
-    </main>
-  )
+  return <main className="wrap">
+    <div className="product-page-head"><div><span className="kicker">Role workspaces</span><h1>Roles</h1><p>Each role is one connected workspace for intake, search strategy, candidates, calibration, and pipeline movement.</p></div></div>
+    <RoleWorkspaceClient />
+    <details className="advanced-disclosure product-panel" style={{ marginTop: 16 }}>
+      <summary>Workspace data, backup, and connected search controls</summary>
+      <div style={{ marginTop: 16 }}><RoleWorkspaceSyncPanel /><RoleWorkspaceBackupPanel /><RoleSearchLaunchPanel /></div>
+    </details>
+  </main>
 }
