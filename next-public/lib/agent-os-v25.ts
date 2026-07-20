@@ -87,7 +87,9 @@ async function executeStep(ownerId: string, workflow: any, step: any) {
     output = strategyOutput(input)
   } else if (step.step_key === 'campaigns') {
     const strategy = strategyOutput(input)
-    const { data: existingCampaign } = await sb.from('acquisition_campaigns').select('id,name').eq('owner_id', ownerId).eq('role_id', input.roleId || '').eq('name', `${input.title} AutoSource`).in('status', ['draft','active','paused']).maybeSingle()
+    let existingQuery = sb.from('acquisition_campaigns').select('id,name').eq('owner_id', ownerId).eq('name', `${input.title} AutoSource`).in('status', ['draft','active','paused'])
+    existingQuery = input.roleId ? existingQuery.eq('role_id', input.roleId) : existingQuery.is('role_id', null)
+    const { data: existingCampaign } = await existingQuery.maybeSingle()
     if (existingCampaign) {
       output = { campaignId: existingCampaign.id, campaignName: existingCampaign.name, activated: true, reused: true }
       await sb.from('acquisition_campaigns').update({ status: 'active', next_run_at: now(), updated_at: now() }).eq('id', existingCampaign.id).eq('owner_id', ownerId)
@@ -112,8 +114,14 @@ async function executeStep(ownerId: string, workflow: any, step: any) {
       await sb.from('agent_workflows').update({ campaign_id: campaign?.id }).eq('id', workflow.id).eq('owner_id', ownerId)
     }
   } else if (step.step_key === 'review') {
-    const { count } = await sb.from('autosource_inbox').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId).eq('role_id', input.roleId || '').in('status', ['unreviewed','reviewing'])
-    output = { queue: 'autosource_inbox', candidatesReady: count || 0, policy: 'Rank by role relevance, evidence quality, identity confidence, and recruiter memory. No automated rejection.' }
+    let count = 0
+    if (input.roleId || workflow.campaign_id) {
+      let inboxQuery = sb.from('autosource_inbox').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId).in('status', ['unreviewed','reviewing'])
+      inboxQuery = input.roleId ? inboxQuery.eq('role_id', input.roleId) : inboxQuery.eq('campaign_id', workflow.campaign_id)
+      const result = await inboxQuery
+      count = result.count || 0
+    }
+    output = { queue: 'autosource_inbox', candidatesReady: count, policy: 'Rank by role relevance, evidence quality, identity confidence, and recruiter memory. No automated rejection.' }
   } else if (step.step_key === 'calibration') {
     const { buildMemoryProposals } = await import('@/lib/agent-automation-v25-1')
     const proposals = await buildMemoryProposals(ownerId, input.roleId)
@@ -126,13 +134,14 @@ async function executeStep(ownerId: string, workflow: any, step: any) {
   if (definition?.approval) {
     const { data: existingApproval } = await sb.from('agent_approvals').select('id').eq('owner_id', ownerId).eq('workflow_id', workflow.id).eq('step_id', step.id).eq('status', 'pending').maybeSingle()
     if (existingApproval) return { waitingApproval: true, approvalId: existingApproval.id, step: step.step_key }
+    const proposals = Array.isArray(output.proposals) ? output.proposals : []
     const { data: approval, error } = await sb.from('agent_approvals').insert({
       owner_id: ownerId,
       workflow_id: workflow.id,
       step_id: step.id,
       approval_type: step.step_key,
       title: step.step_key === 'strategy' ? `Approve sourcing strategy for ${input.title}` : `Approve calibration memory for ${input.title}`,
-      summary: step.step_key === 'strategy' ? 'Review search intent, connectors, target companies, and guardrails before activation.' : output.proposals && Array.isArray(output.proposals) && output.proposals.length ? 'Review repeated recruiter patterns before future searches use them.' : 'Not enough repeated recruiter decisions to create memory yet. Approve to continue without new signals.',
+      summary: step.step_key === 'strategy' ? 'Review search intent, connectors, target companies, and guardrails before activation.' : proposals.length ? 'Review repeated recruiter patterns before future searches use them.' : 'Not enough repeated recruiter decisions to create memory yet. Approve to continue without new signals.',
       payload: output,
     }).select('id').single()
     if (error) throw new Error(error.message)
