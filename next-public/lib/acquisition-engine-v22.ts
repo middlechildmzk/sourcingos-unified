@@ -4,7 +4,7 @@ import { CampaignInput, connectorRunners, Discovery, scoreDiscovery } from '@/li
 
 const safeText = (value: unknown, max = 1000) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
-async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createServerSupabaseClient>>, ownerId: string, campaignId: string, discoveryId: string, d: Discovery, score: number) {
+export async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createServerSupabaseClient>>, ownerId: string, campaignId: string, discoveryId: string, d: Discovery, score: number, manual = false) {
   const { data: existingProfile } = await sb.from('source_profiles').select('id,candidate_id').eq('owner_id', ownerId).eq('source', d.sourceKey).eq('source_profile_id', d.sourceId).maybeSingle()
   if (existingProfile?.candidate_id) {
     await sb.from('acquisition_discoveries').update({ candidate_id: existingProfile.candidate_id, source_profile_id: existingProfile.id, disposition: 'duplicate', last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId)
@@ -20,7 +20,7 @@ async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createServerSu
     current_title: safeText(d.headline, 200) || null,
     summary: safeText(d.summary, 2000) || null,
     skills: d.skills.slice(0, 50),
-    merge_status: d.identityConfidence >= 92 ? 'source_verified' : 'pending',
+    merge_status: manual ? 'pending' : d.identityConfidence >= 92 ? 'source_verified' : 'pending',
     last_refreshed_at: new Date().toISOString(),
   }).select('id').single()
   if (candidateError || !candidate) throw candidateError || new Error('Candidate creation failed')
@@ -37,23 +37,50 @@ async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createServerSu
     organization: safeText(d.organization, 200) || null,
     raw_text: safeText(d.summary, 5000) || null,
     raw: d.raw,
-    status: d.identityConfidence >= 92 ? 'confirmed' : 'pending',
+    status: manual ? 'reviewed' : d.identityConfidence >= 92 ? 'confirmed' : 'pending',
     match_score: d.identityConfidence,
-    match_reasons: [`Unique ${d.sourceKey} source identity`, `Campaign score ${score}`],
+    match_reasons: [manual ? 'Recruiter accepted discovery' : `Unique ${d.sourceKey} source identity`, `Campaign score ${score}`],
     last_seen_at: new Date().toISOString(),
   }).select('id').single()
   if (profileError || !profile) throw profileError || new Error('Source profile creation failed')
 
   if (d.evidence.length) {
-    const evidenceRows = d.evidence.slice(0, 50).map(e => ({ owner_id: ownerId, candidate_id: candidate.id, source_profile_id: profile.id, source: d.sourceKey, label: safeText(e.label, 200) || e.kind, detail: safeText(e.value, 2000), confidence: d.identityConfidence >= 90 ? 'high' : 'medium', url: safeText(e.url, 1000) || null }))
+    const evidenceRows = d.evidence.slice(0, 50).map(e => ({ owner_id: ownerId, candidate_id: candidate.id, source_profile_id: profile.id, source: d.sourceKey, label: safeText(e.label, 200) || e.kind, detail: safeText(e.value, 2000), confidence: manual || d.identityConfidence >= 90 ? 'high' : 'medium', url: safeText(e.url, 1000) || null }))
     await sb.from('evidence_items').insert(evidenceRows)
   }
 
+  const disposition = manual ? 'accepted' : 'auto_promoted'
   await Promise.all([
-    sb.from('acquisition_discoveries').update({ candidate_id: candidate.id, source_profile_id: profile.id, disposition: 'auto_promoted', last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId),
-    sb.from('autosource_inbox').upsert({ owner_id: ownerId, campaign_id: campaignId, candidate_id: candidate.id, priority: score, reason: `Auto-discovered from ${d.sourceKey}; identity ${d.identityConfidence}, campaign ${score}.`, status: 'unreviewed' }, { onConflict: 'owner_id,campaign_id,candidate_id' }),
+    sb.from('acquisition_discoveries').update({ candidate_id: candidate.id, source_profile_id: profile.id, disposition, review_reason: manual ? 'Accepted by recruiter and promoted to Candidate Graph.' : null, last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId),
+    sb.from('autosource_inbox').upsert({ owner_id: ownerId, campaign_id: campaignId, candidate_id: candidate.id, priority: score, reason: `${manual ? 'Recruiter-approved' : 'Auto-discovered'} from ${d.sourceKey}; identity ${d.identityConfidence}, campaign ${score}.`, status: 'unreviewed' }, { onConflict: 'owner_id,campaign_id,candidate_id' }),
   ])
-  return { disposition: 'auto_promoted' as const, candidateId: candidate.id }
+  return { disposition, candidateId: candidate.id }
+}
+
+export async function promoteStoredDiscovery(ownerId: string, discoveryId: string) {
+  const sb = createServerSupabaseClient()
+  if (!sb) throw new Error('Supabase client unavailable')
+  const { data: row, error } = await sb.from('acquisition_discoveries').select('*').eq('id', discoveryId).eq('owner_id', ownerId).eq('disposition', 'needs_review').single()
+  if (error || !row) throw error || new Error('Discovery not found')
+  const sourceKey = safeText(row.source_key) as Discovery['sourceKey']
+  const skills = Array.isArray(row.skills) ? row.skills.filter((value: unknown): value is string => typeof value === 'string').slice(0, 50) : []
+  const evidence = Array.isArray(row.evidence) ? row.evidence.map((value: any) => ({ kind: safeText(value?.kind, 100) || 'public_evidence', label: safeText(value?.label, 200) || 'Public evidence', value: safeText(value?.value, 2000), url: safeText(value?.url, 1000) || undefined, observedAt: safeText(value?.observedAt, 100) || undefined })).filter((value: { value: string }) => Boolean(value.value)) : []
+  const discovery: Discovery = {
+    sourceKey,
+    sourceId: safeText(row.source_id, 500),
+    sourceUrl: safeText(row.source_url, 1000),
+    displayName: safeText(row.display_name, 300),
+    headline: safeText(row.headline, 300) || undefined,
+    organization: safeText(row.organization, 300) || undefined,
+    location: safeText(row.location, 300) || undefined,
+    summary: safeText(row.summary, 2000) || undefined,
+    skills,
+    evidence,
+    identityConfidence: Number(row.identity_confidence || 0),
+    profileQuality: Number(row.profile_quality || 0),
+    raw: row.raw && typeof row.raw === 'object' ? row.raw : {},
+  }
+  return promoteDiscovery(sb, ownerId, row.campaign_id, row.id, discovery, Number(row.campaign_score || 0), true)
 }
 
 export async function runCampaign(ownerId: string, campaignId: string) {
