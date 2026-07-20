@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/autosource",
+      "schedule": "0 */6 * * *"
+    }
+  ]
+}
