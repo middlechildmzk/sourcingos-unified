@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+
 import Link from 'next/link'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 
 type Candidate = {
@@ -9,6 +10,7 @@ type Candidate = {
   headline: string
   location?: string
   currentCompany?: string
+  currentTitle?: string
   summary: string
   skills: string[]
   sourceProfileIds: string[]
@@ -16,16 +18,34 @@ type Candidate = {
   contactSignalIds: string[]
   openToWorkSignalIds: string[]
   mergeStatus: string
+  updatedAt?: string
 }
 
+type MatchReview = { id: string; proposedCanonicalName: string; score: number; reasons: string[]; conflicts: string[]; decision: string }
+type ImportBatch = { id: string; importType: string; fileName?: string; rowsSeen: number; recordsCreated: number; warnings: string[]; createdAt: string }
+type Counts = { candidates: number; filteredCandidates: number; sourceProfiles: number; evidenceItems: number; contactSignals: number; openToWorkSignals: number; pendingMatchReviews: number }
 type Snapshot = {
+  ok: boolean
+  persistence_mode: 'preview' | 'supabase'
   candidates: Candidate[]
   sourceProfiles: any[]
   evidenceItems: any[]
   contactSignals: any[]
   openToWorkSignals: any[]
-  matchReviews: any[]
-  importBatches: any[]
+  matchReviews: MatchReview[]
+  importBatches: ImportBatch[]
+  counts: Counts
+  page: { limit: number; offset: number; hasMore: boolean }
+  search: string
+}
+
+const EMPTY: Snapshot = {
+  ok: true,
+  persistence_mode: 'preview',
+  candidates: [], sourceProfiles: [], evidenceItems: [], contactSignals: [], openToWorkSignals: [], matchReviews: [], importBatches: [],
+  counts: { candidates: 0, filteredCandidates: 0, sourceProfiles: 0, evidenceItems: 0, contactSignals: 0, openToWorkSignals: 0, pendingMatchReviews: 0 },
+  page: { limit: 50, offset: 0, hasMore: false },
+  search: '',
 }
 
 const sampleResume = `Jordan Rivera
@@ -35,108 +55,130 @@ Minneapolis, MN | jordan.rivera@example.com | https://github.com/jrivera-platfor
 Kubernetes, Terraform, AWS GovCloud, FedRAMP, NIST RMF, Python, Linux, security automation.
 Built CI/CD controls for regulated cloud environments. Available for contract consulting. Resume updated May 2026.`
 
-export function CandidateDbClient() {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
-  const [resumeText, setResumeText] = useState(sampleResume)
-  const [csvText, setCsvText] = useState('name,title,company,location,email,skills\nTaylor Chen,Technical Sourcer,Acme AI,Remote,taylor@example.com,AI sourcing GitHub Boolean')
-  const [status, setStatus] = useState('')
+function words(value: string) { return value.replaceAll('_', ' ') }
 
-  async function load() {
-    const res = await fetch('/api/candidate-db/list')
-    const json = await res.json()
-    setSnapshot(json)
+export function CandidateDbClient() {
+  const [snapshot, setSnapshot] = useState<Snapshot>(EMPTY)
+  const [searchInput, setSearchInput] = useState('')
+  const [appliedSearch, setAppliedSearch] = useState('')
+  const [resumeText, setResumeText] = useState(sampleResume)
+  const [csvText, setCsvText] = useState('name,title,company,location,email,skills\nTaylor Chen,Technical Sourcer,Acme AI,Remote,taylor@example.com,"AI sourcing, GitHub, Boolean"')
+  const [status, setStatus] = useState('Loading Candidate Graph…')
+  const [loading, setLoading] = useState(true)
+
+  async function load(offset = 0, search = appliedSearch) {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: '50', offset: String(offset) })
+      if (search) params.set('q', search)
+      const res = await fetch(`/api/candidate-db/list?${params.toString()}`, { headers: { accept: 'application/json' } })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not load Candidate Graph.')
+      setSnapshot({ ...EMPTY, ...json, counts: { ...EMPTY.counts, ...(json.counts || {}) }, page: { ...EMPTY.page, ...(json.page || {}) } })
+      setStatus(json.persistence_mode === 'supabase' ? 'Candidate Graph is connected to durable storage.' : 'Preview records are temporary and reset between server restarts.')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not load Candidate Graph.')
+    } finally {
+      setLoading(false)
+    }
   }
-  useEffect(() => { load().catch(() => undefined) }, [])
+
+  useEffect(() => { load(0, '') }, [])
 
   async function importResume() {
-    setStatus('Importing resume text...')
-    const res = await fetch('/api/candidate-db/import-resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, fileName: 'sample-resume.txt' }) })
+    setStatus('Importing resume into the Candidate Graph…')
+    const res = await fetch('/api/candidate-db/import-resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, fileName: 'pasted-resume.txt' }) })
     const json = await res.json()
-    setStatus(json.ok ? `Imported ${json.candidate.canonicalName}` : json.error)
-    await load()
+    setStatus(res.ok && json.ok ? `Imported ${json.candidate.canonicalName}.` : json.error || 'Resume import failed.')
+    if (res.ok && json.ok) await load(0, appliedSearch)
   }
 
   async function importCsv() {
-    setStatus('Importing CSV...')
-    const res = await fetch('/api/candidate-db/import-csv', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ csv: csvText, fileName: 'sample-candidates.csv' }) })
+    setStatus('Importing CSV into the Candidate Graph…')
+    const res = await fetch('/api/candidate-db/import-csv', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ csv: csvText, fileName: 'pasted-candidates.csv' }) })
     const json = await res.json()
-    setStatus(json.ok ? `Imported ${json.recordsCreated} candidate record(s)` : json.error)
-    await load()
+    setStatus(res.ok && json.ok ? `Imported ${json.recordsCreated.toLocaleString()} candidate record${json.recordsCreated === 1 ? '' : 's'}.` : json.error || 'CSV import failed.')
+    if (res.ok && json.ok) await load(0, appliedSearch)
   }
 
   async function normalizeCandidate() {
     const res = await fetch('/api/candidate-db/normalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, source: 'uploaded_resume' }) })
     const json = await res.json()
-    setStatus(json.ok ? `Normalization found ${json.normalized.skills.length} skill(s), ${json.normalized.contacts.length} contact signal(s), and ${json.normalized.openToWorkSignals.length} open-to-work signal(s).` : json.error)
+    setStatus(res.ok && json.ok ? `Detected ${json.normalized.skills.length} skills, ${json.normalized.contacts.length} contact signals, and ${json.normalized.openToWorkSignals.length} availability signals. Nothing was saved.` : json.error || 'Normalization failed.')
   }
 
   async function createMatchReview() {
-    const ids = snapshot?.sourceProfiles.slice(0, 2).map(p => p.id) || []
-    if (ids.length < 2) { setStatus('Import at least two source profiles before creating a match review.'); return }
+    const ids = snapshot.sourceProfiles.slice(0, 2).map(profile => profile.id)
+    if (ids.length < 2) { setStatus('At least two loaded source profiles are required for a match review.'); return }
     const res = await fetch('/api/candidate-db/match-review', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceProfileIds: ids }) })
     const json = await res.json()
-    setStatus(json.ok ? `Created match review with score ${json.review.score}/100` : json.error)
-    await load()
+    setStatus(res.ok && json.ok ? `Created an identity review with score ${json.review.match_score ?? json.review.score}/100.` : json.error || 'Could not create identity review.')
+    if (res.ok && json.ok) await load(snapshot.page.offset, appliedSearch)
   }
 
   async function decide(reviewId: string, decision: 'confirmed' | 'rejected') {
     const res = await fetch('/api/candidate-db/confirm-merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reviewId, decision }) })
     const json = await res.json()
-    setStatus(json.ok ? `${decision === 'confirmed' ? 'Confirmed match' : 'Kept profiles separate'}` : json.error)
-    await load()
+    setStatus(res.ok && json.ok ? decision === 'confirmed' ? 'Confirmed the identity match.' : 'Kept the source profiles separate.' : json.error || 'Could not save identity decision.')
+    if (res.ok && json.ok) await load(snapshot.page.offset, appliedSearch)
   }
 
+  function search(event: FormEvent) {
+    event.preventDefault()
+    const next = searchInput.trim()
+    setAppliedSearch(next)
+    load(0, next)
+  }
+
+  const coverage = useMemo(() => snapshot.counts.candidates ? Math.round((snapshot.counts.evidenceItems / snapshot.counts.candidates) * 10) / 10 : 0, [snapshot.counts])
+  const start = snapshot.counts.filteredCandidates ? snapshot.page.offset + 1 : 0
+  const end = snapshot.page.offset + snapshot.candidates.length
+
   return <div className="interactive-tool">
-    <div className="cta"><b>Candidate Intelligence workspace:</b> Source profiles remain separate, contact signals are unverified by default, and merges require recruiter confirmation. Add reviewed records to a role-specific queue rather than assigning a global fit score.</div>
-    <div className="grid two">
-      <div className="card">
-        <span className="kicker">Resume import</span>
-        <h3>Paste resume/profile text</h3>
-        <textarea className="textarea big" value={resumeText} onChange={e => setResumeText(e.target.value)} />
-        <div className="button-row"><button className="btn" onClick={importResume}>Import resume</button><button onClick={normalizeCandidate}>Normalize only</button></div>
-      </div>
-      <div className="card">
-        <span className="kicker">CSV import</span>
-        <h3>Paste candidate CSV</h3>
-        <textarea className="textarea big" value={csvText} onChange={e => setCsvText(e.target.value)} />
-        <button className="btn" onClick={importCsv}>Import CSV</button>
-      </div>
+    <div className="product-summary-grid">
+      <div className="product-stat"><small>Canonical candidates</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>Owner-scoped identities</span></div>
+      <div className="product-stat"><small>Source profiles</small><b>{snapshot.counts.sourceProfiles.toLocaleString()}</b><span>Provenance preserved</span></div>
+      <div className="product-stat"><small>Evidence records</small><b>{snapshot.counts.evidenceItems.toLocaleString()}</b><span>{coverage} per candidate</span></div>
+      <div className="product-stat"><small>Identity review</small><b>{snapshot.counts.pendingMatchReviews.toLocaleString()}</b><span>Pending recruiter decisions</span></div>
     </div>
-    {status ? <div className="cta">{status}</div> : null}
-    <div className="grid">
-      <div className="card"><span className="kicker">Candidates</span><div className="big-number">{snapshot?.candidates.length || 0}</div></div>
-      <div className="card"><span className="kicker">Source profiles</span><div className="big-number">{snapshot?.sourceProfiles.length || 0}</div></div>
-      <div className="card"><span className="kicker">Contact signals</span><div className="big-number">{snapshot?.contactSignals.length || 0}</div></div>
-      <div className="card"><span className="kicker">Open-to-work signals</span><div className="big-number">{snapshot?.openToWorkSignals.length || 0}</div></div>
+
+    <div className="product-layout">
+      <div style={{ display: 'grid', gap: 14 }}>
+        {!!snapshot.matchReviews.length && <section className="product-panel">
+          <div className="product-panel-head"><div><span className="kicker">Needs attention</span><h2>Identity match review</h2></div><span>{snapshot.counts.pendingMatchReviews} pending</span></div>
+          <div className="product-list">{snapshot.matchReviews.map(review => <div className="product-row" key={review.id}><div className="product-row-main"><div className="product-row-title">{review.proposedCanonicalName}</div><div className="product-row-meta">Match score {review.score}/100 · {review.reasons.slice(0, 2).join(' · ') || 'Review source-profile identity evidence'}</div>{review.conflicts.length ? <div className="cta" style={{ marginTop: 8, marginBottom: 0 }}>{review.conflicts.join('; ')}</div> : null}</div><div className="product-row-actions"><button className="btn secondary" onClick={() => decide(review.id, 'rejected')}>Keep separate</button><button className="btn" onClick={() => decide(review.id, 'confirmed')}>Confirm match</button></div></div>)}</div>
+        </section>}
+
+        <section className="product-panel">
+          <div className="product-panel-head"><div><span className="kicker">Candidate Graph</span><h2>Candidates</h2></div><span>{start.toLocaleString()}–{end.toLocaleString()} of {snapshot.counts.filteredCandidates.toLocaleString()}</span></div>
+          <form onSubmit={search} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginBottom: 14 }}><input className="input" style={{ margin: 0 }} value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search name, title, company, or location" /><button className="btn" type="submit">Search</button></form>
+          {appliedSearch && <div className="button-row" style={{ marginBottom: 12 }}><span className="status-pill active">Search: {appliedSearch}</span><button className="btn ghost" onClick={() => { setSearchInput(''); setAppliedSearch(''); load(0, '') }}>Clear</button></div>}
+          <div className="product-list">
+            {snapshot.candidates.map(candidate => <div className="product-row" key={candidate.id}>
+              <div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><div className="product-row-title">{candidate.canonicalName}</div><span className={`status-pill ${candidate.mergeStatus === 'source_verified' || candidate.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(candidate.mergeStatus)}</span></div><div className="product-row-meta">{[candidate.headline || candidate.currentTitle, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate profile'}</div>{candidate.summary && <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: '7px 0 0' }}>{candidate.summary.slice(0, 220)}{candidate.summary.length > 220 ? '…' : ''}</p>}<div className="chips">{candidate.skills.slice(0, 6).map(skill => <span className="tag" key={skill}>{skill}</span>)}<span className="tag">{candidate.sourceProfileIds.length} source{candidate.sourceProfileIds.length === 1 ? '' : 's'}</span><span className="tag">{candidate.evidenceItemIds.length} evidence</span></div></div>
+              <div className="product-row-actions"><Link className="btn ghost" href={`/app/candidate/${candidate.id}`}>Open 360</Link><AddToRoleButton candidate={{ candidateId: candidate.id, name: candidate.canonicalName, headline: candidate.headline, company: candidate.currentCompany, location: candidate.location, source: 'candidate_database', contactStatus: candidate.contactSignalIds.length ? 'signals_found' : 'unknown', evidenceStatus: candidate.evidenceItemIds.length ? 'reviewed' : 'unreviewed', tags: candidate.skills }} /></div>
+            </div>)}
+            {!loading && !snapshot.candidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No matching candidates</div><div className="product-row-meta">Try a broader search or import an authorized candidate file.</div></div></div>}
+            {loading && <div className="product-row"><div className="product-row-main"><div className="product-row-title">Loading candidates…</div><div className="product-row-meta">Reading the owner-scoped Candidate Graph.</div></div></div>}
+          </div>
+          <div className="button-row" style={{ justifyContent: 'space-between', marginTop: 14 }}><button className="btn secondary" disabled={snapshot.page.offset === 0 || loading} onClick={() => load(Math.max(0, snapshot.page.offset - snapshot.page.limit), appliedSearch)}>Previous</button><button className="btn secondary" disabled={!snapshot.page.hasMore || loading} onClick={() => load(snapshot.page.offset + snapshot.page.limit, appliedSearch)}>Next</button></div>
+        </section>
+      </div>
+
+      <aside style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
+        <section className="product-panel"><div className="product-panel-head"><h2>Graph health</h2><span className={`status-pill ${snapshot.persistence_mode === 'supabase' ? 'success' : 'warning'}`}>{snapshot.persistence_mode === 'supabase' ? 'durable' : 'preview'}</span></div><div className="product-list"><div className="product-row"><div className="product-row-main"><div className="product-row-title">Contact signals</div><div className="product-row-meta">Unverified until recruiter confirmation</div></div><b>{snapshot.counts.contactSignals.toLocaleString()}</b></div><div className="product-row"><div className="product-row-main"><div className="product-row-title">Availability signals</div><div className="product-row-meta">Signals, never verified job-seeking claims</div></div><b>{snapshot.counts.openToWorkSignals.toLocaleString()}</b></div></div><Link className="btn secondary" style={{ marginTop: 14 }} href="/app/evidence-ledger">Open Evidence Ledger</Link></section>
+
+        <details className="advanced-disclosure product-panel">
+          <summary>Import authorized candidate data</summary>
+          <div style={{ marginTop: 14 }}><span className="kicker">Resume or profile text</span><textarea className="textarea big" value={resumeText} onChange={event => setResumeText(event.target.value)} /><div className="button-row"><button className="btn" onClick={importResume}>Import resume</button><button className="btn secondary" onClick={normalizeCandidate}>Preview extraction</button></div><div className="sidebar-divider" style={{ margin: '18px 0' }} /><span className="kicker">CSV paste import</span><textarea className="textarea big" value={csvText} onChange={event => setCsvText(event.target.value)} /><button className="btn" onClick={importCsv}>Import CSV</button><p className="muted" style={{ fontSize: 10, lineHeight: 1.5 }}>Use only data you are authorized to store. Production imports are owner-scoped and durable; preview imports reset between server restarts.</p></div>
+        </details>
+
+        <details className="advanced-disclosure product-panel">
+          <summary>Identity tools and recent imports</summary>
+          <div style={{ marginTop: 14 }}><button className="btn secondary" onClick={createMatchReview}>Compare first two loaded source profiles</button><div className="product-list" style={{ marginTop: 14 }}>{snapshot.importBatches.slice(0, 8).map(batch => <div className="product-row" key={batch.id}><div className="product-row-main"><div className="product-row-title">{batch.fileName || words(batch.importType)}</div><div className="product-row-meta">{batch.recordsCreated.toLocaleString()} created from {batch.rowsSeen.toLocaleString()} row{batch.rowsSeen === 1 ? '' : 's'}</div></div></div>)}</div></div>
+        </details>
+      </aside>
     </div>
-    <section>
-      <div className="button-row"><button className="btn secondary" onClick={createMatchReview}>Create match review from first two source profiles</button><Link className="btn ghost" href="/app/roles">Open role workspaces →</Link></div>
-      <h2>Candidate records</h2>
-      <div className="results">{snapshot?.candidates.map(c => <div className="result-card" key={c.id}>
-        <div className="result-head"><span>{c.mergeStatus}</span><span>{c.sourceProfileIds.length} source(s)</span></div>
-        <h3>{c.canonicalName}</h3>
-        <p className="muted">{c.headline} {c.location ? `· ${c.location}` : ''}</p>
-        <p>{c.summary}</p>
-        <div className="chips">{c.skills.map(skill => <span className="tag" key={skill}>{skill}</span>)}</div>
-        <div className="button-row" style={{ marginTop: 12 }}>
-          <Link className="btn ghost" href={`/app/candidate/${c.id}`}>Candidate 360 →</Link>
-          <AddToRoleButton candidate={{
-            candidateId: c.id,
-            name: c.canonicalName,
-            headline: c.headline,
-            company: c.currentCompany,
-            location: c.location,
-            source: 'candidate_database',
-            contactStatus: c.contactSignalIds.length ? 'signals_found' : 'unknown',
-            evidenceStatus: c.evidenceItemIds.length ? 'reviewed' : 'unreviewed',
-            tags: c.skills,
-          }} />
-        </div>
-      </div>)}</div>
-    </section>
-    <section>
-      <h2>Merge review queue</h2>
-      <div className="results">{snapshot?.matchReviews.map(r => <div className="result-card" key={r.id}><div className="result-head"><span>{r.decision}</span><span>{r.score}/100</span></div><h3>{r.proposedCanonicalName}</h3><ul>{r.reasons.map((reason: string) => <li key={reason}>{reason}</li>)}</ul>{r.conflicts.length ? <p className="muted">Conflicts: {r.conflicts.join('; ')}</p> : null}<div className="button-row"><button onClick={() => decide(r.id, 'confirmed')}>Confirm merge</button><button onClick={() => decide(r.id, 'rejected')}>Keep separate</button></div></div>)}</div>
-    </section>
+    <p className="muted" style={{ marginTop: 16, fontSize: 11 }}>{status}</p>
   </div>
 }
