@@ -4,38 +4,72 @@ import { useEffect, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import type { NetworkRow } from '@/app/api/network/list/route'
 
+type NetworkResponse = {
+  response: Response
+  rows: NetworkRow[]
+  total: number
+}
+
+async function requestNetwork(searchQuery: string): Promise<NetworkResponse> {
+  const trimmed = searchQuery.trim()
+  const url = trimmed ? `/api/network/list?q=${encodeURIComponent(trimmed)}` : '/api/network/list'
+  const response = await fetch(url, { headers: { accept: 'application/json' } })
+  const json = await response.json()
+  if (!response.ok || !json.ok) {
+    const error = new Error(json.error || 'Network search failed.') as Error & { status?: number }
+    error.status = response.status
+    throw error
+  }
+  return {
+    response,
+    rows: Array.isArray(json.rows) ? json.rows.slice(0, 12) : [],
+    total: Array.isArray(json.rows) ? json.rows.length : 0,
+  }
+}
+
 export function NetworkRoleHandoffClient() {
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<NetworkRow[]>([])
   const [state, setState] = useState<'idle' | 'loading' | 'ready' | 'auth' | 'error'>('idle')
   const [message, setMessage] = useState('Search imported connections and add selected people to a role review queue.')
 
-  async function search() {
+  async function runSearch(searchQuery: string) {
     setState('loading')
     try {
-      const url = query.trim() ? `/api/network/list?q=${encodeURIComponent(query.trim())}` : '/api/network/list'
-      const response = await fetch(url, { headers: { accept: 'application/json' } })
-      if (response.status === 401) {
-        setState('auth')
-        setRows([])
-        setMessage('Sign in to search your private network.')
-        return
-      }
-      const json = await response.json()
-      if (!response.ok || !json.ok) throw new Error(json.error || 'Network search failed.')
-      setRows(Array.isArray(json.rows) ? json.rows.slice(0, 12) : [])
+      const result = await requestNetwork(searchQuery)
+      setRows(result.rows)
       setState('ready')
-      setMessage(json.rows?.length
-        ? `Showing ${Math.min(json.rows.length, 12)} relationship-context result${json.rows.length === 1 ? '' : 's'}. Review before adding.`
+      setMessage(result.total
+        ? `Showing ${Math.min(result.total, 12)} relationship-context result${result.total === 1 ? '' : 's'}. Review before adding.`
         : 'No imported connections matched this search.')
     } catch (error) {
-      setState('error')
+      const status = (error as Error & { status?: number }).status
+      setState(status === 401 ? 'auth' : 'error')
       setRows([])
-      setMessage(error instanceof Error ? error.message : 'Network search failed.')
+      setMessage(status === 401 ? 'Sign in to search your private network.' : error instanceof Error ? error.message : 'Network search failed.')
     }
   }
 
-  useEffect(() => { search().catch(() => undefined) }, [])
+  useEffect(() => {
+    let active = true
+    requestNetwork('')
+      .then(result => {
+        if (!active) return
+        setRows(result.rows)
+        setState('ready')
+        setMessage(result.total
+          ? `Showing ${Math.min(result.total, 12)} relationship-context result${result.total === 1 ? '' : 's'}. Review before adding.`
+          : 'No imported connections matched this search.')
+      })
+      .catch(error => {
+        if (!active) return
+        const status = (error as Error & { status?: number }).status
+        setState(status === 401 ? 'auth' : 'error')
+        setRows([])
+        setMessage(status === 401 ? 'Sign in to search your private network.' : error instanceof Error ? error.message : 'Network search failed.')
+      })
+    return () => { active = false }
+  }, [])
 
   return (
     <section className="card" style={{ marginBottom: 18, padding: 16 }}>
@@ -46,11 +80,11 @@ export function NetworkRoleHandoffClient() {
         <input
           value={query}
           onChange={event => setQuery(event.target.value)}
-          onKeyDown={event => { if (event.key === 'Enter') search() }}
+          onKeyDown={event => { if (event.key === 'Enter') runSearch(query) }}
           placeholder="Search network by name, title, or company"
           style={{ flex: '1 1 320px' }}
         />
-        <button type="button" className="btn secondary" onClick={search} disabled={state === 'loading'}>
+        <button type="button" className="btn secondary" onClick={() => runSearch(query)} disabled={state === 'loading'}>
           {state === 'loading' ? 'Searching…' : 'Search network'}
         </button>
       </div>
