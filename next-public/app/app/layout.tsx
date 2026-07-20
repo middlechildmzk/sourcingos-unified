@@ -3,6 +3,7 @@ import { AppShell } from '@/components/AppShell'
 import type { Metadata } from 'next'
 import './app-shell.css'
 import './v25-2.css'
+import './import-center.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
