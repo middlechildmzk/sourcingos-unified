@@ -100,7 +100,7 @@ function matchList(text: string, values: string[]): string[] {
 
 function extractLabeledLine(text: string, labels: string[]): string {
   for (const label of labels) {
-    const match = text.match(new RegExp(`(?:^|\\n)\\s*${label}\\s*[:\\-]\\s*([^\\n]+)`, 'i'))
+    const match = text.match(new RegExp(`(?:^|\n)\s*${label}\s*[:\-]\s*([^\n]+)`, 'i'))
     if (match?.[1]) return match[1].trim()
   }
   return ''
@@ -113,7 +113,7 @@ export function parseRoleIntake(rawDescription: string): RoleIntake {
     'Untitled role'
   const location = extractLabeledLine(rawDescription, ['location', 'work location']) || 'Not specified'
   const compensation = extractLabeledLine(rawDescription, ['compensation', 'salary', 'pay range']) || 'Not specified'
-  const clearanceMatches = rawDescription.match(/TS\/?SCI|Top Secret|Secret clearance|Public Trust|CI Poly|Full Scope Poly/gi) || []
+  const clearanceMatches = rawDescription.match(/\b(?:TS\/?SCI|Top Secret|Secret|Public Trust|CI Poly|Full Scope Poly)\b/gi) || []
   const lower = rawDescription.toLowerCase()
   const workMode: RoleIntake['workMode'] = lower.includes('remote') ? 'remote' : lower.includes('hybrid') ? 'hybrid' : lower.includes('onsite') || lower.includes('on-site') ? 'onsite' : 'unknown'
   const skills = matchList(rawDescription, technicalTerms)
