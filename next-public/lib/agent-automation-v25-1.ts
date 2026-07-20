@@ -111,11 +111,11 @@ export async function sendInboxCandidateToRole(ownerId: string, inboxId: string,
   const candidate = Array.isArray(inbox.candidates) ? inbox.candidates[0] : inbox.candidates
   if (!candidate) throw new Error('Candidate record unavailable.')
   const identityKey = `candidate:${candidate.id}`
-  const { error: roleError } = await sb.from('role_candidates').upsert({ owner_id: ownerId, role_id: roleId, candidate_id: candidate.id, identity_key: identityKey, name: candidate.canonical_name, headline: candidate.headline || '', company: candidate.current_company || '', location: candidate.location || '', source: 'autosource', source_url: null, stage: 'needs_review', fit_decision: 'unreviewed', fit_reasons: [], concerns: [], tags: candidate.skills || [], contact_status: 'unknown', evidence_status: 'unreviewed', snapshot: candidate, updated_at: new Date().toISOString() }, { onConflict: 'owner_id,role_id,identity_key' })
+  const { error: roleError } = await sb.from('role_candidates').upsert({ owner_id: ownerId, role_id: roleId, candidate_id: candidate.id, identity_key: identityKey, name: candidate.canonical_name, headline: candidate.headline || '', company: candidate.current_company || '', location: candidate.location || '', source: 'autosource', source_url: null, stage: 'needs_review', fit_decision: 'unreviewed', fit_reasons: [], concerns: [], tags: candidate.skills || [], contact_status: 'unknown', evidence_status: 'unreviewed', snapshot: candidate, updated_at: new Date().toISOString() }, { onConflict: 'role_id,identity_key' })
   if (roleError) throw new Error(roleError.message)
   await Promise.all([
     sb.from('autosource_inbox').update({ role_id: roleId, status: 'sent_to_role', updated_at: new Date().toISOString() }).eq('id', inboxId).eq('owner_id', ownerId),
-    sb.from('role_activity').upsert({ owner_id: ownerId, role_id: roleId, event_key: `autosource:${inboxId}`, event_type: 'candidate_added', message: `AutoSource candidate ${candidate.canonical_name} added for recruiter review.`, payload: { candidateId: candidate.id, campaignId: inbox.campaign_id } }, { onConflict: 'owner_id,role_id,event_key' }),
+    sb.from('role_activity').upsert({ owner_id: ownerId, role_id: roleId, event_key: `autosource:${inboxId}`, event_type: 'candidate_added', message: `AutoSource candidate ${candidate.canonical_name} added for recruiter review.`, payload: { candidateId: candidate.id, campaignId: inbox.campaign_id } }, { onConflict: 'role_id,event_key' }),
   ])
   return { candidateId: candidate.id, roleId }
 }
