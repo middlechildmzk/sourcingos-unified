@@ -1,20 +1,18 @@
-import { AutoSourceClient } from '@/components/AutoSourceClient'
+import Link from 'next/link'
+import { AutoSourceCommandCenterClient } from '@/components/AutoSourceCommandCenterClient'
 
 export const metadata = {
-  title: 'AutoSource Agent — Multi-Role Sourcing Command Center',
-  description: 'Upload your req load. AutoSource splits each JD into its own sourcing project, builds a role-specific search strategy, captures candidates, learns from your calibration, and tracks a pipeline per role.',
+  title: 'AutoSource Command Center — SourcingOS',
+  description: 'Run recruiter-controlled candidate discovery, enrichment, identity review, and prioritized AutoSource campaigns.',
   robots: { index: false, follow: false },
 }
 
 export default function AutoSourcePage() {
-  return (
-    <main className="wrap">
-      <div className="eyebrow">SourcingOS Workbench — Private beta</div>
-      <AutoSourceClient />
-      <p style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6, marginTop: '32px' }}>
-        Local-first: roles and candidates are stored in your browser. Search lanes generate launchable links and manual-safe workflows —
-        no scraping, no auto-contact. Clearance and contact signals are never treated as verified. Fit scores are project-specific, not global candidate ratings.
-      </p>
-    </main>
-  )
+  return <main className="wrap">
+    <div className="eyebrow">SourcingOS V22</div>
+    <h1>AutoSource Command Center</h1>
+    <p className="lead">Create multi-source talent discovery campaigns, run approved public connectors, automatically promote high-confidence identities into the Candidate Graph, enrich known candidates, and review the rest before action.</p>
+    <div className="button-row" style={{ margin: '16px 0 22px' }}><Link className="btn ghost" href="/app/acquisition">Acquisition metrics →</Link><Link className="btn ghost" href="/app/roles">Role workspaces →</Link><Link className="btn ghost" href="/app/candidate-database">Candidate database →</Link></div>
+    <AutoSourceCommandCenterClient />
+  </main>
 }
