@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createRoleWorkspace, roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
@@ -19,11 +20,16 @@ function statusClass(status: RoleWorkspace['status']) {
 }
 
 export function RoleWorkspaceClient() {
+  const searchParams = useSearchParams()
   const { roles, mode, message, addRole } = useRoleWorkspaces()
   const [newRoleText, setNewRoleText] = useState('')
   const [showCreate, setShowCreate] = useState(false)
   const [status, setStatus] = useState('')
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (searchParams.get('new') === '1') setShowCreate(true)
+  }, [searchParams])
 
   const filteredRoles = useMemo(() => {
     const needle = query.trim().toLowerCase()
