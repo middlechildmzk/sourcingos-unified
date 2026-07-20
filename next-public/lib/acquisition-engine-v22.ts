@@ -37,7 +37,7 @@ export async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createS
     organization: safeText(d.organization, 200) || null,
     raw_text: safeText(d.summary, 5000) || null,
     raw: d.raw,
-    status: manual ? 'reviewed' : d.identityConfidence >= 92 ? 'confirmed' : 'pending',
+    status: manual || d.identityConfidence >= 92 ? 'confirmed' : 'pending',
     match_score: d.identityConfidence,
     match_reasons: [manual ? 'Recruiter accepted discovery' : `Unique ${d.sourceKey} source identity`, `Campaign score ${score}`],
     last_seen_at: new Date().toISOString(),
