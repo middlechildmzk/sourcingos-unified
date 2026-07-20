@@ -25,6 +25,20 @@ function timestamp(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+function compactActivity(activity: RoleWorkspace['activity']): RoleWorkspace['activity'] {
+  const seenIntakeUpdates = new Set<string>()
+  return [...activity]
+    .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt))
+    .filter(event => {
+      if (event.type !== 'intake_updated') return true
+      const key = `${event.type}|${event.message}`
+      if (seenIntakeUpdates.has(key)) return false
+      seenIntakeUpdates.add(key)
+      return true
+    })
+    .slice(0, 2000)
+}
+
 export function readRoleWorkspaces(): RoleWorkspace[] {
   if (typeof window === 'undefined') return []
   try {
@@ -39,8 +53,10 @@ export function readRoleWorkspaces(): RoleWorkspace[] {
 
 export function writeRoleWorkspaces(roles: RoleWorkspace[]): void {
   if (typeof window === 'undefined') return
-  window.localStorage.setItem(ROLE_WORKSPACE_STORAGE_KEY, JSON.stringify(roles))
-  window.dispatchEvent(new CustomEvent(ROLE_WORKSPACE_CHANGED_EVENT, { detail: { count: roles.length } }))
+  const compacted = roles.map(role => ({ ...role, activity: compactActivity(role.activity) }))
+  roles.splice(0, roles.length, ...compacted)
+  window.localStorage.setItem(ROLE_WORKSPACE_STORAGE_KEY, JSON.stringify(compacted))
+  window.dispatchEvent(new CustomEvent(ROLE_WORKSPACE_CHANGED_EVENT, { detail: { count: compacted.length } }))
 }
 
 export function roleCandidateIdentityKey(input: RoleCandidateInput): string {
@@ -76,7 +92,7 @@ export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspac
   for (const workspace of local) {
     const server = roles.get(workspace.id)
     if (!server) {
-      roles.set(workspace.id, workspace)
+      roles.set(workspace.id, { ...workspace, activity: compactActivity(workspace.activity) })
       continue
     }
     const localIsNewer = timestamp(workspace.updatedAt) >= timestamp(server.updatedAt)
@@ -88,7 +104,7 @@ export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspac
       ...preferred,
       searchLanes: mergeLanes(workspace.searchLanes, server.searchLanes),
       candidates: mergeCandidates(workspace.candidates, server.candidates),
-      activity: Array.from(activity.values()).sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt)),
+      activity: compactActivity(Array.from(activity.values())),
       createdAt: timestamp(workspace.createdAt) <= timestamp(server.createdAt) ? workspace.createdAt : server.createdAt,
       updatedAt: timestamp(workspace.updatedAt) >= timestamp(server.updatedAt) ? workspace.updatedAt : server.updatedAt,
     })
