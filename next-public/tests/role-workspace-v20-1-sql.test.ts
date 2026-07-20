@@ -15,8 +15,8 @@ describe('V20.1 role workspace SQL contract', () => {
   it('enables RLS on every private role table', () => {
     for (const table of ['role_workspaces', 'role_search_lanes', 'role_candidates', 'role_activity']) {
       expect(sql).toContain(`alter table public.${table} enable row level security`)
-      expect(sql).toContain(`using (owner_id = auth.uid())`)
     }
+    expect(sql.match(/using \(owner_id = \(select auth\.uid\(\)\)\)/g)).toHaveLength(4)
   })
 
   it('revokes direct authenticated writes and grants select only', () => {
@@ -31,6 +31,13 @@ describe('V20.1 role workspace SQL contract', () => {
     expect(sql).toContain('unique(role_id, identity_key)')
     expect(sql).toContain('unique(role_id, event_key)')
     expect(sql).toContain('unique(role_id, lane_key)')
+  })
+
+  it('reconciles with the existing project and Candidate Graph schema', () => {
+    expect(sql).toContain('legacy_project_id uuid null references public.projects(id)')
+    expect(sql).toContain('candidate_id uuid null references public.candidates(id)')
+    expect(sql).toContain('source_profile_id uuid null references public.source_profiles(id)')
+    expect(sql).toContain('role_candidates_source_profile_idx')
   })
 
   it('keeps candidate fit decisions role-specific', () => {
