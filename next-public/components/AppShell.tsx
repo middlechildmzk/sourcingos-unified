@@ -22,6 +22,7 @@ const primary = [
 ]
 
 const tools = [
+  { href: '/app/import', label: 'Import Center' },
   { href: '/app/candidate-search', label: 'Candidate Search' },
   { href: '/app/acquisition', label: 'Acquisition & Sources' },
   { href: '/app/evidence-ledger', label: 'Evidence Ledger' },
