@@ -86,7 +86,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const reviewQuery = sb
     .from('identity_match_reviews')
-    .select('id, candidate_id, source_profile_ids, proposed_canonical_name, match_score, match_reasons, conflicts, decision, decided_by, decided_at, created_at')
+    .select('id, candidate_id, source_profile_ids, match_score, match_reasons, conflicts, decision, decided_by, decided_at, created_at')
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false })
     .limit(1000)
@@ -170,7 +170,7 @@ export async function listEvidenceLedgerFromSupabase(
     id: stringValue(row, 'id'),
     candidateId: optionalString(row, 'candidate_id'),
     sourceProfileIds: stringArray(row, 'source_profile_ids'),
-    proposedCanonicalName: stringValue(row, 'proposed_canonical_name', 'Candidate identity review'),
+    proposedCanonicalName: 'Candidate identity review',
     score: numberValue(row, 'match_score'),
     reasons: stringArray(row, 'match_reasons'),
     conflicts: stringArray(row, 'conflicts'),
