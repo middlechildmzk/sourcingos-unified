@@ -1,5 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { AddToRoleButton } from '@/components/AddToRoleButton'
 
 type Candidate = {
   id: string
@@ -85,7 +87,7 @@ export function CandidateDbClient() {
   }
 
   return <div className="interactive-tool">
-    <div className="cta"><b>V18 preview:</b> This is a recruiter-owned Candidate Graph foundation. Source profiles remain separate, contact signals are unverified by default, and merges require recruiter confirmation.</div>
+    <div className="cta"><b>Candidate Intelligence workspace:</b> Source profiles remain separate, contact signals are unverified by default, and merges require recruiter confirmation. Add reviewed records to a role-specific queue rather than assigning a global fit score.</div>
     <div className="grid two">
       <div className="card">
         <span className="kicker">Resume import</span>
@@ -108,9 +110,29 @@ export function CandidateDbClient() {
       <div className="card"><span className="kicker">Open-to-work signals</span><div className="big-number">{snapshot?.openToWorkSignals.length || 0}</div></div>
     </div>
     <section>
-      <div className="button-row"><button className="btn secondary" onClick={createMatchReview}>Create match review from first two source profiles</button></div>
+      <div className="button-row"><button className="btn secondary" onClick={createMatchReview}>Create match review from first two source profiles</button><Link className="btn ghost" href="/app/roles">Open role workspaces →</Link></div>
       <h2>Candidate records</h2>
-      <div className="results">{snapshot?.candidates.map(c => <div className="result-card" key={c.id}><div className="result-head"><span>{c.mergeStatus}</span><span>{c.sourceProfileIds.length} source(s)</span></div><h3>{c.canonicalName}</h3><p className="muted">{c.headline} {c.location ? `· ${c.location}` : ''}</p><p>{c.summary}</p><div className="chips">{c.skills.map(skill => <span className="tag" key={skill}>{skill}</span>)}</div></div>)}</div>
+      <div className="results">{snapshot?.candidates.map(c => <div className="result-card" key={c.id}>
+        <div className="result-head"><span>{c.mergeStatus}</span><span>{c.sourceProfileIds.length} source(s)</span></div>
+        <h3>{c.canonicalName}</h3>
+        <p className="muted">{c.headline} {c.location ? `· ${c.location}` : ''}</p>
+        <p>{c.summary}</p>
+        <div className="chips">{c.skills.map(skill => <span className="tag" key={skill}>{skill}</span>)}</div>
+        <div className="button-row" style={{ marginTop: 12 }}>
+          <Link className="btn ghost" href={`/app/candidate/${c.id}`}>Candidate 360 →</Link>
+          <AddToRoleButton candidate={{
+            candidateId: c.id,
+            name: c.canonicalName,
+            headline: c.headline,
+            company: c.currentCompany,
+            location: c.location,
+            source: 'candidate_database',
+            contactStatus: c.contactSignalIds.length ? 'signals_found' : 'unknown',
+            evidenceStatus: c.evidenceItemIds.length ? 'reviewed' : 'unreviewed',
+            tags: c.skills,
+          }} />
+        </div>
+      </div>)}</div>
     </section>
     <section>
       <h2>Merge review queue</h2>
