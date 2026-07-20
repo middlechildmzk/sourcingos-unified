@@ -11,6 +11,8 @@ const resumeImport = read('app/api/candidate-db/import-resume/route.ts')
 const csvImport = read('app/api/candidate-db/import-csv/route.ts')
 const client = read('components/CandidateDbClient.tsx')
 const page = read('app/app/candidate-database/page.tsx')
+const candidate360 = read('components/Candidate360Client.tsx')
+const candidate360Page = read('app/app/candidate/[id]/page.tsx')
 
 describe('V25 Candidate Graph workspace', () => {
   it('returns one normalized contract in preview and Supabase modes', () => {
@@ -52,5 +54,17 @@ describe('V25 Candidate Graph workspace', () => {
     expect(client).toContain('Open 360')
     expect(page).toContain('<h1>Candidates</h1>')
     expect(page).not.toContain('SourcingOS V19')
+  })
+
+  it('makes Candidate 360 evidence-first and hides sensitive internals', () => {
+    expect(candidate360).toContain('Professional evidence')
+    expect(candidate360).toContain('Source profiles')
+    expect(candidate360).toContain('Contact research')
+    expect(candidate360).toContain('Availability signals')
+    expect(candidate360).toContain("action: 'extract_graph'")
+    expect(candidate360).toContain("action: 'queue_enrichment'")
+    expect(candidate360).toContain('AddToRoleButton')
+    expect(candidate360Page).not.toContain('CandidateRoleHandoff')
+    expect(candidate360Page).not.toContain('Preview mode:')
   })
 })
