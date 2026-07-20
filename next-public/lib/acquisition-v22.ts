@@ -93,8 +93,11 @@ export async function discoverPubMed(input: CampaignInput, cursor?: string | nul
     for (const author of article.authors || []) {
       const name = clean(author.name); if (!name) continue
       const key = `${name.toLowerCase()}|${clean(article.sortfirstauthor)}`
-      if (!people.has(key)) people.set(key, { sourceKey: 'pubmed', sourceId: key, sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, displayName: name, headline: 'Published researcher', summary: clean(article.title), skills: uniq(input.skills), identityConfidence: 72, profileQuality: 58, evidence: [{ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) }], raw: { author, article } })
-      else people.get(key)!.evidence.push({ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) })
+      if (!people.has(key)) {
+        people.set(key, { sourceKey: 'pubmed', sourceId: key, sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, displayName: name, headline: 'Published researcher', summary: clean(article.title), skills: uniq(input.skills), identityConfidence: 72, profileQuality: 58, evidence: [{ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) }], raw: { author, article } })
+      } else {
+        people.get(key)!.evidence.push({ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) })
+      }
     }
   }
   return { discoveries: Array.from(people.values()), cursor: ids.length === 50 ? String(retstart + 50) : null }
@@ -103,12 +106,20 @@ export async function discoverPubMed(input: CampaignInput, cursor?: string | nul
 export async function discoverCrossref(input: CampaignInput, cursor?: string | null): Promise<{ discoveries: Discovery[]; cursor: string | null }> {
   const offset = Math.max(0, Number(cursor || 0))
   const data = await getJson(`https://api.crossref.org/works?query=${encodeURIComponent(input.query)}&rows=50&offset=${offset}&select=DOI,title,author,published,URL,publisher`)
-  const items = data?.message?.items || []; const people = new Map<string, Discovery>()
-  for (const work of items) for (const author of work.author || []) {
-    const name = [clean(author.given), clean(author.family)].filter(Boolean).join(' '); if (!name) continue
-    const id = clean(author.ORCID) || `${name.toLowerCase()}|${clean(work.publisher)}`
-    const ev = { kind: 'publication', label: clean(work.publisher) || 'Crossref work', value: clean(work.title?.[0]), url: clean(work.URL) }
-    if (!people.has(id)) people.set(id, { sourceKey: 'crossref', sourceId: id, sourceUrl: clean(author.ORCID) || clean(work.URL), displayName: name, organization: clean(author.affiliation?.[0]?.name), headline: 'Published professional', skills: uniq(input.skills), identityConfidence: author.ORCID ? 94 : 70, profileQuality: author.ORCID ? 78 : 55, evidence: [ev], raw: { author, work } }) else people.get(id)!.evidence.push(ev)
+  const items = data?.message?.items || []
+  const people = new Map<string, Discovery>()
+  for (const work of items) {
+    for (const author of work.author || []) {
+      const name = [clean(author.given), clean(author.family)].filter(Boolean).join(' ')
+      if (!name) continue
+      const id = clean(author.ORCID) || `${name.toLowerCase()}|${clean(work.publisher)}`
+      const ev = { kind: 'publication', label: clean(work.publisher) || 'Crossref work', value: clean(work.title?.[0]), url: clean(work.URL) }
+      if (!people.has(id)) {
+        people.set(id, { sourceKey: 'crossref', sourceId: id, sourceUrl: clean(author.ORCID) || clean(work.URL), displayName: name, organization: clean(author.affiliation?.[0]?.name), headline: 'Published professional', skills: uniq(input.skills), identityConfidence: author.ORCID ? 94 : 70, profileQuality: author.ORCID ? 78 : 55, evidence: [ev], raw: { author, work } })
+      } else {
+        people.get(id)!.evidence.push(ev)
+      }
+    }
   }
   return { discoveries: Array.from(people.values()), cursor: items.length === 50 ? String(offset + 50) : null }
 }
