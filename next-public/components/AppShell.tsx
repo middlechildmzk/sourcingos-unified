@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { LogoutButton } from '@/components/LogoutButton'
+import { CommandPalette } from '@/components/CommandPalette'
 
 type AppShellProps = {
   children: React.ReactNode
@@ -45,6 +46,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
       </div>
 
       <div className="app-workspace-label">Recruiting workspace</div>
+      <CommandPalette />
       <nav className="app-primary-nav" aria-label="Primary workspace navigation">
         {primary.map(item => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`app-nav-item ${active(pathname, item.href) ? 'active' : ''}`}>
           <span className="app-nav-icon">{item.icon}</span>
@@ -74,6 +76,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
       <header className="app-mobile-header">
         <button className="app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation">☰</button>
         <Link href="/app/agent-os" className="app-mobile-brand">SourcingOS</Link>
+        <CommandPalette triggerClassName="app-command-trigger app-command-trigger-mobile" hotkey={false} />
         <span className={mode === 'preview' ? 'app-mode-dot preview' : 'app-mode-dot'} title={mode === 'preview' ? 'Preview mode' : 'Connected'} />
       </header>
       {mode === 'preview' && <div className="app-preview-strip"><b>Preview mode</b><span>Durable agent execution and shared candidate data are unavailable until authenticated storage is connected.</span></div>}
