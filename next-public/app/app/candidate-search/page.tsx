@@ -1,10 +1,11 @@
 import { WorkbenchClient } from '@/components/WorkbenchClient'
+import { ActiveRoleSearchContext } from '@/components/ActiveRoleSearchContext'
 import Link from 'next/link'
 
 export const metadata = {
   title: 'Candidate Search — SourcingOS Workbench',
   description:
-    'Role intake, search strategy, open-web discovery, and Candidate 360 in one workbench. Powered by Candidate Graph — recruiter-confirmed identity matching, no silent merges.',
+    'Role intake, active role context, search strategy, open-web discovery, and Candidate 360 in one recruiter-controlled workbench.',
   robots: { index: false, follow: false },
 }
 
@@ -14,11 +15,11 @@ export default function CandidateSearchPage() {
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
       <h1>Candidate Search</h1>
       <p className="lead">
-        Role intake → search strategy → open-web discovery → Candidate 360. One
-        recruiter-controlled workflow. Powered by Candidate Graph under the hood.
+        Role intake → search strategy → open-web discovery → Candidate 360 → role review queue. One recruiter-controlled workflow. Powered by Candidate Graph under the hood.
       </p>
 
-      {/* Compliance guardrails — factual, not a preview warning */}
+      <ActiveRoleSearchContext />
+
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
         <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
           No auto-merge at any confidence level ·
@@ -31,12 +32,18 @@ export default function CandidateSearchPage() {
       <WorkbenchClient publicMode={false} />
 
       <div className="card" style={{ marginTop: '32px' }}>
-        <span className="kicker">Also in the beta workflow</span>
+        <span className="kicker">Also in the connected workflow</span>
         <div className="grid two" style={{ marginTop: '12px' }}>
+          <Link href="/app/roles" style={{ color: 'inherit' }}>
+            <strong>Role Workspaces</strong>
+            <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
+              Return to the calibrated role, review queue, pipeline, activity, and storage controls.
+            </p>
+          </Link>
           <Link href="/app/candidate-database" style={{ color: 'inherit' }}>
             <strong>Candidate Database</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
-              Import resumes and CSV, normalize candidates, review identity matches, confirm merges.
+              Import resumes and CSV, normalize candidates, review identity matches, confirm merges, and add records to a role.
             </p>
           </Link>
           <Link href="/sources" style={{ color: 'inherit' }}>
