@@ -34,7 +34,7 @@ This checkpoint hardens authentication, preview isolation, role ownership, Candi
 
 Migration path:
 
-`supabase/migrations/20260721173000_role_workspace_owner_safety.sql`
+`next-public/supabase/migrations/20260721173000_role_workspace_owner_safety.sql`
 
 The migration adds composite parent and child ownership constraints while preserving the existing server-only mutation architecture:
 
