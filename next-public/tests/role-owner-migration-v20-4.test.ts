@@ -8,6 +8,7 @@ const migration = readFileSync(
 )
 
 const childTables = ['role_search_lanes', 'role_candidates', 'role_activity']
+const roleTables = ['role_workspaces', ...childTables]
 
 describe('role owner safety migration', () => {
   it('adds composite parent-child ownership constraints', () => {
@@ -19,15 +20,29 @@ describe('role owner safety migration', () => {
     }
   })
 
-  it('requires both row ownership and parent role ownership for child policies', () => {
+  it('requires both row ownership and parent role ownership for child reads', () => {
     for (const table of childTables) {
       expect(migration).toContain(`where rw.id = ${table}.role_id`)
     }
-    expect((migration.match(/rw\.owner_id = \(select auth\.uid\(\)\)/g) || []).length).toBeGreaterThanOrEqual(12)
+    expect((migration.match(/rw\.owner_id = \(select auth\.uid\(\)\)/g) || []).length).toBe(3)
   })
 
-  it('protects update ownership with USING and WITH CHECK', () => {
-    expect((migration.match(/for update to authenticated/g) || []).length).toBe(4)
-    expect((migration.match(/with check \(/g) || []).length).toBeGreaterThanOrEqual(7)
+  it('keeps authenticated clients read-only', () => {
+    for (const table of roleTables) {
+      expect(migration).toContain(`revoke all on public.${table} from anon, authenticated`)
+      expect(migration).toContain(`grant select on public.${table} to authenticated`)
+    }
+
+    expect(migration).not.toMatch(/grant\s+(?:insert|update|delete)/i)
+    expect(migration).not.toMatch(/grant\s+select\s*,\s*insert/i)
+    expect(migration).not.toMatch(/create policy [^\n]+\n\s+for (?:insert|update|delete)/i)
+  })
+
+  it('removes historical direct-write policies defensively', () => {
+    for (const table of roleTables) {
+      for (const operation of ['insert', 'update', 'delete']) {
+        expect(migration).toContain(`drop policy if exists ${table}_owner_${operation}`)
+      }
+    }
   })
 })
