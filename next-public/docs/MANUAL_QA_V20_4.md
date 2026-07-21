@@ -5,7 +5,7 @@ Use the approved beta account in one browser session and the newest magic link.
 
 ## Automated release evidence
 
-Verified at head `4606ada958662ddf9bc0462c653d733016d01ac1`:
+Verified at security head `4606ada958662ddf9bc0462c653d733016d01ac1`:
 
 - Locked Linux install: PASS
 - Cross-platform lockfile generation and macOS locked install: PASS
