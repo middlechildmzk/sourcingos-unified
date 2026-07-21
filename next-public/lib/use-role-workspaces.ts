@@ -158,6 +158,11 @@ export function useRoleWorkspaces() {
     const current = readRoleWorkspaces()
     if (!current.some(role => role.id === roleId)) return true
 
+    if (mode === 'checking' || mode === 'error') {
+      setMessage('Wait for account storage to reconnect before deleting this role.')
+      return false
+    }
+
     if (mode === 'supabase') {
       const expectedVersion = versions.current[roleId]
       if (!expectedVersion) {
