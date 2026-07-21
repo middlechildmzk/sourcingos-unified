@@ -8,18 +8,22 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 const rolesPage = read('app/app/roles/page.tsx')
 const roleDetailPage = read('app/app/roles/[id]/page.tsx')
 const rolePortfolio = read('components/RoleWorkspaceClient.tsx')
+const roleWizard = read('components/RoleIntakeWizard.tsx')
 const roleDetail = read('components/RoleDetailClient.tsx')
 const roleDelete = read('components/RoleDeleteControl.tsx')
 const roleStore = read('lib/use-role-workspaces.ts')
 const shell = read('components/AppShell.tsx')
 const palette = read('components/CommandPalette.tsx')
 const styles = read('app/app/v25-2.css')
+const v26Styles = read('app/app/v26.css')
 
 describe('V25.2 daily driver experience', () => {
-  it('uses a role portfolio plus a dedicated role workspace route', () => {
+  it('uses a guided role portfolio plus a dedicated role workspace route', () => {
     expect(rolesPage).toContain('<RoleWorkspaceClient />')
     expect(rolePortfolio).toContain('href={`/app/roles/${role.id}`}')
-    expect(rolePortfolio).toContain('Req portfolio')
+    expect(rolePortfolio).toContain('Search portfolio')
+    expect(rolePortfolio).toContain('<RoleIntakeWizard')
+    expect(roleWizard).toContain('Guided role setup')
     expect(roleDetailPage).toContain('<RoleDetailClient roleId={params.id} />')
   })
 
@@ -69,11 +73,13 @@ describe('V25.2 daily driver experience', () => {
     expect(palette).toContain('Search roles, candidates, or actions')
   })
 
-  it('includes responsive drawer, command, role tab, and pipeline styles', () => {
+  it('includes responsive drawer, command, role tab, pipeline, and guided setup styles', () => {
     expect(styles).toContain('.candidate-drawer')
     expect(styles).toContain('.command-palette')
     expect(styles).toContain('.role-tabs')
     expect(styles).toContain('.role-pipeline-board')
     expect(styles).toContain('@media(max-width:620px)')
+    expect(v26Styles).toContain('.role-wizard')
+    expect(v26Styles).toContain('.role-portfolio-row-v26')
   })
 })
