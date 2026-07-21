@@ -1,0 +1,119 @@
+name: SourcingOS lockfile refresh
+
+on:
+  push:
+    branches:
+      - v20-role-workspace-daily-driver
+    paths:
+      - next-public/package.json
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sourcingos-lockfile-refresh-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-and-verify-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: next-public/package-lock.json
+      - name: Generate a clean cross-platform lockfile
+        working-directory: next-public
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --package-lock-only --ignore-scripts --include=optional
+      - name: Verify required platform packages remain represented
+        working-directory: next-public
+        run: |
+          node - <<'NODE'
+          const lock = require('./package-lock.json')
+          const packages = lock.packages || {}
+          const required = [
+            'node_modules/@next/swc-darwin-arm64',
+            'node_modules/@next/swc-darwin-x64',
+            'node_modules/@next/swc-linux-x64-gnu',
+            'node_modules/@next/swc-linux-x64-musl',
+            'node_modules/@esbuild/darwin-arm64',
+            'node_modules/@esbuild/linux-x64',
+            'node_modules/@rollup/rollup-darwin-arm64',
+            'node_modules/@rollup/rollup-linux-x64-gnu'
+          ]
+          const missing = required.filter(name => !packages[name])
+          if (missing.length) {
+            console.error('Missing optional platform packages:', missing)
+            process.exit(1)
+          }
+          console.log('Cross-platform optional package coverage verified.')
+          NODE
+      - name: Locked install and application checks
+        working-directory: next-public
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Audit summary
+        working-directory: next-public
+        run: |
+          npm audit --json > audit.json || true
+          node - <<'NODE'
+          const audit = require('./audit.json')
+          console.log('Audit vulnerabilities:', JSON.stringify(audit.metadata?.vulnerabilities || {}))
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sourcingos-package-lock
+          path: next-public/package-lock.json
+          if-no-files-found: error
+
+  verify-macos:
+    needs: generate-and-verify-linux
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/download-artifact@v4
+        with:
+          name: sourcingos-package-lock
+          path: lockfile-artifact
+      - name: Verify macOS locked install
+        run: |
+          cp lockfile-artifact/package-lock.json next-public/package-lock.json
+          cd next-public
+          npm ci
+
+  commit-lockfile:
+    needs:
+      - generate-and-verify-linux
+      - verify-macos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: sourcingos-package-lock
+          path: lockfile-artifact
+      - name: Commit verified lockfile
+        run: |
+          cp lockfile-artifact/package-lock.json next-public/package-lock.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add next-public/package-lock.json
+          if git diff --cached --quiet; then
+            echo "Lockfile already current."
+            exit 0
+          fi
+          git commit -m "chore: refresh verified cross-platform lockfile"
+          git push origin HEAD:${{ github.ref_name }}
