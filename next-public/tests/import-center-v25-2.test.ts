@@ -49,7 +49,7 @@ describe('V25.2 Import Center', () => {
     expect(historyRoute).toContain(".from('candidate_import_batches')")
     expect(historyRoute).toContain(".eq('owner_id', gate.userId)")
     expect(page).toContain('<ImportCenterClient />')
-    expect(shell).toContain("{ href: '/app/import', label: 'Import Center' }")
+    expect(shell).toContain("{ href: '/app/import', label: 'Import Center', icon: 'import'")
   })
 
   it('is explicit about the current XLSX boundary and includes responsive workflow styles', () => {
