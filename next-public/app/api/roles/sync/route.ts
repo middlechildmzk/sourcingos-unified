@@ -2,7 +2,7 @@ import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
-import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { createServerSupabaseClient, isDurablePersistenceConfigured } from '@/lib/supabase/server'
 import { ROLE_STAGES, type RoleWorkspace } from '@/lib/role-workspace'
 
 export const dynamic = 'force-dynamic'
@@ -47,13 +47,17 @@ function validateWorkspace(value: unknown): { ok: true; workspace: RoleWorkspace
   return { ok: true, workspace }
 }
 
+function uniqueViolation(error: { code?: string } | null): boolean {
+  return error?.code === '23505'
+}
+
 export async function GET(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const rl = await rateLimit(req, 'workbench', gate.userId)
   if (!rl.ok) return rl.response
 
-  if (!isSupabaseConfigured() || gate.preview) {
+  if (!isDurablePersistenceConfigured() || gate.preview) {
     return NextResponse.json({ ok: true, mode: 'preview', workspaces: [], note: 'Durable role storage is not configured.' })
   }
 
@@ -141,7 +145,7 @@ export async function POST(req: NextRequest) {
   const validation = validateWorkspace((body as { workspace?: unknown })?.workspace)
   if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 })
 
-  if (!isSupabaseConfigured() || gate.preview) {
+  if (!isDurablePersistenceConfigured() || gate.preview) {
     return NextResponse.json({
       ok: true,
       mode: 'preview',
@@ -170,21 +174,75 @@ export async function POST(req: NextRequest) {
     hiringManagerNotes: text(workspace.intake.hiringManagerNotes, 5000),
     rawDescription: text(workspace.intake.rawDescription, 50000),
   }
+  const now = new Date().toISOString()
 
-  const { error: roleError } = await sb.from('role_workspaces').upsert({
-    id: workspace.id,
-    owner_id: ownerId,
-    status: workspace.status,
-    title: intake.title,
-    location: intake.location,
-    work_mode: intake.workMode || 'unknown',
-    compensation: intake.compensation,
-    clearance: intake.clearance,
-    intake,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'id' })
+  const { data: existingRole, error: lookupError } = await sb
+    .from('role_workspaces')
+    .select('owner_id,version')
+    .eq('id', workspace.id)
+    .maybeSingle()
 
-  if (roleError) return NextResponse.json({ ok: false, error: roleError.message }, { status: 500 })
+  if (lookupError) return NextResponse.json({ ok: false, error: lookupError.message }, { status: 500 })
+  if (existingRole && existingRole.owner_id !== ownerId) {
+    return NextResponse.json(
+      { ok: false, code: 'role_owned_by_another', error: 'This role belongs to another account.' },
+      { status: 403 }
+    )
+  }
+
+  let version = 1
+  if (existingRole) {
+    version = Math.max(1, Number(existingRole.version) || 1) + 1
+    const { data: updatedRole, error: updateError } = await sb
+      .from('role_workspaces')
+      .update({
+        status: workspace.status,
+        title: intake.title,
+        location: intake.location,
+        work_mode: intake.workMode || 'unknown',
+        compensation: intake.compensation,
+        clearance: intake.clearance,
+        intake,
+        version,
+        updated_at: now,
+      })
+      .eq('id', workspace.id)
+      .eq('owner_id', ownerId)
+      .select('id')
+      .maybeSingle()
+
+    if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 })
+    if (!updatedRole) {
+      return NextResponse.json(
+        { ok: false, code: 'role_write_conflict', error: 'The role changed before this save completed.' },
+        { status: 409 }
+      )
+    }
+  } else {
+    const { error: insertError } = await sb
+      .from('role_workspaces')
+      .insert({
+        id: workspace.id,
+        owner_id: ownerId,
+        status: workspace.status,
+        title: intake.title,
+        location: intake.location,
+        work_mode: intake.workMode || 'unknown',
+        compensation: intake.compensation,
+        clearance: intake.clearance,
+        intake,
+        version,
+        updated_at: now,
+      })
+
+    if (uniqueViolation(insertError)) {
+      return NextResponse.json(
+        { ok: false, code: 'role_create_conflict', error: 'A role with this identifier already exists.' },
+        { status: 409 }
+      )
+    }
+    if (insertError) return NextResponse.json({ ok: false, error: insertError.message }, { status: 500 })
+  }
 
   const laneRows = workspace.searchLanes.map(lane => ({
     owner_id: ownerId,
@@ -195,7 +253,7 @@ export async function POST(req: NextRequest) {
     query: text(lane.query, 5000),
     source: text(lane.source, 120),
     status: LANE_STATUSES.has(lane.status) ? lane.status : 'proposed',
-    updated_at: new Date().toISOString(),
+    updated_at: now,
   })).filter(row => row.lane_key && row.label && row.source)
 
   const candidateRows = workspace.candidates.map(candidate => ({
@@ -247,6 +305,7 @@ export async function POST(req: NextRequest) {
     mode: 'supabase',
     persisted: true,
     workspaceId: workspace.id,
+    version,
     counts: { lanes: laneRows.length, candidates: candidateRows.length, activity: activityRows.length },
   })
 }
