@@ -3,6 +3,20 @@
 Run this checklist against the latest Vercel preview after GitHub CI is green.
 Use the approved beta account in one browser session and the newest magic link.
 
+## Automated release evidence
+
+Verified at head `4606ada958662ddf9bc0462c653d733016d01ac1`:
+
+- Locked Linux install: PASS
+- Cross-platform lockfile generation and macOS locked install: PASS
+- TypeScript: PASS
+- Deterministic tests: 168/168 across 75 suites
+- Production build: PASS
+- Vercel preview deployment: READY
+- Stable branch alias: `https://sourcingos-unified-git-v20-role-0eef77-middlechildmzks-projects.vercel.app`
+
+The owner-safety migration is committed but has not been applied to Supabase.
+
 ## Authentication
 
 1. Open `/app` while signed out. Confirm redirect to `/login`.
@@ -41,11 +55,10 @@ Check Today, Roles, AutoSource, Candidates, Candidate 360, and the role candidat
 
 Record browser-console errors, network failures, and screenshots for any issue.
 
-## Release evidence to record
+## Remaining evidence to record
 
-- GitHub head SHA
-- GitHub Actions run URL and exact test count
-- Vercel preview URL
-- Supabase migration status (not applied / test / production)
-- Browser and device used
-- Remaining failures
+- Supabase migration result and advisor output
+- Authenticated desktop and mobile screenshots
+- Browser-console results
+- Preview callback allowlist confirmation
+- `CRON_SECRET` confirmation and one successful scheduled invocation
