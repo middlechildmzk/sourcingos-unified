@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const ROLE_ID = '11111111-1111-4111-8111-111111111111'
+
 const state = vi.hoisted(() => ({
   existingOwner: 'user-B' as string | null,
   existingVersion: 1,
   insertError: null as null | { code?: string; message: string },
-  updateData: { id: '11111111-1111-4111-8111-111111111111' } as { id: string } | null,
+  updateData: { id: ROLE_ID } as { id: string } | null,
   updateError: null as null | { message: string },
+  deleteData: { id: ROLE_ID } as { id: string } | null,
+  deleteError: null as null | { message: string },
   insertPayload: null as Record<string, unknown> | null,
   updatePayload: null as Record<string, unknown> | null,
+  versionFilters: [] as unknown[],
   childWrites: 0,
 }))
 
@@ -19,15 +24,19 @@ vi.mock('@/lib/supabase/server', () => ({
   isDurablePersistenceConfigured: () => true,
   createServerSupabaseClient: () => ({
     from: (table: string) => {
-      let operation: 'lookup' | 'update' | '' = ''
+      let operation: 'lookup' | 'update' | 'delete' | '' = ''
       const builder: any = {
         select: () => {
           if (!operation) operation = 'lookup'
           return builder
         },
-        eq: () => builder,
+        eq: (column: string, value: unknown) => {
+          if (column === 'version') state.versionFilters.push(value)
+          return builder
+        },
         maybeSingle: async () => {
           if (operation === 'update') return { data: state.updateData, error: state.updateError }
+          if (operation === 'delete') return { data: state.deleteData, error: state.deleteError }
           return {
             data: state.existingOwner ? { owner_id: state.existingOwner, version: state.existingVersion } : null,
             error: null,
@@ -36,6 +45,10 @@ vi.mock('@/lib/supabase/server', () => ({
         update: (payload: Record<string, unknown>) => {
           operation = 'update'
           state.updatePayload = payload
+          return builder
+        },
+        delete: () => {
+          operation = 'delete'
           return builder
         },
         insert: async (payload: Record<string, unknown>) => {
@@ -52,11 +65,9 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
 }))
 
-import { POST } from '@/app/api/roles/sync/route'
+import { DELETE, POST } from '@/app/api/roles/sync/route'
 
-const ROLE_ID = '11111111-1111-4111-8111-111111111111'
-
-function workspace(withChild = false) {
+function workspace(withChild = false, expectedVersion?: number) {
   return {
     workspace: {
       id: ROLE_ID,
@@ -66,6 +77,7 @@ function workspace(withChild = false) {
       candidates: [],
       activity: [],
     },
+    expectedVersion,
   }
 }
 
@@ -77,20 +89,30 @@ function request(body: unknown) {
   } as any
 }
 
+function deleteRequest(expectedVersion = 1) {
+  return {
+    headers: new Headers(),
+    url: `http://localhost/api/roles/sync?roleId=${ROLE_ID}&expectedVersion=${expectedVersion}`,
+  } as any
+}
+
 beforeEach(() => {
   state.existingOwner = 'user-B'
   state.existingVersion = 1
   state.insertError = null
   state.updateData = { id: ROLE_ID }
   state.updateError = null
+  state.deleteData = { id: ROLE_ID }
+  state.deleteError = null
   state.insertPayload = null
   state.updatePayload = null
+  state.versionFilters = []
   state.childWrites = 0
 })
 
-describe('/api/roles/sync owner safety', () => {
+describe('/api/roles/sync owner and version safety', () => {
   it('rejects another owner’s role before any parent or child write', async () => {
-    const response = await POST(request(workspace(true)))
+    const response = await POST(request(workspace(true, 1)))
     expect(response.status).toBe(403)
     expect((await response.json()).code).toBe('role_owned_by_another')
     expect(state.insertPayload).toBeNull()
@@ -98,19 +120,48 @@ describe('/api/roles/sync owner safety', () => {
     expect(state.childWrites).toBe(0)
   })
 
-  it('updates only a role owned by the authenticated user and never rewrites owner_id', async () => {
+  it('updates only the expected version of a role owned by the authenticated user', async () => {
     state.existingOwner = 'user-A'
-    const response = await POST(request(workspace()))
+    const response = await POST(request(workspace(false, 1)))
     expect(response.status).toBe(200)
+    expect(state.updatePayload).toMatchObject({ version: 2 })
     expect(state.updatePayload).not.toHaveProperty('owner_id')
+    expect(state.versionFilters).toContain(1)
     expect(state.insertPayload).toBeNull()
   })
 
-  it('inserts a new role with the authenticated owner', async () => {
+  it('requires a known server version before updating an existing role', async () => {
+    state.existingOwner = 'user-A'
+    const response = await POST(request(workspace()))
+    expect(response.status).toBe(409)
+    expect((await response.json()).code).toBe('role_version_required')
+    expect(state.updatePayload).toBeNull()
+  })
+
+  it('rejects stale browser edits before any child write', async () => {
+    state.existingOwner = 'user-A'
+    state.existingVersion = 3
+    const response = await POST(request(workspace(true, 2)))
+    expect(response.status).toBe(409)
+    expect((await response.json()).code).toBe('role_version_conflict')
+    expect(state.updatePayload).toBeNull()
+    expect(state.childWrites).toBe(0)
+  })
+
+  it('inserts a new role with the authenticated owner and version one', async () => {
     state.existingOwner = null
     const response = await POST(request(workspace()))
     expect(response.status).toBe(200)
-    expect(state.insertPayload).toMatchObject({ id: ROLE_ID, owner_id: 'user-A' })
+    expect(state.insertPayload).toMatchObject({ id: ROLE_ID, owner_id: 'user-A', version: 1 })
+    expect((await response.json()).version).toBe(1)
+  })
+
+  it('does not silently recreate a role that was deleted on the server', async () => {
+    state.existingOwner = null
+    const response = await POST(request(workspace(false, 4)))
+    expect(response.status).toBe(409)
+    expect((await response.json()).code).toBe('role_missing_on_server')
+    expect(state.insertPayload).toBeNull()
   })
 
   it('returns 409 when a concurrent create wins the same role id', async () => {
@@ -122,19 +173,40 @@ describe('/api/roles/sync owner safety', () => {
     expect(state.childWrites).toBe(0)
   })
 
-  it('returns 409 when the owner-scoped update affects no row', async () => {
+  it('returns 409 when the version-scoped update affects no row', async () => {
     state.existingOwner = 'user-A'
     state.updateData = null
-    const response = await POST(request(workspace(true)))
+    const response = await POST(request(workspace(true, 1)))
     expect(response.status).toBe(409)
     expect((await response.json()).code).toBe('role_write_conflict')
     expect(state.childWrites).toBe(0)
   })
 
-  it('writes child records only after the parent write succeeds', async () => {
+  it('writes child records only after the versioned parent write succeeds', async () => {
     state.existingOwner = null
     const response = await POST(request(workspace(true)))
     expect(response.status).toBe(200)
     expect(state.childWrites).toBe(1)
+  })
+})
+
+describe('DELETE /api/roles/sync', () => {
+  it('deletes only the authenticated owner’s expected role version', async () => {
+    const response = await DELETE(deleteRequest(4))
+    expect(response.status).toBe(200)
+    expect(state.versionFilters).toContain(4)
+    expect((await response.json()).persisted).toBe(true)
+  })
+
+  it('returns 409 when the role changed or is unavailable', async () => {
+    state.deleteData = null
+    const response = await DELETE(deleteRequest())
+    expect(response.status).toBe(409)
+    expect((await response.json()).code).toBe('role_delete_conflict')
+  })
+
+  it('requires a valid version', async () => {
+    const response = await DELETE({ headers: new Headers(), url: `http://localhost/api/roles/sync?roleId=${ROLE_ID}` } as any)
+    expect(response.status).toBe(400)
   })
 })
