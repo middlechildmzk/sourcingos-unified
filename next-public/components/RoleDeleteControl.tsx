@@ -13,6 +13,7 @@ export function RoleDeleteControl({ roleId }: { roleId: string }) {
   const storageReady = mode === 'supabase' || mode === 'preview'
 
   if (!role) return null
+  const roleTitle = role.intake.title
 
   async function deleteRole() {
     if (!storageReady) {
@@ -21,7 +22,7 @@ export function RoleDeleteControl({ roleId }: { roleId: string }) {
     }
 
     const confirmed = window.confirm(
-      `Delete ${role.intake.title}? This removes the role workspace and its role-specific candidates, search lanes, and activity. This cannot be undone.`
+      `Delete ${roleTitle}? This removes the role workspace and its role-specific candidates, search lanes, and activity. This cannot be undone.`
     )
     if (!confirmed) return
 
