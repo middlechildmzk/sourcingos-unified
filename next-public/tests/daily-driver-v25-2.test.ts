@@ -40,11 +40,18 @@ describe('V25.2 daily driver experience', () => {
     expect(roleDetail).toContain("action: 'extract_graph'")
   })
 
-  it('hydrates roles from account storage and debounces owner-scoped sync', () => {
+  it('hydrates server versions and debounces versioned owner-scoped sync', () => {
     expect(roleStore).toContain("fetch('/api/roles/sync'")
     expect(roleStore).toContain('hydrateRoleWorkspaces')
     expect(roleStore).toContain('scheduleSync')
-    expect(roleStore).toContain('JSON.stringify({ workspace })')
+    expect(roleStore).toContain('expectedVersion: versions.current[workspace.id]')
+    expect(roleStore).toContain('versionsFromResponse(json.versions)')
+  })
+
+  it('supports version-checked durable role deletion', () => {
+    expect(roleStore).toContain("method: 'DELETE'")
+    expect(roleStore).toContain('expectedVersion=${expectedVersion}')
+    expect(roleStore).toContain('The local workspace was preserved.')
   })
 
   it('adds a global role and candidate command palette', () => {
