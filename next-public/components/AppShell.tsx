@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { LogoutButton } from '@/components/LogoutButton'
 import { CommandPalette } from '@/components/CommandPalette'
+import { ProductIcon, type ProductIconName } from '@/components/ProductIcon'
 
 type AppShellProps = {
   children: React.ReactNode
@@ -14,20 +15,27 @@ type AppShellProps = {
   role?: string | null
 }
 
-const primary = [
-  { href: '/app/agent-os', label: 'Today', icon: '✦', description: 'Approvals and agent work' },
-  { href: '/app/roles', label: 'Roles', icon: '▣', description: 'Active searches and pipelines' },
-  { href: '/app/autosource', label: 'AutoSource', icon: '◎', description: 'Campaigns and candidate review' },
-  { href: '/app/candidate-database', label: 'Candidates', icon: '◉', description: 'Candidate intelligence graph' },
+type NavigationItem = {
+  href: string
+  label: string
+  icon: ProductIconName
+  description: string
+}
+
+const primary: NavigationItem[] = [
+  { href: '/app/agent-os', label: 'Today', icon: 'today', description: 'Your decisions and agent work' },
+  { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Searches, strategy, and pipelines' },
+  { href: '/app/autosource', label: 'AutoSource', icon: 'autosource', description: 'Discovery campaigns and review' },
+  { href: '/app/candidate-database', label: 'Candidates', icon: 'candidates', description: 'Identity, evidence, and rediscovery' },
 ]
 
-const tools = [
-  { href: '/app/import', label: 'Import Center' },
-  { href: '/app/candidate-search', label: 'Candidate Search' },
-  { href: '/app/acquisition', label: 'Acquisition & Sources' },
-  { href: '/app/evidence-ledger', label: 'Evidence Ledger' },
-  { href: '/app/network', label: 'Network Vault' },
-  { href: '/sources', label: 'Source Toolkit' },
+const tools: NavigationItem[] = [
+  { href: '/app/import', label: 'Import Center', icon: 'import', description: 'Bring in candidate data' },
+  { href: '/app/candidate-search', label: 'Candidate Search', icon: 'search', description: 'Search across known records' },
+  { href: '/app/acquisition', label: 'Acquisition & Sources', icon: 'acquisition', description: 'Source operations' },
+  { href: '/app/evidence-ledger', label: 'Evidence Ledger', icon: 'ledger', description: 'Claim provenance and review' },
+  { href: '/app/network', label: 'Network Vault', icon: 'network', description: 'Relationships and warm paths' },
+  { href: '/sources', label: 'Source Toolkit', icon: 'toolkit', description: 'Open sourcing utilities' },
 ]
 
 function active(pathname: string, href: string) {
@@ -42,7 +50,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
   return <div className="app-shell">
     <aside className={`app-sidebar ${mobileOpen ? 'app-sidebar-open' : ''}`}>
       <div className="app-brand-row">
-        <Link href="/app/agent-os" className="app-brand-mark"><span>S</span><b>SourcingOS</b></Link>
+        <Link href="/app/agent-os" className="app-brand-mark"><span>S</span><div><b>SourcingOS</b><small>Recruiter intelligence</small></div></Link>
         <button className="app-sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
       </div>
 
@@ -50,7 +58,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
       <CommandPalette />
       <nav className="app-primary-nav" aria-label="Primary workspace navigation">
         {primary.map(item => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={`app-nav-item ${active(pathname, item.href) ? 'active' : ''}`}>
-          <span className="app-nav-icon">{item.icon}</span>
+          <span className="app-nav-icon"><ProductIcon name={item.icon} /></span>
           <span><b>{item.label}</b><small>{item.description}</small></span>
         </Link>)}
       </nav>
@@ -60,7 +68,9 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
         <span>Tools & data</span><span>{toolsOpen ? '−' : '+'}</span>
       </button>
       {toolsOpen && <nav className="app-secondary-nav" aria-label="Secondary tools">
-        {tools.map(item => <Link key={item.href} href={item.href} onClick={() => setMobileOpen(false)} className={active(pathname, item.href) ? 'active' : ''}>{item.label}</Link>)}
+        {tools.map(item => <Link key={item.href} href={item.href} title={item.description} onClick={() => setMobileOpen(false)} className={active(pathname, item.href) ? 'active' : ''}>
+          <ProductIcon name={item.icon} /><span>{item.label}</span>
+        </Link>)}
       </nav>}
 
       <div className="app-sidebar-spacer" />
