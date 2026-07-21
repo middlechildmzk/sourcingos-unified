@@ -1,19 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ROLE_ID = '11111111-1111-4111-8111-111111111111'
+const CANDIDATE_ID = '22222222-2222-4222-8222-222222222222'
 
 const state = vi.hoisted(() => ({
-  existingOwner: 'user-B' as string | null,
-  existingVersion: 1,
-  insertError: null as null | { code?: string; message: string },
-  updateData: { id: '11111111-1111-4111-8111-111111111111' } as { id: string } | null,
-  updateError: null as null | { message: string },
+  rpcData: {
+    ok: true,
+    version: 2,
+    updatedAt: '2026-07-21T18:00:00.000Z',
+    counts: { lanes: 1, candidates: 1, activity: 1 },
+  } as Record<string, unknown> | null,
+  rpcError: null as null | { code?: string; message: string },
+  rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
+  fromCalls: [] as string[],
   deleteData: { id: '11111111-1111-4111-8111-111111111111' } as { id: string } | null,
   deleteError: null as null | { message: string },
-  insertPayload: null as Record<string, unknown> | null,
-  updatePayload: null as Record<string, unknown> | null,
   versionFilters: [] as unknown[],
-  childWrites: 0,
 }))
 
 vi.mock('@/lib/auth-gate', () => ({
@@ -23,42 +25,20 @@ vi.mock('@/lib/rate-limit', () => ({ rateLimit: async () => ({ ok: true }) }))
 vi.mock('@/lib/supabase/server', () => ({
   isDurablePersistenceConfigured: () => true,
   createServerSupabaseClient: () => ({
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      state.rpcCalls.push({ name, args })
+      return { data: state.rpcData, error: state.rpcError }
+    },
     from: (table: string) => {
-      let operation: 'lookup' | 'update' | 'delete' | '' = ''
+      state.fromCalls.push(table)
       const builder: any = {
-        select: () => {
-          if (!operation) operation = 'lookup'
-          return builder
-        },
+        delete: () => builder,
         eq: (column: string, value: unknown) => {
           if (column === 'version') state.versionFilters.push(value)
           return builder
         },
-        maybeSingle: async () => {
-          if (operation === 'update') return { data: state.updateData, error: state.updateError }
-          if (operation === 'delete') return { data: state.deleteData, error: state.deleteError }
-          return {
-            data: state.existingOwner ? { owner_id: state.existingOwner, version: state.existingVersion } : null,
-            error: null,
-          }
-        },
-        update: (payload: Record<string, unknown>) => {
-          operation = 'update'
-          state.updatePayload = payload
-          return builder
-        },
-        delete: () => {
-          operation = 'delete'
-          return builder
-        },
-        insert: async (payload: Record<string, unknown>) => {
-          state.insertPayload = payload
-          return { data: null, error: state.insertError }
-        },
-        upsert: async () => {
-          if (table !== 'role_workspaces') state.childWrites += 1
-          return { data: null, error: null }
-        },
+        select: () => builder,
+        maybeSingle: async () => ({ data: state.deleteData, error: state.deleteError }),
       }
       return builder
     },
@@ -67,15 +47,48 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { DELETE, POST } from '@/app/api/roles/sync/route'
 
-function workspace(withChild = false, expectedVersion?: number) {
+function workspace(expectedVersion?: number) {
   return {
     workspace: {
       id: ROLE_ID,
       status: 'active',
-      intake: { title: 'Senior Sourcer' },
-      searchLanes: withChild ? [{ id: 'lane-1', label: 'Core', purpose: '', query: 'sourcer', source: 'candidate_graph', status: 'approved' }] : [],
-      candidates: [],
-      activity: [],
+      intake: {
+        title: ' Senior Sourcer ',
+        location: ' Minneapolis ',
+        workMode: 'remote',
+        mustHaves: ['Sourcing', 'Sourcing'],
+      },
+      searchLanes: [
+        { id: 'lane-1', label: ' Core ', purpose: '', query: 'sourcer', source: 'candidate_graph', status: 'approved' },
+        { id: 'lane-1', label: ' Core ', purpose: '', query: 'sourcer', source: 'candidate_graph', status: 'approved' },
+      ],
+      candidates: [
+        {
+          id: CANDIDATE_ID,
+          name: 'Candidate One',
+          headline: 'Recruiter',
+          company: 'Example',
+          location: 'Minnesota',
+          source: 'manual',
+          stage: 'needs_review',
+          fitDecision: 'unreviewed',
+          fitReasons: [],
+          concerns: [],
+          tags: [],
+          contactStatus: 'unknown',
+          evidenceStatus: 'unreviewed',
+          addedAt: '2026-07-21T17:00:00.000Z',
+          updatedAt: 'not-a-date',
+        },
+      ],
+      activity: [
+        {
+          id: 'event-1',
+          type: 'role_updated',
+          message: 'Role updated',
+          createdAt: '2026-07-21T17:30:00.000Z',
+        },
+      ],
     },
     expectedVersion,
   }
@@ -97,96 +110,107 @@ function deleteRequest(expectedVersion = 1) {
 }
 
 beforeEach(() => {
-  state.existingOwner = 'user-B'
-  state.existingVersion = 1
-  state.insertError = null
-  state.updateData = { id: ROLE_ID }
-  state.updateError = null
+  state.rpcData = {
+    ok: true,
+    version: 2,
+    updatedAt: '2026-07-21T18:00:00.000Z',
+    counts: { lanes: 1, candidates: 1, activity: 1 },
+  }
+  state.rpcError = null
+  state.rpcCalls = []
+  state.fromCalls = []
   state.deleteData = { id: ROLE_ID }
   state.deleteError = null
-  state.insertPayload = null
-  state.updatePayload = null
   state.versionFilters = []
-  state.childWrites = 0
 })
 
-describe('/api/roles/sync owner and version safety', () => {
-  it('rejects another owner’s role before any parent or child write', async () => {
-    const response = await POST(request(workspace(true, 1)))
+describe('POST /api/roles/sync atomic snapshot safety', () => {
+  it('rejects invalid workspaces before calling the database', async () => {
+    const response = await POST(request({ workspace: { id: 'bad' } }))
+    expect(response.status).toBe(400)
+    expect(state.rpcCalls).toHaveLength(0)
+    expect(state.fromCalls).toHaveLength(0)
+  })
+
+  it('delegates one sanitized, deduplicated snapshot to the server-only RPC', async () => {
+    state.rpcData = {
+      ok: true,
+      version: 5,
+      updatedAt: '2026-07-21T18:00:00.000Z',
+      counts: { lanes: 1, candidates: 1, activity: 1 },
+    }
+
+    const response = await POST(request(workspace(4)))
+    expect(response.status).toBe(200)
+    expect(state.rpcCalls).toHaveLength(1)
+    expect(state.fromCalls).toHaveLength(0)
+
+    const call = state.rpcCalls[0]
+    expect(call.name).toBe('save_role_workspace_snapshot')
+    expect(call.args).toMatchObject({
+      p_owner_id: 'user-A',
+      p_role_id: ROLE_ID,
+      p_expected_version: 4,
+      p_role: {
+        title: 'Senior Sourcer',
+        location: 'Minneapolis',
+        work_mode: 'remote',
+      },
+    })
+    expect(call.args.p_lanes).toHaveLength(1)
+    expect(call.args.p_candidates).toHaveLength(1)
+    expect(call.args.p_activity).toHaveLength(1)
+    expect((call.args.p_candidates as Array<Record<string, unknown>>)[0].updated_at).toEqual(expect.stringMatching(/Z$/))
+    expect((await response.json()).version).toBe(5)
+  })
+
+  it('maps cross-owner rejection from the transaction to 403', async () => {
+    state.rpcData = {
+      ok: false,
+      status: 403,
+      code: 'role_owned_by_another',
+      error: 'This role belongs to another account.',
+    }
+
+    const response = await POST(request(workspace(1)))
     expect(response.status).toBe(403)
     expect((await response.json()).code).toBe('role_owned_by_another')
-    expect(state.insertPayload).toBeNull()
-    expect(state.updatePayload).toBeNull()
-    expect(state.childWrites).toBe(0)
   })
 
-  it('updates only the expected version of a role owned by the authenticated user', async () => {
-    state.existingOwner = 'user-A'
-    const response = await POST(request(workspace(false, 1)))
-    expect(response.status).toBe(200)
-    expect(state.updatePayload).toMatchObject({ version: 2 })
-    expect(state.updatePayload).not.toHaveProperty('owner_id')
-    expect(state.versionFilters).toContain(1)
-    expect(state.insertPayload).toBeNull()
-  })
+  it('maps stale-version rejection and preserves the current version', async () => {
+    state.rpcData = {
+      ok: false,
+      status: 409,
+      code: 'role_version_conflict',
+      error: 'This role changed in another session. Refresh before saving.',
+      currentVersion: 7,
+    }
 
-  it('requires a known server version before updating an existing role', async () => {
-    state.existingOwner = 'user-A'
-    const response = await POST(request(workspace()))
+    const response = await POST(request(workspace(6)))
     expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('role_version_required')
-    expect(state.updatePayload).toBeNull()
+    expect(await response.json()).toMatchObject({
+      code: 'role_version_conflict',
+      currentVersion: 7,
+    })
   })
 
-  it('rejects stale browser edits before any child write', async () => {
-    state.existingOwner = 'user-A'
-    state.existingVersion = 3
-    const response = await POST(request(workspace(true, 2)))
-    expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('role_version_conflict')
-    expect(state.updatePayload).toBeNull()
-    expect(state.childWrites).toBe(0)
+  it('fails closed when the atomic migration is not available', async () => {
+    state.rpcData = null
+    state.rpcError = { code: 'PGRST202', message: 'Could not find the function public.save_role_workspace_snapshot' }
+
+    const response = await POST(request(workspace(1)))
+    expect(response.status).toBe(503)
+    expect((await response.json()).code).toBe('role_snapshot_migration_required')
+    expect(state.fromCalls).toHaveLength(0)
   })
 
-  it('inserts a new role with the authenticated owner and version one', async () => {
-    state.existingOwner = null
-    const response = await POST(request(workspace()))
-    expect(response.status).toBe(200)
-    expect(state.insertPayload).toMatchObject({ id: ROLE_ID, owner_id: 'user-A', version: 1 })
-    expect((await response.json()).version).toBe(1)
-  })
+  it('returns 500 for unexpected RPC failures without starting direct writes', async () => {
+    state.rpcData = null
+    state.rpcError = { message: 'database unavailable' }
 
-  it('does not silently recreate a role that was deleted on the server', async () => {
-    state.existingOwner = null
-    const response = await POST(request(workspace(false, 4)))
-    expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('role_missing_on_server')
-    expect(state.insertPayload).toBeNull()
-  })
-
-  it('returns 409 when a concurrent create wins the same role id', async () => {
-    state.existingOwner = null
-    state.insertError = { code: '23505', message: 'duplicate key' }
-    const response = await POST(request(workspace(true)))
-    expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('role_create_conflict')
-    expect(state.childWrites).toBe(0)
-  })
-
-  it('returns 409 when the version-scoped update affects no row', async () => {
-    state.existingOwner = 'user-A'
-    state.updateData = null
-    const response = await POST(request(workspace(true, 1)))
-    expect(response.status).toBe(409)
-    expect((await response.json()).code).toBe('role_write_conflict')
-    expect(state.childWrites).toBe(0)
-  })
-
-  it('writes child records only after the versioned parent write succeeds', async () => {
-    state.existingOwner = null
-    const response = await POST(request(workspace(true)))
-    expect(response.status).toBe(200)
-    expect(state.childWrites).toBe(1)
+    const response = await POST(request(workspace(1)))
+    expect(response.status).toBe(500)
+    expect(state.fromCalls).toHaveLength(0)
   })
 })
 
@@ -194,6 +218,7 @@ describe('DELETE /api/roles/sync', () => {
   it('deletes only the authenticated owner’s expected role version', async () => {
     const response = await DELETE(deleteRequest(4))
     expect(response.status).toBe(200)
+    expect(state.fromCalls).toEqual(['role_workspaces'])
     expect(state.versionFilters).toContain(4)
     expect((await response.json()).persisted).toBe(true)
   })
