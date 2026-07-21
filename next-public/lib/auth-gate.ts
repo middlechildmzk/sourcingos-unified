@@ -1,7 +1,9 @@
 import 'server-only'
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
-import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { previewBypassEnabled, resolveServerAuthMode } from '@/lib/supabase/config'
+
+export { previewBypassEnabled }
 
 export interface GateOk {
   ok: true
@@ -22,16 +24,17 @@ function fail(status: 401 | 403 | 503, code: string, error: string): GateFail {
   }
 }
 
-export function previewBypassEnabled(): boolean {
-  if (process.env.VERCEL_ENV === 'production') return false
-  return process.env.ALLOW_PREVIEW_BYPASS === 'true'
-}
-
 export async function requireSession(opts?: { admin?: boolean }): Promise<GateResult> {
-  if (!isSupabaseConfigured()) {
-    if (previewBypassEnabled()) {
-      return { ok: true, userId: 'preview-user', isAdmin: false, preview: true }
+  const mode = resolveServerAuthMode()
+
+  if (mode === 'preview-bypass') {
+    if (opts?.admin) {
+      return fail(403, 'forbidden', 'Admin access is unavailable in preview bypass mode.')
     }
+    return { ok: true, userId: 'preview-user', isAdmin: false, preview: true }
+  }
+
+  if (mode === 'unavailable') {
     return fail(503, 'auth_unavailable', 'Authentication is unavailable. Please try again later.')
   }
 
