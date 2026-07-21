@@ -1,4 +1,4 @@
-import type { RoleCandidate, RoleWorkspace, SearchLane } from './role-workspace'
+import type { RoleActivity, RoleCandidate, RoleIntake, RoleWorkspace, SearchLane } from './role-workspace'
 
 export const ROLE_WORKSPACE_STORAGE_KEY = 'sourcingos.v20.role-workspaces'
 export const ROLE_WORKSPACE_CHANGED_EVENT = 'sourcingos:role-workspaces-changed'
@@ -16,18 +16,144 @@ export type RoleCandidateInput = {
   tags?: string[]
 }
 
-function normalize(value: string | undefined): string {
+const roleStatuses = new Set<RoleWorkspace['status']>(['draft', 'calibrating', 'active', 'paused', 'closed'])
+const workModes = new Set<RoleIntake['workMode']>(['remote', 'hybrid', 'onsite', 'flexible', 'unknown'])
+const laneSources = new Set<SearchLane['source']>(['candidate_database', 'network', 'github', 'research', 'healthcare', 'resume_xray', 'web_xray'])
+const laneStatuses = new Set<SearchLane['status']>(['proposed', 'approved', 'paused'])
+const candidateStages = new Set<RoleCandidate['stage']>(['discovered', 'needs_review', 'shortlisted', 'contact_research', 'ready_for_outreach', 'outreach_drafted', 'contacted', 'responded', 'interested', 'submitted', 'interviewing', 'offer', 'closed', 'archived'])
+const fitDecisions = new Set<RoleCandidate['fitDecision']>(['unreviewed', 'strong_fit', 'possible_fit', 'not_fit'])
+const contactStatuses = new Set<RoleCandidate['contactStatus']>(['unknown', 'signals_found', 'verified', 'blocked'])
+const evidenceStatuses = new Set<RoleCandidate['evidenceStatus']>(['unreviewed', 'reviewed', 'conflicting', 'stale'])
+const activityTypes = new Set<RoleActivity['type']>(['role_created', 'intake_updated', 'lane_approved', 'candidate_added', 'candidate_reviewed', 'stage_changed', 'note_added'])
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function normalize(value: unknown): string {
   return String(value || '').trim()
 }
 
-function timestamp(value: string | undefined): number {
-  const parsed = Date.parse(String(value || ''))
+function textArray(value: unknown, max = 50): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map(normalize).filter(Boolean))).slice(0, max)
+}
+
+function validIso(value: unknown, fallback: string): string {
+  const text = normalize(value)
+  return Number.isFinite(Date.parse(text)) ? text : fallback
+}
+
+function enumValue<T extends string>(value: unknown, allowed: Set<T>, fallback: T): T {
+  const text = normalize(value) as T
+  return allowed.has(text) ? text : fallback
+}
+
+function timestamp(value: unknown): number {
+  const parsed = Date.parse(normalize(value))
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function compactActivity(activity: RoleWorkspace['activity']): RoleWorkspace['activity'] {
+function normalizeIntake(value: unknown, legacy: Record<string, unknown>): RoleIntake {
+  const intake = record(value) || {}
+  return {
+    title: normalize(intake.title || legacy.title) || 'Untitled role',
+    location: normalize(intake.location || legacy.location) || 'Not specified',
+    workMode: enumValue(intake.workMode || intake.work_mode, workModes, 'unknown'),
+    compensation: normalize(intake.compensation) || 'Not specified',
+    clearance: normalize(intake.clearance) || 'Not specified',
+    mustHaves: textArray(intake.mustHaves || intake.must_haves),
+    niceToHaves: textArray(intake.niceToHaves || intake.nice_to_haves),
+    disqualifiers: textArray(intake.disqualifiers),
+    targetCompanies: textArray(intake.targetCompanies || intake.target_companies),
+    adjacentBackgrounds: textArray(intake.adjacentBackgrounds || intake.adjacent_backgrounds),
+    hiringManagerNotes: normalize(intake.hiringManagerNotes || intake.hiring_manager_notes),
+    rawDescription: normalize(intake.rawDescription || intake.raw_description || legacy.rawDescription || legacy.raw_description),
+  }
+}
+
+function normalizeLane(value: unknown, roleId: string, index: number): SearchLane | null {
+  const lane = record(value)
+  if (!lane) return null
+  const label = normalize(lane.label)
+  const query = normalize(lane.query)
+  if (!label && !query) return null
+  return {
+    id: normalize(lane.id) || `${roleId}-lane-${index}`,
+    label: label || 'Search lane',
+    purpose: normalize(lane.purpose),
+    query,
+    source: enumValue(lane.source, laneSources, 'web_xray'),
+    status: enumValue(lane.status, laneStatuses, 'proposed'),
+  }
+}
+
+function normalizeCandidate(value: unknown, roleId: string, index: number, fallbackTime: string): RoleCandidate | null {
+  const candidate = record(value)
+  if (!candidate) return null
+  const name = normalize(candidate.name || candidate.canonicalName || candidate.canonical_name)
+  if (!name) return null
+  const addedAt = validIso(candidate.addedAt || candidate.added_at, fallbackTime)
+  return {
+    id: normalize(candidate.id) || `${roleId}-candidate-${index}`,
+    candidateId: normalize(candidate.candidateId || candidate.candidate_id) || undefined,
+    name,
+    headline: normalize(candidate.headline),
+    company: normalize(candidate.company || candidate.currentCompany || candidate.current_company),
+    location: normalize(candidate.location),
+    source: normalize(candidate.source) || 'unknown',
+    sourceUrl: normalize(candidate.sourceUrl || candidate.source_url) || undefined,
+    stage: enumValue(candidate.stage, candidateStages, 'needs_review'),
+    fitDecision: enumValue(candidate.fitDecision || candidate.fit_decision, fitDecisions, 'unreviewed'),
+    fitReasons: textArray(candidate.fitReasons || candidate.fit_reasons),
+    concerns: textArray(candidate.concerns),
+    tags: textArray(candidate.tags, 20),
+    contactStatus: enumValue(candidate.contactStatus || candidate.contact_status, contactStatuses, 'unknown'),
+    evidenceStatus: enumValue(candidate.evidenceStatus || candidate.evidence_status, evidenceStatuses, 'unreviewed'),
+    addedAt,
+    updatedAt: validIso(candidate.updatedAt || candidate.updated_at, addedAt),
+  }
+}
+
+function normalizeActivity(value: unknown, roleId: string, index: number, fallbackTime: string): RoleActivity | null {
+  const activity = record(value)
+  if (!activity) return null
+  const message = normalize(activity.message)
+  if (!message) return null
+  return {
+    id: normalize(activity.id) || `${roleId}-activity-${index}`,
+    type: enumValue(activity.type, activityTypes, 'note_added'),
+    message,
+    createdAt: validIso(activity.createdAt || activity.created_at, fallbackTime),
+  }
+}
+
+export function normalizeRoleWorkspace(value: unknown): RoleWorkspace | null {
+  const role = record(value)
+  if (!role) return null
+  const id = normalize(role.id)
+  if (!id) return null
+  const now = new Date().toISOString()
+  const createdAt = validIso(role.createdAt || role.created_at, now)
+  const updatedAt = validIso(role.updatedAt || role.updated_at, createdAt)
+  const lanes = Array.isArray(role.searchLanes || role.search_lanes) ? role.searchLanes || role.search_lanes : []
+  const candidates = Array.isArray(role.candidates) ? role.candidates : []
+  const activity = Array.isArray(role.activity) ? role.activity : []
+  return {
+    id,
+    status: enumValue(role.status, roleStatuses, 'calibrating'),
+    intake: normalizeIntake(role.intake, role),
+    searchLanes: (lanes as unknown[]).map((lane, index) => normalizeLane(lane, id, index)).filter((lane): lane is SearchLane => Boolean(lane)),
+    candidates: candidates.map((candidate, index) => normalizeCandidate(candidate, id, index, createdAt)).filter((candidate): candidate is RoleCandidate => Boolean(candidate)),
+    activity: activity.map((event, index) => normalizeActivity(event, id, index, createdAt)).filter((event): event is RoleActivity => Boolean(event)),
+    createdAt,
+    updatedAt,
+  }
+}
+
+function compactActivity(activity: RoleWorkspace['activity'] | undefined): RoleWorkspace['activity'] {
   const seenIntakeUpdates = new Set<string>()
-  return [...activity]
+  return [...(Array.isArray(activity) ? activity : [])]
     .sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt))
     .filter(event => {
       if (event.type !== 'intake_updated') return true
@@ -45,7 +171,8 @@ export function readRoleWorkspaces(): RoleWorkspace[] {
     const raw = window.localStorage.getItem(ROLE_WORKSPACE_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map(normalizeRoleWorkspace).filter((role): role is RoleWorkspace => Boolean(role))
   } catch {
     return []
   }
@@ -53,7 +180,10 @@ export function readRoleWorkspaces(): RoleWorkspace[] {
 
 export function writeRoleWorkspaces(roles: RoleWorkspace[]): void {
   if (typeof window === 'undefined') return
-  const compacted = roles.map(role => ({ ...role, activity: compactActivity(role.activity) }))
+  const compacted = roles
+    .map(normalizeRoleWorkspace)
+    .filter((role): role is RoleWorkspace => Boolean(role))
+    .map(role => ({ ...role, activity: compactActivity(role.activity) }))
   roles.splice(0, roles.length, ...compacted)
   window.localStorage.setItem(ROLE_WORKSPACE_STORAGE_KEY, JSON.stringify(compacted))
   window.dispatchEvent(new CustomEvent(ROLE_WORKSPACE_CHANGED_EVENT, { detail: { count: compacted.length } }))
@@ -66,18 +196,16 @@ export function roleCandidateIdentityKey(input: RoleCandidateInput): string {
   return `profile:${normalize(input.name).toLowerCase()}|${normalize(input.company).toLowerCase()}|${normalize(input.source).toLowerCase()}`
 }
 
-function mergeLanes(local: SearchLane[], remote: SearchLane[]): SearchLane[] {
+function mergeLanes(local: SearchLane[] = [], remote: SearchLane[] = []): SearchLane[] {
   const lanes = new Map<string, SearchLane>()
   for (const lane of remote) lanes.set(lane.id, lane)
   for (const lane of local) lanes.set(lane.id, lane)
   return Array.from(lanes.values())
 }
 
-function mergeCandidates(local: RoleCandidate[], remote: RoleCandidate[]): RoleCandidate[] {
+function mergeCandidates(local: RoleCandidate[] = [], remote: RoleCandidate[] = []): RoleCandidate[] {
   const candidates = new Map<string, RoleCandidate>()
-  for (const candidate of remote) {
-    candidates.set(roleCandidateIdentityKey(candidate), candidate)
-  }
+  for (const candidate of remote) candidates.set(roleCandidateIdentityKey(candidate), candidate)
   for (const candidate of local) {
     const key = roleCandidateIdentityKey(candidate)
     const existing = candidates.get(key)
@@ -88,8 +216,13 @@ function mergeCandidates(local: RoleCandidate[], remote: RoleCandidate[]): RoleC
 
 export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspace[]): RoleWorkspace[] {
   const roles = new Map<string, RoleWorkspace>()
-  for (const workspace of remote) roles.set(workspace.id, workspace)
-  for (const workspace of local) {
+  for (const value of remote) {
+    const workspace = normalizeRoleWorkspace(value)
+    if (workspace) roles.set(workspace.id, workspace)
+  }
+  for (const value of local) {
+    const workspace = normalizeRoleWorkspace(value)
+    if (!workspace) continue
     const server = roles.get(workspace.id)
     if (!server) {
       roles.set(workspace.id, { ...workspace, activity: compactActivity(workspace.activity) })
@@ -139,9 +272,7 @@ export function addCandidateToRole(roleId: string, input: RoleCandidateInput, no
     sourceUrl: candidate.sourceUrl,
   }) === identityKey)
 
-  if (duplicate) {
-    return { ok: true, duplicate: true, role, candidate: duplicate, message: `${duplicate.name} is already in ${role.intake.title}.` }
-  }
+  if (duplicate) return { ok: true, duplicate: true, role, candidate: duplicate, message: `${duplicate.name} is already in ${role.intake.title}.` }
 
   const timestampValue = now.toISOString()
   const candidate: RoleCandidate = {
@@ -167,18 +298,12 @@ export function addCandidateToRole(roleId: string, input: RoleCandidateInput, no
   const updatedRole: RoleWorkspace = {
     ...role,
     candidates: [candidate, ...role.candidates],
-    activity: [{
-      id: crypto.randomUUID(),
-      type: 'candidate_added',
-      message: `Added ${candidate.name} from ${candidate.source} to the review queue.`,
-      createdAt: timestampValue,
-    }, ...role.activity],
+    activity: [{ id: crypto.randomUUID(), type: 'candidate_added', message: `Added ${candidate.name} from ${candidate.source} to the review queue.`, createdAt: timestampValue }, ...role.activity],
     updatedAt: timestampValue,
   }
 
   const updatedRoles = [...roles]
   updatedRoles[roleIndex] = updatedRole
   writeRoleWorkspaces(updatedRoles)
-
   return { ok: true, duplicate: false, role: updatedRole, candidate, message: `Added ${candidate.name} to ${updatedRole.intake.title}.` }
 }
