@@ -2,8 +2,10 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { createRoleWorkspace, roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
+import { useRouter } from 'next/navigation'
+import { roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
+import { RoleIntakeWizard } from '@/components/RoleIntakeWizard'
 
 const demoJd = `Program Director - Human Performance and Readiness
 Location: Tampa, FL / Hybrid
@@ -18,15 +20,32 @@ function statusClass(status: RoleWorkspace['status']) {
   return ''
 }
 
+function roleHealth(role: RoleWorkspace): number {
+  const metrics = roleMetrics(role)
+  const approved = role.searchLanes.filter(lane => lane.status === 'approved').length
+  let score = role.status === 'active' ? 35 : role.status === 'calibrating' ? 22 : 12
+  score += Math.min(24, approved * 8)
+  score += Math.min(21, metrics.strongFits * 7)
+  score += Math.min(12, metrics.contactReady * 6)
+  if (metrics.candidateCount && !metrics.needsReview) score += 8
+  return Math.min(score, 100)
+}
+
 export function RoleWorkspaceClient() {
+  const router = useRouter()
   const { roles, mode, message, addRole } = useRoleWorkspaces()
-  const [newRoleText, setNewRoleText] = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [wizardText, setWizardText] = useState('')
+  const [wizardKey, setWizardKey] = useState(0)
   const [status, setStatus] = useState('')
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('new') === '1') setShowCreate(true)
+    if (new URLSearchParams(window.location.search).get('new') === '1') {
+      setWizardText('')
+      setWizardKey(current => current + 1)
+      setShowCreate(true)
+    }
   }, [])
 
   const filteredRoles = useMemo(() => {
@@ -45,60 +64,98 @@ export function RoleWorkspaceClient() {
     return summary
   }, { active: 0, calibrating: 0, candidates: 0, needsReview: 0 }), [roles])
 
-  function createRole() {
-    if (newRoleText.trim().length < 80) {
-      setStatus('Paste a complete job description or intake summary before creating the role.')
-      return
-    }
-    const role = createRoleWorkspace(newRoleText)
+  function openWizard(text = '') {
+    setWizardText(text)
+    setWizardKey(current => current + 1)
+    setShowCreate(true)
+    setStatus('')
+  }
+
+  function createRole(role: RoleWorkspace) {
     addRole(role)
-    setNewRoleText('')
     setShowCreate(false)
-    setStatus(`Created ${role.intake.title}. Open the role to calibrate strategy and launch the agent.`)
+    setStatus(`Created ${role.intake.title}. The calibrated workspace is ready for strategy review and discovery.`)
+    router.push(`/app/roles/${role.id}`)
   }
 
   return <div className="interactive-tool">
     {status && <div className="cta" role="status">{status}</div>}
 
-    <div className="product-page-actions" style={{ marginBottom: 18 }}>
-      <button className="btn" onClick={() => setShowCreate(value => !value)}>{showCreate ? 'Close intake' : 'New role'}</button>
-      {!showCreate && <button className="btn secondary" onClick={() => { setNewRoleText(demoJd); setShowCreate(true) }}>Load demo intake</button>}
-      <span className={`status-pill ${mode === 'supabase' ? 'success' : mode === 'error' ? 'warning' : ''}`}>{mode === 'checking' ? 'connecting' : mode}</span>
+    <div className="role-portfolio-actions">
+      <div>
+        <button className="btn" onClick={() => showCreate ? setShowCreate(false) : openWizard()}>{showCreate ? 'Close guided setup' : 'Create role'}</button>
+        {!showCreate && <button className="btn secondary" onClick={() => openWizard(demoJd)}>Try POTFF demo</button>}
+      </div>
+      <div className="role-portfolio-status">
+        <span className={`status-pill ${mode === 'supabase' ? 'success' : mode === 'error' ? 'warning' : ''}`}>{mode === 'checking' ? 'connecting' : mode}</span>
+        <span>{message}</span>
+      </div>
     </div>
 
-    {showCreate && <section className="product-panel" style={{ marginBottom: 18 }}>
-      <div className="product-panel-head"><div><span className="kicker">New role</span><h2>Create a calibrated workspace</h2></div><span>JD or intake notes</span></div>
-      <textarea className="textarea big" value={newRoleText} onChange={event => setNewRoleText(event.target.value)} placeholder="Paste the full job description, hiring-manager notes, or calibrated intake…" style={{ minHeight: 220 }} />
-      <div className="button-row"><button className="btn" onClick={createRole}>Create role workspace</button><button className="btn ghost" onClick={() => setNewRoleText(demoJd)}>Use demo</button></div>
-      <p className="muted" style={{ fontSize: 11, marginBottom: 0 }}>SourcingOS proposes intake fields and search lanes. The recruiter still approves strategy, identity, fit, disposition, and outreach.</p>
-    </section>}
+    {showCreate && <RoleIntakeWizard
+      key={wizardKey}
+      initialText={wizardText}
+      onCancel={() => setShowCreate(false)}
+      onCreate={createRole}
+    />}
 
-    <div className="product-summary-grid">
-      <div className="product-stat"><small>Active roles</small><b>{totals.active}</b><span>Currently sourcing</span></div>
-      <div className="product-stat"><small>Calibrating</small><b>{totals.calibrating}</b><span>Need intake or strategy review</span></div>
-      <div className="product-stat"><small>Role candidates</small><b>{totals.candidates}</b><span>Across every req</span></div>
-      <div className="product-stat"><small>Needs review</small><b>{totals.needsReview}</b><span>Human decisions pending</span></div>
+    <div className="product-summary-grid role-portfolio-summary">
+      <div className="product-stat"><small>Active searches</small><b>{totals.active}</b><span>Currently sourcing</span></div>
+      <div className="product-stat"><small>In calibration</small><b>{totals.calibrating}</b><span>Need intake or strategy review</span></div>
+      <div className="product-stat"><small>Role candidates</small><b>{totals.candidates}</b><span>Across every requisition</span></div>
+      <div className="product-stat"><small>Decisions waiting</small><b>{totals.needsReview}</b><span>Human review required</span></div>
     </div>
 
-    <section className="product-panel">
-      <div className="product-panel-head"><div><span className="kicker">Req portfolio</span><h2>Role workspaces</h2></div><span>{roles.length} total</span></div>
-      {!!roles.length && <input className="input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search roles, locations, status, or clearance" aria-label="Search roles" />}
+    <section className="product-panel role-portfolio-panel">
+      <div className="product-panel-head">
+        <div><span className="kicker">Search portfolio</span><h2>Role workspaces</h2></div>
+        <span>{roles.length} total</span>
+      </div>
+
+      {!!roles.length && <div className="role-portfolio-toolbar">
+        <input className="input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search title, location, status, or clearance" aria-label="Search roles" />
+        <button className="btn ghost" onClick={() => setQuery('')} disabled={!query}>Clear</button>
+      </div>}
+
       <div className="product-list">
         {filteredRoles.map(role => {
           const metrics = roleMetrics(role)
-          return <Link className="product-row role-portfolio-row" href={`/app/roles/${role.id}`} key={role.id}>
-            <div className="product-row-main">
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}><div className="product-row-title">{role.intake.title}</div><span className={`status-pill ${statusClass(role.status)}`}>{role.status}</span></div>
-              <div className="product-row-meta">{[role.intake.location, role.intake.workMode, role.intake.clearance !== 'Not specified' ? role.intake.clearance : '', `${metrics.candidateCount} candidates`, `${metrics.needsReview} to review`].filter(Boolean).join(' · ')}</div>
-              <div className="role-progress-line"><span style={{ width: `${Math.min(100, metrics.candidateCount ? 35 + metrics.strongFits * 12 + metrics.contactReady * 8 : role.status === 'active' ? 28 : 14)}%` }} /></div>
+          const health = roleHealth(role)
+          const approvedLanes = role.searchLanes.filter(lane => lane.status === 'approved').length
+          return <Link className="product-row role-portfolio-row role-portfolio-row-v26" href={`/app/roles/${role.id}`} key={role.id}>
+            <div className="role-portfolio-health" aria-label={`${health}% search health`}>
+              <div style={{ background: `conic-gradient(var(--app-accent) ${health}%, rgba(148,169,198,.12) 0)` }}><span>{health}</span></div>
+              <small>health</small>
             </div>
-            <div className="product-row-actions"><span className="status-pill">{role.searchLanes.filter(lane => lane.status === 'approved').length} lanes</span><span className="btn ghost">Open workspace →</span></div>
+            <div className="product-row-main">
+              <div className="role-portfolio-title-row">
+                <div className="product-row-title">{role.intake.title}</div>
+                <span className={`status-pill ${statusClass(role.status)}`}>{role.status}</span>
+              </div>
+              <div className="product-row-meta">{[role.intake.location, role.intake.workMode, role.intake.clearance !== 'Not specified' ? role.intake.clearance : ''].filter(Boolean).join(' · ') || 'Location and work mode pending'}</div>
+              <div className="role-portfolio-signal-row">
+                <span><b>{metrics.candidateCount}</b> candidates</span>
+                <span><b>{metrics.needsReview}</b> to review</span>
+                <span><b>{metrics.strongFits}</b> strong fits</span>
+                <span><b>{approvedLanes}</b> lanes approved</span>
+              </div>
+              <div className="role-progress-line"><span style={{ width: `${health}%` }} /></div>
+            </div>
+            <div className="product-row-actions"><span className="btn ghost">Open workspace →</span></div>
           </Link>
         })}
-        {!filteredRoles.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">{roles.length ? 'No roles match this search' : 'Create your first role'}</div><div className="product-row-meta">{roles.length ? 'Try a title, location, clearance, or role status.' : 'A role becomes the shared home for intake, strategy, candidate review, pipeline, and agent activity.'}</div></div>{!roles.length && <button className="btn" onClick={() => setShowCreate(true)}>Create role</button>}</div>}
+
+        {!filteredRoles.length && <div className="role-portfolio-empty">
+          <div className="role-portfolio-empty-mark">✦</div>
+          <div>
+            <div className="product-row-title">{roles.length ? 'No roles match this search' : 'Create your first calibrated search'}</div>
+            <div className="product-row-meta">{roles.length
+              ? 'Try a title, location, clearance, or role status.'
+              : 'Paste a JD, confirm the intake, approve search lanes, and open a role workspace in one guided flow.'}</div>
+          </div>
+          {!roles.length && <button className="btn" onClick={() => openWizard()}>Start guided setup</button>}
+        </div>}
       </div>
     </section>
-
-    <div className="role-storage-note">{message}</div>
   </div>
 }
