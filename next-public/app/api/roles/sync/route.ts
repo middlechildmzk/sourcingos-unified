@@ -24,6 +24,11 @@ function textArray(value: unknown, maxItems = 30, maxLength = 200): string[] {
   return Array.from(new Set(value.map(item => text(item, maxLength)).filter(Boolean))).slice(0, maxItems)
 }
 
+function positiveInteger(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
 function identityKey(candidate: RoleWorkspace['candidates'][number]): string {
   const sourceUrl = text(candidate.sourceUrl, 1500).toLowerCase()
   if (sourceUrl) return `url:${sourceUrl}`
@@ -58,7 +63,7 @@ export async function GET(req: NextRequest) {
   if (!rl.ok) return rl.response
 
   if (!isDurablePersistenceConfigured() || gate.preview) {
-    return NextResponse.json({ ok: true, mode: 'preview', workspaces: [], note: 'Durable role storage is not configured.' })
+    return NextResponse.json({ ok: true, mode: 'preview', workspaces: [], versions: {}, note: 'Durable role storage is not configured.' })
   }
 
   const sb = createServerSupabaseClient()
@@ -74,7 +79,8 @@ export async function GET(req: NextRequest) {
 
   if (roleError) return NextResponse.json({ ok: false, error: roleError.message }, { status: 500 })
   const roleIds = (roles || []).map(role => role.id)
-  if (!roleIds.length) return NextResponse.json({ ok: true, mode: 'supabase', workspaces: [] })
+  const versions = Object.fromEntries((roles || []).map(role => [role.id, positiveInteger(role.version) || 1]))
+  if (!roleIds.length) return NextResponse.json({ ok: true, mode: 'supabase', workspaces: [], versions })
 
   const [lanesResult, candidatesResult, activityResult] = await Promise.all([
     sb.from('role_search_lanes').select('*').eq('owner_id', ownerId).in('role_id', roleIds),
@@ -126,7 +132,7 @@ export async function GET(req: NextRequest) {
     updatedAt: role.updated_at,
   }))
 
-  return NextResponse.json({ ok: true, mode: 'supabase', workspaces })
+  return NextResponse.json({ ok: true, mode: 'supabase', workspaces, versions })
 }
 
 export async function POST(req: NextRequest) {
@@ -142,8 +148,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const validation = validateWorkspace((body as { workspace?: unknown })?.workspace)
+  const payload = body as { workspace?: unknown; expectedVersion?: unknown }
+  const validation = validateWorkspace(payload?.workspace)
   if (!validation.ok) return NextResponse.json({ ok: false, error: validation.error }, { status: 400 })
+  const expectedVersion = positiveInteger(payload?.expectedVersion)
 
   if (!isDurablePersistenceConfigured() || gate.preview) {
     return NextResponse.json({
@@ -192,7 +200,21 @@ export async function POST(req: NextRequest) {
 
   let version = 1
   if (existingRole) {
-    version = Math.max(1, Number(existingRole.version) || 1) + 1
+    const currentVersion = positiveInteger(existingRole.version) || 1
+    if (expectedVersion === null) {
+      return NextResponse.json(
+        { ok: false, code: 'role_version_required', error: 'Refresh this role before saving again.', currentVersion },
+        { status: 409 }
+      )
+    }
+    if (expectedVersion !== currentVersion) {
+      return NextResponse.json(
+        { ok: false, code: 'role_version_conflict', error: 'This role changed in another session. Refresh before saving.', currentVersion },
+        { status: 409 }
+      )
+    }
+
+    version = currentVersion + 1
     const { data: updatedRole, error: updateError } = await sb
       .from('role_workspaces')
       .update({
@@ -208,6 +230,7 @@ export async function POST(req: NextRequest) {
       })
       .eq('id', workspace.id)
       .eq('owner_id', ownerId)
+      .eq('version', currentVersion)
       .select('id')
       .maybeSingle()
 
@@ -219,6 +242,13 @@ export async function POST(req: NextRequest) {
       )
     }
   } else {
+    if (expectedVersion !== null) {
+      return NextResponse.json(
+        { ok: false, code: 'role_missing_on_server', error: 'This role was removed from the account. Refresh before recreating it.' },
+        { status: 409 }
+      )
+    }
+
     const { error: insertError } = await sb
       .from('role_workspaces')
       .insert({
@@ -306,6 +336,46 @@ export async function POST(req: NextRequest) {
     persisted: true,
     workspaceId: workspace.id,
     version,
+    updatedAt: now,
     counts: { lanes: laneRows.length, candidates: candidateRows.length, activity: activityRows.length },
   })
+}
+
+export async function DELETE(req: NextRequest) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
+  const url = new URL(req.url)
+  const roleId = text(url.searchParams.get('roleId'), 60)
+  const expectedVersion = positiveInteger(url.searchParams.get('expectedVersion'))
+  if (!UUID_RE.test(roleId)) return NextResponse.json({ ok: false, error: 'Valid role id is required.' }, { status: 400 })
+  if (expectedVersion === null) return NextResponse.json({ ok: false, error: 'Valid role version is required.' }, { status: 400 })
+
+  if (!isDurablePersistenceConfigured() || gate.preview) {
+    return NextResponse.json({ ok: true, mode: 'preview', persisted: false, workspaceId: roleId })
+  }
+
+  const sb = createServerSupabaseClient()
+  if (!sb) return NextResponse.json({ ok: false, error: 'Supabase client unavailable.' }, { status: 500 })
+
+  const { data: deletedRole, error } = await sb
+    .from('role_workspaces')
+    .delete()
+    .eq('id', roleId)
+    .eq('owner_id', gate.userId)
+    .eq('version', expectedVersion)
+    .select('id')
+    .maybeSingle()
+
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  if (!deletedRole) {
+    return NextResponse.json(
+      { ok: false, code: 'role_delete_conflict', error: 'This role changed or is no longer available. Refresh before deleting.' },
+      { status: 409 }
+    )
+  }
+
+  return NextResponse.json({ ok: true, mode: 'supabase', persisted: true, workspaceId: roleId })
 }
