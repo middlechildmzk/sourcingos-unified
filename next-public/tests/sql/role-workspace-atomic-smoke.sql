@@ -3,39 +3,30 @@
 -- Ephemeral PostgreSQL contract test for the unapplied role durability migration.
 -- This creates only the minimal dependencies needed to execute the real SQL files.
 
-do $$
-begin
-  if not exists (select 1 from pg_roles where rolname = 'anon') then
-    create role anon nologin;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
-    create role authenticated nologin;
-  end if;
-  if not exists (select 1 from pg_roles where rolname = 'service_role') then
-    create role service_role nologin bypassrls;
-  end if;
-end $$;
+create role anon nologin;
+create role authenticated nologin;
+create role service_role nologin bypassrls;
 
-create schema if not exists auth;
-create table if not exists auth.users (
+create schema auth;
+create table auth.users (
   id uuid primary key
 );
 
-create or replace function auth.uid()
+create function auth.uid()
 returns uuid
 language sql
 stable
 as $$ select null::uuid $$;
 
-create table if not exists public.projects (
+create table public.projects (
   id uuid primary key
 );
 
-create table if not exists public.candidates (
+create table public.candidates (
   id uuid primary key
 );
 
-create table if not exists public.source_profiles (
+create table public.source_profiles (
   id uuid primary key
 );
 
