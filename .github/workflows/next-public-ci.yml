@@ -46,7 +46,21 @@ jobs:
         run: npm run typecheck
 
       - name: Run deterministic tests
-        run: npm run test
+        run: |
+          npm run test -- --reporter=json --outputFile=vitest-report.json
+          node - <<'NODE'
+          const report = require('./vitest-report.json')
+          console.log(`Vitest: ${report.numPassedTests}/${report.numTotalTests} tests passed across ${report.numPassedTestSuites}/${report.numTotalTestSuites} suites.`)
+          if (report.numFailedTests || report.numFailedTestSuites) process.exit(1)
+          NODE
+
+      - name: Upload deterministic test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-report
+          path: next-public/vitest-report.json
+          if-no-files-found: warn
 
       - name: Build production application
         run: npm run build
