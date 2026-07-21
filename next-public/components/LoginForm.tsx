@@ -18,6 +18,11 @@ function readableLoginError(message: string) {
   return message
 }
 
+export function resolveLoginCallbackOrigin(currentOrigin: string, currentHostname: string, configuredSiteUrl?: string) {
+  const isVercelPreview = /(?:^|\.)vercel\.app$/i.test(currentHostname)
+  return isVercelPreview ? currentOrigin : configuredSiteUrl || currentOrigin
+}
+
 export function LoginForm({ from, error: initialError }: LoginFormProps) {
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -55,9 +60,14 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
     setStatus('sending')
     setMessage('')
 
-    // Build the callback URL so Supabase knows where to redirect after the link click
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
-    const callbackUrl = new URL('/auth/callback', siteUrl)
+    // Preview deployments must return to the same preview hostname. Using the
+    // production site URL here sends testers back to an older production build.
+    const callbackOrigin = resolveLoginCallbackOrigin(
+      window.location.origin,
+      window.location.hostname,
+      process.env.NEXT_PUBLIC_SITE_URL
+    )
+    const callbackUrl = new URL('/auth/callback', callbackOrigin)
     if (from) callbackUrl.searchParams.set('next', from)
 
     try {
@@ -65,7 +75,7 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
         email: trimmedEmail,
         options: {
           emailRedirectTo: callbackUrl.toString(),
-          shouldCreateUser: false, // invite-only: don't auto-create accounts
+          shouldCreateUser: false,
         },
       })
 
