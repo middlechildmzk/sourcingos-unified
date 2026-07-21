@@ -1,3 +1,4 @@
+import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
 
 export const metadata = {
@@ -9,6 +10,7 @@ export default function RoleDetailPage({ params }: { params: { id: string } }) {
   return (
     <main className="wrap">
       <RoleDetailClient roleId={params.id} />
+      <RoleDeleteControl roleId={params.id} />
     </main>
   )
 }
