@@ -15,6 +15,21 @@ const EVIDENCE_STATUSES = new Set(['unreviewed', 'reviewed', 'conflicting', 'sta
 const LANE_STATUSES = new Set(['proposed', 'approved', 'paused'])
 const ROLE_STAGE_SET = new Set<string>(ROLE_STAGES)
 
+type SnapshotRpcResult = {
+  ok?: boolean
+  code?: string
+  error?: string
+  status?: number
+  currentVersion?: number
+  version?: number
+  updatedAt?: string
+  counts?: {
+    lanes?: number
+    candidates?: number
+    activity?: number
+  }
+}
+
 function text(value: unknown, max = 500): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
@@ -24,9 +39,21 @@ function textArray(value: unknown, maxItems = 30, maxLength = 200): string[] {
   return Array.from(new Set(value.map(item => text(item, maxLength)).filter(Boolean))).slice(0, maxItems)
 }
 
+function uniqueRows<T>(rows: T[], keyOf: (row: T) => string): T[] {
+  const unique = new Map<string, T>()
+  for (const row of rows) unique.set(keyOf(row), row)
+  return Array.from(unique.values())
+}
+
 function positiveInteger(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function isoTimestamp(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback
 }
 
 function identityKey(candidate: RoleWorkspace['candidates'][number]): string {
@@ -52,8 +79,15 @@ function validateWorkspace(value: unknown): { ok: true; workspace: RoleWorkspace
   return { ok: true, workspace }
 }
 
-function uniqueViolation(error: { code?: string } | null): boolean {
-  return error?.code === '23505'
+function rpcStatus(result: SnapshotRpcResult): number {
+  if (result.status === 403) return 403
+  if (result.status === 400) return 400
+  if (result.status === 503) return 503
+  return 409
+}
+
+function missingSnapshotFunction(error: { code?: string; message?: string } | null): boolean {
+  return error?.code === 'PGRST202' || /save_role_workspace_snapshot/i.test(error?.message || '')
 }
 
 export async function GET(req: NextRequest) {
@@ -184,99 +218,17 @@ export async function POST(req: NextRequest) {
   }
   const now = new Date().toISOString()
 
-  const { data: existingRole, error: lookupError } = await sb
-    .from('role_workspaces')
-    .select('owner_id,version')
-    .eq('id', workspace.id)
-    .maybeSingle()
-
-  if (lookupError) return NextResponse.json({ ok: false, error: lookupError.message }, { status: 500 })
-  if (existingRole && existingRole.owner_id !== ownerId) {
-    return NextResponse.json(
-      { ok: false, code: 'role_owned_by_another', error: 'This role belongs to another account.' },
-      { status: 403 }
-    )
+  const roleRow = {
+    status: workspace.status,
+    title: intake.title,
+    location: intake.location,
+    work_mode: intake.workMode || 'unknown',
+    compensation: intake.compensation,
+    clearance: intake.clearance,
+    intake,
   }
 
-  let version = 1
-  if (existingRole) {
-    const currentVersion = positiveInteger(existingRole.version) || 1
-    if (expectedVersion === null) {
-      return NextResponse.json(
-        { ok: false, code: 'role_version_required', error: 'Refresh this role before saving again.', currentVersion },
-        { status: 409 }
-      )
-    }
-    if (expectedVersion !== currentVersion) {
-      return NextResponse.json(
-        { ok: false, code: 'role_version_conflict', error: 'This role changed in another session. Refresh before saving.', currentVersion },
-        { status: 409 }
-      )
-    }
-
-    version = currentVersion + 1
-    const { data: updatedRole, error: updateError } = await sb
-      .from('role_workspaces')
-      .update({
-        status: workspace.status,
-        title: intake.title,
-        location: intake.location,
-        work_mode: intake.workMode || 'unknown',
-        compensation: intake.compensation,
-        clearance: intake.clearance,
-        intake,
-        version,
-        updated_at: now,
-      })
-      .eq('id', workspace.id)
-      .eq('owner_id', ownerId)
-      .eq('version', currentVersion)
-      .select('id')
-      .maybeSingle()
-
-    if (updateError) return NextResponse.json({ ok: false, error: updateError.message }, { status: 500 })
-    if (!updatedRole) {
-      return NextResponse.json(
-        { ok: false, code: 'role_write_conflict', error: 'The role changed before this save completed.' },
-        { status: 409 }
-      )
-    }
-  } else {
-    if (expectedVersion !== null) {
-      return NextResponse.json(
-        { ok: false, code: 'role_missing_on_server', error: 'This role was removed from the account. Refresh before recreating it.' },
-        { status: 409 }
-      )
-    }
-
-    const { error: insertError } = await sb
-      .from('role_workspaces')
-      .insert({
-        id: workspace.id,
-        owner_id: ownerId,
-        status: workspace.status,
-        title: intake.title,
-        location: intake.location,
-        work_mode: intake.workMode || 'unknown',
-        compensation: intake.compensation,
-        clearance: intake.clearance,
-        intake,
-        version,
-        updated_at: now,
-      })
-
-    if (uniqueViolation(insertError)) {
-      return NextResponse.json(
-        { ok: false, code: 'role_create_conflict', error: 'A role with this identifier already exists.' },
-        { status: 409 }
-      )
-    }
-    if (insertError) return NextResponse.json({ ok: false, error: insertError.message }, { status: 500 })
-  }
-
-  const laneRows = workspace.searchLanes.map(lane => ({
-    owner_id: ownerId,
-    role_id: workspace.id,
+  const laneRows = uniqueRows(workspace.searchLanes.map(lane => ({
     lane_key: text(lane.id, 120),
     label: text(lane.label, 200),
     purpose: text(lane.purpose, 1000),
@@ -284,12 +236,10 @@ export async function POST(req: NextRequest) {
     source: text(lane.source, 120),
     status: LANE_STATUSES.has(lane.status) ? lane.status : 'proposed',
     updated_at: now,
-  })).filter(row => row.lane_key && row.label && row.source)
+  })).filter(row => row.lane_key && row.label && row.source), row => row.lane_key)
 
-  const candidateRows = workspace.candidates.map(candidate => ({
+  const candidateRows = uniqueRows(workspace.candidates.map(candidate => ({
     id: UUID_RE.test(String(candidate.id || '')) ? candidate.id : crypto.randomUUID(),
-    owner_id: ownerId,
-    role_id: workspace.id,
     candidate_id: candidate.candidateId && UUID_RE.test(candidate.candidateId) ? candidate.candidateId : null,
     source_profile_id: null,
     identity_key: identityKey(candidate),
@@ -307,37 +257,68 @@ export async function POST(req: NextRequest) {
     contact_status: CONTACT_STATUSES.has(candidate.contactStatus) ? candidate.contactStatus : 'unknown',
     evidence_status: EVIDENCE_STATUSES.has(candidate.evidenceStatus) ? candidate.evidenceStatus : 'unreviewed',
     snapshot: { importedFrom: 'v20_browser_workspace' },
-    added_at: candidate.addedAt,
-    updated_at: candidate.updatedAt,
-  }))
+    added_at: isoTimestamp(candidate.addedAt, now),
+    updated_at: isoTimestamp(candidate.updatedAt, now),
+  })), row => row.identity_key)
 
-  const activityRows = workspace.activity.map(activity => ({
-    owner_id: ownerId,
-    role_id: workspace.id,
+  const activityRows = uniqueRows(workspace.activity.map(activity => ({
     event_key: text(activity.id, 120),
     event_type: text(activity.type, 120),
     message: text(activity.message, 2000),
     payload: {},
-    created_at: activity.createdAt,
-  })).filter(row => row.event_key && row.event_type && row.message)
+    created_at: isoTimestamp(activity.createdAt, now),
+  })).filter(row => row.event_key && row.event_type && row.message), row => row.event_key)
 
-  const operations = []
-  if (laneRows.length) operations.push(sb.from('role_search_lanes').upsert(laneRows, { onConflict: 'role_id,lane_key' }))
-  if (candidateRows.length) operations.push(sb.from('role_candidates').upsert(candidateRows, { onConflict: 'role_id,identity_key' }))
-  if (activityRows.length) operations.push(sb.from('role_activity').upsert(activityRows, { onConflict: 'role_id,event_key' }))
+  const { data, error } = await sb.rpc('save_role_workspace_snapshot', {
+    p_owner_id: ownerId,
+    p_role_id: workspace.id,
+    p_expected_version: expectedVersion,
+    p_role: roleRow,
+    p_lanes: laneRows,
+    p_candidates: candidateRows,
+    p_activity: activityRows,
+    p_updated_at: now,
+  })
 
-  const results = await Promise.all(operations)
-  const writeError = results.find(result => result.error)?.error
-  if (writeError) return NextResponse.json({ ok: false, error: writeError.message }, { status: 500 })
+  if (error) {
+    if (missingSnapshotFunction(error)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: 'role_snapshot_migration_required',
+          error: 'Durable role saving is paused until the atomic workspace migration is applied.',
+        },
+        { status: 503 }
+      )
+    }
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  }
+
+  const result = (data || {}) as SnapshotRpcResult
+  if (!result.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: result.code || 'role_snapshot_conflict',
+        error: result.error || 'The role could not be saved.',
+        currentVersion: result.currentVersion,
+      },
+      { status: rpcStatus(result) }
+    )
+  }
 
   return NextResponse.json({
     ok: true,
     mode: 'supabase',
     persisted: true,
     workspaceId: workspace.id,
-    version,
-    updatedAt: now,
-    counts: { lanes: laneRows.length, candidates: candidateRows.length, activity: activityRows.length },
+    version: result.version,
+    updatedAt: result.updatedAt || now,
+    counts: {
+      lanes: result.counts?.lanes ?? laneRows.length,
+      candidates: result.counts?.candidates ?? candidateRows.length,
+      activity: result.counts?.activity ?? activityRows.length,
+    },
   })
 }
 
