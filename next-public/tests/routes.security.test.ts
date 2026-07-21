@@ -1,7 +1,7 @@
 // tests/routes.security.test.ts — behavioral tests against REAL route handlers.
 // Baseline env is unconfigured (see setup.ts), so the fail-closed path is the
 // default condition under test: protected routes must never return 200.
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 function post(url: string, body: unknown, ip = '10.50.0.1'): NextRequest {
@@ -106,29 +106,38 @@ describe('bad request bodies', () => {
 
 describe('public routes stay public but rate-limited', () => {
   it('POST /api/waitlist works without auth, then 429s after 3/hour', async () => {
-    const { POST } = await import('../app/api/waitlist/route')
-    const ip = '10.70.0.9'
-    for (let i = 0; i < 3; i++) {
-      const res = await POST(post('/api/waitlist', { email: `t${i}@example.com` }, ip))
-      expect(res.status).toBe(200)
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    try {
+      const { POST } = await import('../app/api/waitlist/route')
+      const ip = '10.70.0.9'
+      for (let i = 0; i < 3; i++) {
+        const res = await POST(post('/api/waitlist', { email: `t${i}@example.com` }, ip))
+        expect(res.status).toBe(200)
+      }
+      const res4 = await POST(post('/api/waitlist', { email: 't4@example.com' }, ip))
+      expect(res4.status).toBe(429)
+    } finally {
+      nowSpy.mockRestore()
     }
-    const res4 = await POST(post('/api/waitlist', { email: 't4@example.com' }, ip))
-    expect(res4.status).toBe(429)
   })
 
   it('GET /api/jobs/search works without auth (sources mocked) and rate-limits per IP', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ jobs: [], data: [] }), { status: 200 }) as never
     )
-    const { GET } = await import('../app/api/jobs/search/route')
-    const ip = '10.80.0.5'
-    const ok = await GET(get('/api/jobs/search?q=sourcer', ip))
-    expect(ok.status).toBe(200)
-    // 'public' policy = 30/min — exhaust it
-    for (let i = 0; i < 30; i++) await GET(get('/api/jobs/search?q=sourcer', ip))
-    const limited = await GET(get('/api/jobs/search?q=sourcer', ip))
-    expect(limited.status).toBe(429)
-    fetchSpy.mockRestore()
+    try {
+      const { GET } = await import('../app/api/jobs/search/route')
+      const ip = '10.80.0.5'
+      const ok = await GET(get('/api/jobs/search?q=sourcer', ip))
+      expect(ok.status).toBe(200)
+      for (let i = 0; i < 30; i++) await GET(get('/api/jobs/search?q=sourcer', ip))
+      const limited = await GET(get('/api/jobs/search?q=sourcer', ip))
+      expect(limited.status).toBe(429)
+    } finally {
+      fetchSpy.mockRestore()
+      nowSpy.mockRestore()
+    }
   })
 
   it('GET /api/jobs/submit (submission list w/ emails) is NOT public', async () => {
@@ -140,13 +149,18 @@ describe('public routes stay public but rate-limited', () => {
 
 describe('AI routes rate-limit per user', () => {
   it('returns 429 after 10 requests/min under preview bypass', async () => {
-    process.env.ALLOW_PREVIEW_BYPASS = 'true'
-    const { POST } = await import('../app/api/ai/search-next/route')
-    let last = 0
-    for (let i = 0; i < 11; i++) {
-      const res = await POST(post('/api/ai/search-next', { query: 'kubernetes' }, '10.90.0.1'))
-      last = res.status
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
+    try {
+      process.env.ALLOW_PREVIEW_BYPASS = 'true'
+      const { POST } = await import('../app/api/ai/search-next/route')
+      let last = 0
+      for (let i = 0; i < 11; i++) {
+        const res = await POST(post('/api/ai/search-next', { query: 'kubernetes' }, '10.90.0.1'))
+        last = res.status
+      }
+      expect(last).toBe(429)
+    } finally {
+      nowSpy.mockRestore()
     }
-    expect(last).toBe(429)
   })
 })
