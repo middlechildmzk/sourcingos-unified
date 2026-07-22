@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import './app-shell.css'
 import './v25-2.css'
 import './v26.css'
+import './v26-candidate-review.css'
 import './import-center.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
