@@ -157,9 +157,14 @@ export function useRoleWorkspaces() {
 
   const updateRole = useCallback((roleId: string, updater: (workspace: RoleWorkspace) => RoleWorkspace) => {
     const current = readRoleWorkspaces()
-    const next = current.map(role => role.id === roleId ? updater(role) : role)
+    let updated: RoleWorkspace | undefined
+    const next = current.map(role => {
+      if (role.id !== roleId) return role
+      updated = reconcileRoleWorkspaceCalibration(updater(role))
+      return updated
+    })
     commit(next, [roleId])
-    return reconcileRoles(next).find(role => role.id === roleId)
+    return updated
   }, [commit])
 
   const removeRole = useCallback(async (roleId: string): Promise<boolean> => {
