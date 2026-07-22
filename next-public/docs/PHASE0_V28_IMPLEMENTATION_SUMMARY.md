@@ -4,7 +4,7 @@ Branch: `phase0-stabilization-v28`
 
 Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 
-Final validated application head before this documentation-only commit: `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`
+Final head: `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`
 
 ## Implemented
 
@@ -66,7 +66,7 @@ Final validated application head before this documentation-only commit: `4df1561
 
 ## Automated verification
 
-GitHub Actions run #222 on commit `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`:
+GitHub Actions run #223 on final head `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`:
 
 - locked dependency installation: passed
 - TypeScript typecheck: passed
@@ -75,15 +75,14 @@ GitHub Actions run #222 on commit `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`:
 - dependency-report artifacts: uploaded
 - production application build: passed
 
-The verified deterministic report contains 99 passing suites and 237 passing tests.
+The deterministic report contains 99 passing suites and 237 passing tests.
 
 Vercel preview:
 
-- deployment id: `dpl_6brawDJMJPhXRKEVB3ytKzdLGgWm`
-- preview URL: `https://sourcingos-unified-pfeu6kett-middlechildmzks-projects.vercel.app`
-- status: READY
-- preview error, warning, and fatal runtime log sweep: no matching logs
+- final deployment status: READY
 - production build generated 116 of 116 static pages
+- only two pre-existing Search Composer hook warnings remain
+- preview error, warning, and fatal runtime log sweep: no matching logs
 
 ## Tracked follow-ups
 
