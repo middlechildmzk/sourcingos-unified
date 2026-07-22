@@ -59,7 +59,7 @@ export function buildSearchStrategyBrief(role: RoleWorkspace, now = new Date()):
     intake.adjacentBackgrounds.length ? `- Approved adjacent backgrounds: ${intake.adjacentBackgrounds.join(', ')}` : '',
     ``,
     `## Search lanes`,
-    ...approvedLanes.map(lane => `- Approved: **${lane.label}** — ${lane.purpose || 'purpose not recorded'}`),
+    ...approvedLanes.map(lane => `- Approved: **${lane.label}**: ${lane.purpose || 'purpose not recorded'}`),
     ...proposedLanes.map(lane => `- Proposed (awaiting recruiter approval): ${lane.label}`),
     !role.searchLanes.length ? '- No search lanes drafted yet.' : '',
     ``,

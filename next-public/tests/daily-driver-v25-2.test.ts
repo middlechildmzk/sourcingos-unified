@@ -26,11 +26,11 @@ describe('V25.2 daily driver experience', () => {
     expect(rolePortfolio).toContain('Search portfolio')
     expect(rolePortfolio).toContain('<RoleIntakeWizard')
     expect(roleWizard).toContain('Guided role setup')
-    expect(roleDetailPage).toContain('<RoleDetailClient roleId={params.id} />')
+    expect(roleDetailPage).toContain('<RoleDetailClient roleId={params.id} initialTab={searchParams?.tab} />')
   })
 
   it('keeps role context across overview, candidates, strategy, and activity', () => {
-    expect(roleDetail).toContain("type Tab = 'overview' | 'candidates' | 'strategy' | 'activity'")
+    expect(roleDetail).toContain("type Tab = 'overview' | 'candidates' | 'calibration' | 'strategy' | 'activity'")
     expect(roleDetail).toContain('Role workspace')
     expect(roleDetail).toContain('Next best actions')
     expect(roleDetail).toContain('Pipeline board')
