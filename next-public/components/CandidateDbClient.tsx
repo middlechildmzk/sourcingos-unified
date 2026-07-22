@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import {
   EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT,
@@ -33,7 +33,7 @@ export function CandidateDbClient() {
   const [status, setStatus] = useState('Loading Candidate Graph…')
   const [loading, setLoading] = useState(true)
 
-  async function load(offset = 0, search = appliedSearch) {
+  const load = useCallback(async (offset = 0, search = '') => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ limit: '50', offset: String(offset) })
@@ -49,9 +49,9 @@ export function CandidateDbClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { void load(0, '') }, [])
+  useEffect(() => { void load(0, '') }, [load])
 
   async function importResume() {
     setStatus('Importing resume into the Candidate Graph…')
