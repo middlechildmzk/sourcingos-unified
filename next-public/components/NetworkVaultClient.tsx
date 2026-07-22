@@ -216,9 +216,9 @@ export function NetworkVaultClient() {
 
       {state === 'ok' && page.total > page.limit && (
         <div className="button-row" style={{ justifyContent: 'space-between', marginTop: 16 }}>
-          <button className="btn secondary" disabled={state === 'loading' || page.offset === 0} onClick={() => void load(debouncedQ, Math.max(0, page.offset - page.limit))}>Previous page</button>
+          <button className="btn secondary" disabled={page.offset === 0} onClick={() => void load(debouncedQ, Math.max(0, page.offset - page.limit))}>Previous page</button>
           <span className="muted" style={{ fontSize: 12 }}>Page {Math.floor(page.offset / page.limit) + 1}</span>
-          <button className="btn secondary" disabled={state === 'loading' || !page.hasMore} onClick={() => void load(debouncedQ, page.offset + page.limit)}>Next page</button>
+          <button className="btn secondary" disabled={!page.hasMore} onClick={() => void load(debouncedQ, page.offset + page.limit)}>Next page</button>
         </div>
       )}
 
