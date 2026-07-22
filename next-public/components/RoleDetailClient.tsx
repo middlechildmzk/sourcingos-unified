@@ -21,6 +21,7 @@ import {
 } from '@/components/CandidateReviewPro'
 import { ProductIcon } from '@/components/ProductIcon'
 import { RoleCalibrationPanel } from '@/components/RoleCalibrationPanel'
+import { RoleReportsPanel } from '@/components/RoleReportsPanel'
 import { pendingInsightCount } from '@/lib/calibration-intelligence'
 
 type Tab = 'overview' | 'candidates' | 'calibration' | 'strategy' | 'activity'
@@ -286,6 +287,7 @@ export function RoleDetailClient({ roleId, initialTab }: { roleId: string; initi
         <aside className="role-aside-stack">
           <section className="product-panel"><div className="product-panel-head"><h2>Search strategy</h2><span>{role.searchLanes.filter(lane => lane.status === 'approved').length}/{role.searchLanes.length} approved</span></div><div className="product-list">{role.searchLanes.slice(0, 5).map(lane => <div className="product-row" key={lane.id}><div className="product-row-main"><div className="product-row-title">{lane.label}</div><div className="product-row-meta">{words(lane.source)}</div></div><span className={`status-pill ${lane.status === 'approved' ? 'success' : lane.status === 'proposed' ? 'warning' : ''}`}>{lane.status}</span></div>)}</div><button className="btn ghost role-panel-button" onClick={() => setTab('strategy')}>Open full strategy</button></section>
           <section className="product-panel"><div className="product-panel-head"><h2>Calibration</h2><span>Recruiter feedback</span></div><div className="product-list">{calibrationInsights(role).map(insight => <div className="product-row" key={insight}><div className="product-row-main"><div className="product-row-meta normal-wrap">{insight}</div></div></div>)}</div></section>
+          <RoleReportsPanel role={role} />
         </aside>
       </div>
     </div>}
