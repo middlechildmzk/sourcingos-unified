@@ -1,5 +1,6 @@
 import { getSession } from '@/lib/supabase/session'
 import { AppShell } from '@/components/AppShell'
+import { ClientErrorReporter } from '@/components/ClientErrorReporter'
 import type { Metadata } from 'next'
 import './app-shell.css'
 import './v25-2.css'
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     email={session.user?.email}
     role={session.user?.role}
   >
+    <ClientErrorReporter />
     {children}
   </AppShell>
 }
