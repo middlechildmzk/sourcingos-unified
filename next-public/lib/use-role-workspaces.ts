@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RoleWorkspace } from '@/lib/role-workspace'
+import { reconcileRoleWorkspaceCalibration } from '@/lib/role-calibration-reconciliation'
 import {
   ROLE_WORKSPACE_CHANGED_EVENT,
   hydrateRoleWorkspaces,
@@ -44,6 +45,10 @@ function versionsFromResponse(value: unknown): VersionMap {
     .filter((entry): entry is [string, number] => Boolean(entry[0] && entry[1])))
 }
 
+function reconcileRoles(roles: RoleWorkspace[]): RoleWorkspace[] {
+  return roles.map(role => reconcileRoleWorkspaceCalibration(role))
+}
+
 export function useRoleWorkspaces() {
   const [roles, setRoles] = useState<RoleWorkspace[]>([])
   const [mode, setMode] = useState<StorageMode>('checking')
@@ -52,15 +57,16 @@ export function useRoleWorkspaces() {
   const versions = useRef<VersionMap>({})
 
   const refreshLocal = useCallback(() => {
-    setRoles(readRoleWorkspaces())
+    setRoles(reconcileRoles(readRoleWorkspaces()))
   }, [])
 
   const syncWorkspace = useCallback(async (workspace: RoleWorkspace) => {
+    const prepared = reconcileRoleWorkspaceCalibration(workspace)
     try {
       const response = await fetch('/api/roles/sync', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ workspace, expectedVersion: versions.current[workspace.id] }),
+        body: JSON.stringify({ workspace: prepared, expectedVersion: versions.current[prepared.id] }),
       })
       const json = await response.json()
       if (!response.ok || !json.ok) throw new Error(json.error || 'Role sync failed.')
@@ -68,7 +74,7 @@ export function useRoleWorkspaces() {
       if (json.mode === 'supabase' && json.persisted) {
         const version = validVersion(json.version)
         if (!version) throw new Error('Role saved without a valid server version. Refresh before editing again.')
-        versions.current = { ...versions.current, [workspace.id]: version }
+        versions.current = { ...versions.current, [prepared.id]: version }
         writeRoleVersions(versions.current)
         setMode('supabase')
         setMessage(`Saved to your account at version ${version}.`)
@@ -107,7 +113,8 @@ export function useRoleWorkspaces() {
         if (json.mode === 'supabase') {
           versions.current = versionsFromResponse(json.versions)
           writeRoleVersions(versions.current)
-          const merged = hydrateRoleWorkspaces(Array.isArray(json.workspaces) ? json.workspaces : [])
+          const merged = reconcileRoles(hydrateRoleWorkspaces(Array.isArray(json.workspaces) ? json.workspaces : []))
+          writeRoleWorkspaces(merged)
           setRoles(merged)
           setMode('supabase')
           setMessage('Connected and restored from your account.')
@@ -130,10 +137,11 @@ export function useRoleWorkspaces() {
   }, [refreshLocal])
 
   const commit = useCallback((next: RoleWorkspace[], syncIds: string[] = []) => {
-    writeRoleWorkspaces(next)
-    setRoles(next)
+    const prepared = reconcileRoles(next)
+    writeRoleWorkspaces(prepared)
+    setRoles(prepared)
     for (const id of syncIds) {
-      const workspace = next.find(role => role.id === id)
+      const workspace = prepared.find(role => role.id === id)
       if (workspace) scheduleSync(workspace)
     }
   }, [scheduleSync])
@@ -151,7 +159,7 @@ export function useRoleWorkspaces() {
     const current = readRoleWorkspaces()
     const next = current.map(role => role.id === roleId ? updater(role) : role)
     commit(next, [roleId])
-    return next.find(role => role.id === roleId)
+    return reconcileRoles(next).find(role => role.id === roleId)
   }, [commit])
 
   const removeRole = useCallback(async (roleId: string): Promise<boolean> => {
