@@ -102,6 +102,7 @@ export function useRoleWorkspaces() {
     versions.current = readRoleVersions()
     refreshLocal()
     const listener = () => refreshLocal()
+    const timers = syncTimers.current
     window.addEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
     window.addEventListener('storage', listener)
 
@@ -131,8 +132,8 @@ export function useRoleWorkspaces() {
     return () => {
       window.removeEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
       window.removeEventListener('storage', listener)
-      for (const timer of syncTimers.current.values()) clearTimeout(timer)
-      syncTimers.current.clear()
+      for (const timer of timers.values()) clearTimeout(timer)
+      timers.clear()
     }
   }, [refreshLocal])
 
