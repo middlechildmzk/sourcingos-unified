@@ -5,18 +5,13 @@
 //   @supabase/ssr's createBrowserClient() stores the PKCE code verifier in a
 //   browser cookie. When the user clicks the magic link and lands here, the
 //   verifier must be read from that same browser context. A server-side route
-//   handler (GET route.ts) cannot write response cookies in Next.js 14's
-//   cookie() API, so exchangeCodeForSession() fails with:
-//   "PKCE code verifier not found in storage."
-//
-//   Running the exchange in the browser guarantees the verifier is accessible.
+//   handler cannot reliably complete this browser-owned exchange.
 //
 // FLOW:
-//   1. Read ?code and ?next from the URL (client-side, after render)
+//   1. Read ?code and ?next from the URL
 //   2. Call supabase.auth.exchangeCodeForSession(code) in the browser
-//   3. On success → full page navigation to ?next (or /app/candidate-search)
-//      (window.location.href forces a fresh request so middleware sees the new cookie)
-//   4. On failure → full page navigation to /login?error=...
+//   3. Navigate to ?next, or Today by default, with a full page request
+//   4. On failure, return to login with a bounded error message
 // ─────────────────────────────────────────────────────────────────────────────
 'use client'
 import { useEffect, useState } from 'react'
@@ -32,11 +27,10 @@ export function AuthCallbackClient() {
   useEffect(() => {
     async function exchange() {
       const code = searchParams.get('code')
-      const next = searchParams.get('next') ?? '/app/candidate-search'
+      const next = searchParams.get('next') ?? '/app/today'
       const errorParam = searchParams.get('error')
       const errorDescription = searchParams.get('error_description')
 
-      // ── Supabase surfaced an error in the redirect URL ─────────────────────
       if (errorParam) {
         const msg = errorDescription ?? errorParam
         setPhase('error')
@@ -45,7 +39,6 @@ export function AuthCallbackClient() {
         return
       }
 
-      // ── No code in URL ─────────────────────────────────────────────────────
       if (!code) {
         const msg = 'Missing auth code. Please request a new sign-in link.'
         setPhase('error')
@@ -54,18 +47,13 @@ export function AuthCallbackClient() {
         return
       }
 
-      // ── Supabase not configured (preview mode) ─────────────────────────────
       const sb = createBrowserSupabaseClient()
       if (!sb) {
-        // No Supabase — skip exchange, go straight to app in preview mode
         setPhase('redirecting')
         window.location.href = safeRelativePath(next)
         return
       }
 
-      // ── Exchange code for session in browser context ───────────────────────
-      // The PKCE verifier is in the browser's cookie storage from when
-      // signInWithOtp() was called. This MUST run client-side.
       const { error } = await sb.auth.exchangeCodeForSession(code)
 
       if (error) {
@@ -76,14 +64,13 @@ export function AuthCallbackClient() {
         return
       }
 
-      // ── Success: full navigation so middleware reads the new session cookie ─
       setPhase('redirecting')
       setMessage('Signed in. Redirecting…')
       window.location.href = safeRelativePath(next)
     }
 
-    exchange()
-  }, []) // intentionally empty — runs once on mount, URL is stable
+    void exchange()
+  }, [searchParams])
 
   return (
     <main
@@ -101,7 +88,6 @@ export function AuthCallbackClient() {
         </>
       ) : (
         <>
-          {/* Minimal animated spinner via CSS */}
           <div
             style={{
               width: '36px', height: '36px', borderRadius: '50%',
