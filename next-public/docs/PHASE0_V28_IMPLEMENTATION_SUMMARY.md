@@ -4,12 +4,15 @@ Branch: `phase0-stabilization-v28`
 
 Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 
+Final validated application head before this documentation-only commit: `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`
+
 ## Implemented
 
-### Application shell
+### Application shell and authentication
 
 - Desktop and mobile SourcingOS brand links now return to Today.
 - Tools & Data automatically expands when the active route is one of its children.
+- Magic-link callback defaults to Today and now has explicit effect dependencies.
 - Primary navigation remains Today, Roles, AutoSource, Candidates.
 
 ### Candidate Database resilience
@@ -18,7 +21,15 @@ Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 - Null, missing, malformed, or snake-case nested candidate fields normalize to safe values.
 - Related records without ids are discarded before client actions use them.
 - Candidate imports, normalization previews, identity-review creation, and merge decisions now handle malformed response bodies without a render crash.
+- Initial loading now uses a stable callback lifecycle.
 - Added regression coverage for null arrays, malformed counts, invalid pages, related records, reviews, and import batches.
+
+### Candidate 360 and adjacent client lifecycles
+
+- Candidate 360 dossier loading now uses a stable candidate-scoped callback.
+- Live Jobs initial search runs once through a stable callback without stale filter closures.
+- Legacy role workspace hydration now has explicit stable dependencies.
+- Role sync timer cleanup uses the effect-owned timer map.
 
 ### Calibration freshness
 
@@ -49,8 +60,37 @@ Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 
 - Reviewed the locked CI audit artifact.
 - Documented runtime Next.js and PostCSS advisories separately from Vitest, Vite, Playwright, and lint-tool advisories.
-- Defined a dedicated framework-security upgrade gate rather than using a forced major audit fix in the stabilization branch.
+- Defined dedicated runtime and tooling security upgrade gates rather than using a forced major audit fix in the stabilization branch.
+- Cleared all prior hook and font warnings except two pre-existing Search Composer effect warnings. Those are tracked in issue #41 for focused refactoring rather than suppression.
 - Added a detailed manual QA checklist for authenticated desktop, mobile, persistence, telemetry, Candidate Database, calibration, and Network Vault verification.
+
+## Automated verification
+
+GitHub Actions run #222 on commit `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`:
+
+- locked dependency installation: passed
+- TypeScript typecheck: passed
+- deterministic tests: passed
+- PostgreSQL atomic role migration contract: passed
+- dependency-report artifacts: uploaded
+- production application build: passed
+
+The verified deterministic report contains 99 passing suites and 237 passing tests.
+
+Vercel preview:
+
+- deployment id: `dpl_6brawDJMJPhXRKEVB3ytKzdLGgWm`
+- preview URL: `https://sourcingos-unified-pfeu6kett-middlechildmzks-projects.vercel.app`
+- status: READY
+- preview error, warning, and fatal runtime log sweep: no matching logs
+- production build generated 116 of 116 static pages
+
+## Tracked follow-ups
+
+- #39 Upgrade Next.js runtime to a patched supported release
+- #40 Upgrade Vitest, Playwright, and lint security toolchain
+- #41 Refactor Search Composer effects for deterministic dependency handling
+- #42 Rehearse role and calibration migrations in isolated Supabase
 
 ## Not changed
 
@@ -62,11 +102,9 @@ Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 
 ## Remaining release gates
 
-- Full GitHub CI pass
-- PostgreSQL migration contract pass
-- Vercel preview build pass
-- Preview runtime log sweep
-- Authenticated manual QA
-- Current Candidate Database browser verification
+- Authenticated manual QA on desktop and mobile
+- Current Candidate Database browser verification with console and network capture
+- Controlled validation of redacted client-error telemetry
 - Isolated Supabase migration rehearsal
 - Explicit decision on runtime framework advisories before wider beta
+- Separate approval before any production merge, deployment, or database mutation
