@@ -5,7 +5,7 @@ import {
   candidateEvidenceDimensions,
   candidateReviewScore,
   matchedRoleSignals,
-} from '@/components/CandidateReviewPro'
+} from '@/lib/candidate-review-pro'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
 
 const root = path.resolve(__dirname, '..')
