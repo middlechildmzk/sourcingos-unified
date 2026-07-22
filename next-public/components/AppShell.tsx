@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LogoutButton } from '@/components/LogoutButton'
 import { CommandPalette } from '@/components/CommandPalette'
 import { ProductIcon, type ProductIconName } from '@/components/ProductIcon'
@@ -43,15 +43,23 @@ function active(pathname: string, href: string) {
   return pathname === href || (href !== '/app/agent-os' && pathname.startsWith(`${href}/`))
 }
 
+function hasActiveTool(pathname: string): boolean {
+  return tools.some(item => active(pathname, item.href))
+}
+
 export function AppShell({ children, mode, authenticated, email, role }: AppShellProps) {
   const pathname = usePathname()
-  const [toolsOpen, setToolsOpen] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(() => hasActiveTool(pathname))
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    if (hasActiveTool(pathname)) setToolsOpen(true)
+  }, [pathname])
 
   return <div className="app-shell">
     <aside className={`app-sidebar ${mobileOpen ? 'app-sidebar-open' : ''}`}>
       <div className="app-brand-row">
-        <Link href="/app/agent-os" className="app-brand-mark"><span>S</span><div><b>SourcingOS</b><small>Recruiter intelligence</small></div></Link>
+        <Link href="/app/today" className="app-brand-mark"><span>S</span><div><b>SourcingOS</b><small>Recruiter intelligence</small></div></Link>
         <button className="app-sidebar-close" onClick={() => setMobileOpen(false)} aria-label="Close navigation">×</button>
       </div>
 
@@ -87,7 +95,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
     <div className="app-main-column">
       <header className="app-mobile-header">
         <button className="app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation">☰</button>
-        <Link href="/app/agent-os" className="app-mobile-brand">SourcingOS</Link>
+        <Link href="/app/today" className="app-mobile-brand">SourcingOS</Link>
         <CommandPalette triggerClassName="app-command-trigger app-command-trigger-mobile" hotkey={false} />
         <span className={mode === 'preview' ? 'app-mode-dot preview' : 'app-mode-dot'} title={mode === 'preview' ? 'Preview mode' : 'Connected'} />
       </header>
