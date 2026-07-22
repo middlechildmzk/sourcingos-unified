@@ -77,6 +77,7 @@ export type RoleWorkspace = {
   searchLanes: SearchLane[]
   candidates: RoleCandidate[]
   activity: RoleActivity[]
+  calibration?: import('./calibration-intelligence').CalibrationState
   createdAt: string
   updatedAt: string
 }

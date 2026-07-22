@@ -32,6 +32,7 @@ create table public.source_profiles (
 
 \ir ../../sql/role-workspace-v20-1.sql
 \ir ../../supabase/migrations/20260721173000_role_workspace_owner_safety.sql
+\ir ../../supabase/migrations/20260722160000_role_calibration_state.sql
 
 do $$
 declare
@@ -288,3 +289,129 @@ end $$;
 select
   (select version from public.role_workspaces where id = '11111111-1111-4111-8111-111111111111') as final_version,
   (select count(*) from public.role_candidates where role_id = '11111111-1111-4111-8111-111111111111') as preserved_candidates;
+
+-- V27 calibration contract: the calibration column must round-trip atomically,
+-- default safely for older clients, and roll back with everything else.
+do $$
+declare
+  v_result jsonb;
+  v_owner_a constant uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  v_role constant uuid := '11111111-1111-4111-8111-111111111111';
+  v_calibration jsonb;
+  v_version integer;
+  v_before_version integer;
+begin
+  -- Older payloads without a calibration key must keep the safe default.
+  select calibration into v_calibration from public.role_workspaces where id = v_role;
+  if v_calibration is null or jsonb_typeof(v_calibration) <> 'object' then
+    raise exception 'calibration default missing or non-object: %', v_calibration;
+  end if;
+
+  select version into v_version from public.role_workspaces where id = v_role;
+  v_result := public.save_role_workspace_snapshot(
+    v_owner_a,
+    v_role,
+    v_version,
+    jsonb_build_object(
+      'status', 'active',
+      'title', 'Senior Sourcer',
+      'location', 'Minneapolis',
+      'work_mode', 'remote',
+      'compensation', '',
+      'clearance', '',
+      'intake', jsonb_build_object('title', 'Senior Sourcer'),
+      'calibration', jsonb_build_object(
+        'insights', jsonb_build_array(jsonb_build_object(
+          'id', 'ci-decision_pattern-kubernetes',
+          'statement', 'Strong-fit decisions consistently show recorded Kubernetes signals.',
+          'status', 'approved',
+          'scope', 'role'
+        )),
+        'events', '[]'::jsonb,
+        'updatedAt', now()::text
+      )
+    ),
+    '[]'::jsonb,
+    '[]'::jsonb,
+    '[]'::jsonb,
+    now()
+  );
+  if coalesce((v_result->>'ok')::boolean, false) is not true then
+    raise exception 'calibration snapshot save failed: %', v_result;
+  end if;
+
+  select calibration into v_calibration from public.role_workspaces where id = v_role;
+  if v_calibration->'insights'->0->>'id' <> 'ci-decision_pattern-kubernetes' then
+    raise exception 'calibration did not persist: %', v_calibration;
+  end if;
+  if v_calibration->'insights'->0->>'status' <> 'approved' then
+    raise exception 'calibration reviewer status did not persist: %', v_calibration;
+  end if;
+
+  -- A malformed calibration payload must fail closed to an empty object, not error.
+  select version into v_version from public.role_workspaces where id = v_role;
+  v_result := public.save_role_workspace_snapshot(
+    v_owner_a,
+    v_role,
+    v_version,
+    jsonb_build_object(
+      'status', 'active',
+      'title', 'Senior Sourcer',
+      'location', 'Minneapolis',
+      'work_mode', 'remote',
+      'compensation', '',
+      'clearance', '',
+      'intake', jsonb_build_object('title', 'Senior Sourcer'),
+      'calibration', 'not-an-object'
+    ),
+    '[]'::jsonb,
+    '[]'::jsonb,
+    '[]'::jsonb,
+    now()
+  );
+  if coalesce((v_result->>'ok')::boolean, false) is not true then
+    raise exception 'malformed calibration should not fail the save: %', v_result;
+  end if;
+  select calibration into v_calibration from public.role_workspaces where id = v_role;
+  if v_calibration <> '{}'::jsonb then
+    raise exception 'malformed calibration must persist as empty object, got %', v_calibration;
+  end if;
+
+  -- Calibration changes must roll back atomically with a failing child write.
+  select version into v_before_version from public.role_workspaces where id = v_role;
+  begin
+    v_result := public.save_role_workspace_snapshot(
+      v_owner_a,
+      v_role,
+      v_before_version,
+      jsonb_build_object(
+        'status', 'active',
+        'title', 'Senior Sourcer',
+        'location', 'Minneapolis',
+        'work_mode', 'remote',
+        'compensation', '',
+        'clearance', '',
+        'intake', jsonb_build_object('title', 'Senior Sourcer'),
+        'calibration', jsonb_build_object('insights', jsonb_build_array(), 'events', jsonb_build_array(), 'updatedAt', 'must-not-survive')
+      ),
+      '[]'::jsonb,
+      jsonb_build_array(jsonb_build_object(
+        'id', '55555555-5555-4555-8555-555555555555',
+        'identity_key', 'profile:invalid-calibration-rollback',
+        'name', 'Invalid Candidate',
+        'source', 'manual',
+        'stage', 'invalid_stage'
+      )),
+      '[]'::jsonb,
+      now()
+    );
+    raise exception 'invalid child unexpectedly committed during calibration rollback test';
+  exception
+    when check_violation then
+      null;
+  end;
+  select calibration into v_calibration from public.role_workspaces where id = v_role;
+  if v_calibration->>'updatedAt' = 'must-not-survive' then
+    raise exception 'calibration change survived a rolled-back snapshot';
+  end if;
+end $$;

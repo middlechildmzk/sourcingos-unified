@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isDurablePersistenceConfigured } from '@/lib/supabase/server'
 import { ROLE_STAGES, type RoleWorkspace } from '@/lib/role-workspace'
+import { normalizeCalibrationState } from '@/lib/calibration-intelligence'
 
 export const dynamic = 'force-dynamic'
 
@@ -129,6 +130,7 @@ export async function GET(req: NextRequest) {
     id: role.id,
     status: role.status,
     intake: role.intake,
+    calibration: role.calibration ? normalizeCalibrationState(role.calibration) : undefined,
     searchLanes: (lanesResult.data || []).filter(lane => lane.role_id === role.id).map(lane => ({
       id: lane.lane_key,
       label: lane.label,
@@ -226,6 +228,7 @@ export async function POST(req: NextRequest) {
     compensation: intake.compensation,
     clearance: intake.clearance,
     intake,
+    calibration: normalizeCalibrationState(workspace.calibration),
   }
 
   const laneRows = uniqueRows(workspace.searchLanes.map(lane => ({

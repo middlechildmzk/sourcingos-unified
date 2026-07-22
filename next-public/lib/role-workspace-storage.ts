@@ -1,4 +1,5 @@
 import type { RoleActivity, RoleCandidate, RoleIntake, RoleWorkspace, SearchLane } from './role-workspace'
+import { normalizeCalibrationState } from './calibration-intelligence'
 
 export const ROLE_WORKSPACE_STORAGE_KEY = 'sourcingos.v20.role-workspaces'
 export const ROLE_WORKSPACE_CHANGED_EVENT = 'sourcingos:role-workspaces-changed'
@@ -146,6 +147,7 @@ export function normalizeRoleWorkspace(value: unknown): RoleWorkspace | null {
     searchLanes: (lanes as unknown[]).map((lane, index) => normalizeLane(lane, id, index)).filter((lane): lane is SearchLane => Boolean(lane)),
     candidates: candidates.map((candidate, index) => normalizeCandidate(candidate, id, index, createdAt)).filter((candidate): candidate is RoleCandidate => Boolean(candidate)),
     activity: activity.map((event, index) => normalizeActivity(event, id, index, createdAt)).filter((event): event is RoleActivity => Boolean(event)),
+    calibration: role.calibration ? normalizeCalibrationState(role.calibration) : undefined,
     createdAt,
     updatedAt,
   }
@@ -214,6 +216,26 @@ function mergeCandidates(local: RoleCandidate[] = [], remote: RoleCandidate[] = 
   return Array.from(candidates.values()).sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt))
 }
 
+function mergeCalibration(
+  preferred: RoleWorkspace['calibration'],
+  secondary: RoleWorkspace['calibration']
+): RoleWorkspace['calibration'] {
+  if (!preferred) return secondary
+  if (!secondary) return preferred
+  const insights = new Map(secondary.insights.map(insight => [insight.id, insight]))
+  for (const insight of preferred.insights) {
+    const other = insights.get(insight.id)
+    if (!other || timestamp(insight.updatedAt) >= timestamp(other.updatedAt)) insights.set(insight.id, insight)
+  }
+  const events = new Map(secondary.events.map(event => [event.id, event]))
+  for (const event of preferred.events) events.set(event.id, event)
+  return {
+    insights: Array.from(insights.values()).sort((a, b) => a.id.localeCompare(b.id)),
+    events: Array.from(events.values()).sort((a, b) => timestamp(a.createdAt) - timestamp(b.createdAt)).slice(-500),
+    updatedAt: timestamp(preferred.updatedAt) >= timestamp(secondary.updatedAt) ? preferred.updatedAt : secondary.updatedAt,
+  }
+}
+
 export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspace[]): RoleWorkspace[] {
   const roles = new Map<string, RoleWorkspace>()
   for (const value of remote) {
@@ -237,6 +259,7 @@ export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspac
       ...preferred,
       searchLanes: mergeLanes(workspace.searchLanes, server.searchLanes),
       candidates: mergeCandidates(workspace.candidates, server.candidates),
+      calibration: mergeCalibration(preferred.calibration, secondary.calibration),
       activity: compactActivity(Array.from(activity.values())),
       createdAt: timestamp(workspace.createdAt) <= timestamp(server.createdAt) ? workspace.createdAt : server.createdAt,
       updatedAt: timestamp(workspace.updatedAt) >= timestamp(server.updatedAt) ? workspace.updatedAt : server.updatedAt,
