@@ -4,7 +4,9 @@ Branch: `phase0-stabilization-v28`
 
 Base: production V27 commit `f497f730b9d325b73429f5ed99c3e299f9c414c1`
 
-Final head: `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`
+Final code head validated before documentation updates: `4df156145f4fcea41f5b75e5f6ea44bd6c0a5fe0`
+
+Current branch head: `66ddd786e8d1051e40bc1c62bfb7bb8ea69fab7f`
 
 ## Implemented
 
@@ -66,7 +68,7 @@ Final head: `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`
 
 ## Automated verification
 
-GitHub Actions run #223 on final head `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`:
+GitHub Actions run #223 on code head `67c1da3fa1f26eab7003ad2fe81230c1460ea9d2`:
 
 - locked dependency installation: passed
 - TypeScript typecheck: passed
@@ -79,7 +81,7 @@ The deterministic report contains 99 passing suites and 237 passing tests.
 
 Vercel preview:
 
-- final deployment status: READY
+- final code preview status: READY
 - production build generated 116 of 116 static pages
 - only two pre-existing Search Composer hook warnings remain
 - preview error, warning, and fatal runtime log sweep: no matching logs
