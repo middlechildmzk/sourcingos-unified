@@ -66,7 +66,7 @@ export function useRoleWorkspaces() {
       const response = await fetch('/api/roles/sync', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ workspace: prepared, expectedVersion: versions.current[prepared.id] }),
+        body: JSON.stringify({ workspace: prepared, expectedVersion: versions.current[workspace.id] }),
       })
       const json = await response.json()
       if (!response.ok || !json.ok) throw new Error(json.error || 'Role sync failed.')
