@@ -23,13 +23,14 @@ type NavigationItem = {
 }
 
 const primary: NavigationItem[] = [
-  { href: '/app/agent-os', label: 'Today', icon: 'today', description: 'Your decisions and agent work' },
+  { href: '/app/today', label: 'Today', icon: 'today', description: 'Your prioritized decision inbox' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Searches, strategy, and pipelines' },
   { href: '/app/autosource', label: 'AutoSource', icon: 'autosource', description: 'Discovery campaigns and review' },
   { href: '/app/candidate-database', label: 'Candidates', icon: 'candidates', description: 'Identity, evidence, and rediscovery' },
 ]
 
 const tools: NavigationItem[] = [
+  { href: '/app/agent-os', label: 'Agent OS', icon: 'today', description: 'Agent runs and approvals' },
   { href: '/app/import', label: 'Import Center', icon: 'import', description: 'Bring in candidate data' },
   { href: '/app/candidate-search', label: 'Candidate Search', icon: 'search', description: 'Search across known records' },
   { href: '/app/acquisition', label: 'Acquisition & Sources', icon: 'acquisition', description: 'Source operations' },
