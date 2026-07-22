@@ -6,10 +6,10 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function RoleDetailPage({ params }: { params: { id: string } }) {
+export default function RoleDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { tab?: string } }) {
   return (
     <main className="wrap">
-      <RoleDetailClient roleId={params.id} />
+      <RoleDetailClient roleId={params.id} initialTab={searchParams?.tab} />
       <RoleDeleteControl roleId={params.id} />
     </main>
   )

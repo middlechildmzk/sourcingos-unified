@@ -20,8 +20,10 @@ import {
   candidateReviewScore,
 } from '@/components/CandidateReviewPro'
 import { ProductIcon } from '@/components/ProductIcon'
+import { RoleCalibrationPanel } from '@/components/RoleCalibrationPanel'
+import { pendingInsightCount } from '@/lib/calibration-intelligence'
 
-type Tab = 'overview' | 'candidates' | 'strategy' | 'activity'
+type Tab = 'overview' | 'candidates' | 'calibration' | 'strategy' | 'activity'
 
 type UndoSnapshot = {
   candidates: RoleCandidate[]
@@ -76,9 +78,11 @@ function candidatePriority(candidate: RoleCandidate): number {
   return 6
 }
 
-export function RoleDetailClient({ roleId }: { roleId: string }) {
+const TAB_VALUES: Tab[] = ['overview', 'candidates', 'calibration', 'strategy', 'activity']
+
+export function RoleDetailClient({ roleId, initialTab }: { roleId: string; initialTab?: string }) {
   const { roles, mode, message, updateRole, syncWorkspace } = useRoleWorkspaces()
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(TAB_VALUES.includes(initialTab as Tab) ? (initialTab as Tab) : 'overview')
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [candidateQuery, setCandidateQuery] = useState('')
@@ -111,6 +115,7 @@ export function RoleDetailClient({ roleId }: { roleId: string }) {
   const reviewedCount = role?.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length || 0
   const reviewProgress = role?.candidates.length ? Math.round((reviewedCount / role.candidates.length) * 100) : 0
   const conflictCount = role?.candidates.filter(candidate => candidate.evidenceStatus === 'conflicting').length || 0
+  const pendingCalibration = pendingInsightCount(role?.calibration)
 
   useEffect(() => {
     if (!role) return
@@ -263,7 +268,7 @@ export function RoleDetailClient({ roleId }: { roleId: string }) {
     </div>
 
     <nav className="role-tabs" aria-label="Role workspace sections">
-      {(['overview', 'candidates', 'strategy', 'activity'] as Tab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}{item === 'candidates' && metrics.needsReview ? <span>{metrics.needsReview}</span> : null}</button>)}
+      {(['overview', 'candidates', 'calibration', 'strategy', 'activity'] as Tab[]).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item[0].toUpperCase() + item.slice(1)}{item === 'candidates' && metrics.needsReview ? <span>{metrics.needsReview}</span> : null}{item === 'calibration' && pendingCalibration ? <span>{pendingCalibration}</span> : null}</button>)}
     </nav>
 
     {tab === 'overview' && <div className="role-section-stack">
@@ -321,6 +326,13 @@ export function RoleDetailClient({ roleId }: { roleId: string }) {
 
       {!!role.candidates.length && <details className="advanced-disclosure product-panel"><summary>Pipeline board</summary><div className="role-pipeline-board">{ROLE_STAGES.filter(stage => metrics.byStage[stage] > 0 || ['needs_review', 'shortlisted', 'contact_research', 'ready_for_outreach', 'contacted', 'responded', 'submitted', 'interviewing'].includes(stage)).map(stage => <div className="role-pipeline-column" key={stage}><div className="product-panel-head"><h2>{stageLabel(stage)}</h2><span>{metrics.byStage[stage]}</span></div>{role.candidates.filter(candidate => candidate.stage === stage).map(candidate => <button key={candidate.id} onClick={() => setSelectedCandidateId(candidate.id)}>{candidate.name}<small>{candidate.company || candidate.headline || 'Review candidate'}</small></button>)}</div>)}</div></details>}
     </div>}
+
+    {tab === 'calibration' && role && <RoleCalibrationPanel
+      role={role}
+      onUpdate={updater => { updateSelected(updater) }}
+      onOpenStrategy={() => setTab('strategy')}
+      onOpenCandidate={candidateId => { setSelectedCandidateId(candidateId); setTab('candidates') }}
+    />}
 
     {tab === 'strategy' && <div className="product-layout">
       <div className="role-section-stack"><section className="product-panel"><div className="product-panel-head"><div><span className="kicker">Approved search brief</span><h2>Intake and calibration</h2></div><span>Edits regenerate proposed lanes</span></div><div className="grid two"><label>Role title<input className="input" value={role.intake.title} onChange={event => updateIntake('title', event.target.value)} /></label><label>Location<input className="input" value={role.intake.location} onChange={event => updateIntake('location', event.target.value)} /></label><label>Work mode<select value={role.intake.workMode} onChange={event => updateIntake('workMode', event.target.value)}><option value="unknown">Unknown</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="onsite">Onsite</option><option value="flexible">Flexible</option></select></label><label>Compensation<input className="input" value={role.intake.compensation} onChange={event => updateIntake('compensation', event.target.value)} /></label><label>Clearance<input className="input" value={role.intake.clearance} onChange={event => updateIntake('clearance', event.target.value)} /></label><label>Target companies<input className="input" value={listInput(role.intake.targetCompanies)} onChange={event => updateIntake('targetCompanies', parseList(event.target.value))} /></label></div><label>Must-haves<textarea className="textarea" value={listInput(role.intake.mustHaves)} onChange={event => updateIntake('mustHaves', parseList(event.target.value))} /></label><label>Nice-to-haves<textarea className="textarea" value={listInput(role.intake.niceToHaves)} onChange={event => updateIntake('niceToHaves', parseList(event.target.value))} /></label><label>Disqualifiers<textarea className="textarea" value={listInput(role.intake.disqualifiers)} onChange={event => updateIntake('disqualifiers', parseList(event.target.value))} /></label><label>Adjacent backgrounds<textarea className="textarea" value={listInput(role.intake.adjacentBackgrounds)} onChange={event => updateIntake('adjacentBackgrounds', parseList(event.target.value))} /></label><label>Hiring-manager notes<textarea className="textarea" value={role.intake.hiringManagerNotes} onChange={event => updateIntake('hiringManagerNotes', event.target.value)} /></label><details className="advanced-disclosure"><summary>Original job description</summary><pre className="normal-wrap">{role.intake.rawDescription}</pre></details></section></div>
