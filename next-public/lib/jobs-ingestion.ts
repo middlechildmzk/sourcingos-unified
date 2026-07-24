@@ -79,8 +79,62 @@ const falsePositiveTitlePatterns = [
   'legal counsel'
 ]
 
+const htmlEntities: Record<string, string> = {
+  '&nbsp;': ' ',
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&rsquo;': "'",
+  '&lsquo;': "'",
+  '&rdquo;': '"',
+  '&ldquo;': '"',
+  '&mdash;': ' ',
+  '&ndash;': ' ',
+  '&bull;': ' ',
+}
+
+function decodeEntities(text: string) {
+  return text.replace(/&[a-zA-Z#0-9]+;/g, entity => htmlEntities[entity] || ' ')
+}
+
+function stripJobBoilerplate(text: string) {
+  return text
+    .replace(/\{[^{}]{0,240}\}/g, ' ')
+    .replace(/\[[^\[\]]{0,240}\]/g, ' ')
+    .replace(/\b(null|undefined|NaN|function|script|style)\b/gi, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/\bapply now\b/gi, ' ')
+    .replace(/\bview job\b/gi, ' ')
+}
+
 export function cleanText(value: unknown, max = 500) {
-  return String(value || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().slice(0, max)
+  const text = decodeEntities(String(value || ''))
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+  return stripJobBoilerplate(text)
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
+}
+
+export function hasUsefulSnippet(value: string) {
+  const text = cleanText(value, 500)
+  if (text.length < 40) return false
+  const alpha = (text.match(/[a-z]/gi) || []).length
+  const punctuation = (text.match(/[{}[\]<>_=|\\]/g) || []).length
+  if (alpha / Math.max(text.length, 1) < 0.45) return false
+  if (punctuation > 12) return false
+  if (/^[-–—•\s]+$/.test(text)) return false
+  return true
+}
+
+export function safeJobSnippet(value: unknown, fallback = 'View the original posting for full job details.') {
+  const text = cleanText(value, 320)
+  return hasUsefulSnippet(text) ? text : fallback
 }
 
 export function isRecruitingRole(title = '', description = '') {
@@ -124,7 +178,7 @@ export async function fetchGreenhouseJobs(target: AtsTarget): Promise<Normalized
     const data = await res.json()
     return (data.jobs || []).filter((job: any) => isRecruitingRole(job.title, job.content)).map((job: any) => {
       const title = cleanText(job.title, 160)
-      const body = cleanText(job.content, 360)
+      const body = safeJobSnippet(job.content)
       const location = cleanText(job.location?.name || 'Location not listed', 120)
       return {
         id: `greenhouse-${target.token}-${job.id}`,
@@ -156,7 +210,7 @@ export async function fetchLeverJobs(target: AtsTarget): Promise<NormalizedJob[]
     const data = await res.json()
     return (Array.isArray(data) ? data : []).filter((job: any) => isRecruitingRole(job.text, `${job.descriptionPlain || ''} ${job.description || ''}`)).map((job: any) => {
       const title = cleanText(job.text, 160)
-      const body = cleanText(job.descriptionPlain || job.description || '', 360)
+      const body = safeJobSnippet(job.descriptionPlain || job.description || '')
       const location = cleanText(job.categories?.location || 'Location not listed', 120)
       const salary = job.salaryRange ? `${job.salaryRange.currency || ''} ${job.salaryRange.min || ''}-${job.salaryRange.max || ''}`.trim() : 'Not listed'
       return {
@@ -190,7 +244,7 @@ export async function fetchAshbyJobs(target: AtsTarget): Promise<NormalizedJob[]
     const jobs = data.jobs || data.jobPostings || []
     return (Array.isArray(jobs) ? jobs : []).filter((job: any) => isRecruitingRole(job.title, job.descriptionHtml || job.descriptionPlain)).map((job: any) => {
       const title = cleanText(job.title, 160)
-      const body = cleanText(job.descriptionHtml || job.descriptionPlain || '', 360)
+      const body = safeJobSnippet(job.descriptionHtml || job.descriptionPlain || '')
       const location = cleanText(job.location || job.locationName || 'Location not listed', 120)
       return {
         id: `ashby-${target.token}-${job.id}`,

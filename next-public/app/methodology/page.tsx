@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { FaqJsonLd } from '@/components/StructuredData'
 
 export const metadata = {
   alternates: { canonical: '/methodology/' },
@@ -6,11 +7,31 @@ export const metadata = {
   description: 'How SourcingOS works: role intake, source lanes, open-web searches, evidence review, recruiter-confirmed Candidate Graph, and Candidate 360 dossiers. A human decides at every step.'
 }
 
+const faqs = [
+  {
+    question: 'What is the SourcingOS methodology?',
+    answer: 'SourcingOS turns role intake into source lanes, public-source searches, evidence review, recruiter-confirmed identity matches, and Candidate 360 dossiers. A human recruiter makes the decisions.',
+  },
+  {
+    question: 'What is a source lane?',
+    answer: 'A source lane is a focused search path such as GitHub, X-Ray, research publications, package ecosystems, healthcare registries, or manual-safe GovCon breadcrumbs.',
+  },
+  {
+    question: 'What does Candidate 360 mean?',
+    answer: 'Candidate 360 is an HM-ready dossier created after recruiter review. It includes evidence, gaps, risk flags, source provenance, verify-next steps, and outreach angles.',
+  },
+]
+
 export default function MethodologyPage() {
   return <main className="wrap article">
+    <FaqJsonLd id="methodology-faq-jsonld" faqs={faqs} />
     <span className="kicker">How SourcingOS works</span>
     <h1>Methodology</h1>
     <p className="lead">SourcingOS turns a messy req into an evidence-backed shortlist without taking the judgment out of your hands. Here is the workflow, step by step.</p>
+
+    <div className="article-callout">
+      <strong>TL;DR:</strong> SourcingOS starts with role intake, expands into source lanes, searches public evidence, separates facts from signals, and keeps merges, outreach, and final decisions human-approved.
+    </div>
 
     <section>
       <h2>1. Role intake</h2>
@@ -40,6 +61,14 @@ export default function MethodologyPage() {
     <section>
       <h2>6. Candidate 360</h2>
       <p>Confirmed records roll up into an HM-ready dossier: evidence matrix, fit summary, gaps, risk flags, a verify-next checklist, contact signal notes, and a drafted outreach angle you review and send yourself.</p>
+    </section>
+
+    <section>
+      <h2>FAQ</h2>
+      {faqs.map(faq => <div className="faq" key={faq.question}>
+        <h3>{faq.question}</h3>
+        <p>{faq.answer}</p>
+      </div>)}
     </section>
 
     <section>
