@@ -8,6 +8,11 @@ import { resolveStoredEntityKind } from '@/lib/entity-classification'
 
 export const dynamic = 'force-dynamic'
 
+function parseRawText(value?: string) {
+  if (!value) return undefined
+  try { return JSON.parse(value) as unknown } catch { return undefined }
+}
+
 export async function GET(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -39,7 +44,7 @@ export async function GET(req: NextRequest) {
       const profiles = sourceProfilesByCandidate.get(candidate.id) || []
       const kinds = profiles.map(profile => resolveStoredEntityKind({
         source: profile.source,
-        raw: profile.rawText ? JSON.parse(profile.rawText) : undefined,
+        raw: parseRawText(profile.rawText),
       }))
       return {
         ...candidate,
@@ -57,7 +62,7 @@ export async function GET(req: NextRequest) {
         ...profile,
         entityKind: resolveStoredEntityKind({
           source: profile.source,
-          raw: profile.rawText ? JSON.parse(profile.rawText) : undefined,
+          raw: parseRawText(profile.rawText),
         }),
       })),
       evidenceItems: db.evidenceItems.filter(item => item.candidateId && candidateIds.has(item.candidateId)),
