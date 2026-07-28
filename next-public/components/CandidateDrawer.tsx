@@ -7,8 +7,6 @@ import { FeedbackButtons } from '@/components/FeedbackButtons'
 import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
 import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
-import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
-import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
 
 export interface DrawerSavedState {
   candidateId: string
@@ -103,10 +101,6 @@ export function CandidateDrawer({
   const color = SOURCE_COLORS[result.source] || SOURCE_COLORS.default
   const openLabel = SOURCE_OPEN_LABEL[result.source] || 'Open source profile'
   const isSaved = Boolean(localSaved)
-  const entityKind = result.entityKind ?? 'unknown'
-  const canSaveCandidate = canPromoteToCandidate(entityKind)
-  const entityKind = result.entityKind ?? 'unknown'
-  const canSaveCandidate = canPromoteToCandidate(entityKind)
   const entityKind = result.entityKind ?? 'unknown'
   const canSaveCandidate = canPromoteToCandidate(entityKind)
   const missingData = [
