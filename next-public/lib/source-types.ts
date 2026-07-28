@@ -53,15 +53,12 @@ export type IdentitySignal = {
   source: SourceName
 }
 
-/**
- * Raw connector result. Legacy connectors may omit entityKind, but every API
- * boundary must normalize this to ClassifiedSourceResult before returning it.
- */
+/** Every connector must explicitly identify the subject it returns. */
 export type SourceResult = {
   id: string
   source: SourceName
   sourceProfileId: string
-  entityKind?: EntityKind
+  entityKind: EntityKind
   displayName: string
   headline?: string
   location?: string
@@ -76,7 +73,7 @@ export type SourceResult = {
   raw?: unknown
 }
 
-export type ClassifiedSourceResult = SourceResult & { entityKind: EntityKind }
+export type ClassifiedSourceResult = SourceResult
 
 export type SourceSearchRequest = {
   query: string
