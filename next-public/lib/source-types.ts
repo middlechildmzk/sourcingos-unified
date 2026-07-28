@@ -17,6 +17,21 @@ export type SourceName =
   | 'rubygems'
   | 'resume_xray'
 
+/**
+ * The real-world subject represented by a source result.
+ *
+ * This is deliberately required. A source artifact, organization, publication,
+ * or search lane must never be allowed to masquerade as a person merely because
+ * it has a display name.
+ */
+export type EntityKind =
+  | 'person'
+  | 'organization'
+  | 'artifact'
+  | 'publication'
+  | 'search_lane'
+  | 'unknown'
+
 export type EvidenceConfidence = 'high' | 'medium' | 'low'
 
 export type EvidenceItem = {
@@ -48,6 +63,7 @@ export type SourceResult = {
   id: string
   source: SourceName
   sourceProfileId: string
+  entityKind: EntityKind
   displayName: string
   headline?: string
   location?: string
