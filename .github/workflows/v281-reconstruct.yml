@@ -8,6 +8,7 @@ on:
       - scripts/v281-reconstruct.mjs
       - scripts/v281-drawer-transform.mjs
       - scripts/v281-candidate-db-transform.mjs
+      - scripts/v281-final-source-transforms.mjs
       - .github/workflows/v281-reconstruct.yml
 
 permissions:
@@ -30,6 +31,7 @@ jobs:
           node scripts/v281-reconstruct.mjs
           node scripts/v281-drawer-transform.mjs
           node scripts/v281-candidate-db-transform.mjs
+          node scripts/v281-final-source-transforms.mjs
       - name: Commit transformed source
         run: |
           if git diff --quiet; then
@@ -38,6 +40,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add next-public/components/WorkbenchClient.tsx next-public/components/CandidateDrawer.tsx next-public/components/CandidateDbClient.tsx
-          git commit -m "Complete V28.1 recruiter interaction safeguards"
+          git add next-public/components/WorkbenchClient.tsx next-public/components/CandidateDrawer.tsx next-public/components/CandidateDbClient.tsx next-public/lib/source-connectors.ts
+          git commit -m "Complete V28.1 recruiter interaction and source truth safeguards"
           git push origin HEAD:v28-1-product-truth-reconstruction
