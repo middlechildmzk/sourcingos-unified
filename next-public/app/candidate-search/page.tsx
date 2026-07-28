@@ -1,56 +1,39 @@
 import { WorkbenchClient } from '@/components/WorkbenchClient'
-import { PublicComposerDefault } from '@/components/PublicComposerDefault'
-import { CandidateSearchV25Builder } from '@/components/CandidateSearchV25Builder'
-import { CandidateSearchTrustLayer } from '@/components/CandidateSearchTrustLayer'
 import Link from 'next/link'
 
 export const metadata = {
   alternates: { canonical: '/candidate-search/' },
   title: 'Candidate Search Demo — SourcingOS',
-  description:
-    'Try SourcingOS Candidate Search free. Search modes, source-lane routing, public-source search, evidence-first result cards, market-map summaries, and recruiter-safe profile review.',
+  description: 'Search public talent evidence, review person profiles first, and inspect supporting provenance without fabricated candidates or contact data.',
 }
 
-// Public demo — search and review work without sign-in.
-// All write actions are gated client-side (publicMode) AND server-side (auth-protected APIs).
 export default function PublicCandidateSearchPage() {
   return (
     <main className="wrap">
-      <div className="eyebrow">SourcingOS — Public demo</div>
-      <h1>Candidate Search</h1>
+      <div className="eyebrow">SourcingOS — Live public demo</div>
+      <h1>Search for people. Inspect the evidence.</h1>
       <p className="lead">
-        Search public talent evidence, review source profiles, inspect why something matched,
-        and keep every claim separated from recruiter confirmation.
+        Describe the talent you need in plain language. SourcingOS separates people from packages,
+        organizations, publications, and manual discovery lanes before anything can become a candidate.
       </p>
 
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 8px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
-          Public evidence matches only · Not confirmed candidates · Contact signals unverified ·
-          Clearance and open-to-work are signals, never verified claims · Confidence means source relevance only
-        </span>
+      <div className="recruiter-trust-note" style={{ margin: '16px 0 20px' }}>
+        <strong>Public evidence, not verified candidate facts.</strong>
+        <span>Identity, employment, location, clearance, contact accuracy, and permission require recruiter confirmation.</span>
       </div>
 
-      <div className="preview-banner" style={{ marginBottom: '20px' }}>
-        <span className="pb-icon">◈</span>
-        <span>
-          <strong>Demo mode.</strong> Search and review are open to everyone. Saving source profiles,
-          adding to projects, confirming same-person matches, contact enrichment, dossier export,
-          and Candidate 360 creation require a beta account.{' '}
-          <Link href="/login" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>Sign in</Link>
-          {' '}or <Link href="/waitlist" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>request access</Link>.
-        </span>
+      <WorkbenchClient publicMode initialTab="composer" />
+
+      <div className="cta" style={{ marginTop: '24px' }}>
+        <strong>Turn a search into a recruiter workflow.</strong>{' '}
+        <Link href="/login" style={{ textDecoration: 'underline' }}>Sign in</Link>{' '}
+        or <Link href="/waitlist" style={{ textDecoration: 'underline' }}>request private beta access</Link>{' '}
+        to save people, add them to roles, and open Candidate 360.
       </div>
 
-      <div className="cta" style={{ marginBottom: '20px' }}>
-        <strong>Need more coverage before you search?</strong> Use the free{' '}
-        <Link href="/tools/search-lane-expander" style={{ textDecoration: 'underline' }}>Search Lane Expander</Link>{' '}
-        to compare Precision, Balanced, Broad, and Market Map lanes.
-      </div>
-
-      <CandidateSearchV25Builder />
-      <PublicComposerDefault />
-      <WorkbenchClient publicMode={true} />
-      <CandidateSearchTrustLayer />
+      <p className="muted" style={{ marginTop: '16px', fontSize: '12px' }}>
+        Need the sourcing methodology? Review the <Link href="/methodology" style={{ textDecoration: 'underline' }}>evidence and trust methodology</Link>.
+      </p>
     </main>
   )
 }

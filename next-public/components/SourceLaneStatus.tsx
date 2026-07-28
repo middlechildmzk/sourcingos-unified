@@ -36,11 +36,11 @@ export function SourceLaneStatus({ lanes, onRetry }: SourceLaneStatusProps) {
   const issueCount = lanes.filter(lane => lane.status === 'timed_out' || lane.status === 'error').length
 
   return (
-    <details className="lane-status-disclosure" key={running ? 'running' : 'complete'} open={running || undefined}>
+    <details className="lane-status-disclosure">
       <summary>
-        <span>{running ? 'Searching source lanes…' : 'Source coverage'}</span>
+        <span>{running ? 'Source coverage while search continues' : 'Source coverage and retries'}</span>
         <span className="lane-status-compact">
-          <span>{resultCount} profiles</span>
+          <span>{resultCount} results</span>
           <span>{found.length} live sources</span>
           {!!manualCount && <span>{manualCount} manual lanes</span>}
           {!!issueCount && <span>{issueCount} need attention</span>}
@@ -52,7 +52,7 @@ export function SourceLaneStatus({ lanes, onRetry }: SourceLaneStatusProps) {
           const showCount = lane.status === 'found' && typeof lane.count === 'number'
           return (
             <div key={lane.source} className="lane-chip" style={{ borderColor: `${meta.color}33` }}>
-              <span className="lane-dot" style={{ color: meta.color }}>{meta.dot}</span>
+              <span className="lane-dot" style={{ color: meta.color }} aria-hidden="true">{meta.dot}</span>
               <span className="lane-source">{lane.source}</span>
               <span className="lane-state" style={{ color: meta.color }}>
                 {showCount ? `${lane.count} ${meta.label}` : meta.label}

@@ -1,11 +1,11 @@
-import { AgentOSClient } from '@/components/AgentOSClient'
+import { permanentRedirect } from 'next/navigation'
 
 export const metadata = {
-  title: 'Today — SourcingOS',
-  description: 'A clean recruiter command center for approvals, prioritized candidate review, active roles, agent workflows, memory, and talent graph intelligence.',
+  title: 'Today | SourcingOS',
+  description: 'SourcingOS recruiter decision inbox.',
   robots: { index: false, follow: false },
 }
 
 export default function AgentOSPage() {
-  return <main className="wrap"><AgentOSClient /></main>
+  permanentRedirect('/app/today/')
 }

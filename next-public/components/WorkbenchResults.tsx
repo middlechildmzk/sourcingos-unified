@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { sourceLabels, type SourceResult } from '@/lib/source-types'
+import { entityKindLabels, sourceLabels, type SourceResult } from '@/lib/source-types'
 
 export interface SavedEntry { id: string; displayName: string; source: string }
 
@@ -48,7 +48,7 @@ export function WorkbenchResults({
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [contactFilter, setContactFilter] = useState<'all' | 'has' | 'none'>('all')
-  const [sortBy, setSortBy] = useState<'relevance' | 'evidence' | 'source'>('relevance')
+  const [sortBy, setSortBy] = useState<'default' | 'evidence' | 'source'>('default')
   const [keyword, setKeyword] = useState('')
   const [saved, setSaved] = useState<Map<string, string>>(new Map())
   const [notices, setNotices] = useState<Map<string, string>>(new Map())
@@ -67,16 +67,12 @@ export function WorkbenchResults({
         {(chipContext?.hasClearance || chipContext?.hasLocation || chipContext?.isSkillLight) && (
           <div className="recruiter-trust-note" style={{ marginTop: '12px' }}>
             <strong>Search tip:</strong>
-            <span>
-              Public sources work best with concrete skills and tools. Treat location and clearance as review filters, then verify them through approved channels.
-            </span>
+            <span>Public sources work best with concrete skills and tools. Treat location and clearance as review filters, then verify them through approved channels.</span>
           </div>
         )}
 
         {noResultsSources.length > 0 && (
-          <p className="muted" style={{ fontSize: '12px', margin: '12px 0 0' }}>
-            No results from: {noResultsSources.join(', ')}
-          </p>
+          <p className="muted" style={{ fontSize: '12px', margin: '12px 0 0' }}>No results from: {noResultsSources.join(', ')}</p>
         )}
 
         {suggestions.length > 0 && (
@@ -95,6 +91,10 @@ export function WorkbenchResults({
   }
 
   async function saveProfile(result: SourceResult) {
+    if (result.entityKind !== 'person') {
+      setNotices(previous => new Map(previous).set(result.id, `${entityKindLabels[result.entityKind]} records cannot be saved as candidates.`))
+      return
+    }
     if (saving.has(result.id) || saved.has(result.id)) return
     if (publicMode) { setAuthRequired(true); return }
 
@@ -143,6 +143,7 @@ export function WorkbenchResults({
         result.headline,
         result.organization,
         result.location,
+        entityKindLabels[result.entityKind],
         ...result.skills,
         ...result.evidence.map(item => `${item.label} ${item.detail}`),
       ].filter(Boolean).join(' ').toLowerCase()
@@ -157,22 +158,105 @@ export function WorkbenchResults({
     return 0
   })
 
+  const people = sorted.filter(result => result.entityKind === 'person')
+  const supporting = sorted.filter(result => result.entityKind !== 'person')
+
+  function renderResult(result: SourceResult, candidate: boolean) {
+    const isSaved = saved.has(result.id)
+    const isSaving = saving.has(result.id)
+    const notice = notices.get(result.id)
+    const candidateId = saved.get(result.id)
+    const topEvidence = result.evidence[0]
+    const subtitle = [result.headline, result.organization].filter(Boolean).join(' at ')
+
+    return (
+      <article
+        className="recruiter-result-row"
+        key={result.id}
+        onClick={event => {
+          const target = event.target as HTMLElement
+          if (target.closest('button,a,input,select')) return
+          onOpenDrawer?.(result)
+        }}
+      >
+        <div
+          className="recruiter-avatar"
+          style={result.avatarUrl ? { backgroundImage: `url(${result.avatarUrl})`, backgroundPosition: 'center', backgroundSize: 'cover' } : undefined}
+          aria-hidden="true"
+        >
+          {!result.avatarUrl && initials(result.displayName)}
+        </div>
+
+        <div className="recruiter-result-main">
+          <div className="recruiter-result-topline">
+            <button className="recruiter-result-name" onClick={() => onOpenDrawer?.(result)}>
+              {result.displayName}
+            </button>
+            <span className="recruiter-source-label">{sourceLabels[result.source]}</span>
+            <span className="recruiter-source-label">{entityKindLabels[result.entityKind]}</span>
+          </div>
+
+          <div className="recruiter-result-subtitle">{subtitle || (candidate ? 'Public person profile' : entityKindLabels[result.entityKind])}</div>
+          {(result.location || (!result.organization && result.headline)) && (
+            <div className="recruiter-result-location">
+              {[result.location, !result.organization ? result.headline : ''].filter(Boolean).join(' · ')}
+            </div>
+          )}
+
+          {topEvidence && (
+            <div className="recruiter-result-match">
+              <span className="recruiter-match-label">Matched</span>
+              <span>{topEvidence.label}{topEvidence.detail && topEvidence.detail !== topEvidence.label ? ` · ${topEvidence.detail}` : ''}</span>
+            </div>
+          )}
+
+          {result.skills.length > 0 && (
+            <div className="recruiter-result-skills">
+              {result.skills.slice(0, 6).map(skill => <span className="recruiter-skill" key={skill}>{skill}</span>)}
+              {result.skills.length > 6 && <span className="recruiter-skill">+{result.skills.length - 6}</span>}
+            </div>
+          )}
+
+          <div className="recruiter-result-stats">
+            <span>{result.evidence.length} evidence item{result.evidence.length === 1 ? '' : 's'}</span>
+            <span>{result.contactSignals.length ? `${result.contactSignals.length} contact signal${result.contactSignals.length === 1 ? '' : 's'}` : 'No contact signal'}</span>
+            <span>{candidate ? 'Identity unconfirmed' : 'Not a candidate record'}</span>
+          </div>
+        </div>
+
+        <div className="recruiter-result-actions">
+          <button className="btn secondary recruiter-open-btn" onClick={() => onOpenDrawer?.(result)}>Open {candidate ? 'profile' : 'evidence'}</button>
+          {result.profileUrl && <a className="btn ghost" href={result.profileUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}
+          {candidate && (isSaved ? (
+            candidateId ? <a className="btn ghost" href={`/app/candidate/${candidateId}`}>Candidate 360 →</a> : <span className="status-live">Saved</span>
+          ) : (
+            <button className="btn ghost" onClick={() => void saveProfile(result)} disabled={isSaving}>
+              {isSaving ? 'Saving…' : publicMode ? 'Save' : '+ Save'}
+            </button>
+          ))}
+        </div>
+
+        {notice && <div className="recruiter-result-notice" style={{ color: isSaved ? 'var(--green)' : 'var(--amber)' }}>{notice}</div>}
+      </article>
+    )
+  }
+
   return (
     <div className="wb-results recruiter-results">
       <div className="recruiter-results-heading">
         <div>
-          <h2>{publicMode ? 'Public source profiles' : 'Candidate leads'}</h2>
-          <p>Review the person or profile first. Open the evidence panel for provenance and verification detail.</p>
+          <h2>{publicMode ? 'Public person profiles' : 'Candidate leads'}</h2>
+          <p>People appear first. Supporting artifacts and discovery lanes stay separate and cannot be saved as candidates.</p>
         </div>
-        <div className="recruiter-results-count">{sorted.length} of {results.length}</div>
+        <div className="recruiter-results-count">{people.length} people · {supporting.length} supporting</div>
       </div>
 
       <div className="recruiter-results-toolbar">
         <input
           value={keyword}
           onChange={event => setKeyword(event.target.value)}
-          placeholder="Filter by name, title, company, location, or skill"
-          aria-label="Filter candidate results"
+          placeholder="Filter by name, title, company, location, skill, or entity type"
+          aria-label="Filter search results"
         />
         <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} aria-label="Filter by source">
           <option value="all">All sources</option>
@@ -183,15 +267,15 @@ export function WorkbenchResults({
           <option value="has">Has contact signal</option>
           <option value="none">No contact signal</option>
         </select>
-        <select value={sortBy} onChange={event => setSortBy(event.target.value as 'relevance' | 'evidence' | 'source')} aria-label="Sort results">
-          <option value="relevance">Best match</option>
+        <select value={sortBy} onChange={event => setSortBy(event.target.value as 'default' | 'evidence' | 'source')} aria-label="Sort results">
+          <option value="default">Default order</option>
           <option value="evidence">Most evidence</option>
           <option value="source">Source</option>
         </select>
       </div>
 
       <div className="recruiter-trust-note">
-        <strong>Unconfirmed public profiles.</strong>
+        <strong>Unconfirmed public evidence.</strong>
         <span>Verify identity, current role, location, clearance, contact accuracy, and permission before acting.</span>
       </div>
 
@@ -202,98 +286,31 @@ export function WorkbenchResults({
       )}
 
       <div className="recruiter-result-list">
-        {sorted.map(result => {
-          const isSaved = saved.has(result.id)
-          const isSaving = saving.has(result.id)
-          const notice = notices.get(result.id)
-          const candidateId = saved.get(result.id)
-          const topEvidence = result.evidence[0]
-          const subtitle = [result.headline, result.organization].filter(Boolean).join(' at ')
-
-          return (
-            <article
-              className="recruiter-result-row"
-              key={result.id}
-              role="button"
-              tabIndex={0}
-              onClick={event => {
-                const target = event.target as HTMLElement
-                if (target.closest('button,a,input,select')) return
-                onOpenDrawer?.(result)
-              }}
-              onKeyDown={event => {
-                if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
-                  event.preventDefault()
-                  onOpenDrawer?.(result)
-                }
-              }}
-              aria-label={`Open ${result.displayName}`}
-            >
-              <div
-                className="recruiter-avatar"
-                style={result.avatarUrl ? { backgroundImage: `url(${result.avatarUrl})`, backgroundPosition: 'center', backgroundSize: 'cover' } : undefined}
-                aria-hidden="true"
-              >
-                {!result.avatarUrl && initials(result.displayName)}
-              </div>
-
-              <div className="recruiter-result-main">
-                <div className="recruiter-result-topline">
-                  <button className="recruiter-result-name" onClick={() => onOpenDrawer?.(result)}>
-                    {result.displayName}
-                  </button>
-                  <span className="recruiter-source-label">{sourceLabels[result.source]}</span>
-                </div>
-
-                <div className="recruiter-result-subtitle">{subtitle || 'Public source profile'}</div>
-                {(result.location || (!result.organization && result.headline)) && (
-                  <div className="recruiter-result-location">
-                    {[result.location, !result.organization ? result.headline : ''].filter(Boolean).join(' · ')}
-                  </div>
-                )}
-
-                {topEvidence && (
-                  <div className="recruiter-result-match">
-                    <span className="recruiter-match-label">Matched</span>
-                    <span>{topEvidence.label}{topEvidence.detail && topEvidence.detail !== topEvidence.label ? ` · ${topEvidence.detail}` : ''}</span>
-                  </div>
-                )}
-
-                {result.skills.length > 0 && (
-                  <div className="recruiter-result-skills">
-                    {result.skills.slice(0, 6).map(skill => <span className="recruiter-skill" key={skill}>{skill}</span>)}
-                    {result.skills.length > 6 && <span className="recruiter-skill">+{result.skills.length - 6}</span>}
-                  </div>
-                )}
-
-                <div className="recruiter-result-stats">
-                  <span>{result.evidence.length} evidence item{result.evidence.length === 1 ? '' : 's'}</span>
-                  <span>{result.contactSignals.length ? `${result.contactSignals.length} contact signal${result.contactSignals.length === 1 ? '' : 's'}` : 'No contact signal'}</span>
-                  <span>Identity unconfirmed</span>
-                </div>
-              </div>
-
-              <div className="recruiter-result-actions">
-                <button className="btn secondary recruiter-open-btn" onClick={() => onOpenDrawer?.(result)}>Open profile</button>
-                {result.profileUrl && <a className="btn ghost" href={result.profileUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}
-                {isSaved ? (
-                  candidateId ? <a className="btn ghost" href={`/app/candidate/${candidateId}`}>Candidate 360 →</a> : <span className="status-live">Saved</span>
-                ) : (
-                  <button className="btn ghost" onClick={() => void saveProfile(result)} disabled={isSaving}>
-                    {isSaving ? 'Saving…' : publicMode ? 'Save' : '+ Save'}
-                  </button>
-                )}
-              </div>
-
-              {notice && <div className="recruiter-result-notice" style={{ color: isSaved ? 'var(--green)' : 'var(--amber)' }}>{notice}</div>}
-            </article>
-          )
-        })}
+        {people.map(result => renderResult(result, true))}
       </div>
+
+      {people.length === 0 && (
+        <div className="market-map-block">
+          <h4>No person records match the current filters</h4>
+          <div>Supporting evidence may still be available below. Refine the search before treating an artifact or discovery lane as a person.</div>
+        </div>
+      )}
+
+      {supporting.length > 0 && (
+        <details className="lane-status-disclosure" style={{ marginTop: '16px' }}>
+          <summary>
+            <span>Supporting evidence and discovery lanes</span>
+            <span className="lane-status-compact"><span>{supporting.length} items</span></span>
+          </summary>
+          <div className="recruiter-result-list" style={{ marginTop: '12px' }}>
+            {supporting.map(result => renderResult(result, false))}
+          </div>
+        </details>
+      )}
 
       {sorted.length === 0 && (
         <div className="market-map-block">
-          <h4>No candidates match the current filters</h4>
+          <h4>No results match the current filters</h4>
           <div>Clear the keyword or broaden the source and contact filters.</div>
         </div>
       )}
