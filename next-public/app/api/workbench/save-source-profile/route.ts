@@ -158,17 +158,14 @@ export async function POST(req: NextRequest) {
       last_seen_at: new Date().toISOString(),
     }
 
-    const { data: profileData, error: profileError } = existingProfile
-      ? await sb.from('source_profiles')
-          .update(profilePayload)
-          .eq('id', existingProfile.id)
-          .eq('owner_id', ownerId)
-          .select('id,candidate_id')
-          .single()
-      : await sb.from('source_profiles')
-          .insert(profilePayload)
-          .select('id,candidate_id')
-          .single()
+    // Upsert closes the race where two first-time saves both pass the lookup.
+    // candidate_id is intentionally omitted from profilePayload, so an existing
+    // canonical link is preserved rather than overwritten.
+    const { data: profileData, error: profileError } = await sb
+      .from('source_profiles')
+      .upsert(profilePayload, { onConflict: 'owner_id,source,source_profile_id' })
+      .select('id,candidate_id')
+      .single()
 
     if (profileError) return errorResponse('source_profiles write', profileError.message)
 
