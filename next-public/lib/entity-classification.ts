@@ -33,10 +33,6 @@ function record(value: unknown): UnknownRecord {
     : {}
 }
 
-function nestedRecord(value: unknown, key: string): UnknownRecord {
-  return record(record(value)[key])
-}
-
 /**
  * Authorized LinkedIn connection imports were historically stored with the
  * connector source `resume_xray`. Treat those records as people at read time
@@ -69,18 +65,19 @@ export function resolveStoredEntityKind(input: {
   if (PERSON_SOURCES.has(source)) return 'person'
 
   if (source === 'github') {
-    const raw = record(input.raw)
-    const detail = record(raw.raw)
-    const apiType = String(detail.type ?? raw.type ?? '').toLowerCase()
+    const root = record(input.raw)
+    const nested = record(root.raw)
+    const apiType = String(nested.type ?? root.type ?? '').toLowerCase()
     if (apiType === 'organization') return 'organization'
     if (apiType === 'user') return 'person'
     return 'unknown'
   }
 
   if (source === 'npi') {
-    const raw = record(input.raw)
-    const payload = record(raw.raw)
-    const basic = nestedRecord(payload, 'basic')
+    const root = record(input.raw)
+    const nested = record(root.raw)
+    const payload = Object.keys(nested).length ? nested : root
+    const basic = record(payload.basic)
     const enumerationType = String(
       payload.enumeration_type ?? basic.enumeration_type ?? '',
     ).toUpperCase()
