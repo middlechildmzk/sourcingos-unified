@@ -17,6 +17,14 @@ export type SourceName =
   | 'rubygems'
   | 'resume_xray'
 
+export type EntityKind =
+  | 'person'
+  | 'organization'
+  | 'artifact'
+  | 'publication'
+  | 'search_lane'
+  | 'unknown'
+
 export type EvidenceConfidence = 'high' | 'medium' | 'low'
 
 export type EvidenceItem = {
@@ -48,6 +56,7 @@ export type SourceResult = {
   id: string
   source: SourceName
   sourceProfileId: string
+  entityKind: EntityKind
   displayName: string
   headline?: string
   location?: string
@@ -126,6 +135,15 @@ export const sourceLabels: Record<SourceName, string> = {
   crates: 'crates.io',
   rubygems: 'RubyGems',
   resume_xray: 'Public Resume X-Ray'
+}
+
+export const entityKindLabels: Record<EntityKind, string> = {
+  person: 'Person',
+  organization: 'Organization',
+  artifact: 'Artifact',
+  publication: 'Publication',
+  search_lane: 'Discovery lane',
+  unknown: 'Needs entity review'
 }
 
 export const sourceGroups: Record<string, SourceName[]> = {
