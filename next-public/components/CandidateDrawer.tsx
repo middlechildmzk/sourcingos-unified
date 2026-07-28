@@ -7,6 +7,7 @@ import { FeedbackButtons } from '@/components/FeedbackButtons'
 import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
 import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
+import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
 
 export interface DrawerSavedState {
   candidateId: string
@@ -103,6 +104,8 @@ export function CandidateDrawer({
   const isSaved = Boolean(localSaved)
   const entityKind = result.entityKind ?? 'unknown'
   const canSaveCandidate = canPromoteToCandidate(entityKind)
+  const entityKind = result.entityKind ?? 'unknown'
+  const canSaveCandidate = canPromoteToCandidate(entityKind)
   const missingData = [
     !result.location ? 'Location' : '',
     !result.organization ? 'Current organization' : '',
@@ -125,6 +128,10 @@ export function CandidateDrawer({
 
   async function saveSourceProfile() {
     if (!result) return
+    if (!canSaveCandidate) {
+      setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
+      return
+    }
     if (!canSaveCandidate) {
       setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
       return

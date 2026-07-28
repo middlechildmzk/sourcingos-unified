@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import {
@@ -26,7 +25,6 @@ function number(value: unknown) {
 }
 
 export function CandidateDbClient() {
-  const router = useRouter()
   const [snapshot, setSnapshot] = useState<CandidateWorkspaceSnapshot>(EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT)
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -151,27 +149,15 @@ export function CandidateDbClient() {
           <div className="product-list">
             {snapshot.candidates.map(candidate => {
               const href = `/app/candidate/${candidate.id}`
-              return <div
-                className="product-row candidate-db-row"
-                key={candidate.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
-                onClick={event => {
-                  const target = event.target as HTMLElement
-                  if (target.closest('button,a,input,select')) return
-                  router.push(href)
-                }}
-                onKeyDown={event => {
-                  if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
-                    event.preventDefault()
-                    router.push(href)
-                  }
-                }}
-              >
+              return <div className="product-row candidate-db-row" key={candidate.id}>
+                <Link
+                  className="candidate-row-open-surface"
+                  href={href}
+                  aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
+                />
                 <div className="product-row-main">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Link className="product-row-title candidate-row-link" href={href}>{candidate.canonicalName}</Link>
+                    <span className="product-row-title candidate-row-link">{candidate.canonicalName}</span>
                     <span className={`status-pill ${candidate.mergeStatus === 'source_verified' || candidate.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(candidate.mergeStatus)}</span>
                   </div>
                   <div className="product-row-meta">{[candidate.headline || candidate.currentTitle, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate profile'}</div>
