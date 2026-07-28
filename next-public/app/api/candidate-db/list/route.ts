@@ -4,6 +4,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { getCandidateDb } from '@/lib/candidate-db-v18'
 import { getCandidateWorkspace } from '@/lib/candidate-workspace-v25'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { resolveStoredEntityKind } from '@/lib/entity-classification'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,11 +26,40 @@ export async function GET(req: NextRequest) {
       : db.candidates
     const candidates = filtered.slice(offset, offset + requestedLimit)
     const candidateIds = new Set(candidates.map(candidate => candidate.id))
+    const sourceProfiles = db.sourceProfiles.filter(item => item.candidateId && candidateIds.has(item.candidateId))
+    const sourceProfilesByCandidate = new Map<string, typeof sourceProfiles>()
+    for (const profile of sourceProfiles) {
+      if (!profile.candidateId) continue
+      const current = sourceProfilesByCandidate.get(profile.candidateId) || []
+      current.push(profile)
+      sourceProfilesByCandidate.set(profile.candidateId, current)
+    }
+
+    const classifiedCandidates = candidates.map(candidate => {
+      const profiles = sourceProfilesByCandidate.get(candidate.id) || []
+      const kinds = profiles.map(profile => resolveStoredEntityKind({
+        source: profile.source,
+        raw: profile.rawText ? JSON.parse(profile.rawText) : undefined,
+      }))
+      return {
+        ...candidate,
+        // Preview resume/CSV imports are explicit candidate imports. Search-saved
+        // preview records are already limited to people by the save endpoint.
+        entityKind: kinds.includes('person') || kinds.length === 0 ? 'person' : kinds[0],
+      }
+    })
+
     return NextResponse.json({
       ok: true,
       persistence_mode: 'preview',
-      candidates,
-      sourceProfiles: db.sourceProfiles.filter(item => item.candidateId && candidateIds.has(item.candidateId)),
+      candidates: classifiedCandidates,
+      sourceProfiles: sourceProfiles.map(profile => ({
+        ...profile,
+        entityKind: resolveStoredEntityKind({
+          source: profile.source,
+          raw: profile.rawText ? JSON.parse(profile.rawText) : undefined,
+        }),
+      })),
       evidenceItems: db.evidenceItems.filter(item => item.candidateId && candidateIds.has(item.candidateId)),
       contactSignals: db.contactSignals.filter(item => item.candidateId && candidateIds.has(item.candidateId)),
       openToWorkSignals: db.openToWorkSignals.filter(item => item.candidateId && candidateIds.has(item.candidateId)),
@@ -38,6 +68,8 @@ export async function GET(req: NextRequest) {
       counts: {
         candidates: db.candidates.length,
         filteredCandidates: filtered.length,
+        personCandidatesOnPage: classifiedCandidates.filter(candidate => candidate.entityKind === 'person').length,
+        nonPersonCandidatesOnPage: classifiedCandidates.filter(candidate => candidate.entityKind !== 'person').length,
         sourceProfiles: db.sourceProfiles.length,
         evidenceItems: db.evidenceItems.length,
         contactSignals: db.contactSignals.length,
