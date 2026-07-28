@@ -5,20 +5,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getCandidateDb, nowIso, uid } from '@/lib/candidate-db-v18'
-import { persistCandidateGraphSnapshot } from '@/lib/supabase-candidate-graph'
+import { resolveStoredEntityKind } from '@/lib/entity-classification'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Save a source profile (from workbench search results) to the Candidate Graph.
-//
-// Guardrails:
-//   - Contact signals always stored as verified=false (enforced at DB level too)
-//   - No auto-merge — candidate stays in pending state until recruiter confirms
-//   - Fit score is null — project_candidates row created with stage=sourced only
-//
-// NOTE: open_to_work_signals are NOT persisted here because SourceResult does
-// not include OTW signals. OTW signals are added during candidate normalization
-// from profile/resume content analysis, not raw source connector results.
-// ─────────────────────────────────────────────────────────────────────────────
+// Save one person source profile to the Candidate Graph.
+// Non-person source subjects fail closed. Repeated saves reuse the existing
+// candidate rather than creating or relinking a new identity.
+
+function errorResponse(scope: string, message: string, status = 500) {
+  return NextResponse.json({ ok: false, error: `${scope}: ${message}` }, { status })
+}
 
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
@@ -32,44 +27,86 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { sourceResult, projectId } = body
 
-    if (!sourceResult?.id || !sourceResult?.displayName) {
-      return NextResponse.json({ ok: false, error: 'sourceResult.id and displayName are required.' }, { status: 400 })
+    if (!sourceResult?.id || !sourceResult?.displayName || !sourceResult?.source || !sourceResult?.sourceProfileId) {
+      return NextResponse.json(
+        { ok: false, error: 'sourceResult.id, source, sourceProfileId, and displayName are required.' },
+        { status: 400 },
+      )
     }
 
-    // ── Preview mode ──────────────────────────────────────────────────────────
-    if (!isSupabaseConfigured()) {
-      // Write to in-memory store + return preview response
-      const db = getCandidateDb()
-      const candidateId = uid('cand')
-      const spId = uid('sp')
+    const entityKind = resolveStoredEntityKind({
+      source: sourceResult.source,
+      raw: sourceResult.raw,
+      entityKind: sourceResult.entityKind,
+    })
 
-      db.sourceProfiles.unshift({
-        id: spId,
-        source: sourceResult.source,
-        sourceProfileId: sourceResult.sourceProfileId,
-        displayName: sourceResult.displayName,
-        headline: sourceResult.headline || '',
-        location: sourceResult.location || '',
-        organization: sourceResult.organization || '',
-        rawText: JSON.stringify(sourceResult),
-        status: 'pending',
-        matchScore: 0,
-        matchReasons: [],
-        candidateId,
-        lastSeenAt: nowIso(),
-        createdAt: nowIso(),
-      })
+    if (entityKind !== 'person') {
+      return NextResponse.json({
+        ok: false,
+        error: `Only person records can be saved as candidates. Received ${entityKind}.`,
+        entityKind,
+      }, { status: 422 })
+    }
+
+    const normalizedResult = { ...sourceResult, entityKind }
+
+    // Preview mode remains idempotent within the current process.
+    if (!isSupabaseConfigured()) {
+      const db = getCandidateDb()
+      const existingProfile = db.sourceProfiles.find(profile =>
+        profile.source === normalizedResult.source
+        && profile.sourceProfileId === normalizedResult.sourceProfileId
+      )
+
+      if (existingProfile?.candidateId) {
+        return NextResponse.json({
+          ok: true,
+          mode: 'preview',
+          reused: true,
+          candidateId: existingProfile.candidateId,
+          sourceProfileId: existingProfile.id,
+          candidateUrl: `/app/candidate/${existingProfile.candidateId}`,
+          note: 'Existing source profile reused. Identity remains pending recruiter review.',
+        })
+      }
+
+      const candidateId = uid('cand')
+      const spId = existingProfile?.id || uid('sp')
+
+      if (existingProfile) {
+        existingProfile.candidateId = candidateId
+        existingProfile.rawText = JSON.stringify(normalizedResult)
+        existingProfile.lastSeenAt = nowIso()
+      } else {
+        db.sourceProfiles.unshift({
+          id: spId,
+          source: normalizedResult.source,
+          sourceProfileId: normalizedResult.sourceProfileId,
+          displayName: normalizedResult.displayName,
+          headline: normalizedResult.headline || '',
+          location: normalizedResult.location || '',
+          organization: normalizedResult.organization || '',
+          rawText: JSON.stringify(normalizedResult),
+          status: 'pending',
+          matchScore: 0,
+          matchReasons: [],
+          candidateId,
+          lastSeenAt: nowIso(),
+          createdAt: nowIso(),
+        })
+      }
+
       db.candidates.unshift({
         id: candidateId,
-        canonicalName: sourceResult.displayName,
-        headline: sourceResult.headline || '',
-        location: sourceResult.location || '',
-        currentCompany: sourceResult.organization || '',
-        skills: sourceResult.skills || [],
-        summary: `Source profile from ${sourceResult.source}. Pending recruiter review.`,
+        canonicalName: normalizedResult.displayName,
+        headline: normalizedResult.headline || '',
+        location: normalizedResult.location || '',
+        currentCompany: normalizedResult.organization || '',
+        skills: normalizedResult.skills || [],
+        summary: `Source profile from ${normalizedResult.source}. Pending recruiter review.`,
         mergeStatus: 'pending',
         sourceProfileIds: [spId],
-        evidenceItemIds: (sourceResult.evidence || []).map((e: { id: string }) => e.id),
+        evidenceItemIds: (normalizedResult.evidence || []).map((item: { id: string }) => item.id),
         contactSignalIds: [],
         openToWorkSignalIds: [],
         createdAt: nowIso(),
@@ -81,11 +118,11 @@ export async function POST(req: NextRequest) {
         mode: 'preview',
         candidateId,
         sourceProfileId: spId,
-        note: 'Preview mode — data is in-memory only. Configure Supabase for persistence.',
+        candidateUrl: `/app/candidate/${candidateId}`,
+        note: 'Preview mode data is in-memory only. Candidate remains pending recruiter review.',
       })
     }
 
-    // ── Supabase mode ─────────────────────────────────────────────────────────
     if (!session.authenticated) {
       return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })
     }
@@ -95,103 +132,205 @@ export async function POST(req: NextRequest) {
 
     const ownerId = session.userId!
 
-    // 1. Upsert source_profile (unique on owner_id + source + source_profile_id)
-    const { data: spData, error: spError } = await sb.from('source_profiles').upsert({
+    const { data: existingProfile, error: lookupError } = await sb
+      .from('source_profiles')
+      .select('id,candidate_id')
+      .eq('owner_id', ownerId)
+      .eq('source', normalizedResult.source)
+      .eq('source_profile_id', normalizedResult.sourceProfileId)
+      .maybeSingle()
+
+    if (lookupError) return errorResponse('source_profiles lookup', lookupError.message)
+
+    const profilePayload = {
       owner_id: ownerId,
-      source: sourceResult.source,
-      source_profile_id: sourceResult.sourceProfileId,
-      profile_url: sourceResult.profileUrl || null,
-      display_name: sourceResult.displayName,
-      headline: sourceResult.headline || null,
-      location: sourceResult.location || null,
-      organization: sourceResult.organization || null,
-      raw: sourceResult,
+      source: normalizedResult.source,
+      source_profile_id: normalizedResult.sourceProfileId,
+      profile_url: normalizedResult.profileUrl || null,
+      display_name: normalizedResult.displayName,
+      headline: normalizedResult.headline || null,
+      location: normalizedResult.location || null,
+      organization: normalizedResult.organization || null,
+      raw: normalizedResult,
       status: 'pending',
       match_score: 0,
       match_reasons: [],
       last_seen_at: new Date().toISOString(),
-    }, { onConflict: 'owner_id,source,source_profile_id' }).select('id').single()
-
-    if (spError) return NextResponse.json({ ok: false, error: `source_profiles: ${spError.message}` }, { status: 500 })
-    const sourceProfileId = spData.id
-
-    // 2. Create a pending candidate record
-    const { data: candData, error: candError } = await sb.from('candidates').insert({
-      owner_id: ownerId,
-      canonical_name: sourceResult.displayName,
-      headline: sourceResult.headline || null,
-      location: sourceResult.location || null,
-      current_company: sourceResult.organization || null,
-      skills: sourceResult.skills || [],
-      summary: `Source profile from ${sourceResult.source}. Pending recruiter review. Not verified.`,
-      merge_status: 'pending',
-    }).select('id').single()
-
-    if (candError) return NextResponse.json({ ok: false, error: `candidates: ${candError.message}` }, { status: 500 })
-    const candidateId = candData.id
-
-    // 3. Link source_profile to candidate
-    await sb.from('source_profiles').update({ candidate_id: candidateId }).eq('id', sourceProfileId)
-
-    // 4. Persist evidence items
-    if (Array.isArray(sourceResult.evidence) && sourceResult.evidence.length > 0) {
-      await sb.from('evidence_items').insert(
-        sourceResult.evidence.map((e: { label: string; detail: string; source: string; confidence?: string; url?: string }) => ({
-          owner_id: ownerId,
-          candidate_id: candidateId,
-          source_profile_id: sourceProfileId,
-          source: e.source || sourceResult.source,
-          label: e.label,
-          detail: e.detail,
-          confidence: e.confidence || 'medium',
-          url: e.url || null,
-        }))
-      )
     }
 
-    // 5. Persist contact signals — ALWAYS verified=false
-    if (Array.isArray(sourceResult.contactSignals) && sourceResult.contactSignals.length > 0) {
-      await sb.from('candidate_contacts').insert(
-        sourceResult.contactSignals.map((c: { type: string; value: string; source: string }) => ({
+    const { data: profileData, error: profileError } = existingProfile
+      ? await sb.from('source_profiles')
+          .update(profilePayload)
+          .eq('id', existingProfile.id)
+          .eq('owner_id', ownerId)
+          .select('id,candidate_id')
+          .single()
+      : await sb.from('source_profiles')
+          .insert(profilePayload)
+          .select('id,candidate_id')
+          .single()
+
+    if (profileError) return errorResponse('source_profiles write', profileError.message)
+
+    const sourceProfileId = profileData.id
+    let candidateId: string | null = profileData.candidate_id || existingProfile?.candidate_id || null
+    let createdCandidateId: string | null = null
+
+    if (!candidateId) {
+      const { data: candidateData, error: candidateError } = await sb.from('candidates').insert({
+        owner_id: ownerId,
+        canonical_name: normalizedResult.displayName,
+        headline: normalizedResult.headline || null,
+        location: normalizedResult.location || null,
+        current_company: normalizedResult.organization || null,
+        skills: normalizedResult.skills || [],
+        summary: `Source profile from ${normalizedResult.source}. Pending recruiter review. Not verified.`,
+        merge_status: 'pending',
+      }).select('id').single()
+
+      if (candidateError) return errorResponse('candidates', candidateError.message)
+      createdCandidateId = candidateData.id
+
+      const { data: linkedProfile, error: linkError } = await sb
+        .from('source_profiles')
+        .update({ candidate_id: createdCandidateId })
+        .eq('id', sourceProfileId)
+        .eq('owner_id', ownerId)
+        .is('candidate_id', null)
+        .select('candidate_id')
+        .maybeSingle()
+
+      if (linkError) return errorResponse('source_profiles link', linkError.message)
+
+      if (linkedProfile?.candidate_id) {
+        candidateId = linkedProfile.candidate_id
+      } else {
+        // A concurrent save may have linked the profile first. Reconcile to the
+        // winning candidate and remove the unlinked duplicate candidate.
+        const { data: reconciled, error: reconcileError } = await sb
+          .from('source_profiles')
+          .select('candidate_id')
+          .eq('id', sourceProfileId)
+          .eq('owner_id', ownerId)
+          .single()
+
+        if (reconcileError || !reconciled?.candidate_id) {
+          return errorResponse('source_profiles reconcile', reconcileError?.message || 'Candidate link was not established.')
+        }
+        candidateId = reconciled.candidate_id
+
+        if (candidateId !== createdCandidateId) {
+          const { error: cleanupError } = await sb
+            .from('candidates')
+            .delete()
+            .eq('id', createdCandidateId)
+            .eq('owner_id', ownerId)
+          if (cleanupError) return errorResponse('candidate reconciliation cleanup', cleanupError.message)
+        }
+      }
+    }
+
+    if (!candidateId) return errorResponse('candidate link', 'No canonical candidate was resolved.')
+
+    const { data: existingEvidence, error: evidenceLookupError } = await sb
+      .from('evidence_items')
+      .select('source,label,detail,url')
+      .eq('owner_id', ownerId)
+      .eq('source_profile_id', sourceProfileId)
+
+    if (evidenceLookupError) return errorResponse('evidence lookup', evidenceLookupError.message)
+
+    const evidenceKeys = new Set((existingEvidence || []).map(item =>
+      [item.source, item.label, item.detail, item.url || ''].join('\u0000')
+    ))
+    const newEvidence = Array.isArray(normalizedResult.evidence)
+      ? normalizedResult.evidence.filter((item: { source?: string; label: string; detail: string; url?: string }) =>
+          !evidenceKeys.has([
+            item.source || normalizedResult.source,
+            item.label,
+            item.detail,
+            item.url || '',
+          ].join('\u0000'))
+        )
+      : []
+
+    if (newEvidence.length > 0) {
+      const { error: evidenceError } = await sb.from('evidence_items').insert(
+        newEvidence.map((item: { label: string; detail: string; source?: string; confidence?: string; url?: string }) => ({
           owner_id: ownerId,
           candidate_id: candidateId,
           source_profile_id: sourceProfileId,
-          type: c.type,
-          value: c.value,
-          source: c.source || sourceResult.source,
+          source: item.source || normalizedResult.source,
+          label: item.label,
+          detail: item.detail,
+          confidence: item.confidence || 'medium',
+          url: item.url || null,
+        }))
+      )
+      if (evidenceError) return errorResponse('evidence write', evidenceError.message)
+    }
+
+    const { data: existingContacts, error: contactLookupError } = await sb
+      .from('candidate_contacts')
+      .select('type,value,source')
+      .eq('owner_id', ownerId)
+      .eq('source_profile_id', sourceProfileId)
+
+    if (contactLookupError) return errorResponse('contact lookup', contactLookupError.message)
+
+    const contactKeys = new Set((existingContacts || []).map(item =>
+      [item.type, item.value, item.source].join('\u0000')
+    ))
+    const newContacts = Array.isArray(normalizedResult.contactSignals)
+      ? normalizedResult.contactSignals.filter((item: { type: string; value: string; source?: string }) =>
+          !contactKeys.has([item.type, item.value, item.source || normalizedResult.source].join('\u0000'))
+        )
+      : []
+
+    if (newContacts.length > 0) {
+      const { error: contactError } = await sb.from('candidate_contacts').insert(
+        newContacts.map((item: { type: string; value: string; source?: string }) => ({
+          owner_id: ownerId,
+          candidate_id: candidateId,
+          source_profile_id: sourceProfileId,
+          type: item.type,
+          value: item.value,
+          source: item.source || normalizedResult.source,
           confidence: 'medium',
-          verified: false,   // enforced — never set to true from source scrape
+          verified: false,
           permission_status: 'unknown',
         }))
       )
+      if (contactError) return errorResponse('contact write', contactError.message)
     }
 
-    // 6. If projectId supplied, create project_candidates row
     let projectCandidateId: string | null = null
     if (projectId) {
-      const { data: pcData } = await sb.from('project_candidates').upsert({
+      const { data: projectCandidate, error: projectError } = await sb.from('project_candidates').upsert({
         project_id: projectId,
         candidate_id: candidateId,
         owner_id: ownerId,
         stage: 'sourced',
-        fit_score: null,      // no auto-scoring — recruiter reviews
+        fit_score: null,
         fit_evidence: [],
         fit_missing: [],
         fit_confidence: 'low',
       }, { onConflict: 'project_id,candidate_id' }).select('id').single()
-      projectCandidateId = pcData?.id ?? null
+
+      if (projectError) return errorResponse('project candidate write', projectError.message)
+      projectCandidateId = projectCandidate.id
     }
 
     return NextResponse.json({
       ok: true,
       mode: 'supabase',
+      reused: Boolean(existingProfile?.candidate_id || profileData.candidate_id),
       candidateId,
       sourceProfileId,
       projectCandidateId,
       candidateUrl: `/app/candidate/${candidateId}`,
-      note: 'Source profile saved. Candidate is pending — recruiter must confirm identity before merge.',
+      note: 'Source profile saved. Candidate is pending recruiter identity review.',
     })
-
   } catch (err) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : 'Save failed.' }, { status: 500 })
   }
