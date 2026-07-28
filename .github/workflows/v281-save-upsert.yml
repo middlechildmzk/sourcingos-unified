@@ -1,0 +1,36 @@
+name: V28.1 harden concurrent save
+
+on:
+  push:
+    branches:
+      - v28-1-product-truth-reconstruction
+    paths:
+      - scripts/v281-save-upsert.mjs
+      - .github/workflows/v281-save-upsert.yml
+
+permissions:
+  contents: write
+
+jobs:
+  transform:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v28-1-product-truth-reconstruction
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/v281-save-upsert.mjs
+      - name: Commit route hardening
+        run: |
+          if git diff --quiet; then
+            echo "No route change required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add next-public/app/api/workbench/save-source-profile/route.ts
+          git commit -m "Close first-save source profile race"
+          git push origin HEAD:v28-1-product-truth-reconstruction
