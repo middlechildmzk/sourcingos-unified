@@ -1,4 +1,4 @@
-/* V28 feedback pass: recruiter-first search hierarchy and candidate rows. */
+/* V28.1: recruiter-first search hierarchy and truthfully typed source subjects. */
 
 /* Put people first. Source diagnostics remain available below the list. */
 .wb-section:has(> .wb-results){display:flex;flex-direction:column;margin-bottom:0}
@@ -11,22 +11,24 @@
 .recruiter-results-toolbar input,.recruiter-results-toolbar select{margin:0;min-height:40px;padding:9px 11px;border-radius:9px;background:#071523;border-color:rgba(148,169,198,.22);font-size:12px}
 .recruiter-results-heading{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:4px}
 .recruiter-results-heading h2{font-size:20px;margin:0}
-.recruiter-results-heading p{font-size:12px;margin:3px 0 0;color:var(--muted)}
+.recruiter-results-heading p{font-size:12px;margin:3px 0 0;color:var(--muted);max-width:760px}
 .recruiter-results-count{font-size:12px;color:var(--muted);white-space:nowrap}
 .recruiter-trust-note{display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid rgba(148,169,198,.18);border-radius:9px;background:rgba(148,169,198,.035);color:var(--muted);font-size:11px;line-height:1.45;margin-bottom:2px}
 .recruiter-trust-note strong{color:#cbd8e8}
 
 .recruiter-result-list{display:flex;flex-direction:column;border:1px solid rgba(148,169,198,.18);border-radius:12px;overflow:hidden;background:rgba(4,13,24,.4)}
-.recruiter-result-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 15px;border-bottom:1px solid rgba(148,169,198,.14);background:rgba(8,21,36,.74);cursor:pointer;transition:background .14s,border-color .14s}
+.recruiter-result-row{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 15px;border-bottom:1px solid rgba(148,169,198,.14);background:rgba(8,21,36,.74);transition:background .14s,border-color .14s}
 .recruiter-result-row:last-child{border-bottom:0}
 .recruiter-result-row:hover,.recruiter-result-row:focus-within{background:rgba(14,34,55,.9)}
-.recruiter-result-row:focus{outline:2px solid rgba(72,217,255,.35);outline-offset:-2px}
+.recruiter-result-row > *:not(.recruiter-row-open-surface){position:relative;z-index:1}
+.recruiter-row-open-surface{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;border-radius:0;background:transparent;cursor:pointer}
+.recruiter-row-open-surface:focus-visible{outline:2px solid rgba(72,217,255,.58);outline-offset:-3px}
+.recruiter-result-actions,.recruiter-result-actions *{position:relative;z-index:2}
 .recruiter-avatar{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#13283d;border:1px solid rgba(148,169,198,.24);color:#dce7f4;font-size:12px;font-weight:900;letter-spacing:.02em;flex-shrink:0}
 .recruiter-avatar img{width:100%;height:100%;object-fit:cover}
 .recruiter-result-main{min-width:0}
 .recruiter-result-topline{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
-.recruiter-result-name{background:none;border:0;padding:0;color:var(--text);font-size:15px;font-weight:800;text-align:left;cursor:pointer}
-.recruiter-result-name:hover{color:var(--accent);text-decoration:underline}
+.recruiter-result-name{color:var(--text);font-size:15px;font-weight:800;text-align:left}
 .recruiter-source-label{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#a8b8cc;background:rgba(148,169,198,.07);border:1px solid rgba(148,169,198,.18);border-radius:5px;padding:2px 6px}
 .recruiter-result-subtitle{font-size:12px;line-height:1.45;color:#c7d5e6;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recruiter-result-location{font-size:11px;color:var(--muted);margin-top:2px}
@@ -41,6 +43,18 @@
 .recruiter-result-notice{grid-column:2/-1;font-size:11px;color:var(--muted);margin-top:-3px}
 
 .results-auth-note{padding:9px 11px;border:1px solid rgba(246,201,107,.24);border-radius:9px;background:rgba(246,201,107,.045);color:#d8bd78;font-size:11px}
+
+.supporting-subjects-disclosure{border:1px solid rgba(148,169,198,.16);border-radius:10px;background:rgba(7,18,31,.55)}
+.supporting-subjects-disclosure > summary{list-style:none;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;cursor:pointer;color:#c8d5e5;font-size:11px;font-weight:800}
+.supporting-subjects-disclosure > summary::-webkit-details-marker{display:none}
+.supporting-subjects-disclosure > summary::after{content:'▾';color:var(--muted);transition:transform .15s}
+.supporting-subjects-disclosure[open] > summary::after{transform:rotate(180deg)}
+.supporting-subject-list{border-top:1px solid rgba(148,169,198,.12)}
+.supporting-subject-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:12px;border-bottom:1px solid rgba(148,169,198,.12)}
+.supporting-subject-row:last-child{border-bottom:0}
+.supporting-subject-row p{margin:4px 0 0;color:var(--muted);font-size:11px;line-height:1.45}
+.supporting-subject-topline{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:12px}
+.supporting-subject-topline span{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#a8b8cc;border:1px solid rgba(148,169,198,.16);border-radius:5px;padding:2px 6px}
 
 /* Keep source operations visible without forcing the recruiter through them. */
 .lane-status-disclosure,.market-map-summary{border:1px solid rgba(148,169,198,.16);border-radius:10px;background:rgba(7,18,31,.55)}
@@ -62,10 +76,9 @@
 .market-map-lanes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .market-map-lane{font-size:10px;border:1px solid rgba(148,169,198,.18);border-radius:7px;padding:5px 8px;color:#c5d2e2;background:rgba(148,169,198,.04)}
 
-/* Candidate database rows should behave like recruiter rows, not static cards. */
-.candidate-db-row{cursor:pointer;transition:background .14s,border-color .14s}
+/* Candidate database rows use one semantic link rather than a simulated button. */
+.candidate-db-row{position:relative;transition:background .14s,border-color .14s}
 .candidate-db-row:hover,.candidate-db-row:focus-within{background:rgba(72,217,255,.045);border-color:rgba(72,217,255,.2)}
-.candidate-db-row:focus{outline:2px solid rgba(72,217,255,.32);outline-offset:-2px}
 .candidate-row-link{color:var(--text)}
 .candidate-row-link:hover{color:var(--accent);text-decoration:underline}
 
@@ -79,5 +92,6 @@
   .recruiter-avatar{width:38px;height:38px}
   .recruiter-result-actions{grid-column:2;justify-content:flex-start;max-width:none}
   .recruiter-result-notice{grid-column:2}
+  .supporting-subject-row{grid-template-columns:1fr}
   .market-map-columns,.market-map-metrics{grid-template-columns:1fr}
 }
