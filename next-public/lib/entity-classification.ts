@@ -50,12 +50,16 @@ export function isLegacyLinkedInConnectionImport(raw: unknown): boolean {
   )
 }
 
+/**
+ * Derive subject kind from source and source evidence. The optional entityKind
+ * field is intentionally not trusted because public request bodies can be
+ * modified by clients.
+ */
 export function resolveStoredEntityKind(input: {
   source?: string | null
   raw?: unknown
   entityKind?: EntityKind | null
 }): EntityKind {
-  if (input.entityKind) return input.entityKind
   if (isLegacyLinkedInConnectionImport(input.raw)) return 'person'
 
   const source = input.source as SourceName | undefined
