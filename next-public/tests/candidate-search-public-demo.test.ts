@@ -65,7 +65,8 @@ describe('Candidate Search public demo', () => {
   it('retains advanced search modes and low-result rescue below successful results', () => {
     expect(workbench).toContain('SearchModeSelector')
     expect(workbench).toContain('MarketMapSummary')
-    expect(marketMap).toContain('Low-result rescue')
+    expect(marketMap).toContain('Ways to broaden the search')
+    expect(marketMap).toContain('snapshot.lowResultActions')
   })
 
   it('raises public source caps and broadens public-safe source coverage', () => {
