@@ -36,7 +36,7 @@ export function SourceLaneStatus({ lanes, onRetry }: SourceLaneStatusProps) {
   const issueCount = lanes.filter(lane => lane.status === 'timed_out' || lane.status === 'error').length
 
   return (
-    <details className="lane-status-disclosure" key={running ? 'running' : 'complete'} defaultOpen={running}>
+    <details className="lane-status-disclosure" key={running ? 'running' : 'complete'} open={running || undefined}>
       <summary>
         <span>{running ? 'Searching source lanes…' : 'Source coverage'}</span>
         <span className="lane-status-compact">
