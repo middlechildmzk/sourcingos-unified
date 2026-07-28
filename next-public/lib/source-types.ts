@@ -17,13 +17,7 @@ export type SourceName =
   | 'rubygems'
   | 'resume_xray'
 
-/**
- * The real-world subject represented by a source result.
- *
- * This is deliberately required. A source artifact, organization, publication,
- * or search lane must never be allowed to masquerade as a person merely because
- * it has a display name.
- */
+/** The real-world subject represented by a source result. */
 export type EntityKind =
   | 'person'
   | 'organization'
@@ -59,11 +53,15 @@ export type IdentitySignal = {
   source: SourceName
 }
 
+/**
+ * Raw connector result. Legacy connectors may omit entityKind, but every API
+ * boundary must normalize this to ClassifiedSourceResult before returning it.
+ */
 export type SourceResult = {
   id: string
   source: SourceName
   sourceProfileId: string
-  entityKind: EntityKind
+  entityKind?: EntityKind
   displayName: string
   headline?: string
   location?: string
@@ -78,6 +76,8 @@ export type SourceResult = {
   raw?: unknown
 }
 
+export type ClassifiedSourceResult = SourceResult & { entityKind: EntityKind }
+
 export type SourceSearchRequest = {
   query: string
   location?: string
@@ -90,7 +90,7 @@ export type SourceSearchResponse = {
   ok: boolean
   query: string
   searchedSources: SourceName[]
-  results: SourceResult[]
+  results: ClassifiedSourceResult[]
   warnings: string[]
   generatedAt: string
 }
@@ -105,22 +105,9 @@ export type RefreshPolicy = {
 }
 
 export const allSourceNames: SourceName[] = [
-  'github',
-  'stackoverflow',
-  'openalex',
-  'npi',
-  'orcid',
-  'semantic_scholar',
-  'arxiv',
-  'pubmed',
-  'huggingface',
-  'npm',
-  'pypi',
-  'kaggle',
-  'devto',
-  'dockerhub',
-  'crates',
-  'rubygems',
+  'github', 'stackoverflow', 'openalex', 'npi', 'orcid',
+  'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
+  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
   'resume_xray'
 ]
 
