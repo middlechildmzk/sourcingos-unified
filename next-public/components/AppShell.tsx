@@ -25,14 +25,13 @@ type NavigationItem = {
 const primary: NavigationItem[] = [
   { href: '/app/today', label: 'Today', icon: 'today', description: 'Your prioritized decision inbox' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Searches, strategy, and pipelines' },
-  { href: '/app/autosource', label: 'AutoSource', icon: 'autosource', description: 'Discovery campaigns and review' },
+  { href: '/app/candidate-search', label: 'Search', icon: 'search', description: 'Find and review candidate people' },
   { href: '/app/candidate-database', label: 'Candidates', icon: 'candidates', description: 'Identity, evidence, and rediscovery' },
 ]
 
 const tools: NavigationItem[] = [
-  { href: '/app/agent-os', label: 'Agent OS', icon: 'today', description: 'Agent runs and approvals' },
+  { href: '/app/autosource', label: 'AutoSource', icon: 'autosource', description: 'Continuous discovery for active roles' },
   { href: '/app/import', label: 'Import Center', icon: 'import', description: 'Bring in candidate data' },
-  { href: '/app/candidate-search', label: 'Candidate Search', icon: 'search', description: 'Search across known records' },
   { href: '/app/acquisition', label: 'Acquisition & Sources', icon: 'acquisition', description: 'Source operations' },
   { href: '/app/evidence-ledger', label: 'Evidence Ledger', icon: 'ledger', description: 'Claim provenance and review' },
   { href: '/app/network', label: 'Network Vault', icon: 'network', description: 'Relationships and warm paths' },
@@ -40,7 +39,7 @@ const tools: NavigationItem[] = [
 ]
 
 function active(pathname: string, href: string) {
-  return pathname === href || (href !== '/app/agent-os' && pathname.startsWith(`${href}/`))
+  return pathname === href || pathname.startsWith(`${href}/`)
 }
 
 function hasActiveTool(pathname: string): boolean {
