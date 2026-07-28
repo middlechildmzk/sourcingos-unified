@@ -8,74 +8,64 @@ function read(path: string) {
 
 describe('Candidate Search public demo', () => {
   const page = read('app/candidate-search/page.tsx')
-  const builder = read('components/CandidateSearchV25Builder.tsx')
-  const trustLayer = read('components/CandidateSearchTrustLayer.tsx')
+  const composer = read('components/SearchComposer.tsx')
   const drawer = read('components/CandidateDrawer.tsx')
   const results = read('components/WorkbenchResults.tsx')
   const workbench = read('components/WorkbenchClient.tsx')
+  const sourceStatus = read('components/SourceLaneStatus.tsx')
   const marketMap = read('components/MarketMapSummary.tsx')
   const route = read('app/api/workbench/search-source/route.ts')
 
-  it('renders public trust disclaimers and confidence framing', () => {
-    expect(page).toContain('Public evidence matches only')
-    expect(page).toContain('Not confirmed candidates')
-    expect(page).toContain('Contact signals unverified')
-    expect(page).toContain('Confidence means source relevance only')
+  it('uses one concise public trust frame', () => {
+    expect(page).toContain('Public evidence, not verified candidate facts')
+    expect(page).toContain('Recruiters confirm identity')
+    expect(page).toContain('<WorkbenchClient publicMode initialTab="composer" />')
+    expect(page).not.toContain('CandidateSearchV25Builder')
+    expect(page).not.toContain('PublicComposerDefault')
+    expect(page).not.toContain('CandidateSearchTrustLayer')
   })
 
-  it('keeps required example searches available', () => {
-    expect(builder).toContain('cleared DevSecOps')
-    expect(builder).toContain('senior Kubernetes platform engineers')
-    expect(builder).toContain('AI/ML researchers')
-    expect(builder).toContain('nurse recruiters')
-    expect(builder).toContain('healthcare data analysts')
+  it('keeps useful example searches in the single composer', () => {
+    expect(composer).toContain('Kubernetes Terraform AWS platform')
+    expect(composer).toContain('DevSecOps Kubernetes TS/SCI')
+    expect(composer).toContain('Epic Azure healthcare data')
+    expect(composer).toContain('MLOps Kubernetes Python')
   })
 
-  it('explains source lane routing and clearance breadcrumbs safely', () => {
-    expect(trustLayer).toContain('GitHub / code evidence')
-    expect(trustLayer).toContain('Open web / X-Ray')
-    expect(trustLayer).toContain('Research / publications')
-    expect(trustLayer).toContain('Package ecosystem')
-    expect(trustLayer).toContain('Healthcare / license / registry')
-    expect(trustLayer).toContain('GovCon / clearance breadcrumb')
-    expect(trustLayer).toContain('AI / ML ecosystem')
-    expect(trustLayer).toContain('unverified breadcrumb, not a verified clearance')
-  })
-
-  it('gates durable workflow actions in public mode', () => {
-    expect(trustLayer).toContain('Save source profile')
-    expect(trustLayer).toContain('Add to project')
-    expect(trustLayer).toContain('Confirm same person')
-    expect(trustLayer).toContain('Create Candidate 360')
-    expect(trustLayer).toContain('Contact enrichment')
-    expect(trustLayer).toContain('Export dossier')
-    expect(trustLayer).toContain('This is available in the private beta')
-  })
-
-  it('separates evidence drawer concepts and avoids identity verification claims', () => {
+  it('keeps evidence and identity caveats available without repeating them on every row', () => {
     expect(drawer).toContain('Public facts')
     expect(drawer).toContain('Public signals')
     expect(drawer).toContain('Assumptions to avoid')
     expect(drawer).toContain('Missing data')
     expect(drawer).toContain('Verify-next checklist')
-    expect(drawer).toContain('Safe outreach angle draft')
-    expect(drawer).toContain('Saving does not verify identity, clearance, employment, or contact accuracy')
+    expect(results).toContain('Unconfirmed public profiles')
+    expect(results).not.toContain('Risk flags')
+    expect(results).not.toContain('Recommended next verification step')
   })
 
-  it('result cards keep confidence and verification language honest', () => {
-    expect(results).toContain('Evidence-first source profile results')
-    expect(results).toContain('Confidence means source relevance only')
-    expect(results).toContain('Risk flags')
-    expect(results).toContain('Recommended next verification step')
-    expect(results).not.toContain('verified candidate')
+  it('separates candidate people from other source subjects', () => {
+    expect(results).toContain("result.entityKind === 'person'")
+    expect(results).toContain('Supporting source subjects')
+    expect(results).toContain('canPromoteToCandidate')
+    expect(route).toContain('classifyRealSourceResults')
+    expect(route).toContain('Only person records may be saved as candidates')
   })
 
-  it('adds search modes, market map summary, and low-result rescue', () => {
+  it('renders results before diagnostics and keeps diagnostics collapsed', () => {
+    const resultsIndex = workbench.indexOf('<WorkbenchResults')
+    const sourceIndex = workbench.indexOf('<SourceLaneStatus', resultsIndex)
+    const marketMapIndex = workbench.indexOf('<MarketMapSummary', resultsIndex)
+    expect(resultsIndex).toBeGreaterThan(-1)
+    expect(sourceIndex).toBeGreaterThan(resultsIndex)
+    expect(marketMapIndex).toBeGreaterThan(sourceIndex)
+    expect(sourceStatus).not.toContain('open={running')
+    expect(sourceStatus).toContain('<details className="lane-status-disclosure">')
+  })
+
+  it('retains advanced search modes and low-result rescue below successful results', () => {
     expect(workbench).toContain('SearchModeSelector')
     expect(workbench).toContain('MarketMapSummary')
-    expect(marketMap).toContain('Market map summary')
     expect(marketMap).toContain('Low-result rescue')
-    expect(marketMap).toContain('public-source discovery, not confirmed candidates')
   })
 
   it('raises public source caps and broadens public-safe source coverage', () => {
