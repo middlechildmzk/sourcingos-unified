@@ -1,11 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import Link from 'next/link'
 import { FindContactButton } from '@/components/FindContactButton'
 import { DrawerCopilot } from '@/components/DrawerCopilot'
 import { FeedbackButtons } from '@/components/FeedbackButtons'
 import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
+import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
 
 export interface DrawerSavedState {
   candidateId: string
@@ -43,12 +44,65 @@ export function CandidateDrawer({
   const [notice, setNotice] = useState('')
   const [authPrompt, setAuthPrompt] = useState(false)
   const [localSaved, setLocalSaved] = useState<DrawerSavedState | null>(saved ?? null)
+  const dialogRef = useRef<HTMLElement | null>(null)
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+  const titleId = useId()
 
-  if (!result) return null
+  useEffect(() => {
+    if (!open) return
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const frame = requestAnimationFrame(() => closeButtonRef.current?.focus())
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+
+      const dialog = dialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+        'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+      )).filter(element => !element.hasAttribute('hidden') && element.getAttribute('aria-hidden') !== 'true')
+      if (focusable.length === 0) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+      previousFocusRef.current?.focus()
+      previousFocusRef.current = null
+    }
+  }, [open, onClose])
+
+  if (!result || !open) return null
 
   const color = SOURCE_COLORS[result.source] || SOURCE_COLORS.default
   const openLabel = SOURCE_OPEN_LABEL[result.source] || 'Open source profile'
   const isSaved = Boolean(localSaved)
+  const entityKind = result.entityKind ?? 'unknown'
+  const canSaveCandidate = canPromoteToCandidate(entityKind)
   const missingData = [
     !result.location ? 'Location' : '',
     !result.organization ? 'Current organization' : '',
@@ -71,6 +125,10 @@ export function CandidateDrawer({
 
   async function saveSourceProfile() {
     if (!result) return
+    if (!canSaveCandidate) {
+      setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
+      return
+    }
     if (publicMode) {
       setAuthPrompt(true)
       return
@@ -110,17 +168,17 @@ export function CandidateDrawer({
         aria-hidden="true"
       />
 
-      <aside className={`candidate-drawer ${open ? 'candidate-drawer-open' : ''}`} role="dialog" aria-label="Candidate source profile">
+      <aside ref={dialogRef} className="candidate-drawer candidate-drawer-open" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="drawer-header">
           <span className="result-source-badge" style={{ background: `${color}18`, color, borderColor: `${color}40` }}>
             {result.source}
           </span>
-          <button className="drawer-close" onClick={onClose} aria-label="Close">×</button>
+          <button ref={closeButtonRef} className="drawer-close" onClick={onClose} aria-label="Close profile drawer">×</button>
         </div>
 
         <div className="drawer-body">
           <div className="drawer-identity">
-            <h2 className="drawer-name">{result.displayName}</h2>
+            <h2 id={titleId} className="drawer-name">{result.displayName}</h2>
             {result.headline && <p className="drawer-headline">{result.headline}</p>}
             <div className="drawer-meta">
               {result.organization && <span>{result.organization}</span>}
@@ -227,18 +285,20 @@ export function CandidateDrawer({
             ) : (
               <p className="muted" style={{ fontSize: '13px', margin: '0 0 8px' }}>No contact signal found yet</p>
             )}
-            <FindContactButton
-              isAuthenticated={!publicMode}
-              source={{
-                sourceProfileId: result.sourceProfileId,
-                displayName: result.displayName,
-                headline: result.headline,
-                organization: result.organization,
-                location: result.location,
-                profileUrl: result.profileUrl,
-                source: result.source,
-              }}
-            />
+            {canSaveCandidate && (
+              <FindContactButton
+                isAuthenticated={!publicMode}
+                source={{
+                  sourceProfileId: result.sourceProfileId,
+                  displayName: result.displayName,
+                  headline: result.headline,
+                  organization: result.organization,
+                  location: result.location,
+                  profileUrl: result.profileUrl,
+                  source: result.source,
+                }}
+              />
+            )}
           </section>
 
           <section className="drawer-section">
@@ -316,14 +376,18 @@ export function CandidateDrawer({
                 </a>
               )}
             </div>
-          ) : (
+          ) : canSaveCandidate ? (
             <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
               <button className="btn" style={{ flex: 1 }} onClick={saveSourceProfile} disabled={saving}>
-                {saving ? 'Saving…' : publicMode ? 'Save source profile (beta)' : projectId ? '+ Save and add to project' : '+ Save source profile'}
+                {saving ? 'Saving…' : publicMode ? 'Save person profile (beta)' : projectId ? '+ Save person and add to project' : '+ Save person profile'}
               </button>
               <span className="muted" style={{ fontSize: '11px', textAlign: 'center' }}>
-                Saving creates a source profile record. Candidate 360 still requires recruiter confirmation.
+                Saving creates a pending candidate record. Recruiter identity confirmation is still required.
               </span>
+            </div>
+          ) : (
+            <div className="drawer-preview-note drawer-preview-unsaved">
+              {entityKindLabels[entityKind]} source subjects can be reviewed as evidence but cannot be saved or added to a role as candidates.
             </div>
           )}
           <p className="muted" style={{ fontSize: '11px', marginTop: '8px', textAlign: 'center' }}>
