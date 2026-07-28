@@ -16,6 +16,7 @@ function result(overrides: Partial<SourceResult> = {}): SourceResult {
     id: 'github:test-person',
     source: 'github',
     sourceProfileId: 'test-person',
+    entityKind: 'person',
     displayName: 'Test Person',
     skills: [],
     evidence: [],
@@ -86,11 +87,12 @@ describe('V28.1 product truth contracts', () => {
     expect(connectors).not.toContain('NEXT_PUBLIC_ENABLE_DEMO_SOURCE_RESULTS')
   })
 
-  it('makes save idempotent, person-only, and fail-closed for child writes', () => {
+  it('makes save idempotent, person-only, concurrency-aware, and fail-closed for child writes', () => {
     const route = read('app/api/workbench/save-source-profile/route.ts')
     expect(route).toContain("entityKind !== 'person'")
     expect(route).toContain('{ status: 422 }')
     expect(route).toContain(".eq('source_profile_id', normalizedResult.sourceProfileId)")
+    expect(route).toContain("onConflict: 'owner_id,source,source_profile_id'")
     expect(route).toContain(".is('candidate_id', null)")
     expect(route).toContain('source_profiles reconcile')
     expect(route).toContain('evidence write')
