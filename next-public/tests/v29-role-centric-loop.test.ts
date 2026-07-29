@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { addCanonicalCandidateToRole, sourceResultToRoleCandidateInput } from '../lib/role-candidate-link'
 import type { RoleWorkspace } from '../lib/role-workspace'
 import type { SourceResult } from '../lib/source-types'
 
 const NOW = new Date('2026-07-29T15:00:00.000Z')
+
+function read(path: string) {
+  return readFileSync(join(process.cwd(), path), 'utf8')
+}
 
 function workspace(): RoleWorkspace {
   return {
@@ -107,5 +113,33 @@ describe('V29 role-centric sourcing loop', () => {
     expect(invalidName.reason).toBe('invalid')
     expect(invalidId.workspace).toBe(base)
     expect(invalidName.workspace).toBe(base)
+  })
+
+  it('launches Candidate Search with URL-driven role and lane context', () => {
+    const actions = read('components/RoleSearchActions.tsx')
+    const page = read('app/app/candidate-search/page.tsx')
+    const scoped = read('components/RoleScopedCandidateSearch.tsx')
+
+    expect(actions).toContain('/app/candidate-search?roleId=')
+    expect(actions).toContain('&laneId=')
+    expect(page).toContain('searchParams?.roleId')
+    expect(page).toContain('searchParams?.laneId')
+    expect(page).toContain('<RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />')
+    expect(scoped).toContain("mustHaves: lane?.query || role.intake.mustHaves.join(', ')")
+    expect(scoped).not.toContain('document.querySelector')
+  })
+
+  it('dispatches one canonical save event and carries the exact role into Candidate 360', () => {
+    const drawer = read('components/CandidateDrawer.tsx')
+    const candidatePage = read('app/app/candidate/[id]/page.tsx')
+    const candidate360 = read('components/Candidate360Client.tsx')
+
+    expect(drawer).toContain('ROLE_CANDIDATE_SAVED_EVENT')
+    expect(drawer).toContain('window.dispatchEvent(new CustomEvent')
+    expect(drawer.match(/if \(!canSaveCandidate\)/g)).toHaveLength(1)
+    expect(drawer).toContain('?roleId=')
+    expect(candidatePage).toContain('searchParams?.roleId')
+    expect(candidate360).toContain('Back to role queue')
+    expect(candidate360).toContain('?tab=candidates')
   })
 })
