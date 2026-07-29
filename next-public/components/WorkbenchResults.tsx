@@ -183,49 +183,117 @@ export function WorkbenchResults({
   })
   const people = sorted.filter(result => result.entityKind === 'person')
   const supporting = sorted.filter(result => result.entityKind !== 'person')
+  const hasPeople = people.length > 0
 
   return (
     <div className="wb-results recruiter-results">
-      <div className="recruiter-results-heading">
+      <div className="recruiter-results-heading" style={{ alignItems: 'center' }}>
         <div>
-          <h2>{publicMode ? 'People from public sources' : 'Candidate leads'}</h2>
-          <p>Candidate actions are limited to records classified as people. Other source subjects remain visible as supporting evidence or discovery lanes.</p>
+          <h2>{hasPeople ? (publicMode ? 'People from public sources' : 'Candidate leads') : 'No candidate people found'}</h2>
+          <p>
+            {hasPeople
+              ? 'Candidate actions are limited to records classified as people. Other source subjects remain visible as supporting evidence or discovery lanes.'
+              : `${supporting.length} supporting source ${supporting.length === 1 ? 'result was' : 'results were'} separated because ${supporting.length === 1 ? 'it is' : 'they are'} not person records.`}
+          </p>
         </div>
-        <div className="recruiter-results-count">{people.length} people</div>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <div className="recruiter-results-count">{people.length} people</div>
+          <div className="recruiter-results-count" style={{ color: 'var(--muted)', borderColor: 'var(--line)', background: 'rgba(255,255,255,.03)' }}>
+            {supporting.length} supporting
+          </div>
+        </div>
       </div>
 
-      <div className="recruiter-results-toolbar">
-        <input
-          value={keyword}
-          onChange={event => setKeyword(event.target.value)}
-          placeholder="Filter by name, title, company, location, skill, or subject type"
-          aria-label="Filter candidate results"
-        />
-        <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} aria-label="Filter by source">
-          <option value="all">All sources</option>
-          {availableSources.map(source => <option key={source} value={source}>{sourceLabels[source]}</option>)}
-        </select>
-        <select value={contactFilter} onChange={event => setContactFilter(event.target.value as 'all' | 'has' | 'none')} aria-label="Filter by contact state">
-          <option value="all">Any contact state</option>
-          <option value="has">Has contact signal</option>
-          <option value="none">No contact signal</option>
-        </select>
-        <select value={sortBy} onChange={event => setSortBy(event.target.value as 'default' | 'evidence' | 'source')} aria-label="Sort results">
-          <option value="default">Default order</option>
-          <option value="evidence">Most evidence</option>
-          <option value="source">Source</option>
-        </select>
-      </div>
+      {hasPeople && (
+        <div className="recruiter-results-toolbar">
+          <input
+            value={keyword}
+            onChange={event => setKeyword(event.target.value)}
+            placeholder="Filter by name, title, company, location, skill, or subject type"
+            aria-label="Filter candidate results"
+          />
+          <select value={sourceFilter} onChange={event => setSourceFilter(event.target.value)} aria-label="Filter by source">
+            <option value="all">All sources</option>
+            {availableSources.map(source => <option key={source} value={source}>{sourceLabels[source]}</option>)}
+          </select>
+          <select value={contactFilter} onChange={event => setContactFilter(event.target.value as 'all' | 'has' | 'none')} aria-label="Filter by contact state">
+            <option value="all">Any contact state</option>
+            <option value="has">Has contact signal</option>
+            <option value="none">No contact signal</option>
+          </select>
+          <select value={sortBy} onChange={event => setSortBy(event.target.value as 'default' | 'evidence' | 'source')} aria-label="Sort results">
+            <option value="default">Default order</option>
+            <option value="evidence">Most evidence</option>
+            <option value="source">Source</option>
+          </select>
+        </div>
+      )}
 
-      <div className="recruiter-trust-note">
-        <strong>Unconfirmed public profiles.</strong>
-        <span>Verify identity, current role, location, clearance, contact accuracy, and permission before acting.</span>
-      </div>
+      {hasPeople && (
+        <div className="recruiter-trust-note">
+          <strong>Unconfirmed public profiles.</strong>
+          <span>Verify identity, current role, location, clearance, contact accuracy, and permission before acting.</span>
+        </div>
+      )}
 
       {authRequired && (
         <div className="results-auth-note">
           Saving and Candidate 360 actions require private beta access. <Link href="/waitlist" style={{ textDecoration: 'underline' }}>Request access →</Link>
         </div>
+      )}
+
+      {!hasPeople && (
+        <section
+          aria-labelledby="no-candidate-people-title"
+          style={{
+            margin: '18px 0',
+            padding: '24px',
+            borderRadius: '16px',
+            border: '1px solid rgba(72,217,255,.28)',
+            background: 'linear-gradient(135deg,rgba(72,217,255,.08),rgba(138,124,255,.05))',
+          }}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr', gap: '16px', alignItems: 'start' }}>
+            <div
+              aria-hidden="true"
+              style={{
+                width: '56px',
+                height: '56px',
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '14px',
+                background: 'rgba(72,217,255,.12)',
+                border: '1px solid rgba(72,217,255,.28)',
+                color: 'var(--accent)',
+                fontSize: '22px',
+                fontWeight: 900,
+              }}
+            >
+              0
+            </div>
+            <div>
+              <h3 id="no-candidate-people-title" style={{ margin: '0 0 8px', fontSize: '20px' }}>No people matched this search yet</h3>
+              <p style={{ margin: 0, color: 'var(--muted)', fontSize: '14px', lineHeight: 1.65 }}>
+                SourcingOS found {supporting.length} public-source {supporting.length === 1 ? 'subject' : 'subjects'}, but they were packages, repositories, organizations, publications, or discovery lanes rather than candidate people. They remain available below as supporting research.
+              </p>
+              {searchedQuery && (
+                <p style={{ margin: '10px 0 0', color: 'var(--text)', fontSize: '13px', lineHeight: 1.55 }}>
+                  <strong>Search:</strong> {searchedQuery}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '16px' }}>
+                {onRetryComposer && <button className="btn secondary" onClick={onRetryComposer}>← Refine search</button>}
+                <Link className="btn ghost" href="/tools/xray-search">Open public-resume X-Ray</Link>
+                <Link className="btn ghost" href="/app/candidate-database">Search Candidate Database</Link>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: '18px', paddingTop: '16px', borderTop: '1px solid rgba(72,217,255,.16)', display: 'grid', gap: '6px', color: 'var(--muted)', fontSize: '13px', lineHeight: 1.5 }}>
+            <span><strong style={{ color: 'var(--text)' }}>Best next move:</strong> add concrete tools or skills, broaden titles, and treat location or clearance as recruiter-review filters rather than public-source proof.</span>
+            {noResultsSources.length > 0 && <span>No people returned from: {noResultsSources.join(', ')}.</span>}
+          </div>
+        </section>
       )}
 
       <div className="recruiter-result-list" aria-label="Candidate people">
@@ -305,16 +373,12 @@ export function WorkbenchResults({
         })}
       </div>
 
-      {people.length === 0 && (
-        <div className="market-map-block">
-          <h4>No person records match the current filters</h4>
-          <div>Supporting artifacts and discovery lanes are separated below rather than presented as candidates.</div>
-        </div>
-      )}
-
       {supporting.length > 0 && (
         <details className="supporting-subjects-disclosure">
-          <summary>Supporting source subjects ({supporting.length})</summary>
+          <summary>Supporting evidence and discovery results ({supporting.length})</summary>
+          <div style={{ padding: '10px 14px 0', color: 'var(--muted)', fontSize: '12px', lineHeight: 1.55 }}>
+            These are not candidate people. Review them only for source research, query refinement, or technical context.
+          </div>
           <div className="supporting-subject-list">
             {supporting.map(result => (
               <article className="supporting-subject-row" key={result.id}>
