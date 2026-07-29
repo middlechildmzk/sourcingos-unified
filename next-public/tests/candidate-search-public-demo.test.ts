@@ -45,7 +45,8 @@ describe('Candidate Search public demo', () => {
 
   it('separates candidate people from other source subjects', () => {
     expect(results).toContain("result.entityKind === 'person'")
-    expect(results).toContain('Supporting source subjects')
+    expect(results).toContain('Supporting evidence and discovery results')
+    expect(results).toContain('These are not candidate people')
     expect(results).toContain('canPromoteToCandidate')
     expect(route).toContain('classifyRealSourceResults')
     expect(route).toContain('Only person records may be saved as candidates')
