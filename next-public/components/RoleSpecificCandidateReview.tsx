@@ -5,8 +5,11 @@ import { useState } from 'react'
 import {
   buildRoleCandidateReview,
   recordRoleCandidateFitDecision,
+  recordRoleCandidateReviewSignal,
   recordRoleCandidateStage,
   type RoleFitDecisionResult,
+  type RoleReviewSignalKind,
+  type RoleReviewSignalResult,
   type RoleStageResult,
 } from '@/lib/role-candidate-review'
 import { ROLE_STAGES, stageLabel, type FitDecision, type RoleStage } from '@/lib/role-workspace'
@@ -81,6 +84,9 @@ export function RoleSpecificCandidateReview({
   const [decisionStatus, setDecisionStatus] = useState('')
   const [pendingStage, setPendingStage] = useState<RoleStage | ''>('')
   const [stageStatus, setStageStatus] = useState('')
+  const [signalKind, setSignalKind] = useState<RoleReviewSignalKind>('fit_reason')
+  const [signalText, setSignalText] = useState('')
+  const [signalStatus, setSignalStatus] = useState('')
   const role = roles.find(item => item.id === roleId)
   const candidate = role?.candidates.find(item => item.candidateId === candidateId || item.id === candidateId)
 
@@ -154,6 +160,25 @@ export function RoleSpecificCandidateReview({
     }
   }
 
+  function addReviewSignal() {
+    const holder: { result?: RoleReviewSignalResult } = {}
+    updateRole(activeRoleId, current => {
+      holder.result = recordRoleCandidateReviewSignal(current, candidateId, signalKind, signalText)
+      return holder.result.workspace
+    })
+
+    if (holder.result?.reason === 'added') {
+      setSignalText('')
+      setSignalStatus(`${signalKind === 'fit_reason' ? 'Fit rationale' : 'Concern'} added. It remains recruiter-authored review context, not verified evidence.`)
+    } else if (holder.result?.reason === 'duplicate') {
+      setSignalStatus('That review note is already recorded. No duplicate activity was created.')
+    } else if (holder.result?.reason === 'invalid') {
+      setSignalStatus('Enter between 3 and 300 characters before adding the review note.')
+    } else {
+      setSignalStatus('This candidate could not be found in the active role queue.')
+    }
+  }
+
   return (
     <section className="product-panel" aria-label={`Role-specific review for ${role.intake.title}`}>
       <div className="product-page-head" style={{ marginBottom: 16 }}>
@@ -220,6 +245,35 @@ export function RoleSpecificCandidateReview({
         </div>
       </div>
 
+      <form className="cta" style={{ marginBottom: 14 }} onSubmit={event => { event.preventDefault(); addReviewSignal() }}>
+        <strong>Add recruiter review context</strong>
+        <p className="muted" style={{ margin: '4px 0 10px', fontSize: 12 }}>Add your rationale or concern. This text is recruiter-authored and does not become verified evidence or change the current decision automatically.</p>
+        <div className="grid two">
+          <label>
+            Review note type
+            <select className="input" value={signalKind} onChange={event => setSignalKind(event.target.value as RoleReviewSignalKind)}>
+              <option value="fit_reason">Fit rationale</option>
+              <option value="concern">Concern</option>
+            </select>
+          </label>
+          <label>
+            Note
+            <textarea
+              className="textarea"
+              maxLength={300}
+              value={signalText}
+              onChange={event => setSignalText(event.target.value)}
+              placeholder={signalKind === 'fit_reason' ? 'Example: Led Kubernetes platform modernization across a regulated environment.' : 'Example: AWS depth is not yet supported by the reviewed evidence.'}
+            />
+          </label>
+        </div>
+        <div className="button-row" style={{ marginTop: 10 }}>
+          <button className="btn secondary" type="submit" disabled={signalText.trim().length < 3}>Add review note</button>
+          <span className="muted" style={{ fontSize: 11 }}>{signalText.length}/300</span>
+        </div>
+        {signalStatus && <p role="status" className="muted" style={{ margin: '10px 0 0', fontSize: 12 }}>{signalStatus}</p>}
+      </form>
+
       <div className="product-layout" style={{ marginTop: 14 }}>
         <div style={{ display: 'grid', gap: 14 }}>
           <RequirementList title="Must-have coverage" supported={review.supportedMustHaves} unconfirmed={review.unconfirmedMustHaves} />
@@ -229,6 +283,14 @@ export function RoleSpecificCandidateReview({
         </div>
 
         <aside style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
+          <section className="product-panel">
+            <div className="product-panel-head"><h2>Recorded fit rationale</h2><span>{candidate.fitReasons.length}</span></div>
+            <div className="product-list">
+              {candidate.fitReasons.map(item => <div className="product-row" key={item}><div className="product-row-main"><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{item}</div></div></div>)}
+              {!candidate.fitReasons.length && <div className="product-row"><div className="product-row-main"><div className="product-row-meta">No recruiter-authored fit rationale has been recorded yet.</div></div></div>}
+            </div>
+          </section>
+
           <section className="product-panel">
             <div className="product-panel-head"><h2>Recorded concerns</h2><span>{review.concerns.length}</span></div>
             <div className="product-list">
