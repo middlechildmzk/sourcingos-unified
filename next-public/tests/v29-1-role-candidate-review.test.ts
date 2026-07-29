@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   buildRoleCandidateReview,
   recordRoleCandidateFitDecision,
+  recordRoleCandidateReviewSignal,
   recordRoleCandidateStage,
 } from '../lib/role-candidate-review'
 import type { RoleCandidate, RoleWorkspace } from '../lib/role-workspace'
@@ -149,6 +150,44 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(result.workspace.activity).toEqual([])
   })
 
+  it('adds recruiter-authored fit rationale without changing decision or stage', () => {
+    const role = { ...workspace(), candidates: [candidate()] }
+    const addedAt = new Date('2026-07-29T19:00:00.000Z')
+    const result = recordRoleCandidateReviewSignal(
+      role,
+      'candidate-1',
+      'fit_reason',
+      'Led AWS and Kubernetes modernization in a regulated environment.',
+      addedAt,
+      'note-1',
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.reason).toBe('added')
+    expect(result.workspace.candidates[0].fitReasons).toContain('Led AWS and Kubernetes modernization in a regulated environment.')
+    expect(result.workspace.candidates[0].fitDecision).toBe('unreviewed')
+    expect(result.workspace.candidates[0].stage).toBe('needs_review')
+    expect(result.workspace.activity[0]).toMatchObject({
+      id: 'note-1',
+      type: 'note_added',
+      createdAt: addedAt.toISOString(),
+    })
+  })
+
+  it('adds concerns, rejects duplicates, and validates length', () => {
+    const role = { ...workspace(), candidates: [candidate()] }
+    const added = recordRoleCandidateReviewSignal(role, 'candidate-1', 'concern', 'Leadership scope needs verification.', new Date(), 'note-2')
+    const duplicate = recordRoleCandidateReviewSignal(added.workspace, 'candidate-1', 'concern', ' leadership scope needs verification. ', new Date(), 'note-3')
+    const invalid = recordRoleCandidateReviewSignal(role, 'candidate-1', 'fit_reason', 'x', new Date(), 'note-4')
+
+    expect(added.reason).toBe('added')
+    expect(added.workspace.candidates[0].concerns).toContain('Leadership scope needs verification.')
+    expect(duplicate.reason).toBe('duplicate')
+    expect(duplicate.workspace).toBe(added.workspace)
+    expect(invalid.reason).toBe('invalid')
+    expect(invalid.workspace).toBe(role)
+  })
+
   it('renders role review ahead of generic Candidate 360 evidence and removes false score presentation', () => {
     const client = read('components/Candidate360Client.tsx')
 
@@ -178,6 +217,17 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(reviewPanel).toContain('This does not change the fit decision, verify contact information, or send outreach.')
     expect(reviewPanel).toContain('Fit decision remains ${words(activeFitDecision)} and no outreach was triggered.')
     expect(reviewPanel).toContain('disabled={(pendingStage || candidate.stage) === candidate.stage}')
+  })
+
+  it('captures recruiter-authored rationale and concerns without treating them as evidence', () => {
+    const reviewPanel = read('components/RoleSpecificCandidateReview.tsx')
+
+    expect(reviewPanel).toContain('Add recruiter review context')
+    expect(reviewPanel).toContain('<option value="fit_reason">Fit rationale</option>')
+    expect(reviewPanel).toContain('<option value="concern">Concern</option>')
+    expect(reviewPanel).toContain('does not become verified evidence or change the current decision automatically')
+    expect(reviewPanel).toContain('maxLength={300}')
+    expect(reviewPanel).toContain('No recruiter-authored fit rationale has been recorded yet.')
   })
 
   it('fails closed when any related Candidate 360 query fails', () => {
