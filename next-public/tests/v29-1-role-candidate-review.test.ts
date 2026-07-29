@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildRoleCandidateReview } from '../lib/role-candidate-review'
+import { buildRoleCandidateReview, recordRoleCandidateFitDecision } from '../lib/role-candidate-review'
 import type { RoleCandidate, RoleWorkspace } from '../lib/role-workspace'
 
 function read(path: string): string {
@@ -80,6 +80,43 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(review.verifyNext).toContain('Record a recruiter-controlled fit decision in the role review queue.')
   })
 
+  it('records one auditable fit decision without advancing the pipeline', () => {
+    const role = { ...workspace(), candidates: [candidate()] }
+    const decidedAt = new Date('2026-07-29T17:00:00.000Z')
+    const result = recordRoleCandidateFitDecision(role, 'candidate-1', 'strong_fit', decidedAt, 'activity-1')
+
+    expect(result.changed).toBe(true)
+    expect(result.reason).toBe('updated')
+    expect(result.workspace.candidates[0].fitDecision).toBe('strong_fit')
+    expect(result.workspace.candidates[0].stage).toBe('needs_review')
+    expect(result.workspace.candidates[0].updatedAt).toBe(decidedAt.toISOString())
+    expect(result.workspace.activity).toEqual([{
+      id: 'activity-1',
+      type: 'candidate_reviewed',
+      message: 'Recorded strong fit for Ada Engineer.',
+      createdAt: decidedAt.toISOString(),
+    }])
+  })
+
+  it('does not create duplicate activity for the current decision', () => {
+    const role = { ...workspace(), candidates: [{ ...candidate(), fitDecision: 'possible_fit' as const }] }
+    const result = recordRoleCandidateFitDecision(role, 'candidate-1', 'possible_fit', new Date(), 'activity-2')
+
+    expect(result.changed).toBe(false)
+    expect(result.reason).toBe('unchanged')
+    expect(result.workspace).toBe(role)
+    expect(result.workspace.activity).toEqual([])
+  })
+
+  it('fails closed when the candidate is not in the role', () => {
+    const role = { ...workspace(), candidates: [candidate()] }
+    const result = recordRoleCandidateFitDecision(role, 'missing', 'not_fit', new Date(), 'activity-3')
+
+    expect(result.changed).toBe(false)
+    expect(result.reason).toBe('missing_candidate')
+    expect(result.workspace).toBe(role)
+  })
+
   it('renders role review ahead of generic Candidate 360 evidence and removes false score presentation', () => {
     const client = read('components/Candidate360Client.tsx')
 
@@ -88,6 +125,17 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(client).toContain('Coverage, not a fit score')
     expect(client).not.toContain('type Dossier = any')
     expect(client).not.toContain('Score {dossier.scores?.evidenceScore')
+  })
+
+  it('exposes explicit accessible fit decisions and states that stages do not advance automatically', () => {
+    const reviewPanel = read('components/RoleSpecificCandidateReview.tsx')
+
+    expect(reviewPanel).toContain("{ value: 'strong_fit', label: 'Strong fit' }")
+    expect(reviewPanel).toContain("{ value: 'possible_fit', label: 'Possible fit' }")
+    expect(reviewPanel).toContain("{ value: 'not_fit', label: 'Not fit' }")
+    expect(reviewPanel).toContain('aria-pressed={candidate.fitDecision === option.value}')
+    expect(reviewPanel).toContain('It does not verify identity, advance the pipeline, or trigger outreach.')
+    expect(reviewPanel).toContain('No duplicate activity was created.')
   })
 
   it('fails closed when any related Candidate 360 query fails', () => {
