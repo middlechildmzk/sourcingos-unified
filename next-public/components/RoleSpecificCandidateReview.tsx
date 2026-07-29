@@ -1,9 +1,17 @@
 'use client'
 
 import Link from 'next/link'
-import { buildRoleCandidateReview } from '@/lib/role-candidate-review'
-import { stageLabel } from '@/lib/role-workspace'
+import { useState } from 'react'
+import { buildRoleCandidateReview, recordRoleCandidateFitDecision, type RoleFitDecisionResult } from '@/lib/role-candidate-review'
+import { stageLabel, type FitDecision } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
+
+const FIT_DECISIONS: Array<{ value: FitDecision; label: string }> = [
+  { value: 'strong_fit', label: 'Strong fit' },
+  { value: 'possible_fit', label: 'Possible fit' },
+  { value: 'not_fit', label: 'Not fit' },
+  { value: 'unreviewed', label: 'Reset decision' },
+]
 
 function words(value: string): string {
   return value.split('_').map(word => word ? word[0].toUpperCase() + word.slice(1) : '').join(' ')
@@ -63,7 +71,8 @@ export function RoleSpecificCandidateReview({
   roleId: string
   candidateId: string
 }) {
-  const { roles, mode, message } = useRoleWorkspaces()
+  const { roles, mode, message, updateRole } = useRoleWorkspaces()
+  const [decisionStatus, setDecisionStatus] = useState('')
   const role = roles.find(item => item.id === roleId)
   const candidate = role?.candidates.find(item => item.candidateId === candidateId || item.id === candidateId)
 
@@ -100,6 +109,22 @@ export function RoleSpecificCandidateReview({
 
   const review = buildRoleCandidateReview(role, candidate)
 
+  function recordDecision(decision: FitDecision) {
+    const holder: { result?: RoleFitDecisionResult } = {}
+    updateRole(role.id, current => {
+      holder.result = recordRoleCandidateFitDecision(current, candidateId, decision)
+      return holder.result.workspace
+    })
+
+    if (holder.result?.reason === 'updated') {
+      setDecisionStatus(`${words(decision)} recorded. Pipeline stage remains ${stageLabel(candidate.stage)} until you change it explicitly.`)
+    } else if (holder.result?.reason === 'unchanged') {
+      setDecisionStatus(`${words(decision)} is already the current fit decision. No duplicate activity was created.`)
+    } else {
+      setDecisionStatus('This candidate could not be found in the active role queue.')
+    }
+  }
+
   return (
     <section className="product-panel" aria-label={`Role-specific review for ${role.intake.title}`}>
       <div className="product-page-head" style={{ marginBottom: 16 }}>
@@ -119,6 +144,27 @@ export function RoleSpecificCandidateReview({
         <div className="product-stat"><small>Pipeline stage</small><b>{stageLabel(candidate.stage)}</b><span>No automatic advancement</span></div>
         <div className="product-stat"><small>Evidence state</small><b>{words(candidate.evidenceStatus)}</b><span>Role review status</span></div>
         <div className="product-stat"><small>Contact state</small><b>{words(candidate.contactStatus)}</b><span>Unverified unless confirmed</span></div>
+      </div>
+
+      <div className="cta" style={{ marginTop: 14, marginBottom: 14 }}>
+        <div>
+          <strong>Recruiter fit decision</strong>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>This records your role-specific judgment only. It does not verify identity, advance the pipeline, or trigger outreach.</p>
+        </div>
+        <div className="button-row" style={{ marginTop: 10 }} aria-label="Record role fit decision">
+          {FIT_DECISIONS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              className={candidate.fitDecision === option.value ? 'btn' : 'btn secondary'}
+              aria-pressed={candidate.fitDecision === option.value}
+              onClick={() => recordDecision(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        {decisionStatus && <p role="status" className="muted" style={{ margin: '10px 0 0', fontSize: 12 }}>{decisionStatus}</p>}
       </div>
 
       <div className="product-layout" style={{ marginTop: 14 }}>
