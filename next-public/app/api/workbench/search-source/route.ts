@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { searchSources } from '@/lib/source-connectors'
 import { classifyRealSourceResults } from '@/lib/entity-classification'
 import { searchGitHubPeople, type GitHubDiscoveryDiagnostics } from '@/lib/github-person-discovery'
+import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
+import type { SourceExecutionDiagnostics } from '@/lib/search/source-diagnostics'
 import { allSourceNames, SourceName } from '@/lib/source-types'
 import { buildSourceQueries, type ComposerChip } from '@/lib/search-query-builder'
 import { z } from 'zod'
@@ -52,24 +54,6 @@ function queryForSource(source: SourceName, chips: ComposerChip[], rawQuery: str
     resume_xray: rawQuery,
   }
   return (map[source] || rawQuery).trim()
-}
-
-type SourceExecutionDiagnostics = {
-  source: SourceName
-  strategy: string
-  health: 'healthy' | 'degraded' | 'rate_limited' | 'error'
-  effectiveQuery: string
-  durationMs: number
-  resultCount: number
-  personCount: number
-  nonPersonCount: number
-  partial: boolean
-  rateLimitRemaining?: number
-  rateLimitResetAt?: string
-  repositoriesExamined?: number
-  contributorsExamined?: number
-  profilesHydrated?: number
-  skippedBots?: number
 }
 
 function genericDiagnostics(
@@ -185,7 +169,7 @@ export async function POST(req: NextRequest) {
         sources: ['github'],
         limit: body.limit,
       })
-      results = classifyRealSourceResults(response.results)
+      results = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
       warnings = response.warnings
       diagnostics = githubDiagnostics(response.diagnostics, results)
     } else {
@@ -228,6 +212,7 @@ export async function POST(req: NextRequest) {
         'Only person records may be saved as candidates or added to roles.',
         'GitHub contribution evidence is tied to public repositories that caused the person to surface.',
         'Repository contribution is a public technical signal, not verified employment or role fit.',
+        'GitHub skills are derived from observed repository languages and topics, not copied from search terms.',
         'Bot and organization accounts do not enter the GitHub person result set.',
         'Contact signals are unverified by default.',
         'Public clearance mentions are unverified breadcrumbs only.',
