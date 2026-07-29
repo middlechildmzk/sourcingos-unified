@@ -2,21 +2,21 @@
 
 This document defines the final gate for the role-centric sourcing loop before merge into `main`.
 
-## Automated gate status
+## Automated gate requirements
 
-Exact release-candidate head: `065d02941e5477b3625318cbea616174b89f4371`
+The exact pull-request head must satisfy all of the following:
 
-- Locked dependency install: passed.
-- TypeScript: passed.
-- Deterministic tests: 253 of 253 passed across 103 of 103 suites.
-- Atomic role migration contract: passed.
-- Dependency audit reports: captured.
-- Production Next.js build: passed.
-- Static generation: 116 of 116 pages.
-- Exact-head Vercel preview: READY.
-- Preview runtime error, warning, and fatal sweep: no matching logs.
+- Locked dependency install passes.
+- TypeScript passes.
+- All deterministic tests pass.
+- Atomic role migration contract passes.
+- Dependency audit reports are captured.
+- Production Next.js build passes.
+- Static generation completes.
+- A Vercel preview is READY from the exact pull-request head.
+- The preview runtime error, warning, and fatal sweep returns no release-blocking result.
 
-Preview deployment: `dpl_7np1Y6kULf5phKaR1ngfmTGworrN`
+The current verification SHA, workflow run, test totals, deployment ID, and preview URL are recorded in PR #47 so this document does not become stale when release-only documentation changes.
 
 ## Required authenticated workflow
 
@@ -48,4 +48,4 @@ Preview deployment: `dpl_7np1Y6kULf5phKaR1ngfmTGworrN`
 
 ## Merge decision
 
-The automated and exact-head preview gates are complete. PR #47 remains unmerged until the authenticated workflow is accepted. After merge, verify Roles, Candidate Search, Candidate 360, Today, runtime logs, and production deployment health before beginning V29.1.
+PR #47 remains unmerged until the exact-head automated, preview, and authenticated-workflow gates are accepted. After merge, verify Roles, Candidate Search, Candidate 360, Today, runtime logs, and production deployment health before beginning V29.1.
