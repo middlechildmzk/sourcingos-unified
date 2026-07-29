@@ -42,13 +42,17 @@ function normalized(value: string): string {
     .trim()
 }
 
+function containsPhrase(value: string, phrase: string): boolean {
+  if (!value || !phrase) return false
+  return ` ${value} `.includes(` ${phrase} `)
+}
+
 function supportedByReviewSignal(requirement: string, reviewSignals: string[]): boolean {
   const target = normalized(requirement)
   if (!target) return false
   return reviewSignals.some(signal => {
     const candidate = normalized(signal)
-    if (!candidate) return false
-    return candidate === target || candidate.includes(target) || target.includes(candidate)
+    return candidate === target || containsPhrase(candidate, target)
   })
 }
 
