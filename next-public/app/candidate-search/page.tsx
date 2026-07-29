@@ -1,56 +1,38 @@
 import { WorkbenchClient } from '@/components/WorkbenchClient'
-import { PublicComposerDefault } from '@/components/PublicComposerDefault'
-import { CandidateSearchV25Builder } from '@/components/CandidateSearchV25Builder'
-import { CandidateSearchTrustLayer } from '@/components/CandidateSearchTrustLayer'
 import Link from 'next/link'
 
 export const metadata = {
   alternates: { canonical: '/candidate-search/' },
-  title: 'Candidate Search Demo — SourcingOS',
+  title: 'Candidate Search Demo | SourcingOS',
   description:
-    'Try SourcingOS Candidate Search free. Search modes, source-lane routing, public-source search, evidence-first result cards, market-map summaries, and recruiter-safe profile review.',
+    'Search public talent evidence, review candidate people separately from artifacts, and inspect why each profile surfaced.',
 }
 
-// Public demo — search and review work without sign-in.
-// All write actions are gated client-side (publicMode) AND server-side (auth-protected APIs).
+// Public demo: one search entry point. Search and evidence review are open;
+// all durable write actions remain gated by authenticated server routes.
 export default function PublicCandidateSearchPage() {
   return (
     <main className="wrap">
-      <div className="eyebrow">SourcingOS — Public demo</div>
-      <h1>Candidate Search</h1>
+      <div className="eyebrow">SourcingOS public demo</div>
+      <h1>Find people. See the evidence.</h1>
       <p className="lead">
-        Search public talent evidence, review source profiles, inspect why something matched,
-        and keep every claim separated from recruiter confirmation.
+        Describe the person you need. SourcingOS searches public sources, separates people from
+        packages and discovery lanes, and shows why each profile surfaced.
       </p>
 
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 8px' }}>
-        <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
-          Public evidence matches only · Not confirmed candidates · Contact signals unverified ·
-          Clearance and open-to-work are signals, never verified claims · Confidence means source relevance only
-        </span>
+      <div className="recruiter-trust-note" style={{ margin: '16px 0' }}>
+        <strong>Public evidence, not verified candidate facts.</strong>
+        <span>Recruiters confirm identity, current role, location, clearance, contact accuracy, and permission before acting.</span>
       </div>
 
-      <div className="preview-banner" style={{ marginBottom: '20px' }}>
-        <span className="pb-icon">◈</span>
-        <span>
-          <strong>Demo mode.</strong> Search and review are open to everyone. Saving source profiles,
-          adding to projects, confirming same-person matches, contact enrichment, dossier export,
-          and Candidate 360 creation require a beta account.{' '}
-          <Link href="/login" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>Sign in</Link>
-          {' '}or <Link href="/waitlist" style={{ color: 'var(--amber)', textDecoration: 'underline' }}>request access</Link>.
-        </span>
-      </div>
+      <WorkbenchClient publicMode initialTab="composer" />
 
-      <div className="cta" style={{ marginBottom: '20px' }}>
-        <strong>Need more coverage before you search?</strong> Use the free{' '}
-        <Link href="/tools/search-lane-expander" style={{ textDecoration: 'underline' }}>Search Lane Expander</Link>{' '}
-        to compare Precision, Balanced, Broad, and Market Map lanes.
+      <div className="cta" style={{ marginTop: '24px' }}>
+        <strong>Need the full workflow?</strong>{' '}
+        <Link href="/login" style={{ textDecoration: 'underline' }}>Sign in</Link>{' '}
+        to save person profiles and open Candidate 360, or review the{' '}
+        <Link href="/methodology" style={{ textDecoration: 'underline' }}>evidence methodology</Link>.
       </div>
-
-      <CandidateSearchV25Builder />
-      <PublicComposerDefault />
-      <WorkbenchClient publicMode={true} />
-      <CandidateSearchTrustLayer />
     </main>
   )
 }

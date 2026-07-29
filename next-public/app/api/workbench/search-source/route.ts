@@ -2,6 +2,7 @@ import 'server-only'
 import { rateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 import { searchSources } from '@/lib/source-connectors'
+import { classifyRealSourceResults } from '@/lib/entity-classification'
 import { allSourceNames, SourceName } from '@/lib/source-types'
 import { buildSourceQueries, type ComposerChip } from '@/lib/search-query-builder'
 import { z } from 'zod'
@@ -29,7 +30,6 @@ const LIVE_PUBLIC_SOURCES = new Set<SourceName>([
   'npi', 'pubmed', 'resume_xray',
 ])
 
-// Per-source query selection — same routing logic as the all-sources route.
 function queryForSource(source: SourceName, chips: ComposerChip[], rawQuery: string): string {
   const q = buildSourceQueries(chips, rawQuery)
   const map: Record<string, string> = {
@@ -83,14 +83,20 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    const { results, warnings, searchedSources } = await searchSources({
+    const connectorResponse = await searchSources({
       query: effectiveQuery,
       location: body.location,
       sources: [body.source],
       limit: body.limit,
     })
 
-    const reached = searchedSources.includes(body.source)
+    // The connector layer is legacy-compatible, but the API boundary is not.
+    // Every returned subject is classified and any generated demo fallback is
+    // removed before it can appear as a candidate-shaped result.
+    const results = classifyRealSourceResults(connectorResponse.results)
+    const warnings = connectorResponse.warnings
+      .filter(warning => !warning.toLowerCase().includes('demo fallback'))
+    const reached = connectorResponse.searchedSources.includes(body.source)
     const status = results.length > 0 ? 'found' : (reached ? 'no_results' : 'error')
 
     return NextResponse.json({
@@ -102,7 +108,8 @@ export async function POST(req: NextRequest) {
       resultCount: results.length,
       warnings,
       guardrails: [
-        'Source profiles are unconfirmed and require recruiter review.',
+        'Source subjects are classified before they enter candidate workflows.',
+        'Only person records may be saved as candidates or added to roles.',
         'Contact signals are unverified by default.',
         'Public clearance mentions are unverified breadcrumbs only.',
         'Confidence means source relevance only, never candidate verification.',

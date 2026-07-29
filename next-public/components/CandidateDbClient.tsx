@@ -38,9 +38,9 @@ export function CandidateDbClient() {
     try {
       const params = new URLSearchParams({ limit: '50', offset: String(offset) })
       if (search) params.set('q', search)
-      const res = await fetch(`/api/candidate-db/list?${params.toString()}`, { headers: { accept: 'application/json' } })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(text(json?.error, 'Could not load Candidate Graph.'))
+      const response = await fetch(`/api/candidate-db/list?${params.toString()}`, { headers: { accept: 'application/json' } })
+      const json = await response.json()
+      if (!response.ok || !json?.ok) throw new Error(text(json?.error, 'Could not load Candidate Graph.'))
       const normalized = normalizeCandidateWorkspaceSnapshot(json)
       setSnapshot(normalized)
       setStatus(normalized.persistence_mode === 'supabase' ? 'Candidate Graph is connected to durable storage.' : 'Preview records are temporary and reset between server restarts.')
@@ -56,11 +56,11 @@ export function CandidateDbClient() {
   async function importResume() {
     setStatus('Importing resume into the Candidate Graph…')
     try {
-      const res = await fetch('/api/candidate-db/import-resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, fileName: 'pasted-resume.txt' }) })
-      const json = await res.json()
+      const response = await fetch('/api/candidate-db/import-resume', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, fileName: 'pasted-resume.txt' }) })
+      const json = await response.json()
       const importedName = text(json?.candidate?.canonicalName, 'candidate')
-      setStatus(res.ok && json?.ok ? `Imported ${importedName}.` : text(json?.error, 'Resume import failed.'))
-      if (res.ok && json?.ok) await load(0, appliedSearch)
+      setStatus(response.ok && json?.ok ? `Imported ${importedName}.` : text(json?.error, 'Resume import failed.'))
+      if (response.ok && json?.ok) await load(0, appliedSearch)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Resume import failed.')
     }
@@ -69,11 +69,11 @@ export function CandidateDbClient() {
   async function importCsv() {
     setStatus('Importing CSV into the Candidate Graph…')
     try {
-      const res = await fetch('/api/candidate-db/import-csv', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ csv: csvText, fileName: 'pasted-candidates.csv' }) })
-      const json = await res.json()
+      const response = await fetch('/api/candidate-db/import-csv', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ csv: csvText, fileName: 'pasted-candidates.csv' }) })
+      const json = await response.json()
       const recordsCreated = number(json?.recordsCreated)
-      setStatus(res.ok && json?.ok ? `Imported ${recordsCreated.toLocaleString()} candidate record${recordsCreated === 1 ? '' : 's'}.` : text(json?.error, 'CSV import failed.'))
-      if (res.ok && json?.ok) await load(0, appliedSearch)
+      setStatus(response.ok && json?.ok ? `Imported ${recordsCreated.toLocaleString()} candidate record${recordsCreated === 1 ? '' : 's'}.` : text(json?.error, 'CSV import failed.'))
+      if (response.ok && json?.ok) await load(0, appliedSearch)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'CSV import failed.')
     }
@@ -81,9 +81,9 @@ export function CandidateDbClient() {
 
   async function normalizeCandidate() {
     try {
-      const res = await fetch('/api/candidate-db/normalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, source: 'uploaded_resume' }) })
-      const json = await res.json()
-      setStatus(res.ok && json?.ok
+      const response = await fetch('/api/candidate-db/normalize', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: resumeText, source: 'uploaded_resume' }) })
+      const json = await response.json()
+      setStatus(response.ok && json?.ok
         ? `Detected ${length(json?.normalized?.skills)} skills, ${length(json?.normalized?.contacts)} contact signals, and ${length(json?.normalized?.openToWorkSignals)} availability signals. Nothing was saved.`
         : text(json?.error, 'Normalization failed.'))
     } catch (error) {
@@ -95,11 +95,11 @@ export function CandidateDbClient() {
     const ids = snapshot.sourceProfiles.slice(0, 2).map(profile => text(profile.id)).filter(Boolean)
     if (ids.length < 2) { setStatus('At least two loaded source profiles are required for a match review.'); return }
     try {
-      const res = await fetch('/api/candidate-db/match-review', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceProfileIds: ids }) })
-      const json = await res.json()
+      const response = await fetch('/api/candidate-db/match-review', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceProfileIds: ids }) })
+      const json = await response.json()
       const score = number(json?.review?.match_score ?? json?.review?.score)
-      setStatus(res.ok && json?.ok ? `Created an identity review with score ${score}/100.` : text(json?.error, 'Could not create identity review.'))
-      if (res.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
+      setStatus(response.ok && json?.ok ? `Created an identity review with score ${score}/100.` : text(json?.error, 'Could not create identity review.'))
+      if (response.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not create identity review.')
     }
@@ -107,10 +107,10 @@ export function CandidateDbClient() {
 
   async function decide(reviewId: string, decision: 'confirmed' | 'rejected') {
     try {
-      const res = await fetch('/api/candidate-db/confirm-merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reviewId, decision }) })
-      const json = await res.json()
-      setStatus(res.ok && json?.ok ? decision === 'confirmed' ? 'Confirmed the identity match.' : 'Kept the source profiles separate.' : text(json?.error, 'Could not save identity decision.'))
-      if (res.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
+      const response = await fetch('/api/candidate-db/confirm-merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reviewId, decision }) })
+      const json = await response.json()
+      setStatus(response.ok && json?.ok ? decision === 'confirmed' ? 'Confirmed the identity match.' : 'Kept the source profiles separate.' : text(json?.error, 'Could not save identity decision.'))
+      if (response.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not save identity decision.')
     }
@@ -126,10 +126,12 @@ export function CandidateDbClient() {
   const coverage = useMemo(() => snapshot.counts.candidates ? Math.round((snapshot.counts.evidenceItems / snapshot.counts.candidates) * 10) / 10 : 0, [snapshot.counts])
   const start = snapshot.counts.filteredCandidates ? snapshot.page.offset + 1 : 0
   const end = snapshot.page.offset + snapshot.candidates.length
+  const personCandidates = snapshot.candidates.filter(candidate => candidate.entityKind === 'person')
+  const supportingCandidates = snapshot.candidates.filter(candidate => candidate.entityKind !== 'person')
 
   return <div className="interactive-tool">
     <div className="product-summary-grid">
-      <div className="product-stat"><small>Canonical candidates</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>Owner-scoped identities</span></div>
+      <div className="product-stat"><small>Stored identity records</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>{snapshot.counts.personCandidatesOnPage} people on this page</span></div>
       <div className="product-stat"><small>Source profiles</small><b>{snapshot.counts.sourceProfiles.toLocaleString()}</b><span>Provenance preserved</span></div>
       <div className="product-stat"><small>Evidence records</small><b>{snapshot.counts.evidenceItems.toLocaleString()}</b><span>{coverage} per candidate</span></div>
       <div className="product-stat"><small>Identity review</small><b>{snapshot.counts.pendingMatchReviews.toLocaleString()}</b><span>Pending recruiter decisions</span></div>
@@ -143,17 +145,52 @@ export function CandidateDbClient() {
         </section>}
 
         <section className="product-panel">
-          <div className="product-panel-head"><div><span className="kicker">Candidate Graph</span><h2>Candidates</h2></div><span>{start.toLocaleString()}–{end.toLocaleString()} of {snapshot.counts.filteredCandidates.toLocaleString()}</span></div>
+          <div className="product-panel-head"><div><span className="kicker">Candidate Graph</span><h2>People</h2></div><span>{personCandidates.length} people · records {start.toLocaleString()}–{end.toLocaleString()}</span></div>
           <form onSubmit={search} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginBottom: 14 }}><input className="input" style={{ margin: 0 }} value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search name, title, company, or location" /><button className="btn" type="submit">Search</button></form>
           {appliedSearch && <div className="button-row" style={{ marginBottom: 12 }}><span className="status-pill active">Search: {appliedSearch}</span><button className="btn ghost" onClick={() => { setSearchInput(''); setAppliedSearch(''); void load(0, '') }}>Clear</button></div>}
           <div className="product-list">
-            {snapshot.candidates.map(candidate => <div className="product-row" key={candidate.id}>
-              <div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><div className="product-row-title">{candidate.canonicalName}</div><span className={`status-pill ${candidate.mergeStatus === 'source_verified' || candidate.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(candidate.mergeStatus)}</span></div><div className="product-row-meta">{[candidate.headline || candidate.currentTitle, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate profile'}</div>{candidate.summary && <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: '7px 0 0' }}>{candidate.summary.slice(0, 220)}{candidate.summary.length > 220 ? '…' : ''}</p>}<div className="chips">{candidate.skills.slice(0, 6).map(skill => <span className="tag" key={skill}>{skill}</span>)}<span className="tag">{candidate.sourceProfileIds.length} source{candidate.sourceProfileIds.length === 1 ? '' : 's'}</span><span className="tag">{candidate.evidenceItemIds.length} evidence</span></div></div>
-              <div className="product-row-actions"><Link className="btn ghost" href={`/app/candidate/${candidate.id}`}>Open 360</Link><AddToRoleButton candidate={{ candidateId: candidate.id, name: candidate.canonicalName, headline: candidate.headline, company: candidate.currentCompany, location: candidate.location, source: 'candidate_database', contactStatus: candidate.contactSignalIds.length ? 'signals_found' : 'unknown', evidenceStatus: candidate.evidenceItemIds.length ? 'reviewed' : 'unreviewed', tags: candidate.skills }} /></div>
-            </div>)}
-            {!loading && !snapshot.candidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No matching candidates</div><div className="product-row-meta">Try a broader search or import an authorized candidate file.</div></div></div>}
+            {personCandidates.map(candidate => {
+              const href = `/app/candidate/${candidate.id}`
+              return <div className="product-row candidate-db-row" key={candidate.id}>
+                <Link
+                  className="candidate-row-open-surface"
+                  href={href}
+                  aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
+                />
+                <div className="product-row-main">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span className="product-row-title candidate-row-link">{candidate.canonicalName}</span>
+                    <span className={`status-pill ${candidate.mergeStatus === 'source_verified' || candidate.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(candidate.mergeStatus)}</span>
+                  </div>
+                  <div className="product-row-meta">{[candidate.headline || candidate.currentTitle, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate profile'}</div>
+                  {candidate.summary && <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, margin: '7px 0 0' }}>{candidate.summary.slice(0, 180)}{candidate.summary.length > 180 ? '…' : ''}</p>}
+                  <div className="chips">{candidate.skills.slice(0, 6).map(skill => <span className="tag" key={skill}>{skill}</span>)}<span className="tag">{candidate.sourceProfileIds.length} source{candidate.sourceProfileIds.length === 1 ? '' : 's'}</span><span className="tag">{candidate.evidenceItemIds.length} evidence</span></div>
+                </div>
+                <div className="product-row-actions">
+                  <Link className="btn ghost" href={href}>Open 360</Link>
+                  <AddToRoleButton candidate={{ candidateId: candidate.id, name: candidate.canonicalName, headline: candidate.headline, company: candidate.currentCompany, location: candidate.location, source: 'candidate_database', contactStatus: candidate.contactSignalIds.length ? 'signals_found' : 'unknown', evidenceStatus: candidate.evidenceItemIds.length ? 'reviewed' : 'unreviewed', tags: candidate.skills }} />
+                </div>
+              </div>
+            })}
+            {!loading && !personCandidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No person records on this page</div><div className="product-row-meta">Continue to another page, broaden the search, or review supporting subjects below.</div></div></div>}
             {loading && <div className="product-row"><div className="product-row-main"><div className="product-row-title">Loading candidates…</div><div className="product-row-meta">Reading the owner-scoped Candidate Graph.</div></div></div>}
           </div>
+          {supportingCandidates.length > 0 && (
+            <details className="advanced-disclosure" style={{ marginTop: 14 }}>
+              <summary>Supporting or unclassified subjects ({supportingCandidates.length})</summary>
+              <div className="product-list" style={{ marginTop: 10 }}>
+                {supportingCandidates.map(subject => (
+                  <div className="product-row" key={subject.id}>
+                    <div className="product-row-main">
+                      <div className="product-row-title">{subject.canonicalName}</div>
+                      <div className="product-row-meta">{words(subject.entityKind)} · not available for role assignment</div>
+                    </div>
+                    <Link className="btn ghost" href={`/app/candidate/${subject.id}`}>Review record</Link>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
           <div className="button-row" style={{ justifyContent: 'space-between', marginTop: 14 }}><button className="btn secondary" disabled={snapshot.page.offset === 0 || loading} onClick={() => void load(Math.max(0, snapshot.page.offset - snapshot.page.limit), appliedSearch)}>Previous</button><button className="btn secondary" disabled={!snapshot.page.hasMore || loading} onClick={() => void load(snapshot.page.offset + snapshot.page.limit, appliedSearch)}>Next</button></div>
         </section>
       </div>

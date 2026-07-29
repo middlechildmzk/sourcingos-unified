@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// lib/search/source-timeout.ts — fetch with independent per-source timeout.
+// lib/search/source-timeout.ts - fetch with independent per-source timeout.
 // One slow source must never block the others.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -16,34 +16,45 @@ export const SOURCE_TIMEOUTS_MS: Record<string, number> = {
 
 export const DEFAULT_TIMEOUT_MS = 8000
 
-/** POST with an AbortController-backed timeout. Resolves to parsed JSON or throws 'timeout'. */
+/**
+ * POST with an independent timeout and an optional parent search signal.
+ * A parent cancellation is distinguishable from a source timeout so stale
+ * search runs can stop without being reported as failed lanes.
+ */
 export async function fetchWithTimeout(
   url: string,
   body: unknown,
-  timeoutMs: number
-): Promise<{ timedOut: boolean; data: unknown }> {
+  timeoutMs: number,
+  parentSignal?: AbortSignal,
+): Promise<{ timedOut: boolean; cancelled: boolean; data: unknown }> {
   const controller = new AbortController()
+  const abortFromParent = () => controller.abort()
+  if (parentSignal?.aborted) controller.abort()
+  else parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: controller.signal,
     })
-    clearTimeout(timer)
-    const data = await res.json()
-    return { timedOut: false, data }
-  } catch (err) {
-    clearTimeout(timer)
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      return { timedOut: true, data: null }
+    const data = await response.json()
+    return { timedOut: false, cancelled: false, data }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      const cancelled = Boolean(parentSignal?.aborted)
+      return { timedOut: !cancelled, cancelled, data: null }
     }
-    throw err
+    throw error
+  } finally {
+    clearTimeout(timer)
+    parentSignal?.removeEventListener('abort', abortFromParent)
   }
 }
 
-// Manual-safe lanes never hit a live API — they open a guided workflow instead.
+// Manual-safe lanes never hit a live API - they open a guided workflow instead.
 export const MANUAL_SAFE_LANES = [
   { id: 'linkedin_xray', label: 'LinkedIn X-Ray', href: '/tools/xray-search' },
   { id: 'clearancejobs', label: 'ClearanceJobs / manual', href: '/tools/jd-search-strategy' },

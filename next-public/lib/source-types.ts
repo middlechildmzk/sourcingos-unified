@@ -17,6 +17,15 @@ export type SourceName =
   | 'rubygems'
   | 'resume_xray'
 
+/** The real-world subject represented by a source result. */
+export type EntityKind =
+  | 'person'
+  | 'organization'
+  | 'artifact'
+  | 'publication'
+  | 'search_lane'
+  | 'unknown'
+
 export type EvidenceConfidence = 'high' | 'medium' | 'low'
 
 export type EvidenceItem = {
@@ -44,10 +53,12 @@ export type IdentitySignal = {
   source: SourceName
 }
 
+/** Every connector must explicitly identify the subject it returns. */
 export type SourceResult = {
   id: string
   source: SourceName
   sourceProfileId: string
+  entityKind: EntityKind
   displayName: string
   headline?: string
   location?: string
@@ -62,6 +73,8 @@ export type SourceResult = {
   raw?: unknown
 }
 
+export type ClassifiedSourceResult = SourceResult
+
 export type SourceSearchRequest = {
   query: string
   location?: string
@@ -74,7 +87,7 @@ export type SourceSearchResponse = {
   ok: boolean
   query: string
   searchedSources: SourceName[]
-  results: SourceResult[]
+  results: ClassifiedSourceResult[]
   warnings: string[]
   generatedAt: string
 }
@@ -89,22 +102,9 @@ export type RefreshPolicy = {
 }
 
 export const allSourceNames: SourceName[] = [
-  'github',
-  'stackoverflow',
-  'openalex',
-  'npi',
-  'orcid',
-  'semantic_scholar',
-  'arxiv',
-  'pubmed',
-  'huggingface',
-  'npm',
-  'pypi',
-  'kaggle',
-  'devto',
-  'dockerhub',
-  'crates',
-  'rubygems',
+  'github', 'stackoverflow', 'openalex', 'npi', 'orcid',
+  'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
+  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
   'resume_xray'
 ]
 
