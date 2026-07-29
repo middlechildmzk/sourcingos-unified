@@ -8,7 +8,6 @@ import type {
 const PERSON_SOURCES = new Set<SourceName>([
   'stackoverflow',
   'openalex',
-  'orcid',
   'semantic_scholar',
   'arxiv',
   'pubmed',
@@ -24,6 +23,7 @@ const ARTIFACT_SOURCES = new Set<SourceName>([
 ])
 
 const SEARCH_LANE_SOURCES = new Set<SourceName>(['kaggle', 'resume_xray'])
+const ORCID_ID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/i
 
 type UnknownRecord = Record<string, unknown>
 
@@ -31,6 +31,54 @@ function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : {}
+}
+
+function text(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  const item = record(value)
+  return typeof item.value === 'string' ? item.value.trim() : ''
+}
+
+function resolvedOrcidName(raw: unknown): string {
+  const root = record(raw)
+  const person = record(root.person)
+  const name = record(person.name ?? root.name)
+
+  const given = text(
+    root['given-names']
+    ?? root.givenNames
+    ?? root.given_names
+    ?? name['given-names']
+    ?? name.givenNames,
+  )
+  const family = text(
+    root['family-names']
+    ?? root['family-name']
+    ?? root.familyName
+    ?? root.family_names
+    ?? name['family-name']
+    ?? name.familyName,
+  )
+  const credit = text(
+    root['credit-name']
+    ?? root.creditName
+    ?? name['credit-name']
+    ?? name.creditName,
+  )
+
+  return credit || [given, family].filter(Boolean).join(' ').trim()
+}
+
+function isIdentifierOnlyOrcidResult(result: SourceResult): boolean {
+  if (result.source !== 'orcid') return false
+  if (resolvedOrcidName(result.raw)) return false
+
+  const displayName = result.displayName.trim()
+  const sourceId = result.sourceProfileId.trim()
+  return !displayName
+    || displayName === sourceId
+    || ORCID_ID_PATTERN.test(displayName)
+    || displayName.toLowerCase() === 'orcid researcher'
 }
 
 /**
@@ -67,6 +115,10 @@ export function resolveStoredEntityKind(input: {
   if (SEARCH_LANE_SOURCES.has(source)) return 'search_lane'
   if (ARTIFACT_SOURCES.has(source)) return 'artifact'
   if (PERSON_SOURCES.has(source)) return 'person'
+
+  if (source === 'orcid') {
+    return resolvedOrcidName(input.raw) ? 'person' : 'unknown'
+  }
 
   if (source === 'github') {
     const root = record(input.raw)
@@ -105,13 +157,26 @@ export function isGeneratedDemoResult(result: SourceResult): boolean {
 }
 
 export function classifySourceResult(result: SourceResult): ClassifiedSourceResult {
+  const entityKind = resolveStoredEntityKind({
+    source: result.source,
+    raw: result.raw,
+    entityKind: result.entityKind,
+  })
+
+  if (entityKind === 'unknown' && isIdentifierOnlyOrcidResult(result)) {
+    return {
+      ...result,
+      entityKind,
+      displayName: 'Unresolved ORCID identity',
+      headline: 'ORCID identifier found, but no public person name was resolved.',
+      skills: [],
+      identitySignals: result.identitySignals.filter(signal => signal.type === 'source_url'),
+    }
+  }
+
   return {
     ...result,
-    entityKind: resolveStoredEntityKind({
-      source: result.source,
-      raw: result.raw,
-      entityKind: result.entityKind,
-    }),
+    entityKind,
   }
 }
 
