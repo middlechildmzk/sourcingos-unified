@@ -71,9 +71,6 @@ function buildDossierFromSupabase(
   const freshness = staleStatus(cand as any, profiles as any)
   const contactsWithScore = mappedContacts.map(ct => ({ ...ct, score: scoreContactSignal(ct as any) }))
   const otwWithScore = otwSignals.map(s => ({ ...s, score: scoreOpenToWorkSignal(s as any) }))
-  const bestContactScore = Math.max(0, ...contactsWithScore.map(c => c.score))
-  const openToWorkScore = Math.max(0, ...otwWithScore.map(s => s.score))
-  const evidenceScore = Math.min(100, evidenceItems.length * 6 + profiles.length * 12)
 
   const verifyNext: string[] = [
     'Confirm current title and company from a primary source.',
@@ -94,8 +91,7 @@ function buildDossierFromSupabase(
   return {
     candidate: cand, sourceProfiles: profiles, evidence: evidenceItems,
     contacts: contactsWithScore, openToWorkSignals: otwWithScore, matchReviews: reviews,
-    projectCandidates, freshness, scores: { bestContactScore, openToWorkScore, evidenceScore },
-    verifyNext, mode: 'supabase' as const,
+    projectCandidates, freshness, verifyNext, mode: 'supabase' as const,
   }
 }
 
