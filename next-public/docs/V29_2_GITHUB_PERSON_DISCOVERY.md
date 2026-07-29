@@ -2,7 +2,7 @@
 
 ## Objective
 
-Make one technical sourcing lane dependable before adding more connectors.
+Make one technical sourcing lane dependable before adding more connectors, while enforcing one source-truth boundary for every result before it reaches Candidate Search or the save API.
 
 The GitHub lane now answers four questions explicitly:
 
@@ -42,6 +42,22 @@ The lane excludes:
 - Repository and package artifacts
 
 Profile hydration failure does not erase already observed public contribution evidence. The result remains explicitly partial, uses the GitHub login as its display name, and returns a warning.
+
+### Cross-source truth boundary
+
+The same classifier now normalizes every source result before it reaches the UI or save route:
+
+- arXiv and PubMed records are publications, not candidate people.
+- Identifier-only ORCID records remain unresolved until a public human name is available.
+- Public profile URLs, publication URLs, locations, and organizations are provenance fields, not contact signals.
+- Only public email and public website paths remain actionable, unverified contact signals.
+- Recruiter query terms explain discovery but cannot become candidate skills.
+- OpenAlex skills come only from returned concepts.
+- NPI skills come only from returned taxonomies.
+- Current Stack Overflow, ORCID, Semantic Scholar, arXiv, and PubMed payloads do not generate candidate skills from the query.
+- The save API reclassifies and sanitizes the request body server-side before any candidate, evidence, or contact write.
+
+Candidate Search shows accurate people and supporting-result counts inside the Results panel. The legacy tab badge that combined people, publications, artifacts, unresolved identities, and discovery lanes is suppressed.
 
 ## Source diagnostics
 
@@ -83,6 +99,9 @@ When GitHub returns a rate-limit response:
 - No automatic candidate advancement
 - No claim that repository contribution equals employment or verified expertise
 - Only canonical person records may be saved or added to roles
+- Publications and artifacts remain supporting evidence
+- Profile links do not count as contact information
+- Search terms do not create candidate claims
 
 ## QA checklist
 
@@ -93,10 +112,14 @@ When GitHub returns a rate-limit response:
 5. Confirm evidence copy does not claim verified employment or role fit.
 6. Confirm a failed profile hydration produces an explicitly partial result.
 7. Confirm a GitHub rate-limit response produces no fabricated candidate result.
-8. Confirm non-GitHub lanes still use their existing connector behavior.
-9. Confirm repeat searches remain isolated by the V28 search-run guard.
-10. Confirm saving remains person-only and idempotent.
+8. Confirm arXiv and PubMed rows appear only under supporting evidence as publications.
+9. Confirm an identifier-only ORCID result appears as unresolved and cannot be saved.
+10. Confirm a profile URL alone does not produce a contact-signal count.
+11. Confirm Stack Overflow and research search terms are not copied into candidate skills.
+12. Confirm repeat searches remain isolated by the V28 search-run guard.
+13. Confirm saving remains person-only, sanitized, and idempotent.
+14. Confirm the Results panel separately reports people and supporting records.
 
 ## Release boundary
 
-This slice changes application code only. It adds no database migration and performs no production data mutation.
+This slice changes application code only. It adds no database migration and performs no production data mutation. Existing production contact rows and historical source profiles are not rewritten by this release; any future reconciliation must be rehearsed and approved separately.
