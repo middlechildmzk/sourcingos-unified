@@ -1,6 +1,8 @@
 import type {
   ClassifiedSourceResult,
+  ContactSignal,
   EntityKind,
+  IdentitySignal,
   SourceName,
   SourceResult,
 } from './source-types'
@@ -8,8 +10,10 @@ import type {
 const PERSON_SOURCES = new Set<SourceName>([
   'stackoverflow',
   'openalex',
-  'orcid',
   'semantic_scholar',
+])
+
+const PUBLICATION_SOURCES = new Set<SourceName>([
   'arxiv',
   'pubmed',
 ])
@@ -24,6 +28,8 @@ const ARTIFACT_SOURCES = new Set<SourceName>([
 ])
 
 const SEARCH_LANE_SOURCES = new Set<SourceName>(['kaggle', 'resume_xray'])
+const ACTIONABLE_CONTACT_TYPES = new Set<ContactSignal['type']>(['public_email', 'website'])
+const ORCID_ID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/i
 
 type UnknownRecord = Record<string, unknown>
 
@@ -31,6 +37,154 @@ function record(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as UnknownRecord
     : {}
+}
+
+function text(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  const item = record(value)
+  return typeof item.value === 'string' ? item.value.trim() : ''
+}
+
+function stringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map(item => typeof item === 'string' ? item.trim() : '')
+      .filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/[,;|]+/)
+      .map(item => item.trim())
+      .filter(Boolean)
+  }
+  return []
+}
+
+function unique(values: string[]): string[] {
+  const seen = new Set<string>()
+  return values.filter(value => {
+    const key = value.trim().toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function resolvedOrcidName(raw: unknown): string {
+  const root = record(raw)
+  const person = record(root.person)
+  const name = record(person.name ?? root.name)
+
+  const given = text(
+    root['given-names']
+    ?? root.givenNames
+    ?? root.given_names
+    ?? name['given-names']
+    ?? name.givenNames,
+  )
+  const family = text(
+    root['family-names']
+    ?? root['family-name']
+    ?? root.familyName
+    ?? root.family_names
+    ?? name['family-name']
+    ?? name.familyName,
+  )
+  const credit = text(
+    root['credit-name']
+    ?? root.creditName
+    ?? name['credit-name']
+    ?? name.creditName,
+  )
+
+  return credit || [given, family].filter(Boolean).join(' ').trim()
+}
+
+function isIdentifierOnlyOrcidResult(result: SourceResult): boolean {
+  if (result.source !== 'orcid') return false
+  if (resolvedOrcidName(result.raw)) return false
+
+  const displayName = result.displayName.trim()
+  const sourceId = result.sourceProfileId.trim()
+  return !displayName
+    || displayName === sourceId
+    || ORCID_ID_PATTERN.test(displayName)
+    || displayName.toLowerCase() === 'orcid researcher'
+}
+
+function observedSkills(result: SourceResult): string[] {
+  const root = record(result.raw)
+
+  if (result.source === 'github') {
+    // The GitHub API boundary has a dedicated truth guard that derives skills
+    // only from observed repository languages and topics.
+    return unique(result.skills)
+  }
+
+  if (result.source === 'openalex') {
+    const concepts = Array.isArray(root.x_concepts) ? root.x_concepts : []
+    return unique(concepts.map(item => text(record(item).display_name)).filter(Boolean))
+  }
+
+  if (result.source === 'npi') {
+    const taxonomies = Array.isArray(root.taxonomies) ? root.taxonomies : []
+    return unique(taxonomies.map(item => {
+      const taxonomy = record(item)
+      return text(taxonomy.desc) || text(taxonomy.code)
+    }).filter(Boolean))
+  }
+
+  if (result.source === 'devto') {
+    return unique(stringList(root.tag_list))
+  }
+
+  if (result.source === 'huggingface') {
+    return unique(stringList(root.tags))
+  }
+
+  if (result.source === 'npm') {
+    return unique(stringList(record(root.package).keywords))
+  }
+
+  if (result.source === 'pypi') {
+    return unique(stringList(root.keywords))
+  }
+
+  // Stack Overflow user search, ORCID search, Semantic Scholar author search,
+  // publications, package search, and discovery lanes do not return verified
+  // person-skill claims in their current connector payloads. Search terms may
+  // explain discovery, but they must not become candidate skills.
+  return []
+}
+
+function actionableContacts(contacts: ContactSignal[]): ContactSignal[] {
+  return contacts.filter(contact => ACTIONABLE_CONTACT_TYPES.has(contact.type))
+}
+
+function observedIdentitySignals(signals: IdentitySignal[], skills: string[]): IdentitySignal[] {
+  const observed = new Set(skills.map(skill => skill.toLowerCase()))
+  return signals.filter(signal => signal.type !== 'skill' || observed.has(signal.value.toLowerCase()))
+}
+
+function publicationPresentation(result: SourceResult): Pick<SourceResult, 'displayName' | 'headline'> {
+  const root = record(result.raw)
+  const title = text(root.title)
+  const author = result.displayName.trim()
+  const sourceLabel = result.source === 'arxiv' ? 'arXiv' : 'PubMed'
+
+  if (!title) {
+    return {
+      displayName: `${sourceLabel} publication`,
+      headline: author ? `Publication evidence associated with ${author}.` : 'Publication evidence.',
+    }
+  }
+
+  return {
+    displayName: title,
+    headline: author
+      ? `${sourceLabel} publication · First listed author: ${author}`
+      : `${sourceLabel} publication evidence`,
+  }
 }
 
 /**
@@ -65,8 +219,13 @@ export function resolveStoredEntityKind(input: {
   const source = input.source as SourceName | undefined
   if (!source) return 'unknown'
   if (SEARCH_LANE_SOURCES.has(source)) return 'search_lane'
+  if (PUBLICATION_SOURCES.has(source)) return 'publication'
   if (ARTIFACT_SOURCES.has(source)) return 'artifact'
   if (PERSON_SOURCES.has(source)) return 'person'
+
+  if (source === 'orcid') {
+    return resolvedOrcidName(input.raw) ? 'person' : 'unknown'
+  }
 
   if (source === 'github') {
     const root = record(input.raw)
@@ -105,13 +264,44 @@ export function isGeneratedDemoResult(result: SourceResult): boolean {
 }
 
 export function classifySourceResult(result: SourceResult): ClassifiedSourceResult {
+  const entityKind = resolveStoredEntityKind({
+    source: result.source,
+    raw: result.raw,
+    entityKind: result.entityKind,
+  })
+  const skills = observedSkills(result)
+  const contactSignals = actionableContacts(result.contactSignals)
+  const identitySignals = observedIdentitySignals(result.identitySignals, skills)
+
+  if (entityKind === 'unknown' && isIdentifierOnlyOrcidResult(result)) {
+    return {
+      ...result,
+      entityKind,
+      displayName: 'Unresolved ORCID identity',
+      headline: 'ORCID identifier found, but no public person name was resolved.',
+      skills: [],
+      contactSignals: [],
+      identitySignals: identitySignals.filter(signal => signal.type === 'source_url'),
+    }
+  }
+
+  if (entityKind === 'publication') {
+    return {
+      ...result,
+      ...publicationPresentation(result),
+      entityKind,
+      skills: [],
+      contactSignals: [],
+      identitySignals: identitySignals.filter(signal => signal.type !== 'skill'),
+    }
+  }
+
   return {
     ...result,
-    entityKind: resolveStoredEntityKind({
-      source: result.source,
-      raw: result.raw,
-      entityKind: result.entityKind,
-    }),
+    entityKind,
+    skills,
+    contactSignals,
+    identitySignals,
   }
 }
 
