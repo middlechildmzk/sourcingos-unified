@@ -1,6 +1,9 @@
+/* eslint-disable @next/next/no-page-custom-font -- The App Router root layout owns these site-wide font links. */
 import type { Metadata } from 'next'
 import './globals.css'
 import './ui-polish.css'
+import './recruiter-results.css'
+import './v281-product-truth.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
 import { siteUrl } from '@/lib/site'
@@ -45,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {/* DM Sans (body) + Syne (display) — distinctive, technical, professional */}
+        {/* DM Sans (body) + Syne (display), loaded once by the root App Router layout. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link

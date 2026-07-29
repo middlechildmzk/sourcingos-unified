@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { SearchComposer, type ComposerOutput } from '@/components/SearchComposer'
 import { WorkbenchResults, type SavedEntry } from '@/components/WorkbenchResults'
@@ -45,8 +45,10 @@ const STRATEGY_SECTIONS = [
 
 const DRAFT_KEY = 'sourcingos.workbench.intake-draft.v1'
 
-export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }) {
-  const [tab, setTab] = useState<Tab>('intake')
+interface WorkbenchClientProps { publicMode?: boolean; initialTab?: Tab }
+
+export function WorkbenchClient({ publicMode = false, initialTab }: WorkbenchClientProps) {
+  const [tab, setTab] = useState<Tab>(initialTab || (publicMode ? 'composer' : 'intake'))
   const [intake, setIntake] = useState<IntakeData>(defaultIntake)
   const [draftRestored, setDraftRestored] = useState(false)
   const [saveDurability, setSaveDurability] = useState<'durable' | 'preview' | null>(null)
@@ -99,7 +101,11 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
   const [applyToast, setApplyToast] = useState('')
   const [searchMode, setSearchMode] = useState<SearchMode>('balanced')
   const [marketMap, setMarketMap] = useState<MarketMapSnapshot | null>(null)
+  const activeRunRef = useRef<{ id: number; controller: AbortController } | null>(null)
+  const nextRunIdRef = useRef(0)
+
   useEffect(() => { setRecentSessions(listSessions()) }, [])
+  useEffect(() => () => { activeRunRef.current?.controller.abort() }, [])
 
   function applyTerms(terms: string[], label: string) {
     if (!terms.length) return
@@ -148,13 +154,18 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
 
   const handleSearch = useCallback(async (output: ComposerOutput) => {
     if (!output.rawQuery.trim()) return
+
+    activeRunRef.current?.controller.abort()
+    const runId = ++nextRunIdRef.current
+    const controller = new AbortController()
+    activeRunRef.current = { id: runId, controller }
+    const isCurrent = () => activeRunRef.current?.id === runId && !controller.signal.aborted
+
     setSearching(true); setSearchError('')
     setSearchResults([]); setNoResultsMeta({ sources: [], suggestions: [] }); setMarketMap(null)
     setTab('results')
 
     const chips = output.chips.map(c => ({ canonical: c.canonical, type: c.type }))
-
-    // Derive chip context for the UI (clearance/location/skill-light banners)
     const hardTerms = chips.filter(c => c.type === 'skill' || c.type === 'tool').map(c => c.canonical)
     const softFilters = chips.filter(c => ['title', 'seniority', 'location', 'company'].includes(c.type)).map(c => ({ canonical: c.canonical, type: c.type }))
     const manualSafe = chips.filter(c => c.type === 'clearance').map(c => c.canonical)
@@ -174,48 +185,55 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
 
     const liveSources = volumePlan.liveSources
     const sourceBreakdown: Record<string, number> = Object.fromEntries(liveSources.map(source => [source, 0]))
-
-    // Seed lane statuses: queued for live sources plus manual-safe lanes.
     const initialLanes: SourceLane[] = [
-      ...liveSources.map(s => ({ source: s, status: 'queued' as const })),
-      ...volumePlan.manualSafeLanes.map(l => ({ source: l.label, status: 'manual_safe' as const, href: l.href })),
+      ...liveSources.map(source => ({ source, status: 'queued' as const })),
+      ...volumePlan.manualSafeLanes.map(lane => ({ source: lane.label, status: 'manual_safe' as const, href: lane.href })),
     ]
     setSourceLanes(initialLanes)
 
     const runSource = async (source: string) => {
-      setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'searching' } : l))
+      if (!isCurrent()) return
+      setSourceLanes(previous => previous.map(lane => lane.source === source ? { ...lane, status: 'searching' } : lane))
       const timeout = SOURCE_TIMEOUTS_MS[source] || DEFAULT_TIMEOUT_MS
       try {
-        const { timedOut, data } = await fetchWithTimeout('/api/workbench/search-source',
-          { query: output.rawQuery, source, chips, limit: volumePlan.sourceLimit }, timeout)
+        const { timedOut, cancelled, data } = await fetchWithTimeout(
+          '/api/workbench/search-source',
+          { query: output.rawQuery, source, chips, limit: volumePlan.sourceLimit },
+          timeout,
+          controller.signal,
+        )
+        if (cancelled || !isCurrent()) return
         if (timedOut) {
-          setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'timed_out' } : l))
+          setSourceLanes(previous => previous.map(lane => lane.source === source ? { ...lane, status: 'timed_out' } : lane))
           return
         }
+
         const json = data as { ok: boolean; results?: SourceResult[]; status?: string }
-        const results = json.results || []
-        sourceBreakdown[source] = results.length
-        // Merge + dedupe by exact result id or exact source URL only. Do not merge identities across sources.
-        if (results.length > 0) {
-          setSearchResults(prev => {
-            const seenIds = new Set(prev.map(r => r.id))
-            const seenUrls = new Set(prev.map(r => r.profileUrl).filter(Boolean))
+        const sourceResults = json.results || []
+        sourceBreakdown[source] = sourceResults.length
+        if (sourceResults.length > 0) {
+          setSearchResults(previous => {
+            if (!isCurrent()) return previous
+            const seenIds = new Set(previous.map(result => result.id))
+            const seenUrls = new Set(previous.map(result => result.profileUrl).filter(Boolean))
             return [
-              ...prev,
-              ...results.filter(r => !seenIds.has(r.id) && (!r.profileUrl || !seenUrls.has(r.profileUrl))),
+              ...previous,
+              ...sourceResults.filter(result => !seenIds.has(result.id) && (!result.profileUrl || !seenUrls.has(result.profileUrl))),
             ]
           })
         }
-        setSourceLanes(prev => prev.map(l => l.source === source
-          ? { ...l, status: results.length > 0 ? 'found' : 'no_results', count: results.length }
-          : l))
+        if (!isCurrent()) return
+        setSourceLanes(previous => previous.map(lane => lane.source === source
+          ? { ...lane, status: sourceResults.length > 0 ? 'found' : 'no_results', count: sourceResults.length }
+          : lane))
       } catch {
-        setSourceLanes(prev => prev.map(l => l.source === source ? { ...l, status: 'error' } : l))
+        if (!isCurrent()) return
+        setSourceLanes(previous => previous.map(lane => lane.source === source ? { ...lane, status: 'error' } : lane))
       }
     }
 
-    // Fire all live sources in parallel. One slow source never blocks the rest.
     await Promise.allSettled(liveSources.map(runSource))
+    if (!isCurrent()) return
     setSearching(false)
 
     const totalResults = Object.values(sourceBreakdown).reduce((sum, count) => sum + count, 0)
@@ -236,25 +254,24 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
       setNoResultsMeta({
         sources: noResultSources,
         suggestions: volumePlan.lowResultActions,
-        broadQuery: volumePlan.queryVariants.find(v => v.id === 'skills-only')?.query,
+        broadQuery: volumePlan.queryVariants.find(variant => variant.id === 'skills-only')?.query,
         usedBroadQuery: false,
       })
     }
 
-    // Persist the search session (localStorage; schema-ready for Supabase later)
     try {
       saveSession({
         projectId: currentProject?.id,
         roleTitle: jdSummary?.roleTitle || intake.jobTitle || output.rawQuery.slice(0, 60),
         rawQuery: output.rawQuery,
         liveSearchTerms: hardTerms,
-        reviewFilters: softFilters.map(f => f.canonical),
+        reviewFilters: softFilters.map(filter => filter.canonical),
         manualSafeConstraints: manualSafe,
         exclusions: output.falsePosWarnings || [],
         sourceLanes: liveSources,
         resultCount: totalResults,
       })
-      setRecentSessions(listSessions())
+      if (isCurrent()) setRecentSessions(listSessions())
     } catch { /* non-fatal */ }
   }, [currentProject?.id, jdSummary, intake.jobTitle, searchMode])
 
@@ -679,22 +696,17 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
 
           {tab === 'results' && (
             <div className="wb-section">
-              {sourceLanes.length > 0 && (
-                <div style={{ marginBottom: '16px' }}>
-                  <div className="wb-section-title" style={{ marginBottom: '8px' }}>
-                    Source lanes {searching && <span className="muted" style={{ fontWeight: 400, fontSize: '12px' }}>— results stream in as each source returns</span>}
-                  </div>
-                  <SourceLaneStatus lanes={sourceLanes} onRetry={retrySource} />
+              {searching && (
+                <div className="search-progress-line" role="status" aria-live="polite">
+                  Searching public sources{searchResults.length > 0 ? ` · ${searchResults.length} source subjects available to review` : '…'}
                 </div>
               )}
 
-              <MarketMapSummary snapshot={marketMap} />
-
               {searching && searchResults.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '32px 0' }}>
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', border: '3px solid rgba(72,217,255,.2)', borderTopColor: 'var(--accent)', animation: 'spin 0.8s linear infinite', margin: '0 auto 14px' }} />
                   <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-                  <p className="muted">Querying public source lanes…</p>
+                  <p className="muted">Looking for candidate people and supporting evidence…</p>
                 </div>
               )}
 
@@ -706,9 +718,9 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
 
               {!searching && !searchError && searchResults.length === 0 && composerOutput && noResultsMeta.suggestions.length === 0 && (
                 <div style={{ marginBottom: '8px' }}>
-                  <p className="muted" style={{ fontSize: '13px' }}>No results yet. Run a search in the Search Composer tab.</p>
+                  <p className="muted" style={{ fontSize: '13px' }}>No results yet. Refine the search and try again.</p>
                   <button className="btn secondary" onClick={() => setTab('composer')} style={{ marginTop: '10px' }}>
-                    ← Back to Search Composer
+                    ← Refine search
                   </button>
                 </div>
               )}
@@ -716,19 +728,15 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
               {!searching && !searchError && searchResults.length === 0 && !composerOutput && (
                 <div className="wb-empty">
                   <h3>No search run yet</h3>
-                  <p>Go to Search Composer, enter your search, and click &ldquo;Search →&rdquo;.</p>
-                  <button className="btn secondary" onClick={() => setTab('composer')}>
-                    Open Search Composer →
-                  </button>
+                  <p>Open Search Composer, describe the person you need, and run the search.</p>
+                  <button className="btn secondary" onClick={() => setTab('composer')}>Open Search Composer →</button>
                 </div>
               )}
 
               {noResultsMeta.usedBroadQuery && (
                 <div className="preview-banner" style={{ marginBottom: '12px', borderColor: 'rgba(72,217,255,.3)' }}>
                   <span className="pb-icon">◈</span>
-                  <span>
-                    No results for the specific query. Showing results for broader search: <strong>{noResultsMeta.broadQuery}</strong>
-                  </span>
+                  <span>No results for the specific query. Showing broader search: <strong>{noResultsMeta.broadQuery}</strong></span>
                 </div>
               )}
 
@@ -741,11 +749,18 @@ export function WorkbenchClient({ publicMode = false }: { publicMode?: boolean }
                   chipContext={chipContext}
                   projectId={currentProject?.id}
                   publicMode={publicMode}
-                  onProfileSaved={entry => setSavedEntries(prev => [...prev, entry])}
+                  onProfileSaved={entry => setSavedEntries(previous => [...previous, entry])}
                   onRetryComposer={() => setTab('composer')}
-                  onOpenDrawer={r => { setDrawerResult(r); setDrawerOpen(true) }}
+                  onOpenDrawer={result => { setDrawerResult(result); setDrawerOpen(true) }}
                 />
               )}
+
+              {sourceLanes.length > 0 && (
+                <div style={{ marginTop: '16px' }}>
+                  <SourceLaneStatus lanes={sourceLanes} onRetry={retrySource} />
+                </div>
+              )}
+              <MarketMapSummary snapshot={marketMap} />
             </div>
           )}
 

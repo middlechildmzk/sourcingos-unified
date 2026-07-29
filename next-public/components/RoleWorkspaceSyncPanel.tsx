@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ROLE_WORKSPACE_CHANGED_EVENT,
   hydrateRoleWorkspaces,
@@ -16,30 +16,18 @@ export function RoleWorkspaceSyncPanel() {
   const [message, setMessage] = useState('Browser-local role workspaces are available immediately. Durable account sync keeps them available across devices.')
   const [mode, setMode] = useState<'unknown' | 'preview' | 'supabase'>('unknown')
 
-  function refreshLocal() {
+  const refreshLocal = useCallback(() => {
     setRoles(readRoleWorkspaces())
-  }
-
-  useEffect(() => {
-    refreshLocal()
-    const listener = () => refreshLocal()
-    window.addEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
-    window.addEventListener('storage', listener)
-    void hydrate()
-    return () => {
-      window.removeEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
-      window.removeEventListener('storage', listener)
-    }
   }, [])
 
-  async function fetchServerWorkspaces() {
+  const fetchServerWorkspaces = useCallback(async () => {
     const res = await fetch('/api/roles/sync', { headers: { accept: 'application/json' }, cache: 'no-store' })
     const json = await res.json()
     if (!res.ok || !json.ok) throw new Error(json.error || 'Storage check failed.')
     return json
-  }
+  }, [])
 
-  async function hydrate() {
+  const hydrate = useCallback(async () => {
     setState('hydrating')
     try {
       const json = await fetchServerWorkspaces()
@@ -60,7 +48,19 @@ export function RoleWorkspaceSyncPanel() {
       setState('error')
       setMessage(error instanceof Error ? error.message : 'Workspace hydration failed.')
     }
-  }
+  }, [fetchServerWorkspaces])
+
+  useEffect(() => {
+    refreshLocal()
+    const listener = () => refreshLocal()
+    window.addEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
+    window.addEventListener('storage', listener)
+    void hydrate()
+    return () => {
+      window.removeEventListener(ROLE_WORKSPACE_CHANGED_EVENT, listener)
+      window.removeEventListener('storage', listener)
+    }
+  }, [hydrate, refreshLocal])
 
   async function check() {
     setState('checking')
@@ -123,13 +123,13 @@ export function RoleWorkspaceSyncPanel() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn ghost" onClick={check} disabled={busy}>
+          <button type="button" className="btn ghost" onClick={() => void check()} disabled={busy}>
             {state === 'checking' ? 'Checking…' : 'Check storage'}
           </button>
-          <button type="button" className="btn ghost" onClick={hydrate} disabled={busy}>
+          <button type="button" className="btn ghost" onClick={() => void hydrate()} disabled={busy}>
             {state === 'hydrating' ? 'Restoring…' : 'Restore from account'}
           </button>
-          <button type="button" className="btn secondary" onClick={sync} disabled={!roles.length || busy}>
+          <button type="button" className="btn secondary" onClick={() => void sync()} disabled={!roles.length || busy}>
             {state === 'syncing' ? 'Syncing…' : 'Sync role workspaces'}
           </button>
         </div>

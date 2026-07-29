@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type LiveJob = {
   id: string
@@ -50,15 +50,16 @@ export function LiveJobsClient({
   const [sources, setSources] = useState<Record<string, boolean>>({ persisted: true, ats: true, remotive: true, arbeitnow: true, usajobs: true })
   const [remoteOnly, setRemoteOnly] = useState(false)
   const [salaryOnly, setSalaryOnly] = useState(false)
+  const initialSearchDone = useRef(false)
 
-  const activeSources = useMemo(() => sourceOptions.filter(s => sources[s.id]).map(s => s.id), [sources])
+  const activeSources = useMemo(() => sourceOptions.filter(source => sources[source.id]).map(source => source.id), [sources])
   const visibleJobs = useMemo(() => jobs.filter(job => {
     if (remoteOnly && !`${job.remoteType} ${job.location}`.toLowerCase().includes('remote')) return false
     if (salaryOnly && (!job.salaryRange || job.salaryRange.toLowerCase().includes('not listed'))) return false
     return true
   }), [jobs, remoteOnly, salaryOnly])
 
-  async function searchJobs(nextQuery = query) {
+  const searchJobs = useCallback(async (nextQuery = query) => {
     const selected = activeSources.length ? activeSources : ['persisted', 'ats', 'remotive', 'arbeitnow', 'usajobs']
     setLoading(true)
     setMessage('')
@@ -81,9 +82,13 @@ export function LiveJobsClient({
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeSources, location, query, remoteOnly, salaryOnly])
 
-  useEffect(() => { searchJobs().catch(() => undefined) }, [])
+  useEffect(() => {
+    if (initialSearchDone.current) return
+    initialSearchDone.current = true
+    void searchJobs()
+  }, [searchJobs])
 
   return <div className="interactive-tool">
     <div className="cta"><b>Job source note:</b> this search combines SourcingOS-reviewed jobs when available, public/free job sources, and curated employer ATS feeds. Apply buttons link back to the original posting. SourcingOS does not copy third-party job descriptions or present them as owned listings.</div>
@@ -93,14 +98,14 @@ export function LiveJobsClient({
         type="button"
         className="tag"
         key={preset}
-        onClick={() => { setQuery(preset); searchJobs(preset).catch(() => undefined) }}
+        onClick={() => { setQuery(preset); void searchJobs(preset) }}
         style={{ cursor: 'pointer' }}
       >{preset}</button>)}
     </div>
 
     <div className="grid two">
-      <div><label>Search</label><input className="input" value={query} onChange={e=>setQuery(e.target.value)} placeholder="technical sourcer remote" /></div>
-      <div><label>Location</label><input className="input" value={location} onChange={e=>setLocation(e.target.value)} placeholder="Remote, United States, Minnesota" /></div>
+      <div><label>Search</label><input className="input" value={query} onChange={event => setQuery(event.target.value)} placeholder="technical sourcer remote" /></div>
+      <div><label>Location</label><input className="input" value={location} onChange={event => setLocation(event.target.value)} placeholder="Remote, United States, Minnesota" /></div>
     </div>
 
     <div className="card" style={{ marginTop: '12px' }}>
@@ -110,15 +115,15 @@ export function LiveJobsClient({
           type="button"
           className="tag"
           key={source.id}
-          onClick={() => setSources(prev => ({ ...prev, [source.id]: !prev[source.id] }))}
+          onClick={() => setSources(previous => ({ ...previous, [source.id]: !previous[source.id] }))}
           style={{ cursor: 'pointer', opacity: sources[source.id] ? 1 : 0.48 }}
         >{sources[source.id] ? '✓ ' : ''}{source.label}</button>)}
-        <button type="button" className="tag" onClick={() => setRemoteOnly(v => !v)} style={{ cursor: 'pointer', opacity: remoteOnly ? 1 : 0.48 }}>{remoteOnly ? '✓ ' : ''}Remote only</button>
-        <button type="button" className="tag" onClick={() => setSalaryOnly(v => !v)} style={{ cursor: 'pointer', opacity: salaryOnly ? 1 : 0.48 }}>{salaryOnly ? '✓ ' : ''}Salary listed</button>
+        <button type="button" className="tag" onClick={() => setRemoteOnly(value => !value)} style={{ cursor: 'pointer', opacity: remoteOnly ? 1 : 0.48 }}>{remoteOnly ? '✓ ' : ''}Remote only</button>
+        <button type="button" className="tag" onClick={() => setSalaryOnly(value => !value)} style={{ cursor: 'pointer', opacity: salaryOnly ? 1 : 0.48 }}>{salaryOnly ? '✓ ' : ''}Salary listed</button>
       </div>
     </div>
 
-    <div className="button-row"><button className="btn" onClick={() => searchJobs()} disabled={loading}>{loading ? 'Searching...' : 'Search job sources'}</button></div>
+    <div className="button-row"><button className="btn" onClick={() => void searchJobs()} disabled={loading}>{loading ? 'Searching...' : 'Search job sources'}</button></div>
     {message ? <div className="cta">{message}{visibleJobs.length !== jobs.length ? ` Showing ${visibleJobs.length} after filters.` : ''}</div> : null}
 
     <div className="job-list">
@@ -128,13 +133,14 @@ export function LiveJobsClient({
             <span className="kicker">{job.source} · {job.remoteType}</span>
             <h3>{job.title}</h3>
             <p className="muted"><strong>{job.company}</strong> · {job.location || 'Location not listed'} · {job.employmentType}</p>
-            <p>{job.description || 'View the original posting for full job details.'}</p>
+            <p>{job.description}</p>
             <div className="chips">{job.tags.map(tag => <span className="tag" key={tag}>{tag}</span>)}</div>
           </div>
-          <aside className="job-side">
-            <div className="salary">{job.salaryRange || 'Not listed'}</div>
-            <a className="btn secondary" href={job.applyUrl} target="_blank" rel="noreferrer">View source</a>
-          </aside>
+          <div className="job-side">
+            <div className="salary">{job.salaryRange || 'Salary not listed'}</div>
+            <a className="btn" href={job.applyUrl} target="_blank" rel="noreferrer noopener">View original</a>
+            <small className="muted">Posted {job.postedDate || 'date not listed'}</small>
+          </div>
         </div>
       </article>)}
     </div>

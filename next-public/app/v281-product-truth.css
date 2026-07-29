@@ -1,0 +1,51 @@
+/* V28.1 product-truth interaction additions. */
+
+.search-progress-line {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border: 1px solid rgba(72, 217, 255, .18);
+  border-radius: 9px;
+  background: rgba(72, 217, 255, .04);
+  color: #b9c9dc;
+  font-size: 11px;
+}
+
+.candidate-db-row {
+  position: relative;
+}
+
+.candidate-db-row > *:not(.candidate-row-open-surface) {
+  position: relative;
+  z-index: 1;
+}
+
+.candidate-row-open-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+}
+
+.candidate-row-open-surface:focus-visible {
+  outline: 2px solid rgba(72, 217, 255, .62);
+  outline-offset: -3px;
+}
+
+.candidate-db-row .product-row-actions,
+.candidate-db-row .product-row-actions * {
+  position: relative;
+  z-index: 2;
+}
+
+.candidate-row-link {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recruiter-result-row,
+  .candidate-db-row,
+  .lane-status-disclosure > summary::after,
+  .market-map-summary > summary::after {
+    transition: none !important;
+  }
+}

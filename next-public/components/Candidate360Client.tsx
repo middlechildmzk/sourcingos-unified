@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import { FindContactButton } from '@/components/FindContactButton'
 
@@ -24,7 +24,7 @@ export function Candidate360Client({ candidateId }: { candidateId: string }) {
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState('')
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/candidate-db/360/${candidateId}`, { headers: { accept: 'application/json' } })
       const json = await res.json()
@@ -33,9 +33,9 @@ export function Candidate360Client({ candidateId }: { candidateId: string }) {
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to load candidate dossier.')
     }
-  }
+  }, [candidateId])
 
-  useEffect(() => { load() }, [candidateId])
+  useEffect(() => { void load() }, [load])
 
   async function runAction(label: string, request: () => Promise<Response>) {
     setWorking(label)
@@ -70,7 +70,7 @@ export function Candidate360Client({ candidateId }: { candidateId: string }) {
       </div>
       {c.summary && <p className="muted" style={{ maxWidth: 900, lineHeight: 1.65, fontSize: 13 }}>{c.summary}</p>}
       <div className="chips" style={{ marginTop: 12 }}>{(c.skills || []).slice(0, 12).map((skill: string) => <span className="tag" key={skill}>{skill}</span>)}</div>
-      <div className="button-row" style={{ marginTop: 16 }}><button className="btn secondary" disabled={!!working} onClick={() => runAction('Checking source freshness…', () => fetch('/api/candidate-db/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candidateId }) }))}>Check freshness</button><button className="btn secondary" disabled={!!working} onClick={() => runAction('Queueing deeper enrichment…', () => fetch('/api/candidate-acquisition', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'queue_enrichment', candidateIds: [candidateId] }) }))}>Enrich</button><button className="btn secondary" disabled={!!working} onClick={() => runAction('Extracting graph relationships…', () => fetch('/api/agent-os', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'extract_graph', candidateId }) }))}>Build graph</button></div>
+      <div className="button-row" style={{ marginTop: 16 }}><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Checking source freshness…', () => fetch('/api/candidate-db/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candidateId }) }))}>Check freshness</button><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Queueing deeper enrichment…', () => fetch('/api/candidate-acquisition', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'queue_enrichment', candidateIds: [candidateId] }) }))}>Enrich</button><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Extracting graph relationships…', () => fetch('/api/agent-os', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'extract_graph', candidateId }) }))}>Build graph</button></div>
       {status && <div className="cta" style={{ marginTop: 14, marginBottom: 0 }}>{status}</div>}
     </section>
 
