@@ -1,4 +1,4 @@
-import type { FitDecision, RoleCandidate, RoleWorkspace } from './role-workspace'
+import type { FitDecision, RoleCandidate, RoleStage, RoleWorkspace } from './role-workspace'
 
 export type RoleCandidateReviewSummary = {
   supportedMustHaves: string[]
@@ -11,6 +11,12 @@ export type RoleCandidateReviewSummary = {
 }
 
 export type RoleFitDecisionResult = {
+  workspace: RoleWorkspace
+  changed: boolean
+  reason: 'updated' | 'unchanged' | 'missing_candidate'
+}
+
+export type RoleStageResult = {
   workspace: RoleWorkspace
   changed: boolean
   reason: 'updated' | 'unchanged' | 'missing_candidate'
@@ -74,6 +80,51 @@ export function recordRoleCandidateFitDecision(
           id: activityId,
           type: 'candidate_reviewed',
           message: `Recorded ${decision.replaceAll('_', ' ')} for ${candidate.name}.`,
+          createdAt: updatedAt,
+        },
+      ],
+      updatedAt,
+    },
+  }
+}
+
+export function recordRoleCandidateStage(
+  role: RoleWorkspace,
+  candidateId: string,
+  stage: RoleStage,
+  now = new Date(),
+  activityId = crypto.randomUUID(),
+): RoleStageResult {
+  const index = role.candidates.findIndex(candidate => candidate.candidateId === candidateId || candidate.id === candidateId)
+  if (index < 0) return { workspace: role, changed: false, reason: 'missing_candidate' }
+
+  const candidate = role.candidates[index]
+  if (candidate.stage === stage) {
+    return { workspace: role, changed: false, reason: 'unchanged' }
+  }
+
+  const updatedAt = now.toISOString()
+  const previousStage = candidate.stage
+  const nextCandidate: RoleCandidate = {
+    ...candidate,
+    stage,
+    updatedAt,
+  }
+  const nextCandidates = [...role.candidates]
+  nextCandidates[index] = nextCandidate
+
+  return {
+    changed: true,
+    reason: 'updated',
+    workspace: {
+      ...role,
+      candidates: nextCandidates,
+      activity: [
+        ...role.activity,
+        {
+          id: activityId,
+          type: 'stage_changed',
+          message: `Moved ${candidate.name} from ${previousStage.replaceAll('_', ' ')} to ${stage.replaceAll('_', ' ')}.`,
           createdAt: updatedAt,
         },
       ],
