@@ -71,9 +71,6 @@ function buildDossierFromSupabase(
   const freshness = staleStatus(cand as any, profiles as any)
   const contactsWithScore = mappedContacts.map(ct => ({ ...ct, score: scoreContactSignal(ct as any) }))
   const otwWithScore = otwSignals.map(s => ({ ...s, score: scoreOpenToWorkSignal(s as any) }))
-  const bestContactScore = Math.max(0, ...contactsWithScore.map(c => c.score))
-  const openToWorkScore = Math.max(0, ...otwWithScore.map(s => s.score))
-  const evidenceScore = Math.min(100, evidenceItems.length * 6 + profiles.length * 12)
 
   const verifyNext: string[] = [
     'Confirm current title and company from a primary source.',
@@ -94,8 +91,7 @@ function buildDossierFromSupabase(
   return {
     candidate: cand, sourceProfiles: profiles, evidence: evidenceItems,
     contacts: contactsWithScore, openToWorkSignals: otwWithScore, matchReviews: reviews,
-    projectCandidates, freshness, scores: { bestContactScore, openToWorkScore, evidenceScore },
-    verifyNext, mode: 'supabase' as const,
+    projectCandidates, freshness, verifyNext, mode: 'supabase' as const,
   }
 }
 
@@ -136,6 +132,24 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         error: candRes.error?.message || 'Candidate not found.',
         mode: 'supabase',
       }, { status: 404 })
+    }
+
+    const failedSections = [
+      { section: 'sourceProfiles', error: spRes.error },
+      { section: 'evidence', error: evRes.error },
+      { section: 'contacts', error: ctRes.error },
+      { section: 'openToWorkSignals', error: otwRes.error },
+      { section: 'matchReviews', error: mrRes.error },
+      { section: 'projectCandidates', error: pcRes.error },
+    ].filter(item => Boolean(item.error)).map(item => item.section)
+
+    if (failedSections.length) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Candidate dossier relationships could not be loaded.',
+        failedSections,
+        mode: 'supabase',
+      }, { status: 502 })
     }
 
     const dossier = buildDossierFromSupabase(
