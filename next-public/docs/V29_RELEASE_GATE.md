@@ -13,7 +13,7 @@ The exact pull-request head must satisfy all of the following:
 - Dependency audit reports are captured.
 - Production Next.js build passes.
 - Static generation completes.
-- A Vercel preview is READY from the exact pull-request head.
+- A Vercel preview is READY from the executable application tree being merged.
 - The preview runtime error, warning, and fatal sweep returns no release-blocking result.
 
 The current verification SHA, workflow run, test totals, deployment ID, and preview URL are recorded in PR #47 so this document does not become stale when release-only documentation changes.
@@ -48,4 +48,4 @@ The current verification SHA, workflow run, test totals, deployment ID, and prev
 
 ## Merge decision
 
-PR #47 remains unmerged until the exact-head automated, preview, and authenticated-workflow gates are accepted. After merge, verify Roles, Candidate Search, Candidate 360, Today, runtime logs, and production deployment health before beginning V29.1.
+PR #47 remains unmerged until the automated, executable-preview, and authenticated-workflow gates are accepted. After merge, verify Roles, Candidate Search, Candidate 360, Today, runtime logs, and production deployment health before beginning V29.1.
