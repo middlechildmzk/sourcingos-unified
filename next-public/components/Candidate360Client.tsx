@@ -4,8 +4,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import { FindContactButton } from '@/components/FindContactButton'
-
-type Dossier = any
+import { RoleSpecificCandidateReview } from '@/components/RoleSpecificCandidateReview'
+import type { CandidateDossier } from '@/lib/candidate-dossier'
 
 function FreshnessChip({ label, days }: { label: string; days: number }) {
   const cls = days <= 7 ? 'fresh-fresh' : days <= 30 ? 'fresh-recent' : days <= 90 ? 'fresh-stale' : 'fresh-unknown'
@@ -20,7 +20,7 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 function words(value: string) { return value.replaceAll('_', ' ') }
 
 export function Candidate360Client({ candidateId, roleId }: { candidateId: string; roleId?: string }) {
-  const [dossier, setDossier] = useState<Dossier | null>(null)
+  const [dossier, setDossier] = useState<CandidateDossier | null>(null)
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState('')
 
@@ -29,7 +29,7 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
       const res = await fetch(`/api/candidate-db/360/${candidateId}`, { headers: { accept: 'application/json' } })
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.error || 'Candidate not found.')
-      setDossier(json.dossier)
+      setDossier(json.dossier as CandidateDossier)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Failed to load candidate dossier.')
     }
@@ -64,23 +64,23 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
   const roleHref = roleId ? `/app/roles/${encodeURIComponent(roleId)}?tab=candidates` : ''
 
   return <div style={{ display: 'grid', gap: 14 }}>
-    {roleId && <div className="cta" style={{ marginBottom: 0 }}><strong>Role context preserved.</strong> Review identity evidence here, then return to the role-specific fit decision. <Link href={roleHref} style={{ textDecoration: 'underline' }}>Back to role queue</Link></div>}
+    {roleId && <RoleSpecificCandidateReview roleId={roleId} candidateId={candidateId} />}
 
     <section className="product-panel">
       <div className="product-page-head" style={{ marginBottom: 16 }}>
         <div><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span className="kicker">Candidate 360</span><span className={`status-pill ${c.mergeStatus === 'source_verified' || c.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(c.mergeStatus || 'pending')}</span></div><h1 style={{ marginTop: 4 }}>{c.canonicalName || 'Unconfirmed identity'}</h1><p>{[c.headline, c.currentCompany, c.location].filter(Boolean).join(' · ') || 'Candidate intelligence record'}</p></div>
-        <div className="product-page-actions">{roleId && <Link className="btn" href={roleHref}>Back to role queue</Link>}<Link className="btn ghost" href="/app/candidate-database">All candidates</Link><AddToRoleButton candidate={{ candidateId, name: c.canonicalName || 'Unconfirmed identity', headline: c.headline, company: c.currentCompany, location: c.location, source: 'candidate_360', contactStatus: contacts.length ? 'signals_found' : 'unknown', evidenceStatus: evidence.length ? 'reviewed' : 'unreviewed', tags: Array.isArray(c.skills) ? c.skills : [] }} /></div>
+        <div className="product-page-actions">{roleId && <Link className="btn" href={roleHref}>Back to role queue</Link>}<Link className="btn ghost" href="/app/candidate-database">All candidates</Link>{!roleId && <AddToRoleButton candidate={{ candidateId, name: c.canonicalName || 'Unconfirmed identity', headline: c.headline, company: c.currentCompany, location: c.location, source: 'candidate_360', contactStatus: contacts.length ? 'signals_found' : 'unknown', evidenceStatus: evidence.length ? 'reviewed' : 'unreviewed', tags: Array.isArray(c.skills) ? c.skills : [] }} />}</div>
       </div>
       {c.summary && <p className="muted" style={{ maxWidth: 900, lineHeight: 1.65, fontSize: 13 }}>{c.summary}</p>}
-      <div className="chips" style={{ marginTop: 12 }}>{(c.skills || []).slice(0, 12).map((skill: string) => <span className="tag" key={skill}>{skill}</span>)}</div>
+      <div className="chips" style={{ marginTop: 12 }}>{(c.skills || []).slice(0, 12).map(skill => <span className="tag" key={skill}>{skill}</span>)}</div>
       <div className="button-row" style={{ marginTop: 16 }}><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Checking source freshness…', () => fetch('/api/candidate-db/refresh', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candidateId }) }))}>Check freshness</button><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Queueing deeper enrichment…', () => fetch('/api/candidate-acquisition', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'queue_enrichment', candidateIds: [candidateId] }) }))}>Enrich</button><button className="btn secondary" disabled={!!working} onClick={() => void runAction('Extracting graph relationships…', () => fetch('/api/agent-os', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'extract_graph', candidateId }) }))}>Build graph</button></div>
       {status && <div className="cta" style={{ marginTop: 14, marginBottom: 0 }}>{status}</div>}
     </section>
 
     <div className="product-summary-grid">
-      <div className="product-stat"><small>Evidence</small><b>{evidence.length}</b><span>Score {dossier.scores?.evidenceScore ?? 0}/100</span></div>
+      <div className="product-stat"><small>Evidence items</small><b>{evidence.length}</b><span>Coverage, not a fit score</span></div>
       <div className="product-stat"><small>Source profiles</small><b>{profiles.length}</b><span>Kept separate until confirmed</span></div>
-      <div className="product-stat"><small>Contact signal</small><b>{dossier.scores?.bestContactScore ?? 0}</b><span>Unverified by default</span></div>
+      <div className="product-stat"><small>Contact paths</small><b>{contacts.length}</b><span>Unverified by default</span></div>
       <div className="product-stat"><small>Freshness</small><b>{dossier.freshness?.days ?? 0}d</b><span><FreshnessChip label={dossier.freshness?.label || 'unknown'} days={dossier.freshness?.days ?? 999} /></span></div>
     </div>
 
@@ -88,30 +88,30 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
       <div style={{ display: 'grid', gap: 14 }}>
         <section className="product-panel">
           <div className="product-panel-head"><div><span className="kicker">Evidence-first review</span><h2>Professional evidence</h2></div><span>{evidence.length} items</span></div>
-          <div className="product-list">{evidence.slice(0, 25).map((item: any) => <div className="product-row" key={item.id}><div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><div className="product-row-title">{item.label}</div><ConfidenceBadge confidence={item.confidence || 'medium'} /><span className="status-pill">{item.source}</span></div><div className="product-row-meta" style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item.detail}</div></div>{item.url ? <a className="btn ghost" href={item.url} target="_blank" rel="noreferrer noopener">Source</a> : null}</div>)}{!evidence.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No evidence collected yet</div><div className="product-row-meta">Queue enrichment or attach a source profile before evaluating this record.</div></div></div>}</div>
-          {evidence.length > 25 && <details className="advanced-disclosure"><summary>Show {evidence.length - 25} additional evidence items</summary><div className="product-list" style={{ marginTop: 12 }}>{evidence.slice(25).map((item: any) => <div className="product-row" key={item.id}><div className="product-row-main"><div className="product-row-title">{item.label}</div><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{item.detail}</div></div></div>)}</div></details>}
+          <div className="product-list">{evidence.slice(0, 25).map(item => <div className="product-row" key={item.id}><div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><div className="product-row-title">{item.label || 'Evidence item'}</div><ConfidenceBadge confidence={item.confidence || 'medium'} />{item.source && <span className="status-pill">{item.source}</span>}</div><div className="product-row-meta" style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item.detail || 'No additional detail returned.'}</div></div>{item.url ? <a className="btn ghost" href={item.url} target="_blank" rel="noreferrer noopener">Source</a> : null}</div>)}{!evidence.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No evidence collected yet</div><div className="product-row-meta">Queue enrichment or attach a source profile before evaluating this record.</div></div></div>}</div>
+          {evidence.length > 25 && <details className="advanced-disclosure"><summary>Show {evidence.length - 25} additional evidence items</summary><div className="product-list" style={{ marginTop: 12 }}>{evidence.slice(25).map(item => <div className="product-row" key={item.id}><div className="product-row-main"><div className="product-row-title">{item.label || 'Evidence item'}</div><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{item.detail || 'No additional detail returned.'}</div></div></div>)}</div></details>}
         </section>
 
         <section className="product-panel">
           <div className="product-panel-head"><div><span className="kicker">Identity provenance</span><h2>Source profiles</h2></div><span>{profiles.length} profiles</span></div>
-          <div className="product-list">{profiles.map((profile: any) => <div className="product-row" key={profile.id}><div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><div className="product-row-title">{profile.displayName || c.canonicalName}</div><span className="status-pill">{profile.source}</span><span className={`status-pill ${profile.status === 'confirmed' ? 'success' : ''}`}>{profile.status || 'pending'}</span></div><div className="product-row-meta">{[profile.headline, profile.organization, profile.location].filter(Boolean).join(' · ') || 'Public source profile'}</div><div className="chips">{(profile.matchReasons || []).slice(0, 4).map((reason: string) => <span className="tag" key={reason}>{reason}</span>)}</div></div>{profile.profileUrl ? <a className="btn ghost" href={profile.profileUrl} target="_blank" rel="noreferrer noopener">Open</a> : null}</div>)}{!profiles.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No source profiles</div><div className="product-row-meta">This candidate needs provenance before identity or fit decisions.</div></div></div>}</div>
+          <div className="product-list">{profiles.map(profile => <div className="product-row" key={profile.id}><div className="product-row-main"><div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}><div className="product-row-title">{profile.displayName || c.canonicalName || 'Unconfirmed identity'}</div>{profile.source && <span className="status-pill">{profile.source}</span>}<span className={`status-pill ${profile.status === 'confirmed' ? 'success' : ''}`}>{profile.status || 'pending'}</span></div><div className="product-row-meta">{[profile.headline, profile.organization, profile.location].filter(Boolean).join(' · ') || 'Public source profile'}</div><div className="chips">{(profile.matchReasons || []).slice(0, 4).map(reason => <span className="tag" key={reason}>{reason}</span>)}</div></div>{profile.profileUrl ? <a className="btn ghost" href={profile.profileUrl} target="_blank" rel="noreferrer noopener">Open</a> : null}</div>)}{!profiles.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No source profiles</div><div className="product-row-meta">This candidate needs provenance before identity or fit decisions.</div></div></div>}</div>
         </section>
       </div>
 
       <aside style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
-        <section className="product-panel"><div className="product-panel-head"><h2>Verify next</h2><span>Before outreach or presentation</span></div><div className="product-list">{(dossier.verifyNext || []).map((item: string, index: number) => <div className="product-row" key={`${item}-${index}`}><div className="product-row-main"><div className="product-row-meta" style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item}</div></div></div>)}</div></section>
+        <section className="product-panel"><div className="product-panel-head"><h2>Verify next</h2><span>Before outreach or presentation</span></div><div className="product-list">{(dossier.verifyNext || []).map((item, index) => <div className="product-row" key={`${item}-${index}`}><div className="product-row-main"><div className="product-row-meta" style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item}</div></div></div>)}</div></section>
 
         <details className="advanced-disclosure product-panel">
           <summary>Contact research ({contacts.length})</summary>
-          <div className="cta" style={{ marginTop: 12 }}><b>Research only.</b> A contact signal is not verification or permission to contact.</div><div className="product-list">{contacts.map((contact: any) => <div className="product-row" key={contact.id}><div className="product-row-main"><div className="product-row-title">{contact.type}: {contact.value}</div><div className="product-row-meta">{contact.source} · permission {contact.permissionStatus || 'unknown'} · signal {contact.score}/100</div></div><ConfidenceBadge confidence={contact.confidence || 'medium'} /></div>)}</div><div style={{ marginTop: 14 }}><FindContactButton isAuthenticated={true} source={{ candidateId, displayName: c.canonicalName, headline: c.headline, organization: c.currentCompany, location: c.location, source: 'github' }} /></div>
+          <div className="cta" style={{ marginTop: 12 }}><b>Research only.</b> A contact signal is not verification or permission to contact.</div><div className="product-list">{contacts.map(contact => <div className="product-row" key={contact.id}><div className="product-row-main"><div className="product-row-title">{contact.type || 'signal'}: {contact.value || 'value unavailable'}</div><div className="product-row-meta">{contact.source || 'unknown source'} · permission {contact.permissionStatus || 'unknown'} · signal {contact.score ?? 0}/100</div></div><ConfidenceBadge confidence={contact.confidence || 'medium'} /></div>)}</div><div style={{ marginTop: 14 }}><FindContactButton isAuthenticated={true} source={{ candidateId, displayName: c.canonicalName, headline: c.headline, organization: c.currentCompany, location: c.location, source: 'github' }} /></div>
         </details>
 
         <details className="advanced-disclosure product-panel">
           <summary>Availability signals ({availability.length})</summary>
-          <p className="muted" style={{ fontSize: 11 }}>Availability language is a reviewable signal, not a verified job-seeking claim.</p><div className="product-list">{availability.map((signal: any) => <div className="product-row" key={signal.id}><div className="product-row-main"><div className="product-row-title">{signal.label}</div><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{signal.detail}</div></div><span className="status-pill">{signal.score}/100</span></div>)}</div>
+          <p className="muted" style={{ fontSize: 11 }}>Availability language is a reviewable signal, not a verified job-seeking claim.</p><div className="product-list">{availability.map(signal => <div className="product-row" key={signal.id}><div className="product-row-main"><div className="product-row-title">{signal.label || 'Availability signal'}</div><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{signal.detail || 'No additional detail returned.'}</div></div><span className="status-pill">{signal.score ?? 0}/100</span></div>)}</div>
         </details>
 
-        {!!reviews.length && <details className="advanced-disclosure product-panel"><summary>Identity decisions ({reviews.length})</summary><div className="product-list">{reviews.map((review: any) => <div className="product-row" key={review.id}><div className="product-row-main"><div className="product-row-title">{words(review.decision || 'pending')} · {review.score}/100</div><div className="product-row-meta">{(review.reasons || []).join(' · ') || 'Identity review'}</div></div></div>)}</div></details>}
+        {!!reviews.length && <details className="advanced-disclosure product-panel"><summary>Identity decisions ({reviews.length})</summary><div className="product-list">{reviews.map(review => <div className="product-row" key={review.id}><div className="product-row-main"><div className="product-row-title">{words(review.decision || 'pending')} · {review.score ?? 0}/100</div><div className="product-row-meta">{(review.reasons || []).join(' · ') || 'Identity review'}</div></div></div>)}</div></details>}
       </aside>
     </div>
   </div>
