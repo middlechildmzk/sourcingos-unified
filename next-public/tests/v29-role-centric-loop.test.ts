@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { addCanonicalCandidateToRole, sourceResultToRoleCandidateInput } from '../lib/role-candidate-link'
+import { buildTodayInbox } from '../lib/today-inbox'
 import type { RoleWorkspace } from '../lib/role-workspace'
 import type { SourceResult } from '../lib/source-types'
 
@@ -75,6 +76,20 @@ describe('V29 role-centric sourcing loop', () => {
     })
     expect(linked.workspace.candidates[0].tags).toEqual(['Kubernetes', 'Terraform'])
     expect(linked.workspace.activity).toHaveLength(1)
+  })
+
+  it('creates one Today candidate decision for the newly linked role candidate', () => {
+    const linked = addCanonicalCandidateToRole(
+      workspace(),
+      sourceResultToRoleCandidateInput('candidate-1', sourceResult()),
+      NOW,
+    )
+    const inbox = buildTodayInbox([linked.workspace], NOW)
+    const decision = inbox.find(item => item.kind === 'candidate_decision')
+
+    expect(decision).toBeDefined()
+    expect(decision?.href).toContain('/app/roles/role-1')
+    expect(decision?.title).toContain('Ada Engineer')
   })
 
   it('is idempotent across repeated saves and does not duplicate activity', () => {
