@@ -138,6 +138,24 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       }, { status: 404 })
     }
 
+    const failedSections = [
+      { section: 'sourceProfiles', error: spRes.error },
+      { section: 'evidence', error: evRes.error },
+      { section: 'contacts', error: ctRes.error },
+      { section: 'openToWorkSignals', error: otwRes.error },
+      { section: 'matchReviews', error: mrRes.error },
+      { section: 'projectCandidates', error: pcRes.error },
+    ].filter(item => Boolean(item.error)).map(item => item.section)
+
+    if (failedSections.length) {
+      return NextResponse.json({
+        ok: false,
+        error: 'Candidate dossier relationships could not be loaded.',
+        failedSections,
+        mode: 'supabase',
+      }, { status: 502 })
+    }
+
     const dossier = buildDossierFromSupabase(
       candRes.data, spRes.data || [], evRes.data || [], ctRes.data || [],
       otwRes.data || [], mrRes.data || [], pcRes.data || []
