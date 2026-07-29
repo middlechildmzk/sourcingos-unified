@@ -93,12 +93,14 @@ describe('V29.2 source execution diagnostics', () => {
 
   it('keeps source details collapsed and secondary to candidate results', () => {
     const component = read('components/SourceLaneStatus.tsx')
+    const diagnosticsModule = read('lib/search/source-diagnostics.ts')
     const workbench = read('components/WorkbenchClient.tsx')
 
     expect(component).toContain('<details className="lane-status-disclosure">')
     expect(component).not.toContain('<details className="lane-status-disclosure" open')
     expect(component).toContain('Source details')
-    expect(component).toContain('Repository contributors')
+    expect(component).toContain('diagnosticsStrategyLabel(diagnostics.strategy)')
+    expect(diagnosticsModule).toContain("return 'Repository contributors'")
     expect(component).toContain('non-person subjects excluded from candidate counts')
     expect(component).toContain('Partial source execution. Review warnings before relying on coverage.')
     expect(workbench.indexOf('<WorkbenchResults')).toBeLessThan(workbench.indexOf('<SourceLaneStatus'))
