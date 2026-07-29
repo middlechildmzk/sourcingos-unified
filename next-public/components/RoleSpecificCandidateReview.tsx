@@ -2,8 +2,14 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { buildRoleCandidateReview, recordRoleCandidateFitDecision, type RoleFitDecisionResult } from '@/lib/role-candidate-review'
-import { stageLabel, type FitDecision } from '@/lib/role-workspace'
+import {
+  buildRoleCandidateReview,
+  recordRoleCandidateFitDecision,
+  recordRoleCandidateStage,
+  type RoleFitDecisionResult,
+  type RoleStageResult,
+} from '@/lib/role-candidate-review'
+import { ROLE_STAGES, stageLabel, type FitDecision, type RoleStage } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 const FIT_DECISIONS: Array<{ value: FitDecision; label: string }> = [
@@ -73,6 +79,8 @@ export function RoleSpecificCandidateReview({
 }) {
   const { roles, mode, message, updateRole } = useRoleWorkspaces()
   const [decisionStatus, setDecisionStatus] = useState('')
+  const [pendingStage, setPendingStage] = useState<RoleStage | ''>('')
+  const [stageStatus, setStageStatus] = useState('')
   const role = roles.find(item => item.id === roleId)
   const candidate = role?.candidates.find(item => item.candidateId === candidateId || item.id === candidateId)
 
@@ -109,6 +117,7 @@ export function RoleSpecificCandidateReview({
 
   const activeRoleId = role.id
   const activeStage = candidate.stage
+  const activeFitDecision = candidate.fitDecision
   const review = buildRoleCandidateReview(role, candidate)
 
   function recordDecision(decision: FitDecision) {
@@ -124,6 +133,24 @@ export function RoleSpecificCandidateReview({
       setDecisionStatus(`${words(decision)} is already the current fit decision. No duplicate activity was created.`)
     } else {
       setDecisionStatus('This candidate could not be found in the active role queue.')
+    }
+  }
+
+  function updateStage() {
+    const selectedStage = pendingStage || activeStage
+    const holder: { result?: RoleStageResult } = {}
+    updateRole(activeRoleId, current => {
+      holder.result = recordRoleCandidateStage(current, candidateId, selectedStage)
+      return holder.result.workspace
+    })
+
+    if (holder.result?.reason === 'updated') {
+      setPendingStage('')
+      setStageStatus(`Moved to ${stageLabel(selectedStage)}. Fit decision remains ${words(activeFitDecision)} and no outreach was triggered.`)
+    } else if (holder.result?.reason === 'unchanged') {
+      setStageStatus(`${stageLabel(selectedStage)} is already the current stage. No duplicate activity was created.`)
+    } else {
+      setStageStatus('This candidate could not be found in the active role queue.')
     }
   }
 
@@ -148,25 +175,49 @@ export function RoleSpecificCandidateReview({
         <div className="product-stat"><small>Contact state</small><b>{words(candidate.contactStatus)}</b><span>Unverified unless confirmed</span></div>
       </div>
 
-      <div className="cta" style={{ marginTop: 14, marginBottom: 14 }}>
-        <div>
+      <div className="product-layout" style={{ marginTop: 14, marginBottom: 14 }}>
+        <div className="cta" style={{ margin: 0 }}>
           <strong>Recruiter fit decision</strong>
           <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>This records your role-specific judgment only. It does not verify identity, advance the pipeline, or trigger outreach.</p>
+          <div className="button-row" style={{ marginTop: 10 }} aria-label="Record role fit decision">
+            {FIT_DECISIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                className={candidate.fitDecision === option.value ? 'btn' : 'btn secondary'}
+                aria-pressed={candidate.fitDecision === option.value}
+                onClick={() => recordDecision(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {decisionStatus && <p role="status" className="muted" style={{ margin: '10px 0 0', fontSize: 12 }}>{decisionStatus}</p>}
         </div>
-        <div className="button-row" style={{ marginTop: 10 }} aria-label="Record role fit decision">
-          {FIT_DECISIONS.map(option => (
-            <button
-              key={option.value}
-              type="button"
-              className={candidate.fitDecision === option.value ? 'btn' : 'btn secondary'}
-              aria-pressed={candidate.fitDecision === option.value}
-              onClick={() => recordDecision(option.value)}
+
+        <div className="cta" style={{ margin: 0 }}>
+          <strong>Pipeline stage</strong>
+          <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>Select and confirm a stage explicitly. This does not change the fit decision, verify contact information, or send outreach.</p>
+          <div className="button-row" style={{ marginTop: 10 }}>
+            <select
+              className="input"
+              aria-label="Select candidate pipeline stage"
+              value={pendingStage || candidate.stage}
+              onChange={event => setPendingStage(event.target.value as RoleStage)}
             >
-              {option.label}
+              {ROLE_STAGES.map(stage => <option value={stage} key={stage}>{stageLabel(stage)}</option>)}
+            </select>
+            <button
+              type="button"
+              className="btn secondary"
+              disabled={(pendingStage || candidate.stage) === candidate.stage}
+              onClick={updateStage}
+            >
+              Update stage
             </button>
-          ))}
+          </div>
+          {stageStatus && <p role="status" className="muted" style={{ margin: '10px 0 0', fontSize: 12 }}>{stageStatus}</p>}
         </div>
-        {decisionStatus && <p role="status" className="muted" style={{ margin: '10px 0 0', fontSize: 12 }}>{decisionStatus}</p>}
       </div>
 
       <div className="product-layout" style={{ marginTop: 14 }}>
