@@ -1,0 +1,84 @@
+import type { RoleCandidate, RoleWorkspace } from './role-workspace'
+
+export type RoleCandidateReviewSummary = {
+  supportedMustHaves: string[]
+  unconfirmedMustHaves: string[]
+  supportedNiceToHaves: string[]
+  unconfirmedNiceToHaves: string[]
+  concerns: string[]
+  verifyNext: string[]
+  summary: string
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
+}
+
+function normalized(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9+#./-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function supportedByReviewSignal(requirement: string, reviewSignals: string[]): boolean {
+  const target = normalized(requirement)
+  if (!target) return false
+  return reviewSignals.some(signal => {
+    const candidate = normalized(signal)
+    if (!candidate) return false
+    return candidate === target || candidate.includes(target) || target.includes(candidate)
+  })
+}
+
+export function buildRoleCandidateReview(
+  role: RoleWorkspace,
+  candidate: RoleCandidate,
+): RoleCandidateReviewSummary {
+  const reviewSignals = unique([...candidate.tags, ...candidate.fitReasons])
+  const supportedMustHaves = role.intake.mustHaves.filter(requirement => supportedByReviewSignal(requirement, reviewSignals))
+  const unconfirmedMustHaves = role.intake.mustHaves.filter(requirement => !supportedMustHaves.includes(requirement))
+  const supportedNiceToHaves = role.intake.niceToHaves.filter(requirement => supportedByReviewSignal(requirement, reviewSignals))
+  const unconfirmedNiceToHaves = role.intake.niceToHaves.filter(requirement => !supportedNiceToHaves.includes(requirement))
+  const concerns = unique(candidate.concerns)
+  const verifyNext: string[] = []
+
+  if (unconfirmedMustHaves.length) {
+    verifyNext.push(`Verify ${unconfirmedMustHaves.slice(0, 3).join(', ')}${unconfirmedMustHaves.length > 3 ? ` and ${unconfirmedMustHaves.length - 3} more` : ''}.`)
+  }
+  if (candidate.evidenceStatus === 'unreviewed') {
+    verifyNext.push('Review the underlying evidence before making a role-fit decision.')
+  } else if (candidate.evidenceStatus === 'conflicting') {
+    verifyNext.push('Resolve conflicting evidence before advancing or presenting this person.')
+  } else if (candidate.evidenceStatus === 'stale') {
+    verifyNext.push('Refresh stale evidence before relying on it for this role.')
+  }
+  if (candidate.contactStatus === 'unknown' || candidate.contactStatus === 'signals_found') {
+    verifyNext.push('Verify any contact path and permission before outreach.')
+  }
+  if (role.intake.clearance && role.intake.clearance !== 'Not specified') {
+    verifyNext.push(`Confirm ${role.intake.clearance} only through the appropriate authorized process.`)
+  }
+  if (concerns.length) {
+    verifyNext.push('Resolve the recorded concerns or document why they do not block this role.')
+  }
+  if (candidate.fitDecision === 'unreviewed') {
+    verifyNext.push('Record a recruiter-controlled fit decision in the role review queue.')
+  }
+
+  const totalMustHaves = role.intake.mustHaves.length
+  const summary = totalMustHaves
+    ? `Current role-review tags and reasons support ${supportedMustHaves.length} of ${totalMustHaves} must-have requirements. This is review coverage, not independent verification.`
+    : 'No explicit must-have requirements are configured for this role yet.'
+
+  return {
+    supportedMustHaves,
+    unconfirmedMustHaves,
+    supportedNiceToHaves,
+    unconfirmedNiceToHaves,
+    concerns,
+    verifyNext: unique(verifyNext),
+    summary,
+  }
+}
