@@ -70,11 +70,6 @@ export type CandidateDossier = {
     days?: number
     label?: string
   }
-  scores?: {
-    bestContactScore?: number
-    openToWorkScore?: number
-    evidenceScore?: number
-  }
   verifyNext?: string[]
   mode?: 'supabase' | 'preview'
 }
