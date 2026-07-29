@@ -18,7 +18,10 @@ const LEGACY_ACTIVE_ROLE_KEY = 'sourcingos.active-role-context.v1'
 export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string; laneId?: string }) {
   const { roles, mode, message, updateRole } = useRoleWorkspaces()
   const role = useMemo(() => roleId ? roles.find(item => item.id === roleId) : undefined, [roleId, roles])
-  const lane = useMemo(() => role?.searchLanes.find(item => item.id === laneId), [laneId, role])
+  const lane = useMemo(
+    () => role?.searchLanes.find(item => item.id === laneId && item.status === 'approved'),
+    [laneId, role],
+  )
   const [prepared, setPrepared] = useState(!roleId)
   const [status, setStatus] = useState('')
   const preparedKey = useRef('')
