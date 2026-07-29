@@ -19,7 +19,7 @@ function ConfidenceBadge({ confidence }: { confidence: string }) {
 
 function words(value: string) { return value.replaceAll('_', ' ') }
 
-export function Candidate360Client({ candidateId }: { candidateId: string }) {
+export function Candidate360Client({ candidateId, roleId }: { candidateId: string; roleId?: string }) {
   const [dossier, setDossier] = useState<Dossier | null>(null)
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState('')
@@ -61,12 +61,15 @@ export function Candidate360Client({ candidateId }: { candidateId: string }) {
   const contacts = Array.isArray(dossier.contacts) ? dossier.contacts : []
   const availability = Array.isArray(dossier.openToWorkSignals) ? dossier.openToWorkSignals : []
   const reviews = Array.isArray(dossier.matchReviews) ? dossier.matchReviews : []
+  const roleHref = roleId ? `/app/roles/${encodeURIComponent(roleId)}?tab=candidates` : ''
 
   return <div style={{ display: 'grid', gap: 14 }}>
+    {roleId && <div className="cta" style={{ marginBottom: 0 }}><strong>Role context preserved.</strong> Review identity evidence here, then return to the role-specific fit decision. <Link href={roleHref} style={{ textDecoration: 'underline' }}>Back to role queue</Link></div>}
+
     <section className="product-panel">
       <div className="product-page-head" style={{ marginBottom: 16 }}>
         <div><div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><span className="kicker">Candidate 360</span><span className={`status-pill ${c.mergeStatus === 'source_verified' || c.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(c.mergeStatus || 'pending')}</span></div><h1 style={{ marginTop: 4 }}>{c.canonicalName || 'Unconfirmed identity'}</h1><p>{[c.headline, c.currentCompany, c.location].filter(Boolean).join(' · ') || 'Candidate intelligence record'}</p></div>
-        <div className="product-page-actions"><Link className="btn ghost" href="/app/candidate-database">All candidates</Link><AddToRoleButton candidate={{ candidateId, name: c.canonicalName || 'Unconfirmed identity', headline: c.headline, company: c.currentCompany, location: c.location, source: 'candidate_360', contactStatus: contacts.length ? 'signals_found' : 'unknown', evidenceStatus: evidence.length ? 'reviewed' : 'unreviewed', tags: Array.isArray(c.skills) ? c.skills : [] }} /></div>
+        <div className="product-page-actions">{roleId && <Link className="btn" href={roleHref}>Back to role queue</Link>}<Link className="btn ghost" href="/app/candidate-database">All candidates</Link><AddToRoleButton candidate={{ candidateId, name: c.canonicalName || 'Unconfirmed identity', headline: c.headline, company: c.currentCompany, location: c.location, source: 'candidate_360', contactStatus: contacts.length ? 'signals_found' : 'unknown', evidenceStatus: evidence.length ? 'reviewed' : 'unreviewed', tags: Array.isArray(c.skills) ? c.skills : [] }} /></div>
       </div>
       {c.summary && <p className="muted" style={{ maxWidth: 900, lineHeight: 1.65, fontSize: 13 }}>{c.summary}</p>}
       <div className="chips" style={{ marginTop: 12 }}>{(c.skills || []).slice(0, 12).map((skill: string) => <span className="tag" key={skill}>{skill}</span>)}</div>

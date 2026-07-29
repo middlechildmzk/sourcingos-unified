@@ -7,6 +7,7 @@ import { FeedbackButtons } from '@/components/FeedbackButtons'
 import type { CopilotPlanInput } from '@/lib/ai/types'
 import type { SourceResult } from '@/lib/source-types'
 import { canPromoteToCandidate, entityKindLabels } from '@/lib/entity-classification'
+import { ROLE_CANDIDATE_SAVED_EVENT, type CanonicalCandidateSavedDetail } from '@/lib/role-candidate-link'
 
 export interface DrawerSavedState {
   candidateId: string
@@ -48,6 +49,12 @@ export function CandidateDrawer({
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const titleId = useId()
+
+  useEffect(() => {
+    setLocalSaved(saved ?? null)
+    setNotice('')
+    setAuthPrompt(false)
+  }, [result?.id, saved])
 
   useEffect(() => {
     if (!open) return
@@ -103,6 +110,10 @@ export function CandidateDrawer({
   const isSaved = Boolean(localSaved)
   const entityKind = result.entityKind ?? 'unknown'
   const canSaveCandidate = canPromoteToCandidate(entityKind)
+  const roleId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('roleId') : null
+  const candidate360Href = localSaved
+    ? `/app/candidate/${localSaved.candidateId}${roleId ? `?roleId=${encodeURIComponent(roleId)}` : ''}`
+    : ''
   const missingData = [
     !result.location ? 'Location' : '',
     !result.organization ? 'Current organization' : '',
@@ -129,14 +140,6 @@ export function CandidateDrawer({
       setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
       return
     }
-    if (!canSaveCandidate) {
-      setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
-      return
-    }
-    if (!canSaveCandidate) {
-      setNotice(`${entityKindLabels[entityKind]} records cannot be saved as candidates.`)
-      return
-    }
     if (publicMode) {
       setAuthPrompt(true)
       return
@@ -156,6 +159,8 @@ export function CandidateDrawer({
         setLocalSaved(state)
         setNotice(json.note || 'Saved source profile. Identity and fit still require recruiter review.')
         onSaved?.(json.candidateId, result.displayName, result.source)
+        const detail: CanonicalCandidateSavedDetail = { candidateId: json.candidateId, result }
+        window.dispatchEvent(new CustomEvent(ROLE_CANDIDATE_SAVED_EVENT, { detail }))
       } else if (json.error === 'Authentication required.') {
         setAuthPrompt(true)
       } else {
@@ -379,15 +384,15 @@ export function CandidateDrawer({
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <span className="status-live" style={{ alignSelf: 'center' }}>Saved source profile</span>
               {localSaved && (
-                <a className="btn secondary" href={`/app/candidate/${localSaved.candidateId}`} style={{ flex: 1, fontSize: '13px' }}>
+                <Link className="btn secondary" href={candidate360Href} style={{ flex: 1, fontSize: '13px' }}>
                   Continue Candidate 360 →
-                </a>
+                </Link>
               )}
             </div>
           ) : canSaveCandidate ? (
             <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
               <button className="btn" style={{ flex: 1 }} onClick={saveSourceProfile} disabled={saving}>
-                {saving ? 'Saving…' : publicMode ? 'Save person profile (beta)' : projectId ? '+ Save person and add to project' : '+ Save person profile'}
+                {saving ? 'Saving…' : publicMode ? 'Save person profile (beta)' : roleId ? '+ Save person and add to role' : projectId ? '+ Save person and add to project' : '+ Save person profile'}
               </button>
               <span className="muted" style={{ fontSize: '11px', textAlign: 'center' }}>
                 Saving creates a pending candidate record. Recruiter identity confirmation is still required.

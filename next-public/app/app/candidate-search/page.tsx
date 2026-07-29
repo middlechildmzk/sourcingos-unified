@@ -1,5 +1,4 @@
-import { WorkbenchClient } from '@/components/WorkbenchClient'
-import { ActiveRoleSearchContext } from '@/components/ActiveRoleSearchContext'
+import { RoleScopedCandidateSearch } from '@/components/RoleScopedCandidateSearch'
 import Link from 'next/link'
 
 export const metadata = {
@@ -9,7 +8,10 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function CandidateSearchPage() {
+export default function CandidateSearchPage({ searchParams }: { searchParams?: { roleId?: string; laneId?: string } }) {
+  const roleId = typeof searchParams?.roleId === 'string' ? searchParams.roleId : undefined
+  const laneId = typeof searchParams?.laneId === 'string' ? searchParams.laneId : undefined
+
   return (
     <main className="wrap">
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
@@ -17,8 +19,6 @@ export default function CandidateSearchPage() {
       <p className="lead">
         Role intake → search strategy → open-web discovery → Candidate 360 → role review queue. One recruiter-controlled workflow. Powered by Candidate Graph under the hood.
       </p>
-
-      <ActiveRoleSearchContext />
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
         <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
@@ -29,7 +29,7 @@ export default function CandidateSearchPage() {
         </span>
       </div>
 
-      <WorkbenchClient publicMode={false} />
+      <RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />
 
       <div className="card" style={{ marginTop: '32px' }}>
         <span className="kicker">Also in the connected workflow</span>
