@@ -1,0 +1,111 @@
+import { describe, expect, it } from 'vitest'
+import { addCanonicalCandidateToRole, sourceResultToRoleCandidateInput } from '../lib/role-candidate-link'
+import type { RoleWorkspace } from '../lib/role-workspace'
+import type { SourceResult } from '../lib/source-types'
+
+const NOW = new Date('2026-07-29T15:00:00.000Z')
+
+function workspace(): RoleWorkspace {
+  return {
+    id: 'role-1',
+    status: 'active',
+    intake: {
+      title: 'Platform Engineer',
+      location: 'Remote US',
+      workMode: 'remote',
+      compensation: 'Not specified',
+      clearance: 'Not specified',
+      mustHaves: ['Kubernetes', 'Terraform'],
+      niceToHaves: [],
+      disqualifiers: [],
+      targetCompanies: [],
+      adjacentBackgrounds: [],
+      hiringManagerNotes: '',
+      rawDescription: '',
+    },
+    searchLanes: [],
+    candidates: [],
+    activity: [],
+    createdAt: NOW.toISOString(),
+    updatedAt: NOW.toISOString(),
+  }
+}
+
+function sourceResult(overrides: Partial<SourceResult> = {}): SourceResult {
+  return {
+    id: 'github:ada',
+    source: 'github',
+    sourceProfileId: 'ada',
+    entityKind: 'person',
+    displayName: 'Ada Engineer',
+    headline: 'Platform Engineer',
+    organization: 'Example Cloud',
+    location: 'Remote US',
+    profileUrl: 'https://github.com/ada',
+    skills: ['Kubernetes', 'Terraform', 'Kubernetes'],
+    evidence: [],
+    contactSignals: [],
+    identitySignals: [],
+    refreshedAt: NOW.toISOString(),
+    ...overrides,
+  }
+}
+
+describe('V29 role-centric sourcing loop', () => {
+  it('adds one canonical person to the role review queue', () => {
+    const input = sourceResultToRoleCandidateInput('candidate-1', sourceResult())
+    const linked = addCanonicalCandidateToRole(workspace(), input, NOW)
+
+    expect(linked.added).toBe(true)
+    expect(linked.reason).toBe('added')
+    expect(linked.workspace.candidates).toHaveLength(1)
+    expect(linked.workspace.candidates[0]).toMatchObject({
+      id: 'candidate-1',
+      candidateId: 'candidate-1',
+      name: 'Ada Engineer',
+      stage: 'needs_review',
+      fitDecision: 'unreviewed',
+      evidenceStatus: 'unreviewed',
+    })
+    expect(linked.workspace.candidates[0].tags).toEqual(['Kubernetes', 'Terraform'])
+    expect(linked.workspace.activity).toHaveLength(1)
+  })
+
+  it('is idempotent across repeated saves and does not duplicate activity', () => {
+    const input = sourceResultToRoleCandidateInput('candidate-1', sourceResult())
+    const first = addCanonicalCandidateToRole(workspace(), input, NOW)
+    const second = addCanonicalCandidateToRole(first.workspace, input, new Date('2026-07-29T16:00:00.000Z'))
+
+    expect(second.added).toBe(false)
+    expect(second.reason).toBe('existing')
+    expect(second.workspace).toEqual(first.workspace)
+    expect(second.workspace.candidates).toHaveLength(1)
+    expect(second.workspace.activity).toHaveLength(1)
+  })
+
+  it('fails closed for artifacts, organizations, search lanes, and unknown subjects', () => {
+    for (const entityKind of ['artifact', 'organization', 'search_lane', 'unknown'] as const) {
+      const input = sourceResultToRoleCandidateInput('candidate-1', sourceResult({ entityKind }))
+      const linked = addCanonicalCandidateToRole(workspace(), input, NOW)
+      expect(linked.added).toBe(false)
+      expect(linked.reason).toBe('not_person')
+      expect(linked.workspace.candidates).toEqual([])
+      expect(linked.workspace.activity).toEqual([])
+    }
+  })
+
+  it('rejects missing canonical IDs or names without changing the workspace', () => {
+    const base = workspace()
+    const invalidId = addCanonicalCandidateToRole(base, {
+      candidateId: ' ', entityKind: 'person', displayName: 'Ada', source: 'github',
+    }, NOW)
+    const invalidName = addCanonicalCandidateToRole(base, {
+      candidateId: 'candidate-1', entityKind: 'person', displayName: ' ', source: 'github',
+    }, NOW)
+
+    expect(invalidId.reason).toBe('invalid')
+    expect(invalidName.reason).toBe('invalid')
+    expect(invalidId.workspace).toBe(base)
+    expect(invalidName.workspace).toBe(base)
+  })
+})
