@@ -89,7 +89,8 @@ describe('V29 role-centric sourcing loop', () => {
 
     expect(decision).toBeDefined()
     expect(decision?.href).toContain('/app/roles/role-1')
-    expect(decision?.title).toContain('Ada Engineer')
+    expect(decision?.title).toBe('1 candidate waiting for a fit decision')
+    expect(decision?.evidence).toContain('Ada Engineer')
   })
 
   it('is idempotent across repeated saves and does not duplicate activity', () => {
@@ -140,6 +141,7 @@ describe('V29 role-centric sourcing loop', () => {
     expect(page).toContain('searchParams?.roleId')
     expect(page).toContain('searchParams?.laneId')
     expect(page).toContain('<RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />')
+    expect(scoped).toContain("item.status === 'approved'")
     expect(scoped).toContain("mustHaves: lane?.query || role.intake.mustHaves.join(', ')")
     expect(scoped).not.toContain('document.querySelector')
   })
