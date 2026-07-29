@@ -1,5 +1,6 @@
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
+import { RoleSearchActions } from '@/components/RoleSearchActions'
 
 export const metadata = {
   title: 'Role Workspace | SourcingOS',
@@ -9,6 +10,7 @@ export const metadata = {
 export default function RoleDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { tab?: string } }) {
   return (
     <main className="wrap">
+      <RoleSearchActions roleId={params.id} />
       <RoleDetailClient roleId={params.id} initialTab={searchParams?.tab} />
       <RoleDeleteControl roleId={params.id} />
     </main>
