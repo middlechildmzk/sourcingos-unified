@@ -107,17 +107,19 @@ export function RoleSpecificCandidateReview({
     )
   }
 
+  const activeRoleId = role.id
+  const activeStage = candidate.stage
   const review = buildRoleCandidateReview(role, candidate)
 
   function recordDecision(decision: FitDecision) {
     const holder: { result?: RoleFitDecisionResult } = {}
-    updateRole(role.id, current => {
+    updateRole(activeRoleId, current => {
       holder.result = recordRoleCandidateFitDecision(current, candidateId, decision)
       return holder.result.workspace
     })
 
     if (holder.result?.reason === 'updated') {
-      setDecisionStatus(`${words(decision)} recorded. Pipeline stage remains ${stageLabel(candidate.stage)} until you change it explicitly.`)
+      setDecisionStatus(`${words(decision)} recorded. Pipeline stage remains ${stageLabel(activeStage)} until you change it explicitly.`)
     } else if (holder.result?.reason === 'unchanged') {
       setDecisionStatus(`${words(decision)} is already the current fit decision. No duplicate activity was created.`)
     } else {
