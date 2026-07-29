@@ -22,6 +22,14 @@ export type RoleStageResult = {
   reason: 'updated' | 'unchanged' | 'missing_candidate'
 }
 
+export type RoleReviewSignalKind = 'fit_reason' | 'concern'
+
+export type RoleReviewSignalResult = {
+  workspace: RoleWorkspace
+  changed: boolean
+  reason: 'added' | 'duplicate' | 'invalid' | 'missing_candidate'
+}
+
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean)))
 }
@@ -125,6 +133,59 @@ export function recordRoleCandidateStage(
           id: activityId,
           type: 'stage_changed',
           message: `Moved ${candidate.name} from ${previousStage.replaceAll('_', ' ')} to ${stage.replaceAll('_', ' ')}.`,
+          createdAt: updatedAt,
+        },
+      ],
+      updatedAt,
+    },
+  }
+}
+
+export function recordRoleCandidateReviewSignal(
+  role: RoleWorkspace,
+  candidateId: string,
+  kind: RoleReviewSignalKind,
+  text: string,
+  now = new Date(),
+  activityId = crypto.randomUUID(),
+): RoleReviewSignalResult {
+  const index = role.candidates.findIndex(candidate => candidate.candidateId === candidateId || candidate.id === candidateId)
+  if (index < 0) return { workspace: role, changed: false, reason: 'missing_candidate' }
+
+  const value = text.trim().replace(/\s+/g, ' ')
+  if (value.length < 3 || value.length > 300) {
+    return { workspace: role, changed: false, reason: 'invalid' }
+  }
+
+  const candidate = role.candidates[index]
+  const current = kind === 'fit_reason' ? candidate.fitReasons : candidate.concerns
+  const duplicate = current.some(item => item.trim().toLowerCase() === value.toLowerCase())
+  if (duplicate) return { workspace: role, changed: false, reason: 'duplicate' }
+
+  const updatedAt = now.toISOString()
+  const nextCandidate: RoleCandidate = {
+    ...candidate,
+    ...(kind === 'fit_reason'
+      ? { fitReasons: [...candidate.fitReasons, value] }
+      : { concerns: [...candidate.concerns, value] }),
+    updatedAt,
+  }
+  const nextCandidates = [...role.candidates]
+  nextCandidates[index] = nextCandidate
+  const label = kind === 'fit_reason' ? 'fit rationale' : 'concern'
+
+  return {
+    changed: true,
+    reason: 'added',
+    workspace: {
+      ...role,
+      candidates: nextCandidates,
+      activity: [
+        ...role.activity,
+        {
+          id: activityId,
+          type: 'note_added',
+          message: `Added ${label} for ${candidate.name}: ${value.slice(0, 120)}${value.length > 120 ? '…' : ''}`,
           createdAt: updatedAt,
         },
       ],
