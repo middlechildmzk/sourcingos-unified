@@ -60,15 +60,16 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
       const detail = (event as CustomEvent<CanonicalCandidateSavedDetail>).detail
       if (!detail?.candidateId || !detail.result) return
 
-      let outcome: RoleCandidateLinkResult | null = null
+      const holder: { value?: RoleCandidateLinkResult } = {}
       updateRole(roleId, current => {
-        outcome = addCanonicalCandidateToRole(
+        holder.value = addCanonicalCandidateToRole(
           current,
           sourceResultToRoleCandidateInput(detail.candidateId, detail.result),
         )
-        return outcome.workspace
+        return holder.value.workspace
       })
 
+      const outcome = holder.value
       if (!outcome) return
       if (outcome.reason === 'added') {
         setStatus(`${detail.result.displayName} was saved once and added to this role's review queue.`)
