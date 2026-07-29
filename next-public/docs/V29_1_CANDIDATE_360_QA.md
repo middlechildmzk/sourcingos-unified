@@ -2,6 +2,12 @@
 
 This checklist validates the recruiter-facing Candidate 360 review added in V29.1.
 
+## Preview gate
+
+- The preview must be built from the V29.1 branch after the pull request targets `main`.
+- Confirm the deployment is READY and its runtime SHA matches the executable branch head being reviewed.
+- Run an error, warning, and fatal runtime-log sweep before approval.
+
 ## Preconditions
 
 - Use an authenticated test account.
@@ -24,6 +30,7 @@ This checklist validates the recruiter-facing Candidate 360 review added in V29.
 3. Confirm no percentage, fit score, or independent-verification claim is shown.
 4. Add a fit rationale containing an unconfirmed requirement and confirm coverage updates.
 5. Confirm the rationale is labelled recruiter-authored review context, not verified evidence.
+6. Confirm an unrelated word containing a requirement substring does not count as coverage, such as `draws` for `AWS`.
 
 ## Fit decisions
 
@@ -65,8 +72,9 @@ This checklist validates the recruiter-facing Candidate 360 review added in V29.
 ## Candidate dossier integrity
 
 1. Load a complete Candidate 360 dossier and verify evidence, source profiles, contacts, availability signals, and identity reviews render.
-2. Simulate or inspect a failed related-table request.
-3. Confirm Candidate 360 fails closed with the failed section identified rather than silently showing an incomplete dossier.
+2. Confirm no synthetic evidence score is displayed or returned by the Supabase dossier path.
+3. Simulate or inspect a failed related-table request.
+4. Confirm Candidate 360 fails closed with the failed section identified rather than silently showing an incomplete dossier.
 
 ## Accessibility and responsive behavior
 
