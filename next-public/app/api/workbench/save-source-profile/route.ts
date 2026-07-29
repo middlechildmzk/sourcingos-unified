@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getCandidateDb, nowIso, uid } from '@/lib/candidate-db-v18'
-import { resolveStoredEntityKind } from '@/lib/entity-classification'
+import { classifySourceResult } from '@/lib/entity-classification'
+import type { SourceResult } from '@/lib/source-types'
 
 // Save one person source profile to the Candidate Graph.
 // Non-person source subjects fail closed. Repeated saves reuse the existing
@@ -34,12 +35,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const entityKind = resolveStoredEntityKind({
-      source: sourceResult.source,
-      raw: sourceResult.raw,
-      entityKind: sourceResult.entityKind,
-    })
+    // Request bodies are untrusted. Re-run the same source-role and claim truth
+    // boundary used by search before any candidate, evidence, or contact write.
+    // This prevents a client from relabelling publications/artifacts as people,
+    // copying recruiter query terms into skills, or saving profile links as
+    // contact information.
+    const normalizedResult = classifySourceResult({
+      ...sourceResult,
+      entityKind: sourceResult.entityKind || 'unknown',
+      skills: Array.isArray(sourceResult.skills) ? sourceResult.skills : [],
+      evidence: Array.isArray(sourceResult.evidence) ? sourceResult.evidence : [],
+      contactSignals: Array.isArray(sourceResult.contactSignals) ? sourceResult.contactSignals : [],
+      identitySignals: Array.isArray(sourceResult.identitySignals) ? sourceResult.identitySignals : [],
+      refreshedAt: sourceResult.refreshedAt || new Date().toISOString(),
+    } as SourceResult)
 
+    const entityKind = normalizedResult.entityKind
     if (entityKind !== 'person') {
       return NextResponse.json({
         ok: false,
@@ -47,8 +58,6 @@ export async function POST(req: NextRequest) {
         entityKind,
       }, { status: 422 })
     }
-
-    const normalizedResult = { ...sourceResult, entityKind }
 
     // Preview mode remains idempotent within the current process.
     if (!isSupabaseConfigured()) {
