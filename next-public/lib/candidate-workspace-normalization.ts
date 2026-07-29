@@ -1,3 +1,5 @@
+import type { EntityKind } from '@/lib/source-types'
+
 export type CandidateWorkspaceCandidate = {
   id: string
   canonicalName: string
@@ -7,6 +9,7 @@ export type CandidateWorkspaceCandidate = {
   currentTitle?: string
   summary: string
   skills: string[]
+  entityKind: EntityKind
   sourceProfileIds: string[]
   evidenceItemIds: string[]
   contactSignalIds: string[]
@@ -37,6 +40,8 @@ export type CandidateWorkspaceImportBatch = {
 export type CandidateWorkspaceCounts = {
   candidates: number
   filteredCandidates: number
+  personCandidatesOnPage: number
+  nonPersonCandidatesOnPage: number
   sourceProfiles: number
   evidenceItems: number
   contactSignals: number
@@ -72,6 +77,8 @@ export const EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT: CandidateWorkspaceSnapshot = {
   counts: {
     candidates: 0,
     filteredCandidates: 0,
+    personCandidatesOnPage: 0,
+    nonPersonCandidatesOnPage: 0,
     sourceProfiles: 0,
     evidenceItems: 0,
     contactSignals: 0,
@@ -114,6 +121,17 @@ function bounded(value: unknown, fallback: number, min: number, max: number): nu
   return Math.max(min, Math.min(max, count(value, fallback)))
 }
 
+function entityKind(value: unknown): EntityKind {
+  return value === 'person'
+    || value === 'organization'
+    || value === 'artifact'
+    || value === 'publication'
+    || value === 'search_lane'
+    || value === 'unknown'
+    ? value
+    : 'unknown'
+}
+
 function objectRows(value: unknown): Record<string, unknown>[] {
   if (!Array.isArray(value)) return []
   return value.map(record).filter((item): item is Record<string, unknown> => Boolean(item))
@@ -139,6 +157,7 @@ function normalizeCandidate(value: unknown, index: number): CandidateWorkspaceCa
     currentTitle: optionalText(candidate.currentTitle ?? candidate.current_title, 500),
     summary: text(candidate.summary, '', 10000),
     skills: textArray(candidate.skills, 100, 200),
+    entityKind: entityKind(candidate.entityKind ?? candidate.entity_kind),
     sourceProfileIds: textArray(candidate.sourceProfileIds ?? candidate.source_profile_ids, 500, 200),
     evidenceItemIds: textArray(candidate.evidenceItemIds ?? candidate.evidence_item_ids, 1000, 200),
     contactSignalIds: textArray(candidate.contactSignalIds ?? candidate.contact_signal_ids, 500, 200),
@@ -189,6 +208,14 @@ export function normalizeCandidateWorkspaceSnapshot(value: unknown): CandidateWo
   const rawCounts = record(snapshot.counts) || {}
   const rawPage = record(snapshot.page) || {}
   const filteredCandidates = count(rawCounts.filteredCandidates, candidates.length)
+  const personCandidatesOnPage = count(
+    rawCounts.personCandidatesOnPage,
+    candidates.filter(candidate => candidate.entityKind === 'person').length,
+  )
+  const nonPersonCandidatesOnPage = count(
+    rawCounts.nonPersonCandidatesOnPage,
+    candidates.length - personCandidatesOnPage,
+  )
 
   return {
     ok: snapshot.ok !== false,
@@ -203,6 +230,8 @@ export function normalizeCandidateWorkspaceSnapshot(value: unknown): CandidateWo
     counts: {
       candidates: count(rawCounts.candidates, candidates.length),
       filteredCandidates,
+      personCandidatesOnPage,
+      nonPersonCandidatesOnPage,
       sourceProfiles: count(rawCounts.sourceProfiles),
       evidenceItems: count(rawCounts.evidenceItems),
       contactSignals: count(rawCounts.contactSignals),

@@ -97,13 +97,14 @@ describe('V27 Today decision inbox', () => {
     expect(blocker.evidence).toContain('No lanes drafted')
   })
 
-  it('routes the app root and navigation to the Today surface without breaking Agent OS', () => {
+  it('routes the app root and duplicate Agent OS route to the single Today surface', () => {
     const appPage = fs.readFileSync(path.join(root, 'app/app/page.tsx'), 'utf8')
     expect(appPage).toContain("redirect('/app/today')")
     const shell = fs.readFileSync(path.join(root, 'components/AppShell.tsx'), 'utf8')
     expect(shell).toContain("{ href: '/app/today', label: 'Today'")
-    expect(shell).toContain("{ href: '/app/agent-os', label: 'Agent OS'")
-    expect(fs.existsSync(path.join(root, 'app/app/agent-os/page.tsx'))).toBe(true)
+    expect(shell).not.toContain("{ href: '/app/agent-os', label: 'Agent OS'")
+    const agentPage = fs.readFileSync(path.join(root, 'app/app/agent-os/page.tsx'), 'utf8')
+    expect(agentPage).toContain("permanentRedirect('/app/today/')")
     const client = fs.readFileSync(path.join(root, 'components/TodayInboxClient.tsx'), 'utf8')
     expect(client).toContain('Nothing here acts on its own')
   })

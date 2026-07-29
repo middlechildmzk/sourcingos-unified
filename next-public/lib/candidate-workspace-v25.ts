@@ -1,5 +1,7 @@
 import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { resolveStoredEntityKind } from '@/lib/entity-classification'
+import type { EntityKind } from '@/lib/source-types'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
@@ -16,6 +18,20 @@ function relationCandidateName(value: unknown) {
   return relation && typeof relation === 'object' && 'canonical_name' in relation
     ? String((relation as { canonical_name?: unknown }).canonical_name || '')
     : ''
+}
+
+function candidateEntityKind(profiles: any[]): EntityKind {
+  const kinds = profiles.map(profile => resolveStoredEntityKind({
+    source: profile.source,
+    raw: profile.raw,
+    entityKind: profile.entity_kind,
+  }))
+  if (kinds.includes('person')) return 'person'
+  if (kinds.includes('organization')) return 'organization'
+  if (kinds.includes('artifact')) return 'artifact'
+  if (kinds.includes('publication')) return 'publication'
+  if (kinds.includes('search_lane')) return 'search_lane'
+  return 'unknown'
 }
 
 export async function getCandidateWorkspace(ownerId: string, query: CandidateWorkspaceQuery = {}) {
@@ -82,10 +98,9 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const contactMap = byCandidate(contacts.data || [])
   const openMap = byCandidate(openSignals.data || [])
 
-  return {
-    ok: true,
-    persistence_mode: 'supabase' as const,
-    candidates: rows.map(row => ({
+  const candidates = rows.map(row => {
+    const candidateProfiles = profileMap.get(row.id) || []
+    return {
       id: row.id,
       canonicalName: row.canonical_name,
       headline: row.headline || row.current_title || '',
@@ -97,12 +112,22 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastRefreshedAt: row.last_refreshed_at || undefined,
-      sourceProfileIds: (profileMap.get(row.id) || []).map(item => item.id),
+      entityKind: candidateEntityKind(candidateProfiles),
+      sourceProfileIds: candidateProfiles.map(item => item.id),
       evidenceItemIds: (evidenceMap.get(row.id) || []).map(item => item.id),
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
       openToWorkSignalIds: (openMap.get(row.id) || []).map(item => item.id),
       mergeStatus: row.merge_status || 'pending',
-    })),
+    }
+  })
+
+  const personCandidatesOnPage = candidates.filter(candidate => candidate.entityKind === 'person').length
+  const nonPersonCandidatesOnPage = candidates.length - personCandidatesOnPage
+
+  return {
+    ok: true,
+    persistence_mode: 'supabase' as const,
+    candidates,
     sourceProfiles: (profiles.data || []).map(row => ({
       id: row.id,
       candidateId: row.candidate_id || undefined,
@@ -113,6 +138,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       headline: row.headline || undefined,
       location: row.location || undefined,
       organization: row.organization || undefined,
+      entityKind: resolveStoredEntityKind({ source: row.source, raw: row.raw, entityKind: row.entity_kind }),
       status: row.status,
       matchScore: row.match_score,
       matchReasons: Array.isArray(row.match_reasons) ? row.match_reasons : [],
@@ -127,6 +153,8 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
     counts: {
       candidates: totalCandidates.count || 0,
       filteredCandidates: candidateResult.count || 0,
+      personCandidatesOnPage,
+      nonPersonCandidatesOnPage,
       sourceProfiles: sourceCount.count || 0,
       evidenceItems: evidenceCount.count || 0,
       contactSignals: contactCount.count || 0,

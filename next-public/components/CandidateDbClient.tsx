@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import {
@@ -26,7 +25,6 @@ function number(value: unknown) {
 }
 
 export function CandidateDbClient() {
-  const router = useRouter()
   const [snapshot, setSnapshot] = useState<CandidateWorkspaceSnapshot>(EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT)
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -128,10 +126,12 @@ export function CandidateDbClient() {
   const coverage = useMemo(() => snapshot.counts.candidates ? Math.round((snapshot.counts.evidenceItems / snapshot.counts.candidates) * 10) / 10 : 0, [snapshot.counts])
   const start = snapshot.counts.filteredCandidates ? snapshot.page.offset + 1 : 0
   const end = snapshot.page.offset + snapshot.candidates.length
+  const personCandidates = snapshot.candidates.filter(candidate => candidate.entityKind === 'person')
+  const supportingCandidates = snapshot.candidates.filter(candidate => candidate.entityKind !== 'person')
 
   return <div className="interactive-tool">
     <div className="product-summary-grid">
-      <div className="product-stat"><small>Canonical candidates</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>Owner-scoped identities</span></div>
+      <div className="product-stat"><small>Stored identity records</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>{snapshot.counts.personCandidatesOnPage} people on this page</span></div>
       <div className="product-stat"><small>Source profiles</small><b>{snapshot.counts.sourceProfiles.toLocaleString()}</b><span>Provenance preserved</span></div>
       <div className="product-stat"><small>Evidence records</small><b>{snapshot.counts.evidenceItems.toLocaleString()}</b><span>{coverage} per candidate</span></div>
       <div className="product-stat"><small>Identity review</small><b>{snapshot.counts.pendingMatchReviews.toLocaleString()}</b><span>Pending recruiter decisions</span></div>
@@ -145,33 +145,21 @@ export function CandidateDbClient() {
         </section>}
 
         <section className="product-panel">
-          <div className="product-panel-head"><div><span className="kicker">Candidate Graph</span><h2>Candidates</h2></div><span>{start.toLocaleString()}–{end.toLocaleString()} of {snapshot.counts.filteredCandidates.toLocaleString()}</span></div>
+          <div className="product-panel-head"><div><span className="kicker">Candidate Graph</span><h2>People</h2></div><span>{personCandidates.length} people · records {start.toLocaleString()}–{end.toLocaleString()}</span></div>
           <form onSubmit={search} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginBottom: 14 }}><input className="input" style={{ margin: 0 }} value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search name, title, company, or location" /><button className="btn" type="submit">Search</button></form>
           {appliedSearch && <div className="button-row" style={{ marginBottom: 12 }}><span className="status-pill active">Search: {appliedSearch}</span><button className="btn ghost" onClick={() => { setSearchInput(''); setAppliedSearch(''); void load(0, '') }}>Clear</button></div>}
           <div className="product-list">
-            {snapshot.candidates.map(candidate => {
+            {personCandidates.map(candidate => {
               const href = `/app/candidate/${candidate.id}`
-              return <div
-                className="product-row candidate-db-row"
-                key={candidate.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
-                onClick={event => {
-                  const target = event.target as HTMLElement
-                  if (target.closest('button,a,input,select')) return
-                  router.push(href)
-                }}
-                onKeyDown={event => {
-                  if ((event.key === 'Enter' || event.key === ' ') && event.target === event.currentTarget) {
-                    event.preventDefault()
-                    router.push(href)
-                  }
-                }}
-              >
+              return <div className="product-row candidate-db-row" key={candidate.id}>
+                <Link
+                  className="candidate-row-open-surface"
+                  href={href}
+                  aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
+                />
                 <div className="product-row-main">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Link className="product-row-title candidate-row-link" href={href}>{candidate.canonicalName}</Link>
+                    <span className="product-row-title candidate-row-link">{candidate.canonicalName}</span>
                     <span className={`status-pill ${candidate.mergeStatus === 'source_verified' || candidate.mergeStatus === 'confirmed' ? 'success' : ''}`}>{words(candidate.mergeStatus)}</span>
                   </div>
                   <div className="product-row-meta">{[candidate.headline || candidate.currentTitle, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate profile'}</div>
@@ -184,9 +172,25 @@ export function CandidateDbClient() {
                 </div>
               </div>
             })}
-            {!loading && !snapshot.candidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No matching candidates</div><div className="product-row-meta">Try a broader search or import an authorized candidate file.</div></div></div>}
+            {!loading && !personCandidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No person records on this page</div><div className="product-row-meta">Continue to another page, broaden the search, or review supporting subjects below.</div></div></div>}
             {loading && <div className="product-row"><div className="product-row-main"><div className="product-row-title">Loading candidates…</div><div className="product-row-meta">Reading the owner-scoped Candidate Graph.</div></div></div>}
           </div>
+          {supportingCandidates.length > 0 && (
+            <details className="advanced-disclosure" style={{ marginTop: 14 }}>
+              <summary>Supporting or unclassified subjects ({supportingCandidates.length})</summary>
+              <div className="product-list" style={{ marginTop: 10 }}>
+                {supportingCandidates.map(subject => (
+                  <div className="product-row" key={subject.id}>
+                    <div className="product-row-main">
+                      <div className="product-row-title">{subject.canonicalName}</div>
+                      <div className="product-row-meta">{words(subject.entityKind)} · not available for role assignment</div>
+                    </div>
+                    <Link className="btn ghost" href={`/app/candidate/${subject.id}`}>Review record</Link>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
           <div className="button-row" style={{ justifyContent: 'space-between', marginTop: 14 }}><button className="btn secondary" disabled={snapshot.page.offset === 0 || loading} onClick={() => void load(Math.max(0, snapshot.page.offset - snapshot.page.limit), appliedSearch)}>Previous</button><button className="btn secondary" disabled={!snapshot.page.hasMore || loading} onClick={() => void load(snapshot.page.offset + snapshot.page.limit, appliedSearch)}>Next</button></div>
         </section>
       </div>
