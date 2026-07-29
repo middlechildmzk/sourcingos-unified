@@ -1,4 +1,4 @@
-import type { RoleCandidate, RoleWorkspace } from './role-workspace'
+import type { FitDecision, RoleCandidate, RoleWorkspace } from './role-workspace'
 
 export type RoleCandidateReviewSummary = {
   supportedMustHaves: string[]
@@ -8,6 +8,12 @@ export type RoleCandidateReviewSummary = {
   concerns: string[]
   verifyNext: string[]
   summary: string
+}
+
+export type RoleFitDecisionResult = {
+  workspace: RoleWorkspace
+  changed: boolean
+  reason: 'updated' | 'unchanged' | 'missing_candidate'
 }
 
 function unique(values: string[]): string[] {
@@ -30,6 +36,50 @@ function supportedByReviewSignal(requirement: string, reviewSignals: string[]): 
     if (!candidate) return false
     return candidate === target || candidate.includes(target) || target.includes(candidate)
   })
+}
+
+export function recordRoleCandidateFitDecision(
+  role: RoleWorkspace,
+  candidateId: string,
+  decision: FitDecision,
+  now = new Date(),
+  activityId = crypto.randomUUID(),
+): RoleFitDecisionResult {
+  const index = role.candidates.findIndex(candidate => candidate.candidateId === candidateId || candidate.id === candidateId)
+  if (index < 0) return { workspace: role, changed: false, reason: 'missing_candidate' }
+
+  const candidate = role.candidates[index]
+  if (candidate.fitDecision === decision) {
+    return { workspace: role, changed: false, reason: 'unchanged' }
+  }
+
+  const updatedAt = now.toISOString()
+  const nextCandidate: RoleCandidate = {
+    ...candidate,
+    fitDecision: decision,
+    updatedAt,
+  }
+  const nextCandidates = [...role.candidates]
+  nextCandidates[index] = nextCandidate
+
+  return {
+    changed: true,
+    reason: 'updated',
+    workspace: {
+      ...role,
+      candidates: nextCandidates,
+      activity: [
+        ...role.activity,
+        {
+          id: activityId,
+          type: 'candidate_reviewed',
+          message: `Recorded ${decision.replaceAll('_', ' ')} for ${candidate.name}.`,
+          createdAt: updatedAt,
+        },
+      ],
+      updatedAt,
+    },
+  }
 }
 
 export function buildRoleCandidateReview(
