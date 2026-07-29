@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { buildRoleCandidateReview, recordRoleCandidateFitDecision } from '../lib/role-candidate-review'
+import {
+  buildRoleCandidateReview,
+  recordRoleCandidateFitDecision,
+  recordRoleCandidateStage,
+} from '../lib/role-candidate-review'
 import type { RoleCandidate, RoleWorkspace } from '../lib/role-workspace'
 
 function read(path: string): string {
@@ -117,6 +121,34 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(result.workspace).toBe(role)
   })
 
+  it('records an explicit stage change without changing fit or triggering another action', () => {
+    const role = { ...workspace(), candidates: [{ ...candidate(), fitDecision: 'strong_fit' as const }] }
+    const changedAt = new Date('2026-07-29T18:00:00.000Z')
+    const result = recordRoleCandidateStage(role, 'candidate-1', 'shortlisted', changedAt, 'stage-activity-1')
+
+    expect(result.changed).toBe(true)
+    expect(result.reason).toBe('updated')
+    expect(result.workspace.candidates[0].stage).toBe('shortlisted')
+    expect(result.workspace.candidates[0].fitDecision).toBe('strong_fit')
+    expect(result.workspace.candidates[0].contactStatus).toBe('signals_found')
+    expect(result.workspace.activity).toEqual([{
+      id: 'stage-activity-1',
+      type: 'stage_changed',
+      message: 'Moved Ada Engineer from needs review to shortlisted.',
+      createdAt: changedAt.toISOString(),
+    }])
+  })
+
+  it('does not duplicate stage activity when the selected stage is current', () => {
+    const role = { ...workspace(), candidates: [{ ...candidate(), stage: 'shortlisted' as const }] }
+    const result = recordRoleCandidateStage(role, 'candidate-1', 'shortlisted', new Date(), 'stage-activity-2')
+
+    expect(result.changed).toBe(false)
+    expect(result.reason).toBe('unchanged')
+    expect(result.workspace).toBe(role)
+    expect(result.workspace.activity).toEqual([])
+  })
+
   it('renders role review ahead of generic Candidate 360 evidence and removes false score presentation', () => {
     const client = read('components/Candidate360Client.tsx')
 
@@ -136,6 +168,16 @@ describe('V29.1 role-specific Candidate 360 review', () => {
     expect(reviewPanel).toContain('aria-pressed={candidate.fitDecision === option.value}')
     expect(reviewPanel).toContain('It does not verify identity, advance the pipeline, or trigger outreach.')
     expect(reviewPanel).toContain('No duplicate activity was created.')
+  })
+
+  it('requires explicit confirmation for pipeline stages and preserves fit and outreach boundaries', () => {
+    const reviewPanel = read('components/RoleSpecificCandidateReview.tsx')
+
+    expect(reviewPanel).toContain('aria-label="Select candidate pipeline stage"')
+    expect(reviewPanel).toContain('Update stage')
+    expect(reviewPanel).toContain('This does not change the fit decision, verify contact information, or send outreach.')
+    expect(reviewPanel).toContain('Fit decision remains ${words(activeFitDecision)} and no outreach was triggered.')
+    expect(reviewPanel).toContain('disabled={(pendingStage || candidate.stage) === candidate.stage}')
   })
 
   it('fails closed when any related Candidate 360 query fails', () => {
