@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { IdentityDecisionPanel } from '@/components/IdentityDecisionPanel'
 
 type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'auto_attached_deterministic' | 'superseded'
 
@@ -86,6 +87,16 @@ type ProposalDetail = ProposalSummary & {
     corroborationCount: number
   }>
   snapshotCount: number
+  decisionPreconditions: {
+    proposalUpdatedAt: string
+    sourceUpdatedAt: string
+  }
+  decisionControls: {
+    enabled: boolean
+    actions: Array<'approve' | 'keep_separate' | 'reject'>
+    bulkDecisions: false
+    automaticAttachment: false
+  }
 }
 
 type ListPayload = {
@@ -240,11 +251,11 @@ export function IdentityReviewClient() {
       <section className="product-panel">
         <div className="product-panel-head">
           <div><span className="kicker">Not activated</span><h2>Durable identity review is unavailable</h2></div>
-          <span className="status-pill warning">read-only gate</span>
+          <span className="status-pill warning">fail-closed gate</span>
         </div>
         <p className="muted">{message}</p>
         <div className="cta" style={{ marginBottom: 0 }}>
-          No proposal, candidate, source-profile, or database record was changed. The identity migrations require a separate reviewed production approval.
+          No proposal, candidate, source-profile, or database record was changed. The identity migrations and decision activation require separate reviewed production approval.
         </div>
         <div className="button-row" style={{ marginTop: 14 }}>
           <Link className="btn secondary" href="/app/candidate-database">Return to Candidates</Link>
@@ -270,7 +281,7 @@ export function IdentityReviewClient() {
     </div>
 
     <div className="cta" style={{ marginBottom: 14 }}>
-      <strong>Read-only review.</strong> Scores rank attention, not identity probability. This surface cannot attach profiles, merge candidates, or record decisions.
+      <strong>Human-controlled identity review.</strong> Scores rank attention, not identity probability. No bulk decision or automatic probabilistic attachment is available.
     </div>
 
     <div className="product-layout" style={{ gridTemplateColumns: 'minmax(300px,.8fr) minmax(0,1.2fr)' }}>
@@ -393,9 +404,14 @@ export function IdentityReviewClient() {
             </div>
           </details>
 
-          <div className="cta" style={{ marginBottom: 0 }}>
-            Decision controls are intentionally unavailable. A future approval must reassign the source profile, preserve the provisional candidate, record the proposal decision, and support reversal in one audited transaction.
-          </div>
+          <IdentityDecisionPanel
+            proposal={detail}
+            onReloadRequested={() => void loadDetail(detail.id)}
+            onDecisionComplete={notice => {
+              setMessage(notice)
+              void loadList(statusFilter, page.offset)
+            }}
+          />
         </div>}
 
         {!detailLoading && !detail && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No proposal selected</div><div className="product-row-meta">Choose a proposal to inspect its source evidence and conflicts.</div></div></div>}
