@@ -84,7 +84,7 @@ create table if not exists public.source_profile_identifiers (
   constraint source_profile_identifiers_owner_evidence_fk
     foreign key (owner_id, source_evidence_id)
     references public.evidence_items(owner_id, id)
-    on delete set null,
+    on delete restrict,
   unique (owner_id, source_profile_id, identifier_type, normalized_value_hash)
 );
 
@@ -124,11 +124,12 @@ create table if not exists public.identity_match_proposals (
   conflicts jsonb not null default '[]'::jsonb check (jsonb_typeof(conflicts) = 'array'),
   resolver_version text not null,
   review_required boolean not null default true,
-  supersedes_id uuid references public.identity_match_proposals(id) on delete set null,
+  supersedes_id uuid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   decided_at timestamptz,
   decided_by uuid references auth.users(id) on delete set null,
+  unique (owner_id, id),
   constraint identity_match_proposals_owner_profile_fk
     foreign key (owner_id, source_profile_id)
     references public.source_profiles(owner_id, id)
@@ -137,6 +138,10 @@ create table if not exists public.identity_match_proposals (
     foreign key (owner_id, candidate_id)
     references public.candidates(owner_id, id)
     on delete cascade,
+  constraint identity_match_proposals_owner_supersedes_fk
+    foreign key (owner_id, supersedes_id)
+    references public.identity_match_proposals(owner_id, id)
+    on delete restrict,
   check (
     (status = 'pending' and decided_at is null and decided_by is null)
     or (status in ('approved', 'rejected') and decided_at is not null and decided_by is not null)
@@ -195,6 +200,7 @@ create table if not exists public.evidence_claims (
   metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  unique (owner_id, id),
   constraint evidence_claims_owner_candidate_fk
     foreign key (owner_id, candidate_id)
     references public.candidates(owner_id, id)
@@ -202,7 +208,7 @@ create table if not exists public.evidence_claims (
   constraint evidence_claims_owner_profile_fk
     foreign key (owner_id, source_profile_id)
     references public.source_profiles(owner_id, id)
-    on delete set null,
+    on delete restrict,
   check (
     (reviewer_status in ('accepted', 'rejected') and reviewed_by is not null and reviewed_at is not null)
     or reviewer_status in ('unreviewed', 'requires_review')
@@ -228,19 +234,6 @@ create table if not exists public.evidence_claim_events (
     references public.evidence_claims(owner_id, id)
     on delete cascade
 );
-
--- Needed by the composite owner-safe event foreign key.
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint
-    where conrelid = 'public.evidence_claims'::regclass
-      and conname = 'evidence_claims_owner_id_id_key'
-  ) then
-    alter table public.evidence_claims
-      add constraint evidence_claims_owner_id_id_key unique (owner_id, id);
-  end if;
-end $$;
 
 create table if not exists public.candidate_merge_events (
   id uuid primary key default gen_random_uuid(),
