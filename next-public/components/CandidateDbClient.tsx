@@ -91,31 +91,6 @@ export function CandidateDbClient() {
     }
   }
 
-  async function createMatchReview() {
-    const ids = snapshot.sourceProfiles.slice(0, 2).map(profile => text(profile.id)).filter(Boolean)
-    if (ids.length < 2) { setStatus('At least two loaded source profiles are required for a match review.'); return }
-    try {
-      const response = await fetch('/api/candidate-db/match-review', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sourceProfileIds: ids }) })
-      const json = await response.json()
-      const score = number(json?.review?.match_score ?? json?.review?.score)
-      setStatus(response.ok && json?.ok ? `Created an identity review with score ${score}/100.` : text(json?.error, 'Could not create identity review.'))
-      if (response.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not create identity review.')
-    }
-  }
-
-  async function decide(reviewId: string, decision: 'confirmed' | 'rejected') {
-    try {
-      const response = await fetch('/api/candidate-db/confirm-merge', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reviewId, decision }) })
-      const json = await response.json()
-      setStatus(response.ok && json?.ok ? decision === 'confirmed' ? 'Confirmed the identity match.' : 'Kept the source profiles separate.' : text(json?.error, 'Could not save identity decision.'))
-      if (response.ok && json?.ok) await load(snapshot.page.offset, appliedSearch)
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Could not save identity decision.')
-    }
-  }
-
   function search(event: FormEvent) {
     event.preventDefault()
     const next = searchInput.trim()
@@ -134,14 +109,20 @@ export function CandidateDbClient() {
       <div className="product-stat"><small>Stored identity records</small><b>{snapshot.counts.candidates.toLocaleString()}</b><span>{snapshot.counts.personCandidatesOnPage} people on this page</span></div>
       <div className="product-stat"><small>Source profiles</small><b>{snapshot.counts.sourceProfiles.toLocaleString()}</b><span>Provenance preserved</span></div>
       <div className="product-stat"><small>Evidence records</small><b>{snapshot.counts.evidenceItems.toLocaleString()}</b><span>{coverage} per candidate</span></div>
-      <div className="product-stat"><small>Identity review</small><b>{snapshot.counts.pendingMatchReviews.toLocaleString()}</b><span>Pending recruiter decisions</span></div>
+      <div className="product-stat"><small>Legacy reviews</small><b>{snapshot.counts.pendingMatchReviews.toLocaleString()}</b><span>Read-only historical queue</span></div>
+    </div>
+
+    <div className="cta" style={{ marginBottom: 14 }}>
+      <strong>Durable identity review is now separate.</strong> Inspect proposal reasons and conflicts without attaching profiles or merging candidates.
+      <div className="button-row" style={{ marginTop: 10 }}><Link className="btn secondary" href="/app/identity-review">Open Identity Review</Link></div>
     </div>
 
     <div className="product-layout">
       <div style={{ display: 'grid', gap: 14 }}>
         {!!snapshot.matchReviews.length && <section className="product-panel">
-          <div className="product-panel-head"><div><span className="kicker">Needs attention</span><h2>Identity match review</h2></div><span>{snapshot.counts.pendingMatchReviews} pending</span></div>
-          <div className="product-list">{snapshot.matchReviews.map(review => <div className="product-row" key={review.id}><div className="product-row-main"><div className="product-row-title">{review.proposedCanonicalName}</div><div className="product-row-meta">Match score {review.score}/100 · {review.reasons.slice(0, 2).join(' · ') || 'Review source-profile identity evidence'}</div>{review.conflicts.length ? <div className="cta" style={{ marginTop: 8, marginBottom: 0 }}>{review.conflicts.join('; ')}</div> : null}</div><div className="product-row-actions"><button className="btn secondary" onClick={() => void decide(review.id, 'rejected')}>Keep separate</button><button className="btn" onClick={() => void decide(review.id, 'confirmed')}>Confirm match</button></div></div>)}</div>
+          <div className="product-panel-head"><div><span className="kicker">Legacy history</span><h2>Earlier identity reviews</h2></div><span>{snapshot.counts.pendingMatchReviews} pending</span></div>
+          <div className="cta" style={{ marginTop: 0 }}>These array-based reviews are preserved for visibility but cannot be confirmed from this page. Use the durable proposal surface for new identity review.</div>
+          <div className="product-list">{snapshot.matchReviews.map(review => <div className="product-row" key={review.id}><div className="product-row-main"><div className="product-row-title">{review.proposedCanonicalName}</div><div className="product-row-meta">Legacy score {review.score}/100 · {review.reasons.slice(0, 2).join(' · ') || 'Historical source-profile comparison'}</div>{review.conflicts.length ? <div className="cta" style={{ marginTop: 8, marginBottom: 0 }}>{review.conflicts.join('; ')}</div> : null}</div><span className="status-pill warning">read only</span></div>)}</div>
         </section>}
 
         <section className="product-panel">
@@ -152,11 +133,7 @@ export function CandidateDbClient() {
             {personCandidates.map(candidate => {
               const href = `/app/candidate/${candidate.id}`
               return <div className="product-row candidate-db-row" key={candidate.id}>
-                <Link
-                  className="candidate-row-open-surface"
-                  href={href}
-                  aria-label={`Open ${candidate.canonicalName} in Candidate 360`}
-                />
+                <Link className="candidate-row-open-surface" href={href} aria-label={`Open ${candidate.canonicalName} in Candidate 360`} />
                 <div className="product-row-main">
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span className="product-row-title candidate-row-link">{candidate.canonicalName}</span>
@@ -175,28 +152,18 @@ export function CandidateDbClient() {
             {!loading && !personCandidates.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">No person records on this page</div><div className="product-row-meta">Continue to another page, broaden the search, or review supporting subjects below.</div></div></div>}
             {loading && <div className="product-row"><div className="product-row-main"><div className="product-row-title">Loading candidates…</div><div className="product-row-meta">Reading the owner-scoped Candidate Graph.</div></div></div>}
           </div>
-          {supportingCandidates.length > 0 && (
-            <details className="advanced-disclosure" style={{ marginTop: 14 }}>
-              <summary>Supporting or unclassified subjects ({supportingCandidates.length})</summary>
-              <div className="product-list" style={{ marginTop: 10 }}>
-                {supportingCandidates.map(subject => (
-                  <div className="product-row" key={subject.id}>
-                    <div className="product-row-main">
-                      <div className="product-row-title">{subject.canonicalName}</div>
-                      <div className="product-row-meta">{words(subject.entityKind)} · not available for role assignment</div>
-                    </div>
-                    <Link className="btn ghost" href={`/app/candidate/${subject.id}`}>Review record</Link>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
+          {supportingCandidates.length > 0 && <details className="advanced-disclosure" style={{ marginTop: 14 }}>
+            <summary>Supporting or unclassified subjects ({supportingCandidates.length})</summary>
+            <div className="product-list" style={{ marginTop: 10 }}>
+              {supportingCandidates.map(subject => <div className="product-row" key={subject.id}><div className="product-row-main"><div className="product-row-title">{subject.canonicalName}</div><div className="product-row-meta">{words(subject.entityKind)} · not available for role assignment</div></div><Link className="btn ghost" href={`/app/candidate/${subject.id}`}>Review record</Link></div>)}
+            </div>
+          </details>}
           <div className="button-row" style={{ justifyContent: 'space-between', marginTop: 14 }}><button className="btn secondary" disabled={snapshot.page.offset === 0 || loading} onClick={() => void load(Math.max(0, snapshot.page.offset - snapshot.page.limit), appliedSearch)}>Previous</button><button className="btn secondary" disabled={!snapshot.page.hasMore || loading} onClick={() => void load(snapshot.page.offset + snapshot.page.limit, appliedSearch)}>Next</button></div>
         </section>
       </div>
 
       <aside style={{ display: 'grid', gap: 14, alignContent: 'start' }}>
-        <section className="product-panel"><div className="product-panel-head"><h2>Graph health</h2><span className={`status-pill ${snapshot.persistence_mode === 'supabase' ? 'success' : 'warning'}`}>{snapshot.persistence_mode === 'supabase' ? 'durable' : 'preview'}</span></div><div className="product-list"><div className="product-row"><div className="product-row-main"><div className="product-row-title">Contact signals</div><div className="product-row-meta">Unverified until recruiter confirmation</div></div><b>{snapshot.counts.contactSignals.toLocaleString()}</b></div><div className="product-row"><div className="product-row-main"><div className="product-row-title">Availability signals</div><div className="product-row-meta">Signals, never verified job-seeking claims</div></div><b>{snapshot.counts.openToWorkSignals.toLocaleString()}</b></div></div><Link className="btn secondary" style={{ marginTop: 14 }} href="/app/evidence-ledger">Open Evidence Ledger</Link></section>
+        <section className="product-panel"><div className="product-panel-head"><h2>Graph health</h2><span className={`status-pill ${snapshot.persistence_mode === 'supabase' ? 'success' : 'warning'}`}>{snapshot.persistence_mode === 'supabase' ? 'durable' : 'preview'}</span></div><div className="product-list"><div className="product-row"><div className="product-row-main"><div className="product-row-title">Contact signals</div><div className="product-row-meta">Unverified until recruiter confirmation</div></div><b>{snapshot.counts.contactSignals.toLocaleString()}</b></div><div className="product-row"><div className="product-row-main"><div className="product-row-title">Availability signals</div><div className="product-row-meta">Signals, never verified job-seeking claims</div></div><b>{snapshot.counts.openToWorkSignals.toLocaleString()}</b></div></div><div className="button-row" style={{ marginTop: 14 }}><Link className="btn secondary" href="/app/identity-review">Open Identity Review</Link><Link className="btn secondary" href="/app/evidence-ledger">Evidence Ledger</Link></div></section>
 
         <details className="advanced-disclosure product-panel">
           <summary>Import authorized candidate data</summary>
@@ -204,8 +171,8 @@ export function CandidateDbClient() {
         </details>
 
         <details className="advanced-disclosure product-panel">
-          <summary>Identity tools and recent imports</summary>
-          <div style={{ marginTop: 14 }}><button className="btn secondary" onClick={() => void createMatchReview()}>Compare first two loaded source profiles</button><div className="product-list" style={{ marginTop: 14 }}>{snapshot.importBatches.slice(0, 8).map(batch => <div className="product-row" key={batch.id}><div className="product-row-main"><div className="product-row-title">{batch.fileName || words(batch.importType)}</div><div className="product-row-meta">{batch.recordsCreated.toLocaleString()} created from {batch.rowsSeen.toLocaleString()} row{batch.rowsSeen === 1 ? '' : 's'}</div></div></div>)}</div></div>
+          <summary>Recent imports</summary>
+          <div className="product-list" style={{ marginTop: 14 }}>{snapshot.importBatches.slice(0, 8).map(batch => <div className="product-row" key={batch.id}><div className="product-row-main"><div className="product-row-title">{batch.fileName || words(batch.importType)}</div><div className="product-row-meta">{batch.recordsCreated.toLocaleString()} created from {batch.rowsSeen.toLocaleString()} row{batch.rowsSeen === 1 ? '' : 's'}</div></div></div>)}</div>
         </details>
       </aside>
     </div>
