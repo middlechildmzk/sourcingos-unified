@@ -24,7 +24,7 @@ function browserSafeProposal(proposal: Awaited<ReturnType<typeof getIdentityProp
   return {
     ...proposal,
     candidateClaims: proposal.candidateClaims.map(claim => SENSITIVE_FIELD.test(claim.fieldName)
-      ? { ...claim, value: '[Sensitive claim masked]' , normalizedValue: null }
+      ? { ...claim, value: '[Sensitive claim masked]', normalizedValue: null }
       : claim),
   }
 }
@@ -62,6 +62,7 @@ export async function GET(
       getIdentityProposal(gate.userId, parsed.data),
       getIdentityDecisionPreconditions(gate.userId, parsed.data),
     ])
+    const decisionsEnabled = isIdentityDecisionActivationEnabled()
     return NextResponse.json({
       ok: true,
       available: true,
@@ -69,13 +70,13 @@ export async function GET(
         ...browserSafeProposal(proposal),
         decisionPreconditions,
         decisionControls: {
-          enabled: isIdentityDecisionActivationEnabled(),
+          enabled: decisionsEnabled,
           actions: ['approve', 'keep_separate', 'reject'],
           bulkDecisions: false,
           automaticAttachment: false,
         },
       },
-      readOnly: true,
+      readOnly: !decisionsEnabled,
     })
   } catch (error) {
     if (error instanceof IdentityProposalNotFoundError || error instanceof IdentityDecisionContextNotFoundError) {
