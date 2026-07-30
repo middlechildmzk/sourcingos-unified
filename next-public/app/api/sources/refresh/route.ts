@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { requireSession } from '@/lib/auth-gate'
 import { z } from 'zod'
-import { buildCandidateGraph } from '@/lib/candidate-graph'
+import { buildIdentityResolutionDraft } from '@/lib/candidate-graph'
 import { searchSources } from '@/lib/source-connectors'
 import { allSourceNames, SourceName } from '@/lib/source-types'
 
@@ -28,14 +28,18 @@ export async function POST(req: Request) {
       sources: body.sources,
       limit: body.limit
     })
+    const draft = buildIdentityResolutionDraft(results)
     return NextResponse.json({
       ok: true,
       refreshedAt: new Date().toISOString(),
       searchedSources,
       results,
-      candidateGraph: buildCandidateGraph(results),
+      candidateGraph: draft.candidates,
+      identityProposals: draft.proposals,
+      nonPersonResults: draft.excluded,
+      resolverVersion: draft.resolverVersion,
       warnings,
-      note: 'Preview refresh route. V17.2 adds a persistent candidate graph adapter and scheduled-refresh scaffold for cron or queue workers.'
+      note: 'Preview refresh route. Name-based re-search returns separate records per source profile. Nothing is linked to an existing candidate without recruiter approval.'
     })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Refresh failed' }, { status: 400 })
