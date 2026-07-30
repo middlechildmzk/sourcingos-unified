@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SourcingOS migration manifest — V29.3A1 durable identity foundation.
+// SourcingOS migration manifest — V29.3A3 transactional identity decisions.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ApplicationMethod =
@@ -111,6 +111,14 @@ export const HELD_REPO_MIGRATIONS: MigrationRecord[] = [
   {
     file: 'supabase/held-migrations/20260722160000_role_calibration_state.sql', ledgerName: null, method: 'held', replaySafety: 'additive_held', order: null,
     note: 'Held until the role-calibration product release is intentionally promoted.',
+  },
+  {
+    file: 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql', ledgerName: null, method: 'held', replaySafety: 'additive_held', order: null,
+    note: 'Transactional identity-decision event ledger and reversible RPC body. Held until a separate activation review approves API, UI, migration, and production rollout together.',
+  },
+  {
+    file: 'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql', ledgerName: null, method: 'held', replaySafety: 'additive_held', order: null,
+    note: 'Same-profile advisory-lock serialization wrapper for the held decision RPC. Must be activated atomically with the preceding held migration.',
   },
 ]
 

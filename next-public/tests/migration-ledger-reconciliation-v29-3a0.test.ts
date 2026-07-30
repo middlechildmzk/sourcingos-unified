@@ -39,7 +39,7 @@ function createdPolicies(sql: string): Array<{ name: string; table: string }> {
   return result
 }
 
-describe('V29.3A1 migration inventory', () => {
+describe('V29.3A3 migration inventory', () => {
   it('accounts for every SQL artifact exactly once', () => {
     const onDisk = [...sqlFiles('sql'), ...sqlFiles('supabase/migrations'), ...sqlFiles('supabase/held-migrations')].sort()
     expect(ALL_SQL_RECORDS.map(record => record.file).sort()).toEqual(onDisk)
@@ -63,7 +63,7 @@ describe('V29.3A1 migration inventory', () => {
   })
 })
 
-describe('V29.3A1 active and held migration boundary', () => {
+describe('V29.3A3 active and held migration boundary', () => {
   it('contains only the ordered baseline and identity migrations', () => {
     expect(sqlFiles('supabase/migrations')).toEqual([
       'supabase/migrations/20260730172500_canonical_baseline_anchor.sql',
@@ -81,11 +81,13 @@ describe('V29.3A1 active and held migration boundary', () => {
     expect(migration).not.toMatch(/\b(create|alter|drop|truncate|insert|update|delete)\s+(table|index|policy|trigger|into|public\.)/)
   })
 
-  it('keeps all unrelated product migrations held', () => {
+  it('keeps all unrelated and decision migrations held', () => {
     expect(HELD_REPO_MIGRATIONS.map(record => record.file).sort()).toEqual([
       'supabase/held-migrations/20260701173000_jobs_v2_foundation.sql',
       'supabase/held-migrations/20260721173000_role_workspace_owner_safety.sql',
       'supabase/held-migrations/20260722160000_role_calibration_state.sql',
+      'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql',
+      'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql',
     ])
     const readme = read('supabase/held-migrations/README.md')
     expect(readme).toContain('not active migrations')
@@ -93,7 +95,7 @@ describe('V29.3A1 active and held migration boundary', () => {
   })
 })
 
-describe('V29.3A1 replay safety', () => {
+describe('V29.3A3 replay safety', () => {
   it('keeps the five raw historical hazards visible', () => {
     expect(rawReplayGuardedFiles().map(record => record.file).sort()).toEqual([
       'sql/agent-os-v23-v25.sql',
@@ -135,12 +137,14 @@ describe('V29.3A1 replay safety', () => {
   })
 })
 
-describe('V29.3A1 canonical contracts', () => {
-  it('keeps current production truth distinct from the unapplied identity design', () => {
+describe('V29.3A3 canonical contracts', () => {
+  it('keeps current production truth distinct from unapplied identity designs', () => {
     expect(CANONICAL_TABLES.evidence_claims.present).toBe(false)
     expect(CANONICAL_TABLES.talent_graph_edges.present).toBe(true)
     expect(IDENTITY_FOUNDATION_TABLES).toContain('evidence_claims')
     expect(IDENTITY_FOUNDATION_TABLES).toContain('identity_match_proposals')
+    expect(HELD_REPO_MIGRATIONS.some(record => record.file.endsWith('transactional_identity_decisions.sql'))).toBe(true)
+    expect(HELD_REPO_MIGRATIONS.some(record => record.file.endsWith('transactional_identity_decision_serialization.sql'))).toBe(true)
   })
 
   it('keeps exact-source idempotency and contact verification fail-closed', () => {
@@ -158,32 +162,39 @@ describe('V29.3A1 canonical contracts', () => {
   })
 })
 
-describe('V29.3A1 CI gates', () => {
+describe('V29.3A3 CI gates', () => {
   it('keeps all migration commands distinct', () => {
     const pkg = JSON.parse(read('package.json'))
     expect(pkg.scripts['migration:reconcile']).toBe('node scripts/migration-replay.js')
     expect(pkg.scripts['migration:replay']).toBe('node scripts/migration-replay-remediated.js')
     expect(pkg.scripts['migration:baseline']).toBe('node scripts/migration-baseline-alignment.js')
     expect(pkg.scripts['migration:identity']).toBe('node scripts/migration-identity-foundation.js')
+    expect(pkg.scripts['migration:identity-decisions']).toBe('node scripts/migration-identity-decisions-held.js')
   })
 
-  it('runs PostgreSQL 17 replay, baseline, and identity gates', () => {
+  it('runs PostgreSQL 17 replay, baseline, identity, and held-decision gates', () => {
     const workflow = read('../.github/workflows/next-public-ci.yml')
     expect(workflow).toContain('image: postgres:17')
     expect(workflow).toContain('npm run migration:replay')
     expect(workflow).toContain('npm run migration:baseline')
     expect(workflow).toContain('npm run migration:identity')
+    expect(workflow).toContain('npm run migration:identity-decisions')
   })
 
-  it('fails closed and fingerprints every promoted migration layer', () => {
+  it('fails closed and fingerprints every promoted or held rehearsal layer', () => {
     const replay = read('scripts/migration-replay-remediated.js')
     const baseline = read('scripts/migration-baseline-alignment.js')
     const identity = read('scripts/migration-identity-foundation.js')
+    const decision = read('scripts/migration-identity-decisions.js')
+    const heldWrapper = read('scripts/migration-identity-decisions-held.js')
     expect(replay).toContain('process.exitCode = 1')
     expect(replay).toContain('beforeGuardedReplay')
     expect(baseline).toContain('schemaAfterSecond')
     expect(identity).toContain('identity migration fails closed without canonical baseline')
     expect(identity).toContain('afterSecond')
     expect(identity).toContain('cross-owner source-profile attachment')
+    expect(decision).toContain('exactly one concurrent approval wins and the other fails closed')
+    expect(heldWrapper).toContain('supabase/held-migrations/20260730194500_transactional_identity_decisions.sql')
+    expect(heldWrapper).toContain('supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql')
   })
 })

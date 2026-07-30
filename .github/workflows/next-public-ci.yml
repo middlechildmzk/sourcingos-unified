@@ -142,6 +142,10 @@ jobs:
         working-directory: next-public
         run: npm run migration:identity
 
+      - name: Rehearse transactional identity decisions
+        working-directory: next-public
+        run: npm run migration:identity-decisions
+
       - name: Upload migration reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,4 +155,5 @@ jobs:
             /tmp/sourcingos-migration-replay-report.json
             /tmp/sourcingos-baseline-alignment-report.json
             /tmp/sourcingos-identity-migration-report.json
+            /tmp/sourcingos-identity-decision-report.json
           if-no-files-found: warn
