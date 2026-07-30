@@ -144,13 +144,13 @@ describe('V29.3A2 Candidate Database handoff', () => {
 })
 
 describe('V29.3A2 release boundary', () => {
-  it('keeps the exact ordered V29.3 migration stack', () => {
+  it('keeps only the approved baseline and identity migrations active', () => {
     const migrations = readdirSync(join(root, 'supabase/migrations')).filter(file => file.endsWith('.sql')).sort()
     expect(migrations).toEqual([
       '20260730172500_canonical_baseline_anchor.sql',
       '20260730181000_durable_identity_foundation.sql',
-      '20260730194500_transactional_identity_decisions.sql',
     ])
+    expect(existsSync(join(root, 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql'))).toBe(true)
   })
 
   it('contains the new read surface files', () => {
