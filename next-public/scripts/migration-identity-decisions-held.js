@@ -1,10 +1,11 @@
 /**
  * V29.3A3 held transactional-decision rehearsal wrapper.
  *
- * The transaction SQL remains quarantined under supabase/held-migrations until
- * a separate activation approval. This wrapper reuses the full disposable
- * PostgreSQL harness while changing only its migration path and pre-apply row
- * fingerprint. The generated runtime copy is always removed.
+ * Both transaction SQL layers remain quarantined under supabase/held-migrations
+ * until a separate activation approval. This wrapper reuses the full disposable
+ * PostgreSQL harness while changing only held paths, the pre-apply row
+ * fingerprint, and the forced concurrency launch. The generated runtime copy is
+ * always removed.
  */
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
@@ -17,7 +18,8 @@ const runtimePath = path.join(scriptsDir, `.migration-identity-decisions-held-${
 try {
   const source = fs.readFileSync(sourcePath, 'utf8')
   const activePath = "const DECISIONS = 'supabase/migrations/20260730194500_transactional_identity_decisions.sql'"
-  const heldPath = "const DECISIONS = 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql'"
+  const heldPaths = `const DECISIONS = 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql'
+const DECISION_SERIALIZATION = 'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql'`
   if (!source.includes(activePath)) throw new Error('Could not locate the A3 migration path.')
 
   const countPattern = /function canonicalCounts\(database\) \{[\s\S]*?\n\}\n\nfunction decisionSql/
@@ -34,9 +36,30 @@ try {
 
 function decisionSql`
 
+  const concurrencyPattern = /async function concurrentApproval\(database\) \{[\s\S]*?\n\}/
+  if (!concurrencyPattern.test(source)) throw new Error('Could not locate the A3 concurrency fixture.')
+  const concurrencyReplacement = `async function concurrentApproval(database) {
+  const sqlA = \`begin; select pg_sleep(0.5); \${decisionSql(ids.concurrencyProposalA, 'approve', 'concurrency A')} commit;\`
+  const sqlB = \`begin; select pg_sleep(0.5); \${decisionSql(ids.concurrencyProposalB, 'approve', 'concurrency B')} commit;\`
+  return Promise.all([runAsyncPsql(database, sqlA), runAsyncPsql(database, sqlB)])
+}`
+
+  const firstApply = "assert(apply(db, DECISIONS).ok, 'transactional identity decision migration applies')"
+  const firstApplyReplacement = `${firstApply}
+  assert(apply(db, DECISION_SERIALIZATION).ok, 'same-profile identity decisions are serialized')`
+  const replayApply = "assert(apply(db, DECISIONS).ok, 'transaction migration replays idempotently')"
+  const replayApplyReplacement = `${replayApply}
+  assert(apply(db, DECISION_SERIALIZATION).ok, 'decision serialization replays idempotently')`
+  if (!source.includes(firstApply) || !source.includes(replayApply)) {
+    throw new Error('Could not locate the A3 application assertions.')
+  }
+
   const patched = source
-    .replace(activePath, heldPath)
+    .replace(activePath, heldPaths)
     .replace(countPattern, countReplacement)
+    .replace(concurrencyPattern, concurrencyReplacement)
+    .replace(firstApply, firstApplyReplacement)
+    .replace(replayApply, replayApplyReplacement)
 
   fs.writeFileSync(runtimePath, patched)
   const result = spawnSync(process.execPath, [runtimePath], {
