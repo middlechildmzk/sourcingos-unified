@@ -126,7 +126,10 @@ export function selectCanonicalField(
   const conflicting = eligible.filter(item => item.key !== selected.key).map(item => item.claim)
   const runnerUp = eligible.find(item => item.key !== selected.key)
   const scoreGap = runnerUp ? selected.score - runnerUp.score : 1
-  const reviewRequired = conflicting.length > 0 && scoreGap < 0.18
+  const explicitConflict = conflicting.some(claim =>
+    claim.lifecycleStatus === 'conflicting' || claim.reviewerStatus === 'requires_review',
+  )
+  const reviewRequired = conflicting.length > 0 && (explicitConflict || scoreGap < 0.18)
 
   const accepted = selected.claim.reviewerStatus === 'accepted'
   const reason = accepted
@@ -141,7 +144,7 @@ export function selectCanonicalField(
     selectedClaimId: selected.claim.id,
     supportingClaims: supporting,
     conflictingClaims: conflicting,
-    selectionReason: reviewRequired ? `${reason} Conflicting claims are close enough to require recruiter review.` : reason,
+    selectionReason: reviewRequired ? `${reason} Conflicting claims require recruiter review.` : reason,
     freshness: computedFreshness(selected.claim, now),
     reviewRequired,
   }
