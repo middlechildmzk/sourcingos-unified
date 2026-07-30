@@ -90,14 +90,20 @@ export function SourceSearchClient() {
   }
 
   async function saveGraph() {
-    if (!data?.candidateGraph?.length) return
+    if (!data?.results?.length) return
     const res = await fetch('/api/candidates/save', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ candidateGraph: data.candidateGraph })
+      body: JSON.stringify({ sourceResults: data.results })
     })
     const json = await res.json()
-    if (json.ok) setNotice(`Saved ${json.savedCount} candidate research profile(s) for review.`)
+    if (json.ok) {
+      const skipped = Array.isArray(json.rejected) ? json.rejected.length : 0
+      setNotice(
+        `Saved ${json.savedCount} separate person record(s) for review.`
+        + (skipped ? ` ${skipped} non-person result(s) were not saved as candidates.` : '')
+      )
+    }
     else setNotice(json.error || 'Save failed')
     await refreshQueue()
   }
@@ -175,12 +181,15 @@ export function SourceSearchClient() {
 
     {pairScores.length ? <section><h2>Identity match review</h2><div className="results">{pairScores.map(p => <div className="result-card" key={`${p.a.id}-${p.b.id}`}><div className="result-head"><span>{p.status}</span><span>{p.score}/100</span></div><h3>{p.a.displayName} ↔ {p.b.displayName}</h3><p className="muted">Recruiter must confirm before any source profiles are treated as the same person.</p><ul>{p.reasons.map(r => <li key={r}>{r}</li>)}</ul></div>)}</div></section> : null}
 
-    {data?.candidateGraph?.length ? <section><h2>Candidate evidence preview</h2><p className="muted">SourcingOS groups evidence into candidate research records while keeping source profiles, match reasons, and refresh timestamps visible.</p><div className="results">{data.candidateGraph.map(c => <div className="result-card" key={c.id}><div className="result-head"><span>{c.status}</span><span>{c.matchScore}/100 max match</span></div><h3>{c.canonicalName}</h3><p className="muted">{c.sourceProfiles.length} source profile(s), {c.evidenceCount} evidence items, {c.contactSignalCount} contact signals.</p><p><b>Next update check:</b> {new Date(c.nextRefreshAt).toLocaleString()}</p><ul>{c.sourceProfiles.map(sp => <li key={sp.id}>{sourceLabels[sp.source]}: {sp.profileUrl || sp.sourceProfileId}</li>)}</ul></div>)}</div><div className="button-row"><button className="btn" onClick={saveGraph}>Save for review</button><button className="btn secondary" onClick={exportGraph}>Copy evidence JSON</button></div></section> : null}
+    {data?.candidateGraph?.length ? <section><h2>Candidate evidence preview</h2><p className="muted">Each person anchor is kept as its own record with one source profile. SourcingOS never groups two source profiles into one person without your approval.</p><div className="results">{data.candidateGraph.map(c => <div className="result-card" key={c.id}><div className="result-head"><span>{c.status}</span><span>1 source profile, unlinked</span></div><h3>{c.canonicalName}</h3><p className="muted">{c.sourceProfiles.length} source profile(s), {c.evidenceCount} evidence items, {c.contactSignalCount} contact signals.</p><p><b>Next update check:</b> {new Date(c.nextRefreshAt).toLocaleString()}</p><ul>{c.sourceProfiles.map(sp => <li key={sp.id}>{sourceLabels[sp.source]}: {sp.profileUrl || sp.sourceProfileId}</li>)}</ul></div>)}</div><div className="button-row"><button className="btn" onClick={saveGraph}>Save for review</button><button className="btn secondary" onClick={exportGraph}>Copy evidence JSON</button></div></section> : null}
 
     <section>
       <h2>Your candidate research list</h2>
       <p className="muted">Saved profiles are available for this preview session. Production persistence is designed for Supabase/Postgres.</p>
-      {queue?.candidates?.length ? <div className="results">{queue.candidates.map(c => <div className="result-card" key={c.id}><div className="result-head"><span>{c.status}</span><span>{c.sourceProfiles.length} source(s)</span></div><h3>{c.canonicalName}</h3><p className="muted">Last checked {new Date(c.lastRefreshedAt).toLocaleString()} · next check {new Date(c.nextRefreshAt).toLocaleString()}</p><div className="button-row"><button onClick={() => refreshCandidate(c)}>Check for updates</button><button onClick={() => decideMerge(c, 'confirmed')}>Confirm match</button><button onClick={() => decideMerge(c, 'rejected')}>Keep separate</button></div></div>)}</div> : <p className="muted">No saved profiles yet. Search public evidence, review source profiles, then save a candidate research record.</p>}
+      {queue?.candidates?.length ? <div className="results">{queue.candidates.map(c => {
+        const hasPendingReview = c.matchReviews.some(review => review.decision === 'pending' && review.sourceProfileIds.length >= 2)
+        return <div className="result-card" key={c.id}><div className="result-head"><span>{c.status}</span><span>{c.sourceProfiles.length} source(s)</span></div><h3>{c.canonicalName}</h3><p className="muted">Last checked {new Date(c.lastRefreshedAt).toLocaleString()} · next check {new Date(c.nextRefreshAt).toLocaleString()}</p><div className="button-row"><button onClick={() => refreshCandidate(c)}>Check for updates</button>{hasPendingReview ? <><button onClick={() => decideMerge(c, 'confirmed')}>Confirm match</button><button onClick={() => decideMerge(c, 'rejected')}>Keep separate</button></> : null}</div>{hasPendingReview ? null : <p className="muted">No persisted identity proposal is available for this one-source preview record.</p>}</div>
+      })}</div> : <p className="muted">No saved profiles yet. Search public evidence, review source profiles, then save a candidate research record.</p>}
       {queue?.events?.length ? <div className="cta"><b>Recent research events</b><ul>{queue.events.slice(0, 6).map(e => <li key={e.id}>{e.type}: {e.detail}</li>)}</ul></div> : null}
     </section>
   </div>
