@@ -40,12 +40,8 @@ export function buildIdentityBlockKeys(profile: IdentityProfile, limit = 16): Id
   }
 
   for (const identifier of profile.identifiers) {
-    if (identifier.type === 'public_email_hash') {
-      add('public_email_hash', identifier.hash, 'Exact observed public email hash')
-    }
-    if (identifier.type === 'orcid') {
-      add('orcid', identifier.hash, 'Exact validated ORCID identifier')
-    }
+    if (identifier.type === 'public_email_hash') add('public_email_hash', identifier.hash, 'Exact observed public email hash')
+    if (identifier.type === 'orcid') add('orcid', identifier.hash, 'Exact validated ORCID identifier')
   }
 
   for (const website of profile.websites) {
@@ -61,10 +57,26 @@ export function buildIdentityBlockKeys(profile: IdentityProfile, limit = 16): Id
   }
 
   const name = foldForComparison(profile.displayName)
+  const tokens = name.split(' ').filter(Boolean)
+  const first = tokens[0] ?? ''
+  const last = tokens.at(-1) ?? ''
   const location = profile.location ? normalizeLocation(profile.location) : ''
   const organization = profile.organization ? normalizeOrganization(profile.organization) : ''
-  if (name && location) add('name_location', `${name}|${location}`, 'Name and coarse location comparison block')
-  if (name && organization) add('name_organization', `${name}|${organization}`, 'Name and organization comparison block')
+
+  if (name && location) add('name_location', `${name}|${location}`, 'Exact normalized name and coarse location comparison block')
+  if (name && organization) add('name_organization', `${name}|${organization}`, 'Exact normalized name and organization comparison block')
+
+  // These are recall-only blocks. They can produce a proposal but can never
+  // satisfy a deterministic rule or authorize attachment.
+  if (tokens.length >= 2 && first && last && location) {
+    add('name_location', `${first}|${last}|${location}`, 'First and last name tokens with location for middle-name variation recall')
+  }
+  if (tokens.length >= 2 && first && last && organization) {
+    add('name_organization', `${first}|${last}|${organization}`, 'First and last name tokens with organization for middle-name variation recall')
+  }
+  if (first.length >= 4 && organization) {
+    add('name_organization', `${first}|${organization}`, 'First-name and organization recall block for possible name changes')
+  }
 
   return result
 }
