@@ -1,21 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SourcingOS migration manifest — V29.3A0.1 replay-safety remediation.
+// SourcingOS migration manifest — V29.3A0.2 canonical baseline alignment.
 //
 // This is the declared source of truth for the reconstructed production
-// sequence, the reconstruction-only replay guard, held release candidates, and
-// superseded SQL. Historical production SQL remains immutable.
+// sequence, reconstruction-only replay guard, zero-change active baseline
+// anchor, held release candidates, and superseded SQL. Historical production
+// SQL remains immutable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ApplicationMethod =
   | 'manual_sql_editor'
   | 'ledger'
   | 'reconciliation_support'
+  | 'baseline_anchor'
   | 'held'
   | 'orphaned'
 
 export type ReplaySafety =
   | 'replay_safe'
   | 'replay_safe_with_guard'
+  | 'zero_change_guarded_anchor'
   | 'table_shape_no_op_secondary_drift'
   | 'incompatible'
   | 'additive_held'
@@ -118,6 +121,22 @@ export const RECONCILIATION_SUPPORT: MigrationRecord[] = [
 ]
 
 /**
+ * The only SQL file eligible for the next migration-history alignment action.
+ * It performs no DDL or DML. It fails unless the database already matches the
+ * reconciled canonical production contract.
+ */
+export const ACTIVE_BASELINE_MIGRATIONS: MigrationRecord[] = [
+  {
+    file: 'supabase/migrations/20260730172500_canonical_baseline_anchor.sql',
+    ledgerName: 'v29_3a0_canonical_baseline_anchor',
+    method: 'baseline_anchor',
+    replaySafety: 'zero_change_guarded_anchor',
+    order: null,
+    note: 'Zero-change, fail-closed ledger anchor. Production application or migration repair requires separate explicit approval.',
+  },
+]
+
+/**
  * Preserved SQL release candidates deliberately removed from the active
  * supabase/migrations directory. They are reviewable but cannot be picked up by
  * an unqualified db push.
@@ -195,6 +214,7 @@ export const ORPHANED_SQL: MigrationRecord[] = [
 export const ALL_SQL_RECORDS: MigrationRecord[] = [
   ...PRODUCTION_SEQUENCE,
   ...RECONCILIATION_SUPPORT,
+  ...ACTIVE_BASELINE_MIGRATIONS,
   ...HELD_REPO_MIGRATIONS,
   ...ORPHANED_SQL,
 ]
@@ -241,4 +261,14 @@ export function isLedgerReplaySafe(): boolean {
   const allowed = new Set<ReplaySafety>(['replay_safe', 'replay_safe_with_guard'])
   return PRODUCTION_SEQUENCE.every(record => allowed.has(record.replaySafety))
     && RECONCILIATION_SUPPORT.some(record => record.file === 'sql/replay-safety-guards-v29-3a0.sql')
+}
+
+/**
+ * True only when the replay-safe history has exactly one fail-closed,
+ * zero-change anchor eligible for explicit ledger alignment.
+ */
+export function isMigrationHistoryAlignable(): boolean {
+  return isLedgerReplaySafe()
+    && ACTIVE_BASELINE_MIGRATIONS.length === 1
+    && ACTIVE_BASELINE_MIGRATIONS[0].replaySafety === 'zero_change_guarded_anchor'
 }

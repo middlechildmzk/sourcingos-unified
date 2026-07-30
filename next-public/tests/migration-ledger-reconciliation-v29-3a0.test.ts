@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// V29.3A0.1 migration replay-safety and quarantine contract tests.
+// V29.3A0.2 migration replay, quarantine, and baseline alignment contracts.
 //
 // These tests keep repository state deterministic. PostgreSQL behavior is
-// verified separately by scripts/migration-replay-remediated.js in CI.
+// verified separately by the replay and baseline alignment harnesses in CI.
 // ─────────────────────────────────────────────────────────────────────────────
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  ACTIVE_BASELINE_MIGRATIONS,
   ALL_SQL_RECORDS,
   CANONICAL_TABLES,
   HELD_REPO_MIGRATIONS,
@@ -16,6 +17,7 @@ import {
   PRODUCTION_SEQUENCE,
   RECONCILIATION_SUPPORT,
   isLedgerReplaySafe,
+  isMigrationHistoryAlignable,
   isRawHistoricalReplaySafe,
   rawReplayGuardedFiles,
 } from '../lib/migration-manifest'
@@ -42,8 +44,8 @@ function createdPolicies(sql: string): Array<{ name: string; table: string }> {
   return result
 }
 
-describe('V29.3A0.1 - manifest accounts for every SQL artifact', () => {
-  it('accounts for historical, support, held, and orphan SQL', () => {
+describe('V29.3A0.2 - manifest accounts for every SQL artifact', () => {
+  it('accounts for historical, support, active baseline, held, and orphan SQL', () => {
     const onDisk = [
       ...sqlFiles('sql'),
       ...sqlFiles('supabase/migrations'),
@@ -64,7 +66,7 @@ describe('V29.3A0.1 - manifest accounts for every SQL artifact', () => {
   })
 })
 
-describe('V29.3A0.1 - production ledger reconciliation remains intact', () => {
+describe('V29.3A0.2 - production ledger reconciliation remains intact', () => {
   it('maps every production ledger entry to one historical SQL file', () => {
     for (const ledgerName of PRODUCTION_LEDGER_ENTRIES) {
       expect(PRODUCTION_SEQUENCE.filter(record => record.ledgerName === ledgerName)).toHaveLength(1)
@@ -84,9 +86,28 @@ describe('V29.3A0.1 - production ledger reconciliation remains intact', () => {
   })
 })
 
-describe('V29.3A0.1 - active migration directory is fail-closed', () => {
-  it('contains no SQL migration eligible for an accidental db push', () => {
-    expect(sqlFiles('supabase/migrations')).toEqual([])
+describe('V29.3A0.2 - active migration directory is fail-closed', () => {
+  it('contains exactly one zero-change baseline anchor', () => {
+    expect(sqlFiles('supabase/migrations')).toEqual([
+      'supabase/migrations/20260730172500_canonical_baseline_anchor.sql',
+    ])
+    expect(ACTIVE_BASELINE_MIGRATIONS).toHaveLength(1)
+    expect(ACTIVE_BASELINE_MIGRATIONS[0]).toMatchObject({
+      method: 'baseline_anchor',
+      replaySafety: 'zero_change_guarded_anchor',
+      ledgerName: 'v29_3a0_canonical_baseline_anchor',
+    })
+  })
+
+  it('keeps the baseline anchor zero-change and fail-closed', () => {
+    const migration = stripComments(read(ACTIVE_BASELINE_MIGRATIONS[0].file)).toLowerCase()
+    expect(migration).toContain('canonical baseline mismatch')
+    expect(migration).toContain("to_regclass('public.' || required_table)")
+    for (const table of ['candidates', 'source_profiles', 'evidence_items', 'candidate_contacts', 'identity_match_reviews', 'talent_graph_edges']) {
+      expect(migration).toContain(`'${table}'`)
+    }
+    expect(migration).toContain("to_regclass('public.evidence_claims')")
+    expect(migration).not.toMatch(/\b(create|alter|drop|truncate|insert|update|delete)\s+(table|index|policy|trigger|into|public\.)/)
   })
 
   it('preserves all three unapplied migrations in the held directory', () => {
@@ -108,7 +129,7 @@ describe('V29.3A0.1 - active migration directory is fail-closed', () => {
   })
 })
 
-describe('V29.3A0.1 - reconstruction replay is safe as a declared composite', () => {
+describe('V29.3A0.2 - reconstruction replay is safe as a declared composite', () => {
   it('keeps the five raw historical hazards visible', () => {
     expect(rawReplayGuardedFiles().map(record => record.file).sort()).toEqual([
       'sql/agent-os-v23-v25.sql',
@@ -125,6 +146,10 @@ describe('V29.3A0.1 - reconstruction replay is safe as a declared composite', ()
     expect(RECONCILIATION_SUPPORT.map(record => record.file)).toContain('sql/replay-safety-guards-v29-3a0.sql')
   })
 
+  it('declares migration history alignable only with the guarded anchor', () => {
+    expect(isMigrationHistoryAlignable()).toBe(true)
+  })
+
   it('keeps the replay guard outside the active migration directory', () => {
     const guard = RECONCILIATION_SUPPORT[0]
     expect(guard.method).toBe('reconciliation_support')
@@ -137,10 +162,8 @@ describe('V29.3A0.1 - reconstruction replay is safe as a declared composite', ()
     const policies = rawReplayGuardedFiles().flatMap(record => createdPolicies(read(record.file)))
     expect(policies).toHaveLength(33)
     for (const policy of policies) {
-      expect(
-        guard,
-        `guard must drop policy ${policy.name} on ${policy.table}`,
-      ).toContain(`drop policy if exists ${policy.name} on ${policy.table}`)
+      expect(guard, `guard must drop policy ${policy.name} on ${policy.table}`)
+        .toContain(`drop policy if exists ${policy.name} on ${policy.table}`)
     }
   })
 
@@ -158,7 +181,7 @@ describe('V29.3A0.1 - reconstruction replay is safe as a declared composite', ()
   })
 })
 
-describe('V29.3A0.1 - canonical identity contract is unchanged', () => {
+describe('V29.3A0.2 - canonical identity contract is unchanged', () => {
   it('keeps exact-source idempotency in source_profiles', () => {
     expect(stripComments(read('sql/complete-schema-v19.sql')).toLowerCase()).toMatch(
       /unique\s*\(owner_id,\s*source,\s*source_profile_id\)/,
@@ -178,7 +201,7 @@ describe('V29.3A0.1 - canonical identity contract is unchanged', () => {
   })
 })
 
-describe('V29.3A0.1 - orphan classifications remain honest', () => {
+describe('V29.3A0.2 - orphan classifications remain honest', () => {
   it('classifies the two text-ID scaffolds as incompatible', () => {
     expect(ORPHANED_SQL.filter(record => record.replaySafety === 'incompatible').map(record => record.file).sort()).toEqual([
       'sql/candidate-graph-schema-v17-3.sql',
@@ -192,24 +215,31 @@ describe('V29.3A0.1 - orphan classifications remain honest', () => {
   })
 })
 
-describe('V29.3A0.1 - CI executes the remediated gate', () => {
-  it('keeps the reconciliation harness and promotes the guarded harness', () => {
+describe('V29.3A0.2 - CI executes both fail-closed gates', () => {
+  it('keeps reconciliation, guarded replay, and baseline commands distinct', () => {
     const pkg = JSON.parse(read('package.json'))
     expect(pkg.scripts['migration:reconcile']).toBe('node scripts/migration-replay.js')
     expect(pkg.scripts['migration:replay']).toBe('node scripts/migration-replay-remediated.js')
+    expect(pkg.scripts['migration:baseline']).toBe('node scripts/migration-baseline-alignment.js')
   })
 
-  it('uses PostgreSQL 17 and the promoted migration:replay command in CI', () => {
+  it('uses PostgreSQL 17 and runs both promoted migration gates in CI', () => {
     const workflow = read('../.github/workflows/next-public-ci.yml')
     expect(workflow).toContain('image: postgres:17')
     expect(workflow).toContain('npm run migration:replay')
+    expect(workflow).toContain('npm run migration:baseline')
   })
 
-  it('fails closed and fingerprints the schema before and after guarded replay', () => {
+  it('fails closed and fingerprints guarded replay and baseline application', () => {
     const replay = read('scripts/migration-replay-remediated.js')
+    const baseline = read('scripts/migration-baseline-alignment.js')
     expect(replay).toContain('process.exitCode = 1')
     expect(replay).toContain('beforeGuardedReplay')
     expect(replay).toContain('afterGuardedReplay')
-    expect(replay).toContain('active supabase/migrations directory contains no SQL files')
+    expect(replay).toContain('canonical baseline anchor')
+    expect(baseline).toContain('process.exitCode = 1')
+    expect(baseline).toContain('schemaAfterFirst')
+    expect(baseline).toContain('schemaAfterSecond')
+    expect(baseline).toContain('baseline anchor fails closed on an empty database')
   })
 })
