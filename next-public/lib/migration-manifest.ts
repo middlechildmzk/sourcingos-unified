@@ -114,7 +114,11 @@ export const HELD_REPO_MIGRATIONS: MigrationRecord[] = [
   },
   {
     file: 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql', ledgerName: null, method: 'held', replaySafety: 'additive_held', order: null,
-    note: 'Fully rehearsed transactional identity-decision RPC design. Held until a separate activation review approves the API, UI, migration, and production rollout together.',
+    note: 'Transactional identity-decision event ledger and reversible RPC body. Held until a separate activation review approves API, UI, migration, and production rollout together.',
+  },
+  {
+    file: 'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql', ledgerName: null, method: 'held', replaySafety: 'additive_held', order: null,
+    note: 'Same-profile advisory-lock serialization wrapper for the held decision RPC. Must be activated atomically with the preceding held migration.',
   },
 ]
 
