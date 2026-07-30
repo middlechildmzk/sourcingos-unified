@@ -303,7 +303,7 @@ describe('V27 calibration persistence safety', () => {
   })
 
   it('migration adds the column additively and keeps the RPC service-role only', () => {
-    const migration = fs.readFileSync(path.resolve(__dirname, '../supabase/migrations/20260722160000_role_calibration_state.sql'), 'utf8')
+    const migration = fs.readFileSync(path.resolve(__dirname, '../supabase/held-migrations/20260722160000_role_calibration_state.sql'), 'utf8')
     expect(migration).toContain("add column if not exists calibration jsonb not null default '{}'::jsonb")
     expect(migration).toContain("calibration = case when jsonb_typeof(p_role->'calibration') = 'object'")
     expect(migration).toContain('revoke all on function public.save_role_workspace_snapshot')
