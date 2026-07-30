@@ -53,8 +53,21 @@ describe('V29.3A2 read-only API boundary', () => {
 })
 
 describe('V29.3A2 owner scoping and browser data minimization', () => {
-  it('owner-scopes every durable proposal query family', () => {
-    expect((proposalRead.match(/\.eq\('owner_id', ownerId\)/g) || []).length).toBeGreaterThanOrEqual(14)
+  it('owner-scopes every durable proposal table read', () => {
+    for (const table of [
+      'identity_match_proposals',
+      'source_profiles',
+      'candidates',
+      'source_profile_identifiers',
+      'evidence_claims',
+      'source_profile_snapshots',
+    ]) {
+      const tableReads = proposalRead.split(`from('${table}')`).slice(1)
+      expect(tableReads.length, `expected read for ${table}`).toBeGreaterThan(0)
+      for (const tableRead of tableReads) {
+        expect(tableRead.split("from('", 1)[0], `missing owner filter after ${table}`).toContain(".eq('owner_id', ownerId)")
+      }
+    }
   })
 
   it('never reads raw source-profile snapshot payloads', () => {
