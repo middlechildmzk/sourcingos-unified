@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 const root = process.cwd()
 const read = (relativePath: string) => readFileSync(join(root, relativePath), 'utf8')
-const migrationPath = 'supabase/migrations/20260730194500_transactional_identity_decisions.sql'
+const migrationPath = 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql'
+const serializationPath = 'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql'
 const migration = read(migrationPath)
+const serialization = read(serializationPath)
 const harness = read('scripts/migration-identity-decisions.js')
+const heldHarness = read('scripts/migration-identity-decisions-held.js')
 const workflow = read('../.github/workflows/next-public-ci.yml')
 const packageJson = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
 
@@ -17,6 +20,7 @@ describe('V29.3A3 transaction boundary', () => {
     expect(migration).toContain('create or replace function public.revert_identity_decision')
     expect(migration).not.toContain('select public.decide_identity_match_proposal(')
     expect(migration).not.toContain('select public.revert_identity_decision(')
+    expect(serialization).not.toContain('select public.decide_identity_match_proposal(')
   })
 
   it('requires both proposal and source-profile optimistic locks', () => {
@@ -30,9 +34,12 @@ describe('V29.3A3 transaction boundary', () => {
   it('is service-role-only and uses fixed-path security-definer functions', () => {
     expect((migration.match(/security definer/g) || []).length).toBe(2)
     expect((migration.match(/set search_path = ''/g) || []).length).toBe(2)
+    expect(serialization).toContain('security definer')
+    expect(serialization).toContain("set search_path = ''")
     expect(migration).toContain('from PUBLIC, anon, authenticated')
-    expect(migration).toContain('to service_role')
-    expect(migration).not.toMatch(/grant execute[\s\S]{0,180}to authenticated/)
+    expect(serialization).toContain('from PUBLIC, anon, authenticated')
+    expect(serialization).toContain('to service_role')
+    expect(serialization).not.toMatch(/grant execute[\s\S]{0,180}to authenticated/)
   })
 
   it('owner-scopes every mutable table statement', () => {
@@ -51,7 +58,9 @@ describe('V29.3A3 transaction boundary', () => {
   })
 
   it('never deletes candidates, profiles, evidence, contacts, signals, or claims', () => {
-    expect(migration).not.toMatch(/delete\s+from\s+public\.(candidates|source_profiles|evidence_items|candidate_contacts|open_to_work_signals|evidence_claims)/i)
+    for (const sql of [migration, serialization]) {
+      expect(sql).not.toMatch(/delete\s+from\s+public\.(candidates|source_profiles|evidence_items|candidate_contacts|open_to_work_signals|evidence_claims)/i)
+    }
     expect(migration).toContain('No event deletes a candidate')
     expect(migration).toContain('never deletes the provisional candidate')
   })
@@ -72,10 +81,11 @@ describe('V29.3A3 approval safety', () => {
     }
   })
 
-  it('serializes competing source-profile approvals and supersedes stale proposals', () => {
-    expect(migration).toContain('for update')
+  it('serializes competing source-profile decisions before row locking', () => {
+    expect(serialization).toContain('pg_advisory_xact_lock')
+    expect(serialization).toContain('hashtextextended(v_source_profile_id::text, 29303)')
+    expect(serialization).toContain('decide_identity_match_proposal_unserialized')
     expect(migration).toContain("code', 'identity_source_has_active_approval")
-    expect(migration).toContain("decision_reason = 'superseded by approved identity decision'")
   })
 
   it('records before and after state in an owner-safe event ledger', () => {
@@ -99,8 +109,8 @@ describe('V29.3A3 rollback safety', () => {
 
   it('keeps rejected and keep-separate decisions distinguishable in the event ledger', () => {
     expect(migration).toContain("action in ('approve', 'keep_separate', 'reject')")
-    expect(migration).toContain("identity_profiles_kept_separate")
-    expect(migration).toContain("identity_proposal_rejected")
+    expect(migration).toContain('identity_profiles_kept_separate')
+    expect(migration).toContain('identity_proposal_rejected')
   })
 })
 
@@ -121,20 +131,22 @@ describe('V29.3A3 executable proof', () => {
   })
 
   it('is wired into the locked package command and PostgreSQL CI job', () => {
-    expect(packageJson.scripts?.['migration:identity-decisions']).toBe('node scripts/migration-identity-decisions.js')
+    expect(packageJson.scripts?.['migration:identity-decisions']).toBe('node scripts/migration-identity-decisions-held.js')
+    expect(heldHarness).toContain(migrationPath)
+    expect(heldHarness).toContain(serializationPath)
     expect(workflow).toContain('Rehearse transactional identity decisions')
     expect(workflow).toContain('npm run migration:identity-decisions')
     expect(workflow).toContain('/tmp/sourcingos-identity-decision-report.json')
   })
 
-  it('keeps the exact ordered active migration stack', () => {
+  it('keeps only the approved baseline and identity migrations active', () => {
     const migrations = readdirSync(join(root, 'supabase/migrations')).filter(file => file.endsWith('.sql')).sort()
     expect(migrations).toEqual([
       '20260730172500_canonical_baseline_anchor.sql',
       '20260730181000_durable_identity_foundation.sql',
-      '20260730194500_transactional_identity_decisions.sql',
     ])
     expect(existsSync(join(root, migrationPath))).toBe(true)
+    expect(existsSync(join(root, serializationPath))).toBe(true)
   })
 
   it('adds no browser decision endpoint or decision control', () => {
