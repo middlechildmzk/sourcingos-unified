@@ -31,8 +31,10 @@ export type ReplaySafety =
   | 'replay_safe'
   /** Re-running fails. The specific reason is recorded. */
   | 'replay_unsafe'
-  /** Re-running succeeds but changes nothing, masking its own divergence. */
+  /** Re-running succeeds and changes no tracked schema object. */
   | 'silent_no_op'
+  /** Existing table shapes are silently preserved, but secondary objects drift. */
+  | 'table_shape_no_op_secondary_drift'
   /** Re-running fails against the live schema because it targets a different shape. */
   | 'incompatible'
 
@@ -175,9 +177,9 @@ export const ORPHANED_SQL: MigrationRecord[] = [
     file: 'sql/candidate-graph-v18.sql',
     ledgerName: null,
     method: 'unapplied',
-    replaySafety: 'silent_no_op',
+    replaySafety: 'table_shape_no_op_secondary_drift',
     order: null,
-    note: 'The most dangerous orphan. Every CREATE uses IF NOT EXISTS, so it reports success against the live schema while changing zero columns. Its differing definitions are silently discarded, which makes it look like a valid source of truth when it is not. Archive.',
+    note: 'Its CREATE TABLE IF NOT EXISTS statements silently preserve the existing production table shapes, but the file still adds missing secondary indexes. It is therefore neither a valid canonical schema nor a total no-op. Archive after recording those secondary-object differences.',
   },
   {
     file: 'sql/candidate-intelligence-spine-v19.sql',
