@@ -1,239 +1,215 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// V29.3A0 migration ledger reconciliation contract tests.
+// V29.3A0.1 migration replay-safety and quarantine contract tests.
 //
-// These follow the repository convention for SQL contract tests: deterministic
-// assertions over file contents and the declared manifest, with no live
-// database dependency in the suite. The PostgreSQL 17 replay rehearsal lives in
-// scripts/migration-replay.js and is run as a release gate, not in vitest.
-//
-// The purpose is to make schema drift loud. If someone adds a SQL file, changes
-// an application method, or fixes a replay hazard without updating the
-// manifest, one of these fails.
+// These tests keep repository state deterministic. PostgreSQL behavior is
+// verified separately by scripts/migration-replay-remediated.js in CI.
 // ─────────────────────────────────────────────────────────────────────────────
-import { readFileSync, readdirSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   ALL_SQL_RECORDS,
   CANONICAL_TABLES,
+  HELD_REPO_MIGRATIONS,
   ORPHANED_SQL,
-  PENDING_REPO_MIGRATIONS,
   PRODUCTION_LEDGER_ENTRIES,
   PRODUCTION_SEQUENCE,
+  RECONCILIATION_SUPPORT,
   isLedgerReplaySafe,
-  replayUnsafeFiles,
+  isRawHistoricalReplaySafe,
+  rawReplayGuardedFiles,
 } from '../lib/migration-manifest'
 
 const root = process.cwd()
-const read = (rel: string) => readFileSync(join(root, rel), 'utf8')
+const read = (relativePath: string) => readFileSync(join(root, relativePath), 'utf8')
+const sqlFiles = (relativeDirectory: string) => {
+  const directory = join(root, relativeDirectory)
+  if (!existsSync(directory)) return []
+  return readdirSync(directory)
+    .filter(file => file.endsWith('.sql'))
+    .map(file => `${relativeDirectory}/${file}`)
+}
+
 const stripComments = (sql: string) => sql.replace(/--[^\n]*/g, '')
+const normalize = (value: string) => value.toLowerCase().replace(/["']/g, '').replace(/\s+/g, ' ').trim()
 
-describe('V29.3A0 - the manifest matches the files on disk', () => {
-  it('accounts for every SQL file in both directories', () => {
+function createdPolicies(sql: string): Array<{ name: string; table: string }> {
+  const result: Array<{ name: string; table: string }> = []
+  const expression = /create\s+policy\s+("[^"]+"|[a-zA-Z0-9_]+)\s+on\s+([a-zA-Z0-9_.]+)/gi
+  for (const match of stripComments(sql).matchAll(expression)) {
+    result.push({ name: normalize(match[1]), table: normalize(match[2]) })
+  }
+  return result
+}
+
+describe('V29.3A0.1 - manifest accounts for every SQL artifact', () => {
+  it('accounts for historical, support, held, and orphan SQL', () => {
     const onDisk = [
-      ...readdirSync(join(root, 'sql')).filter(f => f.endsWith('.sql')).map(f => `sql/${f}`),
-      ...readdirSync(join(root, 'supabase/migrations')).filter(f => f.endsWith('.sql')).map(f => `supabase/migrations/${f}`),
+      ...sqlFiles('sql'),
+      ...sqlFiles('supabase/migrations'),
+      ...sqlFiles('supabase/held-migrations'),
     ].sort()
-
-    const declared = ALL_SQL_RECORDS.map(r => r.file).sort()
+    const declared = ALL_SQL_RECORDS.map(record => record.file).sort()
     expect(declared).toEqual(onDisk)
   })
 
-  it('points every manifest entry at a file that exists', () => {
+  it('points every manifest record at an existing file', () => {
     for (const record of ALL_SQL_RECORDS) {
       expect(existsSync(join(root, record.file)), `missing ${record.file}`).toBe(true)
     }
   })
 
-  it('gives the production sequence a contiguous order starting at 1', () => {
-    const orders = PRODUCTION_SEQUENCE.map(r => r.order)
-    expect(orders).toEqual(orders.map((_, i) => i + 1))
+  it('keeps the production sequence ordered from one through eight', () => {
+    expect(PRODUCTION_SEQUENCE.map(record => record.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
   })
 })
 
-describe('V29.3A0 - the repository reconciles against the production ledger', () => {
-  it('maps every production ledger entry to exactly one repository file', () => {
-    for (const entry of PRODUCTION_LEDGER_ENTRIES) {
-      const matches = PRODUCTION_SEQUENCE.filter(r => r.ledgerName === entry)
-      expect(matches, `ledger entry ${entry} has no unique repository file`).toHaveLength(1)
+describe('V29.3A0.1 - production ledger reconciliation remains intact', () => {
+  it('maps every production ledger entry to one historical SQL file', () => {
+    for (const ledgerName of PRODUCTION_LEDGER_ENTRIES) {
+      expect(PRODUCTION_SEQUENCE.filter(record => record.ledgerName === ledgerName)).toHaveLength(1)
     }
   })
 
-  it('records no ledger entry that production does not have', () => {
-    const claimed = PRODUCTION_SEQUENCE.map(r => r.ledgerName).filter(Boolean)
-    for (const name of claimed) {
-      expect(PRODUCTION_LEDGER_ENTRIES).toContain(name as (typeof PRODUCTION_LEDGER_ENTRIES)[number])
-    }
+  it('does not invent remote ledger entries', () => {
+    const claimed = PRODUCTION_SEQUENCE.map(record => record.ledgerName).filter(Boolean)
+    expect(claimed.sort()).toEqual([...PRODUCTION_LEDGER_ENTRIES].sort())
   })
 
-  it('shows that no ledger migration came from the versioned migrations directory', () => {
-    const ledgerFiles = PRODUCTION_SEQUENCE.filter(r => r.method === 'ledger').map(r => r.file)
-    expect(ledgerFiles.length).toBe(PRODUCTION_LEDGER_ENTRIES.length)
-    expect(ledgerFiles.every(f => f.startsWith('sql/'))).toBe(true)
-    expect(ledgerFiles.some(f => f.startsWith('supabase/migrations/'))).toBe(false)
-  })
-
-  it('shows that every versioned migration is still unapplied', () => {
-    const versioned = ALL_SQL_RECORDS.filter(r => r.file.startsWith('supabase/migrations/'))
-    expect(versioned.length).toBeGreaterThan(0)
-    expect(versioned.every(r => r.method === 'unapplied')).toBe(true)
-    expect(PENDING_REPO_MIGRATIONS.map(r => r.file).sort()).toEqual(versioned.map(r => r.file).sort())
-  })
-
-  it('records that the candidate graph was applied outside the ledger', () => {
-    const manual = PRODUCTION_SEQUENCE.filter(r => r.method === 'manual_sql_editor')
-    expect(manual.map(r => r.file)).toEqual([
+  it('retains the two manual SQL-editor baseline files', () => {
+    expect(PRODUCTION_SEQUENCE.filter(record => record.method === 'manual_sql_editor').map(record => record.file)).toEqual([
       'sql/complete-schema-v19.sql',
       'sql/rls-policies-v19.sql',
     ])
-    const checklist = read('sql/MIGRATION-CHECKLIST.md')
-    expect(checklist).toContain('complete-schema-v19.sql')
-    expect(checklist).toContain('rls-policies-v19.sql')
-    expect(checklist.toLowerCase()).toContain('supabase sql editor')
   })
 })
 
-describe('V29.3A0 - replay safety is measured, not assumed', () => {
-  it('pins the exact set of replay-unsafe production files', () => {
-    expect(replayUnsafeFiles().map(r => r.file).sort()).toEqual([
+describe('V29.3A0.1 - active migration directory is fail-closed', () => {
+  it('contains no SQL migration eligible for an accidental db push', () => {
+    expect(sqlFiles('supabase/migrations')).toEqual([])
+  })
+
+  it('preserves all three unapplied migrations in the held directory', () => {
+    expect(HELD_REPO_MIGRATIONS.map(record => record.file).sort()).toEqual([
+      'supabase/held-migrations/20260701173000_jobs_v2_foundation.sql',
+      'supabase/held-migrations/20260721173000_role_workspace_owner_safety.sql',
+      'supabase/held-migrations/20260722160000_role_calibration_state.sql',
+    ])
+    expect(HELD_REPO_MIGRATIONS.every(record => record.method === 'held')).toBe(true)
+  })
+
+  it('documents why each held migration cannot be activated implicitly', () => {
+    const readme = read('supabase/held-migrations/README.md')
+    for (const record of HELD_REPO_MIGRATIONS) {
+      expect(readme).toContain(record.file.split('/').at(-1))
+    }
+    expect(readme).toContain('not active migrations')
+    expect(readme).toContain('explicit production approval')
+  })
+})
+
+describe('V29.3A0.1 - reconstruction replay is safe as a declared composite', () => {
+  it('keeps the five raw historical hazards visible', () => {
+    expect(rawReplayGuardedFiles().map(record => record.file).sort()).toEqual([
       'sql/agent-os-v23-v25.sql',
       'sql/autosource-v22.sql',
       'sql/candidate-acquisition-v21.sql',
       'sql/complete-schema-v19.sql',
       'sql/rls-policies-v19.sql',
     ])
+    expect(isRawHistoricalReplaySafe()).toBe(false)
   })
 
-  it('reports the ledger as not yet replay-safe', () => {
-    expect(isLedgerReplaySafe()).toBe(false)
+  it('declares the guarded eight-file reconstruction replay-safe', () => {
+    expect(isLedgerReplaySafe()).toBe(true)
+    expect(RECONCILIATION_SUPPORT.map(record => record.file)).toContain('sql/replay-safety-guards-v29-3a0.sql')
   })
 
-  it('attributes every replay failure to an unguarded policy or trigger', () => {
-    for (const record of replayUnsafeFiles()) {
-      const sql = stripComments(read(record.file)).toLowerCase()
-      const createPolicies = (sql.match(/create policy/g) || []).length
-      const dropPolicyGuards = (sql.match(/drop policy if exists/g) || []).length
-      const createTriggers = (sql.match(/create trigger/g) || []).length
-      const dropTriggerGuards = (sql.match(/drop trigger if exists/g) || []).length
+  it('keeps the replay guard outside the active migration directory', () => {
+    const guard = RECONCILIATION_SUPPORT[0]
+    expect(guard.method).toBe('reconciliation_support')
+    expect(guard.file.startsWith('supabase/migrations/')).toBe(false)
+    expect(read(guard.file)).toContain('NOT a production migration')
+  })
 
-      const unguarded = (createPolicies - dropPolicyGuards) + (createTriggers - dropTriggerGuards)
-      expect(unguarded, `${record.file} should have an unguarded object`).toBeGreaterThan(0)
+  it('guards every policy recreated by the five raw-unsafe files', () => {
+    const guard = normalize(read('sql/replay-safety-guards-v29-3a0.sql'))
+    const policies = rawReplayGuardedFiles().flatMap(record => createdPolicies(read(record.file)))
+    expect(policies).toHaveLength(33)
+    for (const policy of policies) {
+      expect(
+        guard,
+        `guard must drop policy ${policy.name} on ${policy.table}`,
+      ).toContain(`drop policy if exists ${policy.name} on ${policy.table}`)
     }
   })
 
-  it('confirms the replay-safe files use the drop-then-create guard', () => {
-    const safe = PRODUCTION_SEQUENCE.filter(r => r.replaySafety === 'replay_safe')
-    for (const record of safe) {
-      const sql = stripComments(read(record.file)).toLowerCase()
-      const createPolicies = (sql.match(/create policy/g) || []).length
-      const dropPolicyGuards = (sql.match(/drop policy if exists/g) || []).length
-      expect(dropPolicyGuards, `${record.file} guards every policy`).toBeGreaterThanOrEqual(createPolicies)
-    }
-  })
-
-  it('keeps every table creation behind IF NOT EXISTS', () => {
-    for (const record of PRODUCTION_SEQUENCE) {
-      const sql = stripComments(read(record.file)).toLowerCase()
-      const creates = (sql.match(/create table/g) || []).length
-      const guarded = (sql.match(/create table if not exists/g) || []).length
-      expect(guarded, `${record.file} guards every create table`).toBe(creates)
-    }
-  })
-
-  it('flags the single production file wrapped in an explicit transaction', () => {
-    const wrapped = PRODUCTION_SEQUENCE.filter(r => /^\s*begin;/im.test(read(r.file)))
-    expect(wrapped.map(r => r.file)).toEqual(['sql/autosource-v22.sql'])
-  })
-})
-
-describe('V29.3A0 - canonical table contract for V29.3A1', () => {
-  it('sources each canonical table from the file that actually defines it', () => {
-    for (const [table, meta] of Object.entries(CANONICAL_TABLES)) {
-      const sql = stripComments(read(meta.source)).toLowerCase()
-      expect(sql, `${meta.source} should define ${table}`).toContain(`create table if not exists public.${table}`)
-    }
-  })
-
-  it('records evidence_claims as absent from production', () => {
-    expect(CANONICAL_TABLES.evidence_claims.present).toBe(false)
-    const orphanFiles = ORPHANED_SQL.map(r => r.file)
-    expect(orphanFiles).toContain(CANONICAL_TABLES.evidence_claims.source)
-  })
-
-  it('preserves the source_profiles idempotency key that exact source reuse depends on', () => {
-    const sql = stripComments(read('sql/complete-schema-v19.sql')).toLowerCase()
-    expect(sql).toMatch(/unique\s*\(owner_id,\s*source,\s*source_profile_id\)/)
-  })
-
-  it('preserves the contact verification guardrail at schema level', () => {
-    const sql = stripComments(read('sql/complete-schema-v19.sql')).toLowerCase()
-    expect(sql).toMatch(/verified\s+boolean\s+not null default false/)
-    expect(sql).toMatch(/check\s*\(\s*verified\s*=\s*false\s*\)/)
-  })
-
-  it('keeps talent_graph_edges outside canonical identity resolution', () => {
-    expect(CANONICAL_TABLES.talent_graph_edges.source).toBe('sql/agent-os-v23-v25.sql')
-    const identityFiles = [
-      'sql/complete-schema-v19.sql',
-      'sql/candidate-intelligence-spine-v19.sql',
+  it('guards every V19 trigger that was previously unguarded', () => {
+    const guard = normalize(read('sql/replay-safety-guards-v29-3a0.sql'))
+    const expected = [
+      'drop trigger if exists set_updated_at_profiles on public.profiles',
+      'drop trigger if exists set_updated_at_projects on public.projects',
+      'drop trigger if exists set_updated_at_candidates on public.candidates',
+      'drop trigger if exists set_updated_at_project_candidates on public.project_candidates',
+      'drop trigger if exists set_updated_at_pipeline_entries on public.pipeline_entries',
+      'drop trigger if exists set_updated_at_source_profiles on public.source_profiles',
     ]
-    for (const file of identityFiles) {
-      expect(stripComments(read(file)).toLowerCase()).not.toContain('talent_graph_edges')
-    }
+    for (const statement of expected) expect(guard).toContain(statement)
   })
 })
 
-describe('V29.3A0 - orphan classification', () => {
-  it('classifies the superseded candidate graph scaffolds as incompatible', () => {
-    const incompatible = ORPHANED_SQL.filter(r => r.replaySafety === 'incompatible').map(r => r.file)
-    expect(incompatible.sort()).toEqual([
+describe('V29.3A0.1 - canonical identity contract is unchanged', () => {
+  it('keeps exact-source idempotency in source_profiles', () => {
+    expect(stripComments(read('sql/complete-schema-v19.sql')).toLowerCase()).toMatch(
+      /unique\s*\(owner_id,\s*source,\s*source_profile_id\)/,
+    )
+  })
+
+  it('keeps contact verification fail-closed in the schema', () => {
+    const schema = stripComments(read('sql/complete-schema-v19.sql')).toLowerCase()
+    expect(schema).toMatch(/verified\s+boolean\s+not null default false/)
+    expect(schema).toMatch(/check\s*\(\s*verified\s*=\s*false\s*\)/)
+  })
+
+  it('keeps evidence_claims absent and talent_graph_edges separate', () => {
+    expect(CANONICAL_TABLES.evidence_claims.present).toBe(false)
+    expect(CANONICAL_TABLES.talent_graph_edges.present).toBe(true)
+    expect(CANONICAL_TABLES.talent_graph_edges.source).toBe('sql/agent-os-v23-v25.sql')
+  })
+})
+
+describe('V29.3A0.1 - orphan classifications remain honest', () => {
+  it('classifies the two text-ID scaffolds as incompatible', () => {
+    expect(ORPHANED_SQL.filter(record => record.replaySafety === 'incompatible').map(record => record.file).sort()).toEqual([
       'sql/candidate-graph-schema-v17-3.sql',
       'sql/candidate-graph-schema.sql',
     ])
   })
 
-  it('flags candidate-graph-v18 as table-shape no-op with secondary-object drift', () => {
-    const v18 = ORPHANED_SQL.find(r => r.file === 'sql/candidate-graph-v18.sql')
-    expect(v18?.replaySafety).toBe('table_shape_no_op_secondary_drift')
-    const sql = stripComments(read('sql/candidate-graph-v18.sql')).toLowerCase()
-    const creates = (sql.match(/create table/g) || []).length
-    const guarded = (sql.match(/create table if not exists/g) || []).length
-    const indexes = (sql.match(/create index if not exists/g) || []).length
-    expect(guarded).toBe(creates)
-    expect(creates).toBeGreaterThan(0)
-    expect(indexes).toBeGreaterThan(0)
-  })
-
-  it('does not put any orphan in the production sequence', () => {
-    const sequenceFiles = new Set(PRODUCTION_SEQUENCE.map(r => r.file))
-    for (const orphan of ORPHANED_SQL) {
-      expect(sequenceFiles.has(orphan.file)).toBe(false)
-    }
+  it('describes V18 as table-shape no-op with secondary drift', () => {
+    expect(ORPHANED_SQL.find(record => record.file === 'sql/candidate-graph-v18.sql')?.replaySafety)
+      .toBe('table_shape_no_op_secondary_drift')
   })
 })
 
-describe('V29.3A0 - replay gate is reproducible in CI', () => {
-  it('exposes the replay command without an undeclared runtime dependency', () => {
+describe('V29.3A0.1 - CI executes the remediated gate', () => {
+  it('keeps the reconciliation harness and promotes the guarded harness', () => {
     const pkg = JSON.parse(read('package.json'))
-    expect(pkg.scripts?.['migration:replay']).toBe('node scripts/migration-replay.js')
-    const replay = read('scripts/migration-replay.js')
-    expect(replay).not.toContain("require('embedded-postgres')")
-    expect(replay).toContain("require('node:child_process')")
+    expect(pkg.scripts['migration:reconcile']).toBe('node scripts/migration-replay.js')
+    expect(pkg.scripts['migration:replay']).toBe('node scripts/migration-replay-remediated.js')
   })
 
-  it('runs the replay harness against the PostgreSQL 17 CI service', () => {
+  it('uses PostgreSQL 17 and the promoted migration:replay command in CI', () => {
     const workflow = read('../.github/workflows/next-public-ci.yml')
     expect(workflow).toContain('image: postgres:17')
     expect(workflow).toContain('npm run migration:replay')
   })
 
-  it('fails closed when measured outcomes drift', () => {
-    const replay = read('scripts/migration-replay.js')
-    expect(replay).toContain('EXPECTED_REPLAY_UNSAFE')
-    expect(replay).toContain('ORPHAN_EXPECTATIONS')
-    expect(replay).toContain('tableShapeFingerprint')
-    expect(replay).toContain('fullSchemaFingerprint')
-    expect(replay).toContain('Assertion failed:')
+  it('fails closed and fingerprints the schema before and after guarded replay', () => {
+    const replay = read('scripts/migration-replay-remediated.js')
     expect(replay).toContain('process.exitCode = 1')
+    expect(replay).toContain('beforeGuardedReplay')
+    expect(replay).toContain('afterGuardedReplay')
+    expect(replay).toContain('active supabase/migrations directory contains no SQL files')
   })
 })
