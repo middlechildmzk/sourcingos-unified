@@ -39,6 +39,16 @@ const LABELS: EvaluationLabel[] = [
   'do_not_link',
 ]
 
+function emptyCounts(): Record<EvaluationLabel, number> {
+  return {
+    exact_source_reuse: 0,
+    deterministic_attach: 0,
+    review: 0,
+    create_new_candidate: 0,
+    do_not_link: 0,
+  }
+}
+
 export function evaluationLabel(decision: DecisionClass): EvaluationLabel {
   if (decision === 'high_priority_review' || decision === 'standard_review') return 'review'
   return decision
@@ -49,11 +59,20 @@ function ratio(numerator: number, denominator: number): number | null {
 }
 
 export function evaluateIdentityResolver(cases: LabeledIdentityCase[]): IdentityEvaluationReport {
-  const matrix = Object.fromEntries(LABELS.map(expected => [
-    expected,
-    Object.fromEntries(LABELS.map(predicted => [predicted, 0])) as Record<EvaluationLabel, number>,
-  ])) as Record<EvaluationLabel, Record<EvaluationLabel, number>>
-  const scores = Object.fromEntries(LABELS.map(label => [label, []])) as Record<EvaluationLabel, number[]>
+  const matrix: Record<EvaluationLabel, Record<EvaluationLabel, number>> = {
+    exact_source_reuse: emptyCounts(),
+    deterministic_attach: emptyCounts(),
+    review: emptyCounts(),
+    create_new_candidate: emptyCounts(),
+    do_not_link: emptyCounts(),
+  }
+  const scores: Record<EvaluationLabel, number[]> = {
+    exact_source_reuse: [],
+    deterministic_attach: [],
+    review: [],
+    create_new_candidate: [],
+    do_not_link: [],
+  }
   const cohorts = new Map<string, { total: number; correct: number }>()
   const falsePositiveCaseIds: string[] = []
   const falseNegativeCaseIds: string[] = []
@@ -100,6 +119,14 @@ export function evaluateIdentityResolver(cases: LabeledIdentityCase[]): Identity
     cohorts.set(cohort, summary)
   }
 
+  const sortedScores: Record<EvaluationLabel, number[]> = {
+    exact_source_reuse: [...scores.exact_source_reuse].sort((a, b) => a - b),
+    deterministic_attach: [...scores.deterministic_attach].sort((a, b) => a - b),
+    review: [...scores.review].sort((a, b) => a - b),
+    create_new_candidate: [...scores.create_new_candidate].sort((a, b) => a - b),
+    do_not_link: [...scores.do_not_link].sort((a, b) => a - b),
+  }
+
   return {
     total: cases.length,
     correct,
@@ -110,9 +137,7 @@ export function evaluateIdentityResolver(cases: LabeledIdentityCase[]): Identity
     falsePositiveCaseIds,
     falseNegativeCaseIds,
     decisionClassConfusionMatrix: matrix,
-    scoreDistributions: Object.fromEntries(
-      LABELS.map(label => [label, scores[label].sort((a, b) => a - b)]),
-    ) as Record<EvaluationLabel, number[]>,
+    scoreDistributions: sortedScores,
     cohortAccuracy: Object.fromEntries([...cohorts.entries()].map(([cohort, value]) => [
       cohort,
       { ...value, accuracy: value.total ? value.correct / value.total : 0 },
