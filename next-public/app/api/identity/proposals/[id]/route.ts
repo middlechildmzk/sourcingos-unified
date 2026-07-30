@@ -19,7 +19,7 @@ function browserSafeProposal(proposal: Awaited<ReturnType<typeof getIdentityProp
   return {
     ...proposal,
     candidateClaims: proposal.candidateClaims.map(claim => SENSITIVE_FIELD.test(claim.fieldName)
-      ? { ...claim, value: '[Sensitive claim masked]', normalizedValue: null }
+      ? { ...claim, value: '[Sensitive claim masked]' , normalizedValue: null }
       : claim),
   }
 }
