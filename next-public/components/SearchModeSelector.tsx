@@ -1,5 +1,6 @@
 'use client'
 
+import { trackEvent } from '@/lib/analytics'
 import { SEARCH_MODE_COPY, type SearchMode } from '@/lib/search/volume-plan'
 
 const modes: SearchMode[] = ['precision', 'balanced', 'broad', 'market_map']
@@ -20,7 +21,10 @@ export function SearchModeSelector({ mode, onChange }: { mode: SearchMode; onCha
               key={m}
               type="button"
               className="card"
-              onClick={() => onChange(m)}
+              onClick={() => {
+                trackEvent('candidate_search_mode_selected', { mode: m })
+                onChange(m)
+              }}
               style={{ textAlign: 'left', borderColor: active ? 'var(--teal)' : undefined, cursor: 'pointer' }}
             >
               <span className="kicker">{active ? 'Selected' : 'Mode'}</span>

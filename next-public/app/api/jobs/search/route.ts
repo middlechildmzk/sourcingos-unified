@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { atsTargets } from '@/data/ats-targets'
 import { z } from 'zod'
 import { rateLimit } from '@/lib/rate-limit'
-import { dedupeJobs, fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs, isRecruitingRole, cleanText, NormalizedJob } from '@/lib/jobs-ingestion'
+import { dedupeJobs, fetchAshbyJobs, fetchGreenhouseJobs, fetchLeverJobs, isRecruitingRole, cleanText, safeJobSnippet, NormalizedJob } from '@/lib/jobs-ingestion'
 import { fetchPersistedJobs, jobMatches } from '@/lib/jobs-v2'
 import { sourceLabelsFor } from '@/lib/job-source-registry'
 
@@ -33,7 +33,7 @@ async function fetchRemotive(query: string): Promise<LiveJob[]> {
       sourceUrl: j.url,
       postedDate: cleanText(j.publication_date || '', 80),
       lastCheckedAt: new Date().toISOString(),
-      description: cleanText(j.description, 360),
+      description: safeJobSnippet(j.description),
       tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'remote job feed', 'source: Remotive'])),
       category: 'recruiter'
     }))
@@ -64,7 +64,7 @@ async function fetchArbeitnow(query: string): Promise<LiveJob[]> {
       sourceUrl: j.url,
       postedDate: j.created_at ? new Date(j.created_at * 1000).toISOString() : '',
       lastCheckedAt: new Date().toISOString(),
-      description: cleanText(j.description, 360),
+      description: safeJobSnippet(j.description),
       tags: Array.from(new Set([...(j.tags || []).slice(0, 4).map((t: any) => cleanText(t, 40)), 'public job feed'])),
       category: 'recruiter'
     }))
@@ -102,7 +102,7 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
         sourceUrl: d.PositionURI,
         postedDate: cleanText(d.PublicationStartDate, 80),
         lastCheckedAt: new Date().toISOString(),
-        description: cleanText(d.UserArea?.Details?.JobSummary, 360),
+        description: safeJobSnippet(d.UserArea?.Details?.JobSummary),
         tags: ['Federal', 'USAJOBS', 'GovCon-adjacent'],
         category: 'govcon-recruiter'
       } satisfies LiveJob

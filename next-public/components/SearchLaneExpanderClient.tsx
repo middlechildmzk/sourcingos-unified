@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { trackEvent } from '@/lib/analytics'
 import { buildVolumeSearchPlan, type SearchMode } from '@/lib/search/volume-plan'
 
 const modes: SearchMode[] = ['precision', 'balanced', 'broad', 'market_map']
@@ -37,7 +38,10 @@ export function SearchLaneExpanderClient() {
   return <div>
     <div className="wb-form-row full" style={{ marginBottom: '16px' }}>
       <label>Role, skills, market, or rough search target</label>
-      <textarea value={query} onChange={e => setQuery(e.target.value)} style={{ minHeight: '86px' }} />
+      <textarea value={query} onChange={e => {
+        setQuery(e.target.value)
+        trackEvent('tool_used', { tool: 'search-lane-expander', action: 'query_changed' })
+      }} style={{ minHeight: '86px' }} />
     </div>
 
     <div className="preview-banner" style={{ marginBottom: '16px' }}>
@@ -64,7 +68,7 @@ export function SearchLaneExpanderClient() {
         <div style={{ marginTop: '12px' }}>
           <div className="composer-section-label">Manual-safe lanes</div>
           <ul style={{ color: 'var(--muted)', lineHeight: 1.65, paddingLeft: '18px' }}>
-            {plan.manualSafeLanes.slice(0, 4).map(lane => <li key={lane.id}><a href={lane.href} target="_blank" rel="noreferrer noopener">{lane.label}</a>: {lane.note}</li>)}
+            {plan.manualSafeLanes.slice(0, 4).map(lane => <li key={lane.id}><a href={lane.href} target="_blank" rel="noreferrer noopener" onClick={() => trackEvent('manual_safe_lane_opened', { tool: 'search-lane-expander', lane: lane.id, mode: plan.mode })}>{lane.label}</a>: {lane.note}</li>)}
           </ul>
         </div>
       </div>)}
@@ -72,7 +76,7 @@ export function SearchLaneExpanderClient() {
 
     <div className="cta" style={{ marginTop: '24px' }}>
       <strong>Next step:</strong> take the best lane into Candidate Search, then use the Market Map summary to see source coverage, no-result sources, and manual-safe next actions.{' '}
-      <Link href="/candidate-search" style={{ textDecoration: 'underline' }}>Open Candidate Search →</Link>
+      <Link href="/candidate-search" style={{ textDecoration: 'underline' }} onClick={() => trackEvent('tool_used', { tool: 'search-lane-expander', action: 'open_candidate_search' })}>Open Candidate Search →</Link>
     </div>
   </div>
 }

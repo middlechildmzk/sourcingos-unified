@@ -1,6 +1,3 @@
-// Single source of truth for site navigation.
-// Public-facing product is "Candidate Search"; "Candidate Graph" is the internal data layer.
-
 export type NavItem = {
   label: string
   href: string
@@ -14,7 +11,7 @@ export const publicNav: NavItem[] = [
   { label: 'Training', href: '/training' },
   { label: 'Jobs', href: '/jobs' },
   { label: 'Directory', href: '/directory' },
-  { label: 'Guides', href: '/blog' },
+  { label: 'Guides', href: '/guides' },
 ]
 
 export const requestAccessCTA: NavItem = {
