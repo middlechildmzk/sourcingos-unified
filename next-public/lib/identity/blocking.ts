@@ -35,6 +35,9 @@ export function buildIdentityBlockKeys(profile: IdentityProfile, limit = 16): Id
 
   const profileUrl = profile.profileUrl ? normalizeProfileUrl(profile.profileUrl) : ''
   if (profileUrl) add('profile_url', profileUrl, 'Exact normalized profile URL')
+  for (const linkedUrl of profile.explicitLinks.map(normalizeProfileUrl).filter(Boolean)) {
+    add('profile_url', linkedUrl, 'Explicitly observed linked profile URL')
+  }
 
   for (const identifier of profile.identifiers) {
     if (identifier.type === 'public_email_hash') {
