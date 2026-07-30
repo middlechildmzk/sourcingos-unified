@@ -77,17 +77,21 @@ create policy identity_decision_events_owner_select on public.identity_decision_
   for select to authenticated
   using ((select auth.uid()) = owner_id);
 
+-- Remove the earlier draft signature if a disposable environment saw it.
+drop function if exists public.decide_identity_match_proposal(uuid, uuid, text, uuid, text, timestamptz);
+
 create or replace function public.decide_identity_match_proposal(
   p_owner_id uuid,
   p_proposal_id uuid,
   p_action text,
   p_actor_id uuid,
-  p_reason text default null,
-  p_expected_updated_at timestamptz default null
+  p_expected_proposal_updated_at timestamptz,
+  p_expected_source_updated_at timestamptz,
+  p_reason text default null
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -101,6 +105,7 @@ declare
   v_contact_count integer := 0;
   v_signal_count integer := 0;
   v_claim_count integer := 0;
+  v_superseded_count integer := 0;
   v_has_role_state boolean := false;
 begin
   if p_owner_id is null or p_actor_id is null or p_actor_id <> p_owner_id then
@@ -109,6 +114,10 @@ begin
 
   if p_action not in ('approve', 'keep_separate', 'reject') then
     return jsonb_build_object('ok', false, 'code', 'identity_action_invalid');
+  end if;
+
+  if p_expected_proposal_updated_at is null or p_expected_source_updated_at is null then
+    return jsonb_build_object('ok', false, 'code', 'identity_decision_precondition_required');
   end if;
 
   select * into v_proposal
@@ -128,7 +137,7 @@ begin
     );
   end if;
 
-  if p_expected_updated_at is not null and v_proposal.updated_at <> p_expected_updated_at then
+  if v_proposal.updated_at <> p_expected_proposal_updated_at then
     return jsonb_build_object(
       'ok', false,
       'code', 'identity_proposal_stale',
@@ -143,6 +152,14 @@ begin
 
   if not found then
     return jsonb_build_object('ok', false, 'code', 'identity_source_profile_not_found');
+  end if;
+
+  if v_profile.updated_at <> p_expected_source_updated_at then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'identity_source_profile_stale',
+      'currentUpdatedAt', v_profile.updated_at
+    );
   end if;
 
   select * into v_target
@@ -176,6 +193,19 @@ begin
 
     if v_profile.candidate_id = v_proposal.candidate_id then
       return jsonb_build_object('ok', false, 'code', 'identity_source_already_attached');
+    end if;
+
+    -- The profile row lock serializes competing approvals. After a waiting
+    -- transaction acquires the lock, this check sees the first applied event.
+    if exists (
+      select 1
+      from public.identity_decision_events
+      where owner_id = p_owner_id
+        and source_profile_id = v_profile.id
+        and event_status = 'applied'
+        and action = 'approve'
+    ) then
+      return jsonb_build_object('ok', false, 'code', 'identity_source_has_active_approval');
     end if;
 
     if v_profile.candidate_id is not null then
@@ -250,6 +280,24 @@ begin
         review_required = false
     where owner_id = p_owner_id and id = v_proposal.id;
 
+    -- Competing pending proposals become stale history. Rollback intentionally
+    -- does not resurrect them; a fresh resolver run must create fresh evidence.
+    update public.identity_match_proposals
+    set status = 'superseded',
+        decision_reason = 'superseded by approved identity decision',
+        decision_metadata = jsonb_build_object(
+          'supersededByProposalId', v_proposal.id,
+          'sourceProfileId', v_profile.id
+        ),
+        decided_at = v_now,
+        decided_by = p_actor_id,
+        review_required = true
+    where owner_id = p_owner_id
+      and source_profile_id = v_profile.id
+      and id <> v_proposal.id
+      and status = 'pending';
+    get diagnostics v_superseded_count = row_count;
+
     insert into public.identity_decision_events (
       owner_id, proposal_id, action, source_profile_id,
       previous_candidate_id, target_candidate_id, previous_source_status,
@@ -269,7 +317,8 @@ begin
         'movedEvidenceItems', v_evidence_count,
         'movedContactSignals', v_contact_count,
         'movedAvailabilitySignals', v_signal_count,
-        'movedEvidenceClaims', v_claim_count
+        'movedEvidenceClaims', v_claim_count,
+        'supersededCompetingProposals', v_superseded_count
       ),
       nullif(trim(coalesce(p_reason, '')), ''),
       p_actor_id
@@ -282,7 +331,8 @@ begin
       'proposalId', v_proposal.id,
       'sourceProfileId', v_profile.id,
       'previousCandidateId', v_profile.candidate_id,
-      'targetCandidateId', v_proposal.candidate_id
+      'targetCandidateId', v_proposal.candidate_id,
+      'supersededCompetingProposals', v_superseded_count
     );
   end if;
 
@@ -338,7 +388,7 @@ create or replace function public.revert_identity_decision(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = ''
 as $$
 declare
@@ -460,9 +510,9 @@ begin
 end;
 $$;
 
-revoke all on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, text, timestamptz)
+revoke all on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, timestamptz, timestamptz, text)
   from PUBLIC, anon, authenticated;
-grant execute on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, text, timestamptz)
+grant execute on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, timestamptz, timestamptz, text)
   to service_role;
 
 revoke all on function public.revert_identity_decision(uuid, uuid, uuid, text)
@@ -472,7 +522,7 @@ grant execute on function public.revert_identity_decision(uuid, uuid, uuid, text
 
 comment on table public.identity_decision_events is
   'Auditable and reversible recruiter decisions for source-profile identity proposals. No event deletes a candidate.';
-comment on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, text, timestamptz) is
-  'Service-role-only transactional identity decision. Approval moves only records tied to the source profile and never deletes the provisional candidate.';
+comment on function public.decide_identity_match_proposal(uuid, uuid, text, uuid, timestamptz, timestamptz, text) is
+  'Service-role-only transactional identity decision with mandatory proposal and source-profile optimistic locks. Approval moves only records tied to the source profile and never deletes the provisional candidate.';
 comment on function public.revert_identity_decision(uuid, uuid, uuid, text) is
   'Service-role-only rollback for an applied identity decision. Approved profile moves are restored and require a fresh resolver proposal.';
