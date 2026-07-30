@@ -81,7 +81,7 @@ describe('V29.3A2 owner scoping and browser data minimization', () => {
 
   it('masks contact-like field claims in the route payload', () => {
     expect(detailRoute).toContain('SENSITIVE_FIELD')
-    expect(detailRoute).toContain("value: '[Sensitive claim masked]' ")
+    expect(detailRoute).toContain("value: '[Sensitive claim masked]'")
     expect(detailRoute).toContain('normalizedValue: null')
   })
 
