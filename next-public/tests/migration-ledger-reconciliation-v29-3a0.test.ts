@@ -192,14 +192,16 @@ describe('V29.3A0 - orphan classification', () => {
     ])
   })
 
-  it('flags candidate-graph-v18 as a silent no-op rather than a valid source', () => {
+  it('flags candidate-graph-v18 as table-shape no-op with secondary-object drift', () => {
     const v18 = ORPHANED_SQL.find(r => r.file === 'sql/candidate-graph-v18.sql')
-    expect(v18?.replaySafety).toBe('silent_no_op')
+    expect(v18?.replaySafety).toBe('table_shape_no_op_secondary_drift')
     const sql = stripComments(read('sql/candidate-graph-v18.sql')).toLowerCase()
     const creates = (sql.match(/create table/g) || []).length
     const guarded = (sql.match(/create table if not exists/g) || []).length
+    const indexes = (sql.match(/create index if not exists/g) || []).length
     expect(guarded).toBe(creates)
     expect(creates).toBeGreaterThan(0)
+    expect(indexes).toBeGreaterThan(0)
   })
 
   it('does not put any orphan in the production sequence', () => {
@@ -229,6 +231,8 @@ describe('V29.3A0 - replay gate is reproducible in CI', () => {
     const replay = read('scripts/migration-replay.js')
     expect(replay).toContain('EXPECTED_REPLAY_UNSAFE')
     expect(replay).toContain('ORPHAN_EXPECTATIONS')
+    expect(replay).toContain('tableShapeFingerprint')
+    expect(replay).toContain('fullSchemaFingerprint')
     expect(replay).toContain('Assertion failed:')
     expect(replay).toContain('process.exitCode = 1')
   })
