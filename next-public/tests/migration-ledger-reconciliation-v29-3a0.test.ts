@@ -87,6 +87,7 @@ describe('V29.3A3 active and held migration boundary', () => {
       'supabase/held-migrations/20260721173000_role_workspace_owner_safety.sql',
       'supabase/held-migrations/20260722160000_role_calibration_state.sql',
       'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql',
+      'supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql',
     ])
     const readme = read('supabase/held-migrations/README.md')
     expect(readme).toContain('not active migrations')
@@ -143,6 +144,7 @@ describe('V29.3A3 canonical contracts', () => {
     expect(IDENTITY_FOUNDATION_TABLES).toContain('evidence_claims')
     expect(IDENTITY_FOUNDATION_TABLES).toContain('identity_match_proposals')
     expect(HELD_REPO_MIGRATIONS.some(record => record.file.endsWith('transactional_identity_decisions.sql'))).toBe(true)
+    expect(HELD_REPO_MIGRATIONS.some(record => record.file.endsWith('transactional_identity_decision_serialization.sql'))).toBe(true)
   })
 
   it('keeps exact-source idempotency and contact verification fail-closed', () => {
@@ -193,5 +195,6 @@ describe('V29.3A3 CI gates', () => {
     expect(identity).toContain('cross-owner source-profile attachment')
     expect(decision).toContain('exactly one concurrent approval wins and the other fails closed')
     expect(heldWrapper).toContain('supabase/held-migrations/20260730194500_transactional_identity_decisions.sql')
+    expect(heldWrapper).toContain('supabase/held-migrations/20260730194600_transactional_identity_decision_serialization.sql')
   })
 })
