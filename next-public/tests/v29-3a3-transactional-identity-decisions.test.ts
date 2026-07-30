@@ -149,10 +149,10 @@ describe('V29.3A3 executable proof', () => {
     expect(existsSync(join(root, serializationPath))).toBe(true)
   })
 
-  it('adds no browser decision endpoint or decision control', () => {
-    expect(existsSync(join(root, 'app/api/identity/proposals/[id]/decision/route.ts'))).toBe(false)
-    const reviewClient = read('components/IdentityReviewClient.tsx')
-    expect(reviewClient).toContain('Decision controls are intentionally unavailable')
-    expect(reviewClient).not.toMatch(/method:\s*['"]POST['"]/)
+  it('keeps the transaction SQL quarantined for later activation layers', () => {
+    expect(migrationPath.startsWith('supabase/held-migrations/')).toBe(true)
+    expect(serializationPath.startsWith('supabase/held-migrations/')).toBe(true)
+    expect(readdirSync(join(root, 'supabase/migrations'))).not.toContain('20260730194500_transactional_identity_decisions.sql')
+    expect(readdirSync(join(root, 'supabase/migrations'))).not.toContain('20260730194600_transactional_identity_decision_serialization.sql')
   })
 })
