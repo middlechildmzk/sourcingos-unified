@@ -12,10 +12,10 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "migration:reconcile": "node scripts/migration-replay.js",
-    "migration:replay": "node scripts/migration-replay-v29-3a3.js",
-    "migration:baseline": "node scripts/migration-baseline-v29-3a3.js",
+    "migration:replay": "node scripts/migration-replay-remediated.js",
+    "migration:baseline": "node scripts/migration-baseline-alignment.js",
     "migration:identity": "node scripts/migration-identity-foundation.js",
-    "migration:identity-decisions": "node scripts/migration-identity-decisions.js"
+    "migration:identity-decisions": "node scripts/migration-identity-decisions-held.js"
   },
   "dependencies": {
     "@next/mdx": "14.2.35",
