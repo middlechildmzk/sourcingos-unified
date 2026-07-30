@@ -92,7 +92,7 @@ The harness:
 6. verifies the exact expected replay failures,
 7. applies all pending versioned migrations on a fresh reconstructed database,
 8. classifies every orphan SQL file,
-9. fingerprints schema objects to prove whether an apparently successful file changed anything,
+9. computes both table-shape and full-schema fingerprints so table-definition no-ops are distinguished from secondary-object drift,
 10. writes a JSON report,
 11. drops every database on exit.
 
@@ -138,11 +138,11 @@ All three pending versioned migrations currently apply on a fresh reconstruction
 |---|---|---|
 | `sql/candidate-graph-schema.sql` | incompatible | superseded text-ID shape; conflicts with canonical UUID schema |
 | `sql/candidate-graph-schema-v17-3.sql` | incompatible | superseded text-ID shape; conflicts with canonical UUID schema |
-| `sql/candidate-graph-v18.sql` | silent no-op | guarded creates report success while leaving the existing schema unchanged |
+| `sql/candidate-graph-v18.sql` | table-shape no-op with secondary drift | existing table definitions are silently preserved, but missing secondary indexes are still added |
 | `sql/candidate-intelligence-spine-v19.sql` | additive, unapplied | defines `evidence_claims`, which is absent from production |
 | `sql/sourcingos-jobs-v17-6.sql` | additive but superseded | older jobs scaffold replaced by jobs v2 direction |
 
-The replay harness computes a schema fingerprint before and after each orphan. This proves the V18 file is a true silent no-op rather than merely assuming it from `IF NOT EXISTS` syntax.
+The first integrated replay gate corrected the original classification. Counting columns alone made V18 look like a total no-op. Full-schema fingerprinting showed that its guarded table definitions do not change table shapes, while its `CREATE INDEX IF NOT EXISTS` statements still modify secondary objects. It is therefore not a valid source of truth and not a total no-op.
 
 ## Canonical identity-table contract
 
