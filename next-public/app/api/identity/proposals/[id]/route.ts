@@ -13,6 +13,16 @@ import {
 export const dynamic = 'force-dynamic'
 
 const idSchema = z.string().uuid()
+const SENSITIVE_FIELD = /(email|phone|contact|address)/i
+
+function browserSafeProposal(proposal: Awaited<ReturnType<typeof getIdentityProposal>>) {
+  return {
+    ...proposal,
+    candidateClaims: proposal.candidateClaims.map(claim => SENSITIVE_FIELD.test(claim.fieldName)
+      ? { ...claim, value: '[Sensitive claim masked]', normalizedValue: null }
+      : claim),
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -43,10 +53,11 @@ export async function GET(
   }
 
   try {
+    const proposal = await getIdentityProposal(gate.userId, parsed.data)
     return NextResponse.json({
       ok: true,
       available: true,
-      proposal: await getIdentityProposal(gate.userId, parsed.data),
+      proposal: browserSafeProposal(proposal),
       readOnly: true,
     })
   } catch (error) {
