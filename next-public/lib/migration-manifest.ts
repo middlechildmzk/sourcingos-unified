@@ -1,74 +1,60 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SourcingOS migration manifest - V29.3A0 ledger reconciliation.
+// SourcingOS migration manifest — V29.3A0.1 replay-safety remediation.
 //
-// This file is the single declared source of truth for which SQL files exist,
-// which were applied to production, how they were applied, and whether they are
-// safe to replay.
-//
-// It exists because the repository had two disjoint migration mechanisms:
-//   - next-public/sql/*.sql        ad hoc files, applied by hand or by CLI
-//   - next-public/supabase/migrations/*.sql   the versioned migration system
-//
-// Every migration recorded in the production ledger came from the first
-// directory. Nothing in the second directory has ever been applied to
-// production. A `supabase db push` would therefore apply three unreviewed
-// migrations in one shot.
-//
-// Tests assert this manifest against the files actually on disk, so drift
-// cannot reappear silently.
+// This is the declared source of truth for the reconstructed production
+// sequence, the reconstruction-only replay guard, held release candidates, and
+// superseded SQL. Historical production SQL remains immutable.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ApplicationMethod =
-  /** Run by hand in the Supabase SQL editor. Never recorded in the ledger. */
   | 'manual_sql_editor'
-  /** Recorded in the production supabase_migrations ledger. */
   | 'ledger'
-  /** Present in the repository, never applied to production. */
-  | 'unapplied'
+  | 'reconciliation_support'
+  | 'held'
+  | 'orphaned'
 
 export type ReplaySafety =
-  /** Re-running the file against an already-migrated database succeeds. */
   | 'replay_safe'
-  /** Re-running fails. The specific reason is recorded. */
-  | 'replay_unsafe'
-  /** Re-running succeeds and changes no tracked schema object. */
-  | 'silent_no_op'
-  /** Existing table shapes are silently preserved, but secondary objects drift. */
+  | 'replay_safe_with_guard'
   | 'table_shape_no_op_secondary_drift'
-  /** Re-running fails against the live schema because it targets a different shape. */
   | 'incompatible'
+  | 'additive_held'
+  | 'superseded'
 
 export type MigrationRecord = {
   file: string
   ledgerName: string | null
   method: ApplicationMethod
   replaySafety: ReplaySafety
-  /** Order within the reconstructed production sequence. Null if never applied. */
+  /** Order within the reconstructed production sequence. Null for non-sequence files. */
   order: number | null
   note: string
 }
 
 /**
- * The reconstructed production sequence, in the order that produces the live
- * schema. Verified by replaying against a disposable PostgreSQL 17 cluster and
- * comparing the result against the read-only production introspection.
+ * The eight-file sequence that reconstructs the current production schema.
+ *
+ * Five files are not safe to run twice by themselves because they recreate
+ * named policies or triggers. V29.3A0.1 deliberately does not rewrite those
+ * historical files. The reconstruction-only guard prelude removes exactly the
+ * named objects they recreate, making the composite sequence replay-safe.
  */
 export const PRODUCTION_SEQUENCE: MigrationRecord[] = [
   {
     file: 'sql/complete-schema-v19.sql',
     ledgerName: null,
     method: 'manual_sql_editor',
-    replaySafety: 'replay_unsafe',
+    replaySafety: 'replay_safe_with_guard',
     order: 1,
-    note: 'Creates the candidate graph. Applied by hand per sql/MIGRATION-CHECKLIST.md step 1, which is why it never entered the ledger. Six of its seven CREATE TRIGGER statements have no DROP TRIGGER IF EXISTS guard.',
+    note: 'Manual V19 candidate graph baseline. Six updated_at triggers require the reconstruction guard before replay.',
   },
   {
     file: 'sql/rls-policies-v19.sql',
     ledgerName: null,
     method: 'manual_sql_editor',
-    replaySafety: 'replay_unsafe',
+    replaySafety: 'replay_safe_with_guard',
     order: 2,
-    note: 'Applied by hand per checklist step 2. All 18 CREATE POLICY statements are unguarded.',
+    note: 'Manual V19 RLS layer. Eighteen named policies require the reconstruction guard before replay.',
   },
   {
     file: 'sql/role-workspace-v20-1.sql',
@@ -76,7 +62,7 @@ export const PRODUCTION_SEQUENCE: MigrationRecord[] = [
     method: 'ledger',
     replaySafety: 'replay_safe',
     order: 3,
-    note: 'Guards all four policies with DROP POLICY IF EXISTS. This is the pattern the other files should adopt.',
+    note: 'Already uses drop-then-create policy guards.',
   },
   {
     file: 'sql/security-hardening-v20-3.sql',
@@ -84,7 +70,7 @@ export const PRODUCTION_SEQUENCE: MigrationRecord[] = [
     method: 'ledger',
     replaySafety: 'replay_safe',
     order: 4,
-    note: 'Index-only migration. All 25 indexes use IF NOT EXISTS.',
+    note: 'Index-only hardening with IF NOT EXISTS.',
   },
   {
     file: 'sql/role-workspace-v20-3-indexes.sql',
@@ -92,120 +78,128 @@ export const PRODUCTION_SEQUENCE: MigrationRecord[] = [
     method: 'ledger',
     replaySafety: 'replay_safe',
     order: 5,
-    note: 'Single compatibility index, IF NOT EXISTS.',
+    note: 'Compatibility index guarded with IF NOT EXISTS.',
   },
   {
     file: 'sql/candidate-acquisition-v21.sql',
     ledgerName: 'candidate_acquisition_v21',
     method: 'ledger',
-    replaySafety: 'replay_unsafe',
+    replaySafety: 'replay_safe_with_guard',
     order: 6,
-    note: 'Three unguarded CREATE POLICY statements.',
+    note: 'Three named owner-select policies require the reconstruction guard before replay.',
   },
   {
     file: 'sql/autosource-v22.sql',
     ledgerName: 'autosource_v22',
     method: 'ledger',
-    replaySafety: 'replay_unsafe',
+    replaySafety: 'replay_safe_with_guard',
     order: 7,
-    note: 'Six unguarded CREATE POLICY statements. Also the only production file wrapped in an explicit BEGIN, so a mid-file failure aborts the whole transaction and cascades into the next file.',
+    note: 'Six named owner-select policies require the reconstruction guard before replay. Historical transaction wrapper remains immutable.',
   },
   {
     file: 'sql/agent-os-v23-v25.sql',
     ledgerName: 'agent_os_v23_v25',
     method: 'ledger',
-    replaySafety: 'replay_unsafe',
+    replaySafety: 'replay_safe_with_guard',
     order: 8,
-    note: 'Six unguarded CREATE POLICY statements. Creates talent_graph_edges, which is separate from canonical identity resolution and stays untouched.',
+    note: 'Six named owner-select policies require the reconstruction guard before replay.',
+  },
+]
+
+export const RECONCILIATION_SUPPORT: MigrationRecord[] = [
+  {
+    file: 'sql/replay-safety-guards-v29-3a0.sql',
+    ledgerName: null,
+    method: 'reconciliation_support',
+    replaySafety: 'replay_safe',
+    order: null,
+    note: 'Disposable reconstruction prelude. Drops only the named policies and triggers recreated by the historical sequence. Never a production migration.',
   },
 ]
 
 /**
- * Present in next-public/supabase/migrations. None have been applied to
- * production. All three apply cleanly on top of the reconstructed schema, so
- * they are pending rather than broken, but they are unreviewed drift and a
- * `supabase db push` would apply them without anyone choosing to.
+ * Preserved SQL release candidates deliberately removed from the active
+ * supabase/migrations directory. They are reviewable but cannot be picked up by
+ * an unqualified db push.
  */
-export const PENDING_REPO_MIGRATIONS: MigrationRecord[] = [
+export const HELD_REPO_MIGRATIONS: MigrationRecord[] = [
   {
-    file: 'supabase/migrations/20260701173000_jobs_v2_foundation.sql',
+    file: 'supabase/held-migrations/20260701173000_jobs_v2_foundation.sql',
     ledgerName: null,
-    method: 'unapplied',
-    replaySafety: 'replay_safe',
+    method: 'held',
+    replaySafety: 'additive_held',
     order: null,
-    note: 'Jobs v2 foundation. Overlaps job_submissions with complete-schema-v19.sql but reconciles additively.',
+    note: 'Held until Jobs V2 receives a dedicated live-schema review and release approval.',
   },
   {
-    file: 'supabase/migrations/20260721173000_role_workspace_owner_safety.sql',
+    file: 'supabase/held-migrations/20260721173000_role_workspace_owner_safety.sql',
     ledgerName: null,
-    method: 'unapplied',
-    replaySafety: 'replay_safe',
+    method: 'held',
+    replaySafety: 'additive_held',
     order: null,
-    note: 'V20.4 owner-safety hardening. Its absence is consistent with the production introspection finding that foreign keys are ID-only rather than composite ownership-safe.',
+    note: 'Held until ownership consistency, lock risk, and constraint application are preflighted against production.',
   },
   {
-    file: 'supabase/migrations/20260722160000_role_calibration_state.sql',
+    file: 'supabase/held-migrations/20260722160000_role_calibration_state.sql',
     ledgerName: null,
-    method: 'unapplied',
-    replaySafety: 'replay_safe',
+    method: 'held',
+    replaySafety: 'additive_held',
     order: null,
-    note: 'V27 role calibration state. V27 was never promoted to production.',
+    note: 'Held until the role-calibration product release is intentionally promoted.',
   },
 ]
 
-/**
- * Files that are neither in the production sequence nor pending application.
- */
 export const ORPHANED_SQL: MigrationRecord[] = [
   {
     file: 'sql/candidate-graph-schema.sql',
     ledgerName: null,
-    method: 'unapplied',
+    method: 'orphaned',
     replaySafety: 'incompatible',
     order: null,
-    note: 'Superseded V17 scaffold with text primary keys. Fails against the live schema: column "next_refresh_at" does not exist. Archive.',
+    note: 'Superseded text-ID candidate graph scaffold. Conflicts with the canonical UUID schema.',
   },
   {
     file: 'sql/candidate-graph-schema-v17-3.sql',
     ledgerName: null,
-    method: 'unapplied',
+    method: 'orphaned',
     replaySafety: 'incompatible',
     order: null,
-    note: 'Superseded V17.3 scaffold with text primary keys. Same failure. Archive.',
+    note: 'Superseded text-ID candidate graph scaffold. Conflicts with the canonical UUID schema.',
   },
   {
     file: 'sql/candidate-graph-v18.sql',
     ledgerName: null,
-    method: 'unapplied',
+    method: 'orphaned',
     replaySafety: 'table_shape_no_op_secondary_drift',
     order: null,
-    note: 'Its CREATE TABLE IF NOT EXISTS statements silently preserve the existing production table shapes, but the file still adds missing secondary indexes. It is therefore neither a valid canonical schema nor a total no-op. Archive after recording those secondary-object differences.',
+    note: 'Its guarded table definitions leave the canonical table shape unchanged, while secondary index statements can still add schema drift.',
   },
   {
     file: 'sql/candidate-intelligence-spine-v19.sql',
     ledgerName: null,
-    method: 'unapplied',
-    replaySafety: 'replay_safe',
+    method: 'orphaned',
+    replaySafety: 'additive_held',
     order: null,
-    note: 'Creates evidence_claims, confirmed absent from production. Applies cleanly on top of the live schema. This is the file V29.3A1 promotes and extends as the canonical field-claim model.',
+    note: 'Defines evidence_claims, which remains absent from production and is a candidate for promotion in V29.3A1.',
   },
   {
     file: 'sql/sourcingos-jobs-v17-6.sql',
     ledgerName: null,
-    method: 'unapplied',
-    replaySafety: 'replay_safe',
+    method: 'orphaned',
+    replaySafety: 'superseded',
     order: null,
-    note: 'Superseded by the jobs v2 foundation migration. Archive.',
+    note: 'Superseded by the held Jobs V2 design.',
   },
 ]
 
 export const ALL_SQL_RECORDS: MigrationRecord[] = [
   ...PRODUCTION_SEQUENCE,
-  ...PENDING_REPO_MIGRATIONS,
+  ...RECONCILIATION_SUPPORT,
+  ...HELD_REPO_MIGRATIONS,
   ...ORPHANED_SQL,
 ]
 
-/** Ledger entries reported by read-only production introspection. */
+/** Ledger entries independently confirmed through read-only production access. */
 export const PRODUCTION_LEDGER_ENTRIES = [
   'v20_role_workspace_durable',
   'v20_3_security_performance_hardening',
@@ -215,11 +209,6 @@ export const PRODUCTION_LEDGER_ENTRIES = [
   'agent_os_v23_v25',
 ] as const
 
-/**
- * Tables whose contract V29.3A1 depends on. `evidence_claims` is deliberately
- * listed as absent: it is defined in an orphaned file and must be promoted
- * through a real migration before anything references it.
- */
 export const CANONICAL_TABLES = {
   candidates: { present: true, source: 'sql/complete-schema-v19.sql' },
   source_profiles: { present: true, source: 'sql/complete-schema-v19.sql' },
@@ -230,10 +219,26 @@ export const CANONICAL_TABLES = {
   talent_graph_edges: { present: true, source: 'sql/agent-os-v23-v25.sql' },
 } as const
 
-export function replayUnsafeFiles(): MigrationRecord[] {
-  return PRODUCTION_SEQUENCE.filter(record => record.replaySafety === 'replay_unsafe')
+export function rawReplayGuardedFiles(): MigrationRecord[] {
+  return PRODUCTION_SEQUENCE.filter(record => record.replaySafety === 'replay_safe_with_guard')
 }
 
+/** Compatibility alias for the V29.3A0 reconciliation report. */
+export function replayUnsafeFiles(): MigrationRecord[] {
+  return rawReplayGuardedFiles()
+}
+
+export function isRawHistoricalReplaySafe(): boolean {
+  return rawReplayGuardedFiles().length === 0
+}
+
+/**
+ * Release gate for future migration work. The reconstructed sequence is safe to
+ * replay only as the declared composite: guard prelude plus eight historical
+ * files. This says nothing about production migration history repair.
+ */
 export function isLedgerReplaySafe(): boolean {
-  return replayUnsafeFiles().length === 0
+  const allowed = new Set<ReplaySafety>(['replay_safe', 'replay_safe_with_guard'])
+  return PRODUCTION_SEQUENCE.every(record => allowed.has(record.replaySafety))
+    && RECONCILIATION_SUPPORT.some(record => record.file === 'sql/replay-safety-guards-v29-3a0.sql')
 }
