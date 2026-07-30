@@ -130,14 +130,20 @@ jobs:
             --dbname postgres \
             --file "$smoke_file"
 
-      - name: Rehearse migration ledger and pending push
+      - name: Rehearse migration ledger and held migrations
         working-directory: next-public
         run: npm run migration:replay
 
-      - name: Upload migration replay report
+      - name: Rehearse canonical baseline alignment
+        working-directory: next-public
+        run: npm run migration:baseline
+
+      - name: Upload migration reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-replay-report
-          path: /tmp/sourcingos-migration-replay-report.json
+          name: migration-reports
+          path: |
+            /tmp/sourcingos-migration-replay-report.json
+            /tmp/sourcingos-baseline-alignment-report.json
           if-no-files-found: warn
