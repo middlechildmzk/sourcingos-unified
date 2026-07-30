@@ -49,7 +49,7 @@ const SEQUENCE_B = [
 const ORPHAN_EXPECTATIONS = {
   'sql/candidate-graph-schema.sql': 'conflicts',
   'sql/candidate-graph-schema-v17-3.sql': 'conflicts',
-  'sql/candidate-graph-v18.sql': 'silent_no_op',
+  'sql/candidate-graph-v18.sql': 'table_shape_no_op_secondary_drift',
   'sql/candidate-intelligence-spine-v19.sql': 'applies',
   'sql/sourcingos-jobs-v17-6.sql': 'applies',
 }
@@ -176,7 +176,27 @@ function applyProductionSequence(database) {
   return rows
 }
 
-function schemaFingerprint(database) {
+function tableShapeFingerprint(database) {
+  const sql = `
+with objects as (
+  select 'column|' || table_schema || '|' || table_name || '|' || ordinal_position || '|' ||
+         column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '') as item
+  from information_schema.columns
+  where table_schema = 'public'
+  union all
+  select 'constraint|' || n.nspname || '|' || c.relname || '|' || con.conname || '|' ||
+         pg_get_constraintdef(con.oid)
+  from pg_constraint con
+  join pg_class c on c.oid = con.conrelid
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public'
+)
+select md5(coalesce(string_agg(item, E'\\n' order by item), '')) from objects;
+`
+  return query(database, sql)
+}
+
+function fullSchemaFingerprint(database) {
   const sql = `
 with objects as (
   select 'column|' || table_schema || '|' || table_name || '|' || ordinal_position || '|' ||
@@ -239,14 +259,35 @@ select jsonb_build_object(
 }
 
 function classifyOrphan(database, file) {
-  const before = schemaFingerprint(database)
+  const beforeTableShape = tableShapeFingerprint(database)
+  const beforeFullSchema = fullSchemaFingerprint(database)
   const result = applyFile(database, file)
-  if (!result.ok) return { classification: 'conflicts', before, after: before, ...result }
-  const after = schemaFingerprint(database)
+  if (!result.ok) {
+    return {
+      classification: 'conflicts',
+      beforeTableShape,
+      afterTableShape: beforeTableShape,
+      beforeFullSchema,
+      afterFullSchema: beforeFullSchema,
+      ...result,
+    }
+  }
+
+  const afterTableShape = tableShapeFingerprint(database)
+  const afterFullSchema = fullSchemaFingerprint(database)
+  let classification = 'applies'
+  if (beforeTableShape === afterTableShape && beforeFullSchema === afterFullSchema) {
+    classification = 'silent_no_op'
+  } else if (beforeTableShape === afterTableShape && beforeFullSchema !== afterFullSchema) {
+    classification = 'table_shape_no_op_secondary_drift'
+  }
+
   return {
-    classification: before === after ? 'silent_no_op' : 'applies',
-    before,
-    after,
+    classification,
+    beforeTableShape,
+    afterTableShape,
+    beforeFullSchema,
+    afterFullSchema,
     ...result,
   }
 }
