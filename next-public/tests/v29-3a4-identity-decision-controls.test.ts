@@ -56,7 +56,9 @@ describe('V29.3A4 fail-closed activation', () => {
     expect(service).toContain('if (!isIdentityDecisionActivationEnabled()) throw new IdentityDecisionUnavailableError()')
     expect(route).toContain('!isIdentityDecisionActivationEnabled()')
     expect(route).toContain("code: 'identity_decisions_unavailable'")
-    expect(detailRoute).toContain('enabled: isIdentityDecisionActivationEnabled()')
+    expect(detailRoute).toContain('const decisionsEnabled = isIdentityDecisionActivationEnabled()')
+    expect(detailRoute).toContain('enabled: decisionsEnabled')
+    expect(detailRoute).toContain('readOnly: !decisionsEnabled')
   })
 
   it('keeps the service role server-only and never exposes its key', () => {
