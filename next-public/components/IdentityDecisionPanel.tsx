@@ -147,7 +147,10 @@ export function IdentityDecisionPanel({ proposal, onDecisionComplete, onReloadRe
           ? `Recorded ${proposal.incoming.displayName} and ${proposal.proposedCandidate.canonicalName} as separate profiles.`
           : `Rejected the identity proposal for ${proposal.incoming.displayName}.`
 
-      close()
+      setIntent(null)
+      setReason('')
+      setConfirmed(false)
+      setError(null)
       onDecisionComplete(successMessage)
     } catch {
       setError('The identity decision request failed before a result was confirmed. Reload the proposal before trying again.')
