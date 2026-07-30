@@ -89,7 +89,7 @@ jobs:
   database-contract:
     name: Migration and database contract
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -138,6 +138,10 @@ jobs:
         working-directory: next-public
         run: npm run migration:baseline
 
+      - name: Rehearse durable identity foundation
+        working-directory: next-public
+        run: npm run migration:identity
+
       - name: Upload migration reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,4 +150,5 @@ jobs:
           path: |
             /tmp/sourcingos-migration-replay-report.json
             /tmp/sourcingos-baseline-alignment-report.json
+            /tmp/sourcingos-identity-migration-report.json
           if-no-files-found: warn

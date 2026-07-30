@@ -3,12 +3,8 @@
  *
  * This script never connects to production. It uses disposable PostgreSQL 17
  * databases supplied through PG* environment variables and proves that the
- * active baseline anchor:
- * - fails closed on an empty database;
- * - passes on the reconciled production contract;
- * - changes neither schema nor row counts;
- * - is idempotent; and
- * - is the only active Supabase migration.
+ * baseline anchor fails closed, is zero-change, and remains first in the exact
+ * active migration sequence.
  */
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
@@ -23,6 +19,10 @@ const RUN_ID = `${process.pid}_${Date.now()}`
 const PREFIX = `sourcingos_baseline_${RUN_ID}`.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
 
 const BASELINE = 'supabase/migrations/20260730172500_canonical_baseline_anchor.sql'
+const EXPECTED_ACTIVE = [
+  '20260730172500_canonical_baseline_anchor.sql',
+  '20260730181000_durable_identity_foundation.sql',
+]
 const PRODUCTION_SEQUENCE = [
   'sql/complete-schema-v19.sql',
   'sql/rls-policies-v19.sql',
@@ -149,7 +149,7 @@ with objects as (
   join pg_namespace n on n.oid = c.relnamespace
   where n.nspname in ('public', 'auth') and not t.tgisinternal
 )
-select md5(coalesce(string_agg(item, E'\\n' order by item), '')) from objects;
+select md5(coalesce(string_agg(item, E'\n' order by item), '')) from objects;
 `)
 }
 
@@ -178,8 +178,8 @@ async function main() {
   }
 
   const active = activeMigrationFiles()
-  assert(active.length === 1, 'exactly one active Supabase migration exists')
-  assert(active[0] === path.basename(BASELINE), 'the active migration is the canonical baseline anchor')
+  assert(JSON.stringify(active) === JSON.stringify(EXPECTED_ACTIVE), 'active Supabase migrations match the exact approved ordered pair')
+  assert(active[0] === path.basename(BASELINE), 'the canonical baseline anchor remains first')
 
   const report = {
     baseline: BASELINE,

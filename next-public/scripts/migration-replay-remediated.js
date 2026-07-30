@@ -1,16 +1,12 @@
 /**
- * V29.3A0.2 reconciled migration replay gate.
+ * V29.3A1 reconciled migration replay gate.
  *
  * This script never connects to production. It uses disposable PostgreSQL 17
  * databases supplied through PG* environment variables.
  *
- * It proves four separate facts:
- * 1. the reconstructed eight-file production sequence still builds from empty;
- * 2. the raw historical sequence still exhibits the five documented hazards;
- * 3. the explicit reconstruction guard makes the same sequence replay 8/8
- *    without changing the resulting schema contract; and
- * 4. the only active Supabase migration is the fail-closed canonical baseline
- *    anchor. All other unapplied SQL remains held.
+ * It proves the reconstructed production sequence and held migrations remain
+ * safe while the active directory contains exactly the ordered baseline and
+ * durable identity foundation migrations.
  */
 const { spawnSync } = require('node:child_process')
 const fs = require('node:fs')
@@ -44,7 +40,10 @@ const RAW_REPLAY_UNSAFE = new Set([
 ])
 
 const REPLAY_GUARD = 'sql/replay-safety-guards-v29-3a0.sql'
-const BASELINE_ANCHOR = '20260730172500_canonical_baseline_anchor.sql'
+const EXPECTED_ACTIVE = [
+  '20260730172500_canonical_baseline_anchor.sql',
+  '20260730181000_durable_identity_foundation.sql',
+]
 
 const HELD_MIGRATIONS = [
   'supabase/held-migrations/20260701173000_jobs_v2_foundation.sql',
@@ -223,8 +222,10 @@ async function main() {
     assertions,
   }
 
-  assert(report.activeMigrations.length === 1, 'active supabase/migrations directory contains exactly one SQL file')
-  assert(report.activeMigrations[0] === BASELINE_ANCHOR, 'the only active SQL migration is the canonical baseline anchor')
+  assert(
+    JSON.stringify(report.activeMigrations) === JSON.stringify(EXPECTED_ACTIVE),
+    'active supabase/migrations directory contains only the approved ordered baseline and identity migrations',
+  )
   for (const file of HELD_MIGRATIONS) {
     assert(fs.existsSync(path.join(ROOT, file)), `held migration is preserved: ${file}`)
   }

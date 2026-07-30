@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "migration:reconcile": "node scripts/migration-replay.js",
     "migration:replay": "node scripts/migration-replay-remediated.js",
-    "migration:baseline": "node scripts/migration-baseline-alignment.js"
+    "migration:baseline": "node scripts/migration-baseline-alignment.js",
+    "migration:identity": "node scripts/migration-identity-foundation.js"
   },
   "dependencies": {
     "@next/mdx": "14.2.35",
