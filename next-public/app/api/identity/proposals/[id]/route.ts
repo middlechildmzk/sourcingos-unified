@@ -9,6 +9,11 @@ import {
   IdentitySchemaUnavailableError,
   isIdentitySchemaUnavailable,
 } from '@/lib/identity/proposal-read'
+import {
+  getIdentityDecisionPreconditions,
+  IdentityDecisionContextNotFoundError,
+  isIdentityDecisionActivationEnabled,
+} from '@/lib/identity/proposal-decision'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,15 +58,27 @@ export async function GET(
   }
 
   try {
-    const proposal = await getIdentityProposal(gate.userId, parsed.data)
+    const [proposal, decisionPreconditions] = await Promise.all([
+      getIdentityProposal(gate.userId, parsed.data),
+      getIdentityDecisionPreconditions(gate.userId, parsed.data),
+    ])
     return NextResponse.json({
       ok: true,
       available: true,
-      proposal: browserSafeProposal(proposal),
+      proposal: {
+        ...browserSafeProposal(proposal),
+        decisionPreconditions,
+        decisionControls: {
+          enabled: isIdentityDecisionActivationEnabled(),
+          actions: ['approve', 'keep_separate', 'reject'],
+          bulkDecisions: false,
+          automaticAttachment: false,
+        },
+      },
       readOnly: true,
     })
   } catch (error) {
-    if (error instanceof IdentityProposalNotFoundError) {
+    if (error instanceof IdentityProposalNotFoundError || error instanceof IdentityDecisionContextNotFoundError) {
       return NextResponse.json({ ok: false, available: true, code: error.code, error: error.message }, { status: 404 })
     }
     if (error instanceof IdentitySchemaUnavailableError || isIdentitySchemaUnavailable(error)) {
