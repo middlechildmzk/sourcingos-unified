@@ -105,12 +105,12 @@ describe('V29.3A2 recruiter review UX', () => {
     expect(client).toContain('Conflicts and negative evidence')
   })
 
-  it('contains no approve, reject, attach, or merge action', () => {
+  it('keeps the evidence client free of direct mutation logic', () => {
     expect(client).not.toContain('Confirm match')
-    expect(client).not.toContain('Keep separate')
-    expect(client).not.toContain('Approve match')
+    expect(client).not.toContain('/api/candidate-db/confirm-merge')
     expect(client).not.toMatch(/method:\s*['"]POST['"]/)
-    expect(client).toContain('Decision controls are intentionally unavailable')
+    expect(client).toContain('Human-controlled identity review')
+    expect(client).toContain('<IdentityDecisionPanel')
   })
 
   it('gives a safe not-activated state without implying failure or data loss', () => {
@@ -153,7 +153,7 @@ describe('V29.3A2 release boundary', () => {
     expect(existsSync(join(root, 'supabase/held-migrations/20260730194500_transactional_identity_decisions.sql'))).toBe(true)
   })
 
-  it('contains the new read surface files', () => {
+  it('contains the durable review surface files', () => {
     for (const path of [
       'app/api/identity/proposals/route.ts',
       'app/api/identity/proposals/[id]/route.ts',
