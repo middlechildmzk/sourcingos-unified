@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
 import { requireSession } from '@/lib/auth-gate'
 import { z } from 'zod'
-import { buildCandidateGraph } from '@/lib/candidate-graph'
+import { buildIdentityResolutionDraft, RESOLVER_VERSION } from '@/lib/candidate-graph'
 import { searchSources } from '@/lib/source-connectors'
 import { allSourceNames, SourceName } from '@/lib/source-types'
 
@@ -31,18 +31,25 @@ export async function POST(req: Request) {
       sources: body.sources,
       limit: body.limit
     })
-    const candidateGraph = body.buildGraph ? buildCandidateGraph(results) : []
+    const draft = body.buildGraph
+      ? buildIdentityResolutionDraft(results)
+      : { candidates: [], proposals: [], excluded: [], duplicatesCollapsed: 0, resolverVersion: RESOLVER_VERSION }
+    const candidateGraph = draft.candidates
     return NextResponse.json({
       ok: true,
       query: body.query,
       searchedSources,
       results,
       candidateGraph,
+      identityProposals: draft.proposals,
+      nonPersonResults: draft.excluded,
+      resolverVersion: draft.resolverVersion,
       warnings,
       generatedAt: new Date().toISOString(),
       guardrails: [
         'Public source evidence only.',
-        'No auto-merge. Recruiter confirms linked profiles.',
+        'No auto-merge and no auto-grouping. Each record holds one source profile until a recruiter approves a link.',
+        'Identity proposals are ranked questions, not decisions. A score is never permission to link.',
         'Contact signals are unverified until manually checked.',
         'NPI is a provider/specialty signal, not outreach permission.',
         'Research/publication sources identify evidence, not employment availability.'
