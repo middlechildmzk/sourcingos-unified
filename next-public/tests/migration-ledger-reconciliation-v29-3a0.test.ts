@@ -102,7 +102,10 @@ describe('V29.3A0.2 - active migration directory is fail-closed', () => {
   it('keeps the baseline anchor zero-change and fail-closed', () => {
     const migration = stripComments(read(ACTIVE_BASELINE_MIGRATIONS[0].file)).toLowerCase()
     expect(migration).toContain('canonical baseline mismatch')
-    expect(migration).toContain("to_regclass('public.candidates')")
+    expect(migration).toContain("to_regclass('public.' || required_table)")
+    for (const table of ['candidates', 'source_profiles', 'evidence_items', 'candidate_contacts', 'identity_match_reviews', 'talent_graph_edges']) {
+      expect(migration).toContain(`'${table}'`)
+    }
     expect(migration).toContain("to_regclass('public.evidence_claims')")
     expect(migration).not.toMatch(/\b(create|alter|drop|truncate|insert|update|delete)\s+(table|index|policy|trigger|into|public\.)/)
   })
