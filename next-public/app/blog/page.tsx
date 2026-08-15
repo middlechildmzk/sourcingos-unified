@@ -4,7 +4,7 @@ import { articles } from '@/data/articles'
 export const metadata = {
   alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
-  description: 'Senior-sourcer guides, original sourcing frameworks, source packs, Boolean strings, X-Ray playbooks, AI workflows, GovCon sourcing, and hiring-manager calibration.',
+  description: 'Senior-sourcer guides, original sourcing frameworks, Boolean benchmark protocols, source packs, X-Ray playbooks, AI workflows, GovCon sourcing, and hiring-manager calibration.',
 }
 
 const latest = [...articles].reverse()
@@ -17,6 +17,12 @@ const flagship = [
     kicker: 'Cleared & GovCon sourcing',
     title: 'Where to Find Cleared Candidates: The 2026 Sourcing Map',
     description: 'Eleven distinct sourcing lanes plus the rule every cleared recruiter should preserve: public clearance language is a breadcrumb, not verification.',
+  },
+  {
+    href: '/blog/boolean-search-benchmark/',
+    kicker: 'Boolean benchmark protocol',
+    title: 'Five Query Archetypes, One Role, Different Talent Pools',
+    description: 'Title, skill, evidence, adjacency, and donor-company queries select different signals. Use the five-archetype protocol to measure coverage instead of polishing one string forever.',
   },
   {
     href: '/blog/search-path-scarcity/',
@@ -36,9 +42,9 @@ export default function Blog(){
  return <main className="wrap blog-index">
   <div className="eyebrow">SourcingOS Authority Hub</div>
   <h1>Advanced sourcing guides for people who find hard talent.</h1>
-  <p className="lead">Tactical content for senior sourcers who need better source packs, search lanes, evidence review, AI workflows, GovCon market maps, contact data decisions, and hiring-manager calibration.</p>
-  <div className="cta"><strong>Start here:</strong> read the newest original sourcing frameworks, then use the free tools to put them into practice.</div>
-  <div className="grid">
+  <p className="lead">Tactical content for senior sourcers who need better source packs, search lanes, evidence review, Boolean coverage, AI workflows, GovCon market maps, contact data decisions, and hiring-manager calibration.</p>
+  <div className="cta"><strong>Start here:</strong> read the newest original sourcing frameworks and benchmark protocols, then use the free tools to put them into practice.</div>
+  <div className="grid two">
    {flagship.map(a=><Link className="card featured authority-card" href={a.href} key={a.href}><span className="kicker">{a.kicker}</span><h2>{a.title}</h2><p className="muted">{a.description}</p></Link>)}
   </div>
   <div className="grid two">
