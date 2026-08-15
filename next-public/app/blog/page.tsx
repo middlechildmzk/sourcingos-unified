@@ -4,7 +4,7 @@ import { articles } from '@/data/articles'
 export const metadata = {
   alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
-  description: 'Senior-sourcer guides, original sourcing frameworks, source packs, Boolean strings, X-Ray playbooks, AI workflows, and hiring-manager calibration.',
+  description: 'Senior-sourcer guides, original sourcing frameworks, source packs, Boolean strings, X-Ray playbooks, AI workflows, GovCon sourcing, and hiring-manager calibration.',
 }
 
 const latest = [...articles].reverse()
@@ -12,6 +12,12 @@ const featured = latest.slice(0, 4)
 const rest = latest.slice(4)
 
 const flagship = [
+  {
+    href: '/blog/where-to-find-cleared-candidates/',
+    kicker: 'Cleared & GovCon sourcing',
+    title: 'Where to Find Cleared Candidates: The 2026 Sourcing Map',
+    description: 'Eleven distinct sourcing lanes plus the rule every cleared recruiter should preserve: public clearance language is a breadcrumb, not verification.',
+  },
   {
     href: '/blog/search-path-scarcity/',
     kicker: 'Flagship methodology',
@@ -30,9 +36,9 @@ export default function Blog(){
  return <main className="wrap blog-index">
   <div className="eyebrow">SourcingOS Authority Hub</div>
   <h1>Advanced sourcing guides for people who find hard talent.</h1>
-  <p className="lead">Tactical content for senior sourcers who need better source packs, search lanes, evidence review, AI workflows, contact data decisions, and hiring-manager calibration.</p>
+  <p className="lead">Tactical content for senior sourcers who need better source packs, search lanes, evidence review, AI workflows, GovCon market maps, contact data decisions, and hiring-manager calibration.</p>
   <div className="cta"><strong>Start here:</strong> read the newest original sourcing frameworks, then use the free tools to put them into practice.</div>
-  <div className="grid two">
+  <div className="grid">
    {flagship.map(a=><Link className="card featured authority-card" href={a.href} key={a.href}><span className="kicker">{a.kicker}</span><h2>{a.title}</h2><p className="muted">{a.description}</p></Link>)}
   </div>
   <div className="grid two">
