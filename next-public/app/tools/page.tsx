@@ -3,7 +3,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Free Sourcing Tools | SourcingOS',
   description:
-    'BooleanOS, X-Ray Launcher, Search Lane Expander, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
+    'BooleanOS, Search Lane Expander, Search Exhaustion Calculator, X-Ray Launcher, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
 }
 
 export default function Tools() {
@@ -12,18 +12,23 @@ export default function Tools() {
       <div className="eyebrow">Free tools</div>
       <h1>Free sourcing tools. No account required.</h1>
       <p className="lead">
-        Start with utility. Build the source pack. Then request access to the private Candidate Search beta.
+        Build search lanes, measure coverage, pressure-test a tired req, and turn sourcing ideas into evidence before you request beta access.
       </p>
       <div className="grid">
+        <Link className="card featured" href="/tools/search-exhaustion-calculator">
+          <span className="kicker">New evidence tool</span>
+          <h3>Search Exhaustion Evidence Calculator</h3>
+          <p className="muted">Calculate lane coverage, duplicate rate, unique-query yield, donor-map coverage, adjacent-title yield, and recent new-lead rate before declaring a market exhausted.</p>
+        </Link>
         <Link className="card featured" href="/tools/search-lane-expander">
-          <span className="kicker">New volume tool</span>
+          <span className="kicker">Volume tool</span>
           <h3>Search Lane Expander</h3>
           <p className="muted">Turn a rough role target into Precision, Balanced, Broad, and Market Map lanes with live sources, manual-safe X-Ray links, and low-result rescue actions.</p>
         </Link>
         <Link className="card" href="/tools/boolean-generator">
           <span className="kicker">Hero tool</span>
           <h3>JD-to-Boolean Search Builder</h3>
-          <p className="muted">Paste a JD → three search lanes (Precision, Balanced, Market Map) with LinkedIn, Google/Bing X-Ray, and GitHub strings. Strips JD noise automatically.</p>
+          <p className="muted">Paste a JD → three search lanes with LinkedIn, Google/Bing X-Ray, and GitHub strings. Strips JD noise automatically.</p>
         </Link>
         <Link className="card" href="/tools/xray-search">
           <span className="kicker">Open-web search</span>
@@ -33,7 +38,7 @@ export default function Tools() {
         <Link className="card" href="/tools/clearance-search">
           <span className="kicker">Cleared / GovCon</span>
           <h3>Clearance Search Builder</h3>
-          <p className="muted">Compliant Boolean and X-Ray for TS/SCI, poly, and cert lanes — clearance terms kept out of public X-Ray on purpose.</p>
+          <p className="muted">Compliant Boolean and X-Ray for TS/SCI, poly, and cert lanes — public clearance language remains an unverified breadcrumb.</p>
         </Link>
         <Link className="card" href="/tools/aging-req-rescue">
           <span className="kicker">Req triage</span>
@@ -48,14 +53,11 @@ export default function Tools() {
         <Link className="card" href="/candidate-search">
           <span className="kicker">Public demo</span>
           <h3>Candidate Search</h3>
-          <p className="muted">
-            Public-source search, source coverage, market-map summary, evidence review, and beta-gated Candidate 360 workflow.
-          </p>
+          <p className="muted">Public-source search, source coverage, market-map summary, evidence review, and beta-gated Candidate 360 workflow.</p>
         </Link>
       </div>
       <div className="cta" style={{ marginTop: '32px' }}>
-        <strong>Free tools → Candidate Search beta:</strong> Search Lane Expander, BooleanOS, and X-Ray Launcher wire
-        directly into the Candidate Search workflow. Build the lane here, then take it into the workbench.
+        <strong>Search strategy → coverage → workbench:</strong> build the lane, measure what is still open, then take the best search into Candidate Search.
       </div>
     </main>
   )
