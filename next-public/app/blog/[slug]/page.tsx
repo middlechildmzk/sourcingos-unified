@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation'
 import { articles } from '@/data/articles'
 import { ArticleBody } from '@/components/ArticleBody'
+import { siteUrl } from '@/lib/site'
+
 export function generateStaticParams(){ return articles.map(a => ({ slug: a.slug })) }
+
 export function generateMetadata({ params }: { params: { slug: string } }){
  const article = articles.find(a => a.slug === params.slug); if(!article) return {};
  return {
@@ -9,8 +12,26 @@ export function generateMetadata({ params }: { params: { slug: string } }){
   description: article.description,
   keywords: [article.keyword, article.category, 'SourcingOS'],
   alternates: { canonical: `/blog/${article.slug}` },
-  openGraph: { title: article.title, description: article.description, url: `/blog/${article.slug}`, type: 'article', publishedTime: article.publishedAt, authors: article.author ? [article.author] : undefined },
+  openGraph: { title: article.title, description: article.description, url: `/blog/${article.slug}`, type: 'article', publishedTime: article.publishedAt, modifiedTime: article.updatedAt, authors: article.author ? [article.author] : undefined },
   twitter: { title: article.title, description: article.description }
  }
 }
-export default function BlogArticle({ params }: { params: { slug: string } }){ const article = articles.find(a => a.slug === params.slug); if(!article) return notFound(); return <ArticleBody article={article}/> }
+
+export default function BlogArticle({ params }: { params: { slug: string } }){
+ const article = articles.find(a => a.slug === params.slug); if(!article) return notFound();
+ const articleUrl = `${siteUrl}/blog/${article.slug}/`
+ const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: article.title,
+  description: article.description,
+  mainEntityOfPage: articleUrl,
+  url: articleUrl,
+  datePublished: article.publishedAt,
+  dateModified: article.updatedAt || article.publishedAt,
+  author: article.author ? { '@type': 'Person', name: article.author } : undefined,
+  publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl },
+  about: [article.category, article.keyword],
+ }
+ return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /><ArticleBody article={article}/></>
+}
