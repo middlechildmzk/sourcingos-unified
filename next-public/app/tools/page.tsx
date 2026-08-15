@@ -3,7 +3,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Free Sourcing Tools | SourcingOS',
   description:
-    'BooleanOS, Search Lane Expander, Search Exhaustion Calculator, X-Ray Launcher, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
+    'BooleanOS, Search Lane Expander, Search Exhaustion Calculator, Unique Contribution Rate Calculator, X-Ray Launcher, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
 }
 
 export default function Tools() {
@@ -12,11 +12,16 @@ export default function Tools() {
       <div className="eyebrow">Free tools</div>
       <h1>Free sourcing tools. No account required.</h1>
       <p className="lead">
-        Build search lanes, measure coverage, pressure-test a tired req, and turn sourcing ideas into evidence before you request beta access.
+        Build search lanes, measure coverage and source overlap, pressure-test a tired req, and turn sourcing ideas into evidence before you request beta access.
       </p>
       <div className="grid">
+        <Link className="card featured" href="/tools/unique-contribution-rate-calculator">
+          <span className="kicker">New source analytics tool</span>
+          <h3>Unique Contribution Rate Calculator</h3>
+          <p className="muted">Measure what each sourcing source or lane uniquely adds in a controlled comparison, plus optional cost per unique candidate.</p>
+        </Link>
         <Link className="card featured" href="/tools/search-exhaustion-calculator">
-          <span className="kicker">New evidence tool</span>
+          <span className="kicker">Coverage evidence tool</span>
           <h3>Search Exhaustion Evidence Calculator</h3>
           <p className="muted">Calculate lane coverage, duplicate rate, unique-query yield, donor-map coverage, adjacent-title yield, and recent new-lead rate before declaring a market exhausted.</p>
         </Link>
@@ -57,7 +62,7 @@ export default function Tools() {
         </Link>
       </div>
       <div className="cta" style={{ marginTop: '32px' }}>
-        <strong>Search strategy → coverage → workbench:</strong> build the lane, measure what is still open, then take the best search into Candidate Search.
+        <strong>Search strategy → coverage → contribution → workbench:</strong> build the lane, measure what is still open and what each source adds, then take the best search into Candidate Search.
       </div>
     </main>
   )
