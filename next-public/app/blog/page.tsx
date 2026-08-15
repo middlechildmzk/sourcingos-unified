@@ -4,7 +4,7 @@ import { articles } from '@/data/articles'
 export const metadata = {
   alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
-  description: 'Senior-sourcer guides, original sourcing frameworks, Boolean benchmark protocols, source packs, X-Ray playbooks, sourcing coverage metrics, GovCon sourcing, and hiring-manager calibration.',
+  description: 'Senior-sourcer guides, original sourcing frameworks, role intake templates, Boolean benchmark protocols, sourcing coverage metrics, GovCon sourcing, and hiring-manager calibration.',
 }
 
 const latest = [...articles].reverse()
@@ -17,6 +17,12 @@ const flagship = [
     kicker: 'Cleared & GovCon sourcing',
     title: 'Where to Find Cleared Candidates: The 2026 Sourcing Map',
     description: 'Eleven distinct sourcing lanes plus the rule every cleared recruiter should preserve: public clearance language is a breadcrumb, not verification.',
+  },
+  {
+    href: '/blog/senior-sourcer-role-intake/',
+    kicker: 'Role intake template',
+    title: '25 Hiring Manager Intake Questions That Actually Change the Search',
+    description: 'Questions organized by the search parameter they change: evidence, titles, skills, donor companies, geography, compensation, verification, and rejection patterns.',
   },
   {
     href: '/blog/search-exhaustion-framework/',
@@ -48,7 +54,7 @@ export default function Blog(){
  return <main className="wrap blog-index">
   <div className="eyebrow">SourcingOS Authority Hub</div>
   <h1>Advanced sourcing guides for people who find hard talent.</h1>
-  <p className="lead">Tactical content for senior sourcers who need better source packs, search lanes, evidence review, Boolean coverage, sourcing metrics, GovCon market maps, contact data decisions, and hiring-manager calibration.</p>
+  <p className="lead">Tactical content for senior sourcers who need better intakes, source packs, search lanes, evidence review, Boolean coverage, sourcing metrics, GovCon market maps, and hiring-manager calibration.</p>
   <div className="cta"><strong>Start here:</strong> read the newest original sourcing frameworks and benchmark protocols, then use the free tools to put them into practice.</div>
   <div className="grid two">
    {flagship.map(a=><Link className="card featured authority-card" href={a.href} key={a.href}><span className="kicker">{a.kicker}</span><h2>{a.title}</h2><p className="muted">{a.description}</p></Link>)}
