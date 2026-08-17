@@ -3,7 +3,7 @@ import Link from 'next/link'
 export const metadata = {
   title: 'Free Sourcing Tools | SourcingOS',
   description:
-    'BooleanOS, Search Lane Expander, Search Exhaustion Calculator, Unique Contribution Rate Calculator, X-Ray Launcher, and JD Strategy Tool — free sourcing utilities for technical, cleared, healthcare, and AI recruiting roles.',
+    'Source Stack Coverage, BooleanOS, Search Lane Expander, Search Exhaustion, Unique Contribution Rate, X-Ray, and JD Strategy tools for technical and hard-to-fill recruiting.',
 }
 
 export default function Tools() {
@@ -12,11 +12,16 @@ export default function Tools() {
       <div className="eyebrow">Free tools</div>
       <h1>Free sourcing tools. No account required.</h1>
       <p className="lead">
-        Build search lanes, measure coverage and source overlap, pressure-test a tired req, and turn sourcing ideas into evidence before you request beta access.
+        Build search lanes, measure source overlap and coverage, pressure-test your sourcing stack, and turn recruiting assumptions into evidence before you buy another tool or abandon a market.
       </p>
       <div className="grid">
+        <Link className="card featured" href="/tools/source-stack-coverage">
+          <span className="kicker">New stack strategy tool</span>
+          <h3>Source Stack Coverage Worksheet</h3>
+          <p className="muted">Unbundle LinkedIn Recruiter into eight sourcing jobs, mark the weekly dependencies your team actually uses, and expose coverage gaps before renewal or cancellation.</p>
+        </Link>
         <Link className="card featured" href="/tools/unique-contribution-rate-calculator">
-          <span className="kicker">New source analytics tool</span>
+          <span className="kicker">Source analytics tool</span>
           <h3>Unique Contribution Rate Calculator</h3>
           <p className="muted">Measure what each sourcing source or lane uniquely adds in a controlled comparison, plus optional cost per unique candidate.</p>
         </Link>
@@ -62,7 +67,7 @@ export default function Tools() {
         </Link>
       </div>
       <div className="cta" style={{ marginTop: '32px' }}>
-        <strong>Search strategy → coverage → contribution → workbench:</strong> build the lane, measure what is still open and what each source adds, then take the best search into Candidate Search.
+        <strong>Stack → search strategy → coverage → contribution → workbench:</strong> identify what your tools cover, build the lane, measure what each source adds, then take the best evidence into Candidate Search.
       </div>
     </main>
   )
