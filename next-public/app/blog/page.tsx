@@ -4,7 +4,7 @@ import { articles } from '@/data/articles'
 export const metadata = {
   alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
-  description: 'Senior-sourcer guides, original sourcing frameworks, role intake templates, Boolean benchmark protocols, source contribution metrics, GovCon sourcing, and hiring-manager calibration.',
+  description: 'Senior-sourcer guides, original sourcing frameworks, source-stack strategy, role intake templates, Boolean benchmarks, source contribution metrics, GovCon sourcing, and hiring-manager calibration.',
 }
 
 const latest = [...articles].reverse()
@@ -12,6 +12,12 @@ const featured = latest.slice(0, 4)
 const rest = latest.slice(4)
 
 const flagship = [
+  {
+    href: '/blog/linkedin-recruiter-alternatives/',
+    kicker: 'Tool strategy + free worksheet',
+    title: 'LinkedIn Recruiter Alternatives: Build a Source Stack Instead',
+    description: 'Unbundle Recruiter into eight sourcing jobs, identify weekly dependencies, and test the uncovered gaps before renewal, downgrade, or cancellation.',
+  },
   {
     href: '/blog/where-to-find-cleared-candidates/',
     kicker: 'Cleared & GovCon sourcing',
@@ -60,7 +66,7 @@ export default function Blog(){
  return <main className="wrap blog-index">
   <div className="eyebrow">SourcingOS Authority Hub</div>
   <h1>Advanced sourcing guides for people who find hard talent.</h1>
-  <p className="lead">Tactical content for senior sourcers who need better intakes, source packs, search lanes, evidence review, Boolean coverage, source contribution metrics, GovCon market maps, and hiring-manager calibration.</p>
+  <p className="lead">Tactical content for senior sourcers who need better source stacks, intakes, search lanes, evidence review, Boolean coverage, source contribution metrics, GovCon market maps, and hiring-manager calibration.</p>
   <div className="cta"><strong>Start here:</strong> read the newest original sourcing frameworks and benchmark protocols, then use the free tools to put them into practice.</div>
   <div className="grid two">
    {flagship.map(a=><Link className="card featured authority-card" href={a.href} key={a.href}><span className="kicker">{a.kicker}</span><h2>{a.title}</h2><p className="muted">{a.description}</p></Link>)}
