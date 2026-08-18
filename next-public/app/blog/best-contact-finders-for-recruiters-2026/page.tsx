@@ -18,15 +18,15 @@ export const metadata: Metadata = {
 const tools = [
   {
     name:'ContactOut',
-    best:'Recruiter-native contact lookup',
-    fit:'Useful when your workflow starts with known people or professional profiles and you want recruiter-oriented email/phone discovery with a browser-extension/search workflow.',
+    best:'Recruiter-oriented contact lookup',
+    fit:'Useful when your workflow starts with known people or professional profiles and you want email/phone discovery with browser-extension and search workflows commonly used by recruiters.',
     verify:'Test match rate on your real candidate set, separate work vs personal data where surfaced, and record both email and phone coverage rather than relying on a vendor-wide accuracy claim.',
     source:'https://contactout.com/'
   },
   {
     name:'Lusha',
     best:'Recruiting + contact data + prospecting workflow',
-    fit:'Lusha now explicitly markets recruiting workflows that combine candidate search, verified contact details, browser-extension lookup, AI recommendations, outreach sequences, and integrations.',
+    fit:'Lusha explicitly markets recruiting workflows that combine candidate search, verified contact details, browser-extension lookup, AI recommendations, outreach sequences, and integrations.',
     verify:'Test whether its recruiting search adds qualified candidates beyond your existing sources, then separately score contact coverage and the value of its automation for your team.',
     source:'https://www.lusha.com/recruiters/'
   },
@@ -34,7 +34,7 @@ const tools = [
     name:'Apollo',
     best:'Broad people search + enrichment workflow',
     fit:'Apollo combines People search with access to prospect emails and phone numbers, enrichment, lists, sequences, and CRM-oriented workflows. For recruiters, the question is whether its B2B data model covers your candidate markets well enough.',
-    verify:'Use the same candidate benchmark as the recruiter-native tools. Track successful verified email/phone reveals, stale employer/title records, recruiter-market coverage, and correction time.',
+    verify:'Use the same candidate benchmark as the recruiter-oriented tools. Track successful verified email/phone reveals, stale employer/title records, recruiter-market coverage, and correction time.',
     source:'https://knowledge.apollo.io/hc/en-us/articles/4738396786701-How-Do-Data-Requests-Work'
   },
   {
@@ -58,8 +58,8 @@ const protocol = [
 ] as const
 
 const faq = [
-  ['What is the best contact finder for recruiters?', 'There is no universal winner. Recruiter-native lookup, broad B2B prospecting, professional email finding, phone coverage, integrations, market coverage, and price are different jobs. Test the providers on the candidate markets your team actually works.'],
-  ['Is ContactOut better than Lusha for recruiters?', 'They overlap, but the useful comparison is workflow-specific. ContactOut is strongly recruiter-oriented around contact lookup, while Lusha now offers a broader recruiting workflow that includes candidate search, contact details, AI recommendations, outreach, and integrations. Run the same benchmark on both.'],
+  ['What is the best contact finder for recruiters?', 'There is no universal winner. Recruiter-oriented lookup, broad B2B prospecting, professional email finding, phone coverage, integrations, market coverage, and price are different jobs. Test the providers on the candidate markets your team actually works.'],
+  ['Is ContactOut better than Lusha for recruiters?', 'They overlap, but the useful comparison is workflow-specific. ContactOut strongly targets recruiters and sales teams for contact lookup, while Lusha now offers a broader recruiting workflow that includes candidate search, contact details, AI recommendations, outreach, and integrations. Run the same benchmark on both.'],
   ['Is Apollo useful for recruiting?', 'It can be, particularly when your candidate markets overlap well with B2B professional data. Evaluate its candidate-market coverage separately from its strength as a sales/prospecting platform.'],
   ['Is Hunter a recruiter database?', 'Hunter is better understood as a professional email discovery and verification system than as a broad recruiter candidate database. It can be valuable when you already know the person and company/domain.'],
   ['Should recruiters use personal contact information?', 'Follow applicable law, employer policy, contractual restrictions, and team outreach standards. Prefer a documented recruiting workflow, honor opt-outs, and do not treat the existence of contact data as consent to automated outreach.'],
@@ -97,11 +97,11 @@ export default function ContactFinderGuide(){
         </aside>
 
         <article className="article-main">
-          <section id="short-answer"><h2>The short answer</h2><p><strong>ContactOut</strong> is the most obviously recruiter-native option in this group. <strong>Lusha</strong> now combines recruiting-specific search, contact data, recommendations and outreach. <strong>Apollo</strong> is a broader B2B people-search and enrichment platform that can work well when your candidate market overlaps its data model. <strong>Hunter</strong> is a focused professional email-finding and verification workflow when you already know the person and company/domain.</p><p>The winner for your team should come from a controlled benchmark, not this paragraph.</p></section>
+          <section id="short-answer"><h2>The short answer</h2><p><strong>ContactOut</strong> strongly targets recruiter and sales contact lookup. <strong>Lusha</strong> now combines recruiting-specific search, contact data, recommendations and outreach. <strong>Apollo</strong> is a broader B2B people-search and enrichment platform that can work when your candidate market overlaps its data model. <strong>Hunter</strong> is a focused professional email-finding and verification workflow when you already know the person and company/domain.</p><p>The winner for your team should come from a controlled benchmark, not this paragraph.</p></section>
 
           <section id="tools"><h2>Which contact finder fits which recruiting workflow?</h2>{tools.map(tool=><div key={tool.name}><h3>{tool.name}: {tool.best}</h3><p>{tool.fit}</p><p><strong>What to test:</strong> {tool.verify}</p><p><a href={tool.source} target="_blank" rel="noreferrer noopener">Official product documentation ↗</a></p></div>)}</section>
 
-          <section className="article-callout"><h2>Do not rank contact tools by “accuracy” without defining the denominator</h2><p>A vendor can be excellent at finding professional emails and mediocre at mobile phones—or have strong sales-prospect coverage but weak coverage in cleared, healthcare, academic, hourly, or niche technical talent. Report email hit rate, verified email rate, phone hit rate, freshness errors, and unusable records separately.</p></section>
+          <section className="article-callout"><h2>Do not rank contact tools by “accuracy” without defining the denominator</h2><p>A provider can be excellent at finding professional emails and weaker at mobile phones—or have strong sales-prospect coverage but weaker coverage in cleared, healthcare, academic, hourly, or niche technical talent. Report email hit rate, verified email rate, phone hit rate, freshness errors, and unusable records separately.</p></section>
 
           <section id="protocol"><h2>The 25-candidate recruiter contact-data test</h2>{protocol.map(([title,copy],i)=><div key={title}><h3>{i+1}. {title}</h3><p>{copy}</p></div>)}</section>
 
