@@ -4,9 +4,9 @@ import { methods } from '@/data/methods'
 
 export const metadata = {
   alternates: { canonical: '/' },
-  title: 'SourcingOS — Find who your search missed.',
+  title: 'AI Sourcing Software for Recruiters | SourcingOS',
   description:
-    'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free tools for technical, cleared, healthcare, and AI recruiting.',
+    'Evidence-first AI sourcing software and free recruiter tools for hard-to-fill technical, cleared, healthcare, and AI roles. Build search lanes, Boolean queries, public-evidence profiles, and recruiter-confirmed Candidate 360 dossiers.',
 }
 
 const tools = [
@@ -61,26 +61,38 @@ export default function Home() {
     <main>
 
       <section className="wrap hero hero-pro">
-        <div className="eyebrow">The sourcing OS for hard-to-fill roles</div>
+        <div className="eyebrow">Evidence-first AI sourcing software for hard-to-fill roles</div>
         <h1>Find who your<br />search missed.</h1>
         <p className="lead">
-          Build source packs, run open-web searches, and turn candidate evidence into
-          recruiter-confirmed Candidate 360 profiles.
+          Use AI to structure the search, expand sourcing lanes, and organize public evidence—then keep identity, fit, contact, and consequential decisions recruiter-confirmed.
         </p>
         <div className="hero-actions">
           <Link className="btn" href="/candidate-search">Try Candidate Search</Link>
-          <Link className="btn secondary" href="/tools/boolean-generator">Try BooleanOS</Link>
-          <Link className="btn ghost" href="/training">Start training →</Link>
+          <Link className="btn secondary" href="/tools/boolean-generator">Free Boolean Generator</Link>
+          <Link className="btn ghost" href="/blog/ai-sourcing-workflow-2026">How we evaluate AI sourcing →</Link>
         </div>
         <div className="trust-strip">
-          <span>No fake candidates</span>
-          <span>Public evidence only</span>
-          <span>Recruiter-confirmed merges</span>
+          <span>AI proposes, recruiter confirms</span>
+          <span>Public evidence stays visible</span>
+          <span>No silent identity merges</span>
           <span>No auto-outreach</span>
         </div>
       </section>
 
       <section className="section" style={{ paddingTop: 0 }}>
+        <div className="section-eyebrow"><span className="section-tag">AI sourcing workflow</span></div>
+        <h2 className="section-title">Use AI where it helps. Keep the evidence boundary visible.</h2>
+        <p className="section-body">SourcingOS is built around a simple operating rule: AI can interpret a req, propose search language, expand source lanes, and summarize evidence. Recruiters still confirm identity, qualification, contact use, merges, and outreach decisions.</p>
+        <div className="grid two">
+          <div className="card featured"><span className="kicker">Good AI work</span><h3>Search strategy and coverage</h3><p className="muted">Role intake, alternate titles, Boolean logic, source-lane expansion, adjacent markets, public-evidence organization, and calibration questions.</p></div>
+          <div className="card"><span className="kicker">Human checkpoint</span><h3>Claims that need confirmation</h3><p className="muted">Identity merges, current clearance or license status, candidate fit, contact-channel decisions, outreach, and any consequential recruiting action.</p></div>
+        </div>
+        <div className="home-cta-row" style={{ marginTop: '20px' }}><Link className="btn secondary" href="/blog/ai-sourcing-workflow-2026">Read the 8-task AI sourcing evaluation harness</Link></div>
+      </section>
+
+      <hr className="section-divider" />
+
+      <section className="section">
         <div className="section-eyebrow"><span className="section-tag">How SourcingOS works</span></div>
         <h2 className="section-title">From req to Candidate 360 in one workflow.</h2>
         <div className="workflow">
@@ -112,7 +124,7 @@ export default function Home() {
       <hr className="section-divider" />
 
       <section className="section">
-        <div className="section-eyebrow"><span className="section-tag">Free tools</span></div>
+        <div className="section-eyebrow"><span className="section-tag">Free recruiter tools</span></div>
         <h2 className="section-title">Start sourcing in 30 seconds. No account required.</h2>
         <p className="section-body">BooleanOS, X-Ray Launcher, and the JD Strategy Tool are free and open. They wire directly into the Candidate Search beta workflow.</p>
         <div className="tools-grid">
