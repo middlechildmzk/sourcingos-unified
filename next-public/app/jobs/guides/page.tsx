@@ -1,8 +1,16 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Recruiter Career Guides | SourcingOS Jobs',
-  description: 'Career resources for sourcers, recruiters, recruiting ops, healthcare recruiters, GovCon recruiters, and AI recruiting roles.'
+  title: 'Recruiter Career Guide Topics | SourcingOS Jobs',
+  description: 'A practical index of career topics for sourcers, recruiters, recruiting ops, healthcare recruiters, GovCon recruiters, and AI recruiting roles.',
+  alternates: { canonical: '/jobs/guides/' },
+  robots: { index: false, follow: true },
+  openGraph: {
+    title: 'Recruiter Career Guide Topics | SourcingOS Jobs',
+    description: 'Explore the recruiter career topics SourcingOS is developing alongside its sourcing tools and job search.',
+    url: '/jobs/guides/',
+    type: 'website',
+  },
 }
 
 const guides = [
@@ -17,14 +25,14 @@ export default function JobGuidesPage() {
   return (
     <main>
       <section className="wrap hero">
-        <div className="eyebrow">Recruiter career hub</div>
-        <h1>Career guides for sourcers and recruiters.</h1>
-        <p className="lead">SourcingOS Jobs is more than a job board. It is a career intelligence layer for people who find people.</p>
+        <div className="eyebrow">Recruiter career topics</div>
+        <h1>Career topics for sourcers and recruiters.</h1>
+        <p className="lead">This is a topic index, not a finished guide library yet. Use it to see the career areas SourcingOS is developing alongside the live job search and sourcing toolkit.</p>
       </section>
       <section className="wrap grid">
         {guides.map(([title, description]) => (
           <div className="card" key={title}>
-            <span className="kicker">Guide</span>
+            <span className="kicker">Topic</span>
             <h3>{title}</h3>
             <p className="muted">{description}</p>
             <Link className="btn secondary" href="/jobs">Browse related jobs</Link>
