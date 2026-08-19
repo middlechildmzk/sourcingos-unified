@@ -4,6 +4,13 @@ export const metadata = {
   title: 'Free Sourcing Tools | SourcingOS',
   description:
     'Source Stack Coverage, BooleanOS, Search Lane Expander, Search Exhaustion, Unique Contribution Rate, X-Ray, and JD Strategy tools for technical and hard-to-fill recruiting.',
+  alternates: { canonical: '/tools/' },
+  openGraph: {
+    title: 'Free Sourcing Tools | SourcingOS',
+    description: 'Free tools for role intake, Boolean search, source-lane expansion, source-stack coverage, search exhaustion, UCR, and open-web sourcing.',
+    url: '/tools/',
+    type: 'website',
+  },
 }
 
 export default function Tools() {
@@ -14,6 +21,16 @@ export default function Tools() {
       <p className="lead">
         Build search lanes, measure source overlap and coverage, pressure-test your sourcing stack, and turn recruiting assumptions into evidence before you buy another tool or abandon a market.
       </p>
+
+      <section className="article-callout" style={{ marginBottom: '24px' }}>
+        <h2>Which role-to-search tool should I use?</h2>
+        <div className="grid">
+          <div className="card"><span className="kicker">At intake</span><h3>JD Strategy Tool</h3><p className="muted">Input: a messy job description. Output: a source pack with evidence requirements, target titles, lanes, Boolean strings, and HM calibration questions.</p></div>
+          <div className="card"><span className="kicker">You know the role</span><h3>BooleanOS</h3><p className="muted">Input: a role you already understand. Output: ready-to-paste Boolean search strings by role mode.</p></div>
+          <div className="card"><span className="kicker">Mid-search</span><h3>Search Lane Expander</h3><p className="muted">Input: a search returning too few results. Output: Precision, Balanced, Broad, and Market Map lanes plus expansion actions.</p></div>
+        </div>
+      </section>
+
       <div className="grid">
         <Link className="card featured" href="/tools/source-stack-coverage">
           <span className="kicker">New stack strategy tool</span>
@@ -22,8 +39,8 @@ export default function Tools() {
         </Link>
         <Link className="card featured" href="/tools/unique-contribution-rate-calculator">
           <span className="kicker">Source analytics tool</span>
-          <h3>Unique Contribution Rate Calculator</h3>
-          <p className="muted">Measure what each sourcing source or lane uniquely adds in a controlled comparison, plus optional cost per unique candidate.</p>
+          <h3>UCR Calculator</h3>
+          <p className="muted">Measure the share of a source&apos;s evidence-fit leads that no other tested source surfaced, plus optional cost per unique lead.</p>
         </Link>
         <Link className="card featured" href="/tools/search-exhaustion-calculator">
           <span className="kicker">Coverage evidence tool</span>
@@ -31,14 +48,14 @@ export default function Tools() {
           <p className="muted">Calculate lane coverage, duplicate rate, unique-query yield, donor-map coverage, adjacent-title yield, and recent new-lead rate before declaring a market exhausted.</p>
         </Link>
         <Link className="card featured" href="/tools/search-lane-expander">
-          <span className="kicker">Volume tool</span>
+          <span className="kicker">Mid-search expansion</span>
           <h3>Search Lane Expander</h3>
           <p className="muted">Turn a rough role target into Precision, Balanced, Broad, and Market Map lanes with live sources, manual-safe X-Ray links, and low-result rescue actions.</p>
         </Link>
         <Link className="card" href="/tools/boolean-generator">
-          <span className="kicker">Hero tool</span>
-          <h3>JD-to-Boolean Search Builder</h3>
-          <p className="muted">Paste a JD → three search lanes with LinkedIn, Google/Bing X-Ray, and GitHub strings. Strips JD noise automatically.</p>
+          <span className="kicker">Role-mode string builder</span>
+          <h3>BooleanOS</h3>
+          <p className="muted">Build ready-to-paste Boolean strings by role mode when you already understand the role and need search syntax now.</p>
         </Link>
         <Link className="card" href="/tools/xray-search">
           <span className="kicker">Open-web search</span>
@@ -56,9 +73,9 @@ export default function Tools() {
           <p className="muted">Diagnose why a req is stuck — ghost req, lane exhaustion, calibration drift, comp, or outreach — and get a rescue plan plus an HM note.</p>
         </Link>
         <Link className="card" href="/tools/jd-search-strategy">
-          <span className="kicker">Search strategy</span>
+          <span className="kicker">Intake and source pack</span>
           <h3>JD Strategy Tool</h3>
-          <p className="muted">Turn a messy JD into source lanes, Boolean strings, target titles, and HM calibration questions.</p>
+          <p className="muted">Turn a messy JD into evidence requirements, source lanes, Boolean strings, target titles, and HM calibration questions.</p>
         </Link>
         <Link className="card" href="/candidate-search">
           <span className="kicker">Public demo</span>
@@ -67,7 +84,7 @@ export default function Tools() {
         </Link>
       </div>
       <div className="cta" style={{ marginTop: '32px' }}>
-        <strong>Stack → search strategy → coverage → contribution → workbench:</strong> identify what your tools cover, build the lane, measure what each source adds, then take the best evidence into Candidate Search.
+        <strong>Stack → intake → strings → expansion → evidence:</strong> identify what your tools cover, use JD Strategy at intake, BooleanOS when the role is clear, Search Lane Expander when coverage is narrow, then review evidence in Candidate Search.
       </div>
     </main>
   )
