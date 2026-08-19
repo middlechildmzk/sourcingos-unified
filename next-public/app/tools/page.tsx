@@ -86,6 +86,10 @@ export default function Tools() {
       <div className="cta" style={{ marginTop: '32px' }}>
         <strong>Stack → intake → strings → expansion → evidence:</strong> identify what your tools cover, use JD Strategy at intake, BooleanOS when the role is clear, Search Lane Expander when coverage is narrow, then review evidence in Candidate Search.
       </div>
+      <div className="cta" style={{ marginTop: '16px' }}>
+        <strong>See what the workflow produces:</strong>{' '}
+        <Link href="/sample-candidate-360/">open the synthetic Candidate 360 dossier</Link> to inspect evidence, unknowns, recruiter-confirmed identity resolution, and verify-next steps before joining the beta.
+      </div>
     </main>
   )
 }
