@@ -5,11 +5,13 @@ export const metadata = {
   alternates: { canonical: '/blog/' },
   title: 'SourcingOS Guides — Advanced Sourcing, AI Recruiting, Boolean Search, and Contact Data',
   description: 'Senior-sourcer guides, original sourcing frameworks, source-stack strategy, role intake templates, Boolean benchmarks, source contribution metrics, GovCon sourcing, and hiring-manager calibration.',
+  openGraph: {
+    title: 'SourcingOS Guides — Advanced Sourcing and Recruiting Research',
+    description: 'Original sourcing frameworks, benchmark protocols, open-web strategy, GovCon sourcing, and recruiter operating systems.',
+    url: '/blog/',
+    type: 'website',
+  },
 }
-
-const latest = [...articles].reverse()
-const featured = latest.slice(0, 4)
-const rest = latest.slice(4)
 
 const flagship = [
   {
@@ -27,8 +29,8 @@ const flagship = [
   {
     href: '/blog/unique-contribution-rate/',
     kicker: 'Source analytics + free calculator',
-    title: 'Unique Contribution Rate: Measure What Each Source Actually Adds',
-    description: 'A reproducible metric for additive discovery: what share of a source’s reviewed candidate set did none of the other tested sources surface?',
+    title: 'Unique Contribution Rate: Measure What Each Sourcing Channel Actually Adds',
+    description: 'A reproducible metric for additive discovery: what share of a source’s evidence-fit leads did none of the other tested sources surface?',
   },
   {
     href: '/blog/senior-sourcer-role-intake/',
@@ -39,7 +41,7 @@ const flagship = [
   {
     href: '/blog/search-exhaustion-framework/',
     kicker: 'Coverage framework + free calculator',
-    title: 'How to Know When You Have Actually Searched the Market',
+    title: 'Recruiter Search Exhaustion: How to Know When You Have Actually Searched the Market',
     description: 'Seven observable signals replace “we looked everywhere” with lane coverage, duplicate pressure, unique-query yield, donor-map coverage, and expansion evidence.',
   },
   {
@@ -61,6 +63,11 @@ const flagship = [
     description: 'Use USAspending and SAM.gov to build evidence-backed donor-company maps from public federal award data instead of recruiter memory.',
   },
 ]
+
+const flagshipSlugs = new Set(flagship.map(item => item.href.split('/').filter(Boolean).pop()))
+const latest = [...articles].filter(article => !flagshipSlugs.has(article.slug)).reverse()
+const featured = latest.slice(0, 4)
+const rest = latest.slice(4)
 
 export default function Blog(){
  return <main className="wrap blog-index">
