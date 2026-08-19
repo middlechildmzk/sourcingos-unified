@@ -4,6 +4,12 @@ export const metadata = {
   alternates: { canonical: '/training/' },
   title: 'Recruiter Training Hub | SourcingOS',
   description: 'Practical SourcingOS training for AI sourcing, source packs, evidence review, hiring manager calibration, cleared sourcing, and Candidate 360 dossiers.',
+  openGraph: {
+    title: 'Recruiter Training Hub | SourcingOS',
+    description: 'Practical training for AI sourcing, evidence review, hiring manager calibration, cleared sourcing, and Candidate 360.',
+    url: '/training/',
+    type: 'website',
+  },
 }
 
 const modules = [
@@ -29,7 +35,7 @@ const modules = [
     href: '/training/cleared-govcon-sourcing-safety',
     kicker: 'GovCon safety',
     title: 'Use clearance breadcrumbs without overclaiming',
-    desc: 'A practical guardrail for cleared and federal searches. Search public language, but never treat public clearance text as verified clearance.',
+    desc: 'A practical guardrail for cleared and federal searches. Search public language, but never treat it as confirmation of current clearance status.',
   },
   {
     href: '/training/candidate-360-workshop',
