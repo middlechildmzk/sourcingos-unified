@@ -16,32 +16,8 @@ export const metadata: Metadata = {
   },
   description:
     'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free sourcing tools for technical, cleared, healthcare, and AI roles.',
-  // NOTE: no site-wide alternates.canonical here. A root-layout canonical of '/'
-  // is inherited by every page that does not override it, which told search
-  // engines the whole site was a duplicate of the homepage. Pages set their own.
-  openGraph: {
-    title: 'SourcingOS — Find who your search missed.',
-    description:
-      'Human-approved sourcing intelligence for hard-to-fill technical, cleared, healthcare, and AI roles. No silent merges. No fake verification.',
-    type: 'website',
-    url: siteUrl,
-    siteName: 'SourcingOS',
-    images: [
-      {
-        url: '/opengraph-image',
-        width: 1200,
-        height: 630,
-        alt: 'SourcingOS — Find who your search missed.',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'SourcingOS — Find who your search missed.',
-    description:
-      'Human-approved sourcing intelligence for hard-to-fill technical, cleared, healthcare, and AI roles.',
-    images: ['/opengraph-image'],
-  },
+  // Do not define a site-wide canonical or Open Graph URL here. Route-level
+  // metadata owns page identity so hubs and articles never inherit the homepage URL.
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
