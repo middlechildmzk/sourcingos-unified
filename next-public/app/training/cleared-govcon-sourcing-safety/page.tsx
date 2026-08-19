@@ -37,7 +37,7 @@ export default function ClearedGovConSourcingSafetyPage() {
       <p>Use Clearance Search or BooleanOS to build the lane, then Candidate Search to review the public evidence and missing data. Candidate 360 should show clearance as verify next until confirmed by the proper process.</p>
       <p>
         <Link className="btn" href="/tools/clearance-search">Open Clearance Search</Link>{' '}
-        <Link className="btn secondary" href="/blog/cleared-devsecops-sourcing">Read cleared DevSecOps guide</Link>
+        <Link className="btn secondary" href="/blog/where-to-find-cleared-candidates/">See the 11-lane cleared sourcing map</Link>
       </p>
     </section>
   </main>
