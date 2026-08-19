@@ -11,6 +11,13 @@ export const metadata: Metadata = {
   title: 'Sample Candidate 360 — Evidence-first sourcing | SourcingOS',
   description:
     'A synthetic Candidate 360 dossier: candidate evidence, role-fit reasoning, risk flags, and hiring-manager-ready summaries. SourcingOS shows the evidence behind every recommendation.',
+  alternates: { canonical: '/sample-candidate-360/' },
+  openGraph: {
+    title: 'Sample Candidate 360 — Evidence-first sourcing | SourcingOS',
+    description: 'See how SourcingOS separates public evidence, recruiter-confirmed identity resolution, unknowns, and verification steps in a synthetic candidate dossier.',
+    url: '/sample-candidate-360/',
+    type: 'website',
+  },
 }
 
 const ledger = [
@@ -37,13 +44,11 @@ const niceToHaves = [
 export default function SampleCandidate360Page() {
   return (
     <main className="wrap">
-      {/* ── Demo disclaimer ── */}
       <div className="cta" style={{ marginTop: 24, borderColor: 'var(--accent)' }}>
         <strong>Synthetic demo data.</strong> No real candidate identity is shown. “Jordan A.” and
         every evidence item below are invented to demonstrate the dossier format.
       </div>
 
-      {/* ── Hero ── */}
       <section className="wrap hero" style={{ paddingTop: 28 }}>
         <div className="eyebrow">Candidate 360 · Sample artifact</div>
         <h1>See what evidence-first sourcing looks like.</h1>
@@ -62,7 +67,6 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 1. Role context ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">1 · Role context</span></div>
         <div className="card">
@@ -77,24 +81,23 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 2. Candidate snapshot ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">2 · Candidate snapshot</span></div>
         <div className="card">
-          <span className="kicker">SAMPLE · Synthetic profile · Identity recruiter-confirmed</span>
+          <span className="kicker">SAMPLE · Synthetic profile · Identity match recruiter-confirmed</span>
           <h2 style={{ marginTop: 6 }}>Jordan A. — DevSecOps Engineer (sample)</h2>
           <p className="muted">
             Public evidence suggests a DevSecOps engineer with sustained Kubernetes and Terraform
             activity, GovCloud-adjacent delivery, and public speaking on RMF-aware pipelines. A
             self-stated clearance breadcrumb appears on a public resume and <strong>would need
             verification</strong>. Three source profiles roll up into this record — SourcingOS
-            proposed the identity match; <strong>a recruiter approved it</strong>. Nothing merged
-            silently.
+            proposed the identity match; <strong>a recruiter approved that identity resolution</strong>.
+            That confirmation applies only to the profile merge, not to the candidate facts below.
+            Nothing merged silently.
           </p>
         </div>
       </section>
 
-      {/* ── 3 + 4. Requirement tables ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">3 · Must-have match &nbsp;/&nbsp; 4 · Bonus signals</span></div>
         <div className="grid two">
@@ -119,7 +122,6 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 5. Evidence ledger ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">5 · Evidence ledger</span></div>
         <h2 className="section-title">Every claim has a source. Every source is visible.</h2>
@@ -148,12 +150,12 @@ export default function SampleCandidate360Page() {
           </table>
         </div>
         <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-          Nothing is marked “verified.” That’s deliberate: open-web signals are leads, not facts —
-          and the distinction stays visible all the way to the hiring manager.
+          Candidate facts are not marked “verified.” The recruiter-confirmed label above applies only
+          to identity resolution across the synthetic source profiles. Open-web signals remain leads,
+          not verified candidate facts, and that distinction stays visible to the hiring manager.
         </p>
       </section>
 
-      {/* ── 6. Source lane context ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">6 · Source lane context</span></div>
         <div className="grid two">
@@ -176,23 +178,20 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 7. Why worth reviewing ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">7 · Why this candidate is worth reviewing</span></div>
         <div className="card">
           <p className="muted">
-            This profile matches 3 of 4 must-haves with medium-to-high-confidence public evidence,
-            including the rare combination the HM flagged: platform depth <em>and</em> a credible
-            clearance signal. The evidence spans independent sources (code, talk, resume, company
-            graph) rather than one self-written profile — which is exactly what reduces
-            false-positive risk on hard searches. Project-specific fit draft: <strong>78/100</strong>
-            (declared weights; capped by the unverified clearance — this is a fit-for-this-role
-            estimate, never a judgment of the person).
+            This synthetic profile has evidence against 3 of 4 must-haves, including the rare
+            combination the HM flagged: platform depth <em>and</em> a clearance breadcrumb that still
+            requires direct verification. The evidence spans independent source types (code, talk,
+            resume, company graph) rather than one self-written profile. <strong>Evidence coverage:
+            3 of 4 must-haves have supporting public signals; 1 remains capped pending verification.</strong>
+            This is an auditable coverage summary for this role, not a score or judgment of the person.
           </p>
         </div>
       </section>
 
-      {/* ── 8. Risks / unknowns ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">8 · Risks, unknowns, and what NOT to assume</span></div>
         <div className="card">
@@ -205,7 +204,6 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 9. Verify next ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">9 · What to verify next</span></div>
         <div className="card">
@@ -218,7 +216,6 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 10. HM talking points ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">10 · Hiring manager talking points</span></div>
         <div className="card">
@@ -232,7 +229,6 @@ export default function SampleCandidate360Page() {
         </div>
       </section>
 
-      {/* ── 11 + 12. Export CTA + trust + beta CTA ── */}
       <section className="section">
         <div className="section-eyebrow"><span className="section-tag">11 · Forward it</span></div>
         <div className="card">
