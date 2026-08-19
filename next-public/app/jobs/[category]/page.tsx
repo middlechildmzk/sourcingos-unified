@@ -41,7 +41,7 @@ const categoryGuides: Record<string, CategoryGuide> = {
     query: 'cleared recruiter govcon recruiter federal recruiter defense recruiter security clearance sourcer',
     titles: ['Cleared Recruiter', 'GovCon Recruiter', 'Federal Recruiter', 'Defense Recruiter'],
     skills: ['federal recruiting', 'mission hiring', 'cyber roles', 'cloud roles', 'compliance-aware sourcing'],
-    tips: ['Search cleared recruiter, federal recruiter, defense recruiter, and GovCon sourcer.', 'Look for role text mentioning federal contracts, cyber, cloud, or mission programs.', 'Treat any clearance language as recruiter-verified only through proper processes.'],
+    tips: ['Search cleared recruiter, federal recruiter, defense recruiter, and GovCon sourcer.', 'Look for role text mentioning federal contracts, cyber, cloud, or mission programs.', 'Treat any clearance language as recruiter-confirmed only through proper processes.'],
   },
   'ai-recruiter-jobs': {
     query: 'AI recruiter ML recruiter machine learning sourcer AI talent acquisition technical sourcer',
@@ -63,9 +63,18 @@ export function generateStaticParams() {
 
 export function generateMetadata({ params }: { params: { category: string } }) {
   const category = getCategoryBySlug(params.category)
+  const canonical = `/jobs/${params.category}/`
   return {
     title: category?.seoTitle ?? 'SourcingOS Jobs',
-    description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.'
+    description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.',
+    alternates: { canonical },
+    robots: { index: false, follow: true },
+    openGraph: {
+      title: category?.seoTitle ?? 'SourcingOS Jobs',
+      description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.',
+      url: canonical,
+      type: 'website',
+    },
   }
 }
 
@@ -114,7 +123,7 @@ export default function JobCategoryPage({ params }: { params: { category: string
         <p className="lead">{category.description}</p>
         <div className="hero-actions">
           <Link className="btn" href="/jobs">All jobs</Link>
-          <Link className="btn secondary" href="/jobs/guides">Career guides</Link>
+          <Link className="btn secondary" href="/jobs/guides">Career guide topics</Link>
           <Link className="btn ghost" href="/waitlist">Join beta</Link>
         </div>
       </section>
@@ -158,7 +167,7 @@ export default function JobCategoryPage({ params }: { params: { category: string
             <span className="kicker">Career resource</span>
             <h2>Build the skills for these roles.</h2>
             <p className="muted">SourcingOS connects recruiter career pages with practical tools, methods, Boolean strings, X-Ray launchers, and source-pack workflows.</p>
-            <Link className="btn secondary" href="/jobs/guides">Open career guides →</Link>
+            <Link className="btn secondary" href="/jobs/guides">See career guide topics →</Link>
           </div>
         </div>
       </section>
