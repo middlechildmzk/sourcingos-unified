@@ -18,6 +18,8 @@ const seedRows: SourceRow[] = [
   { id: 4, name: 'Donor-company lane', reviewed: 18, unique: 7, cost: 0 },
 ]
 
+const shortDefinition = "UCR is the share of a source's evidence-fit leads that no other tested source surfaced."
+
 function pct(n: number) {
   return `${Math.round(n * 100)}%`
 }
@@ -52,20 +54,20 @@ export function UniqueContributionRateCalculatorClient() {
   return <div>
     <div className="preview-banner" style={{ marginBottom: 20 }}>
       <span className="pb-icon">◈</span>
-      <span><strong>Comparison rule:</strong> use the same requisition, comparable review criteria, and capped effort per source. UCR measures additive discovery inside that comparison. It does not measure candidate quality, response rate, hires, or ROI by itself.</span>
+      <span><strong>Comparison rule:</strong> {shortDefinition} Use the same requisition, evidence-fit review standard, and comparable effort per source. UCR measures additive discovery inside that comparison. It does not measure response, hires, or ROI by itself.</span>
     </div>
 
     <div style={{ overflowX: 'auto' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
         <thead>
           <tr>
-            {['Source / lane', 'Reviewed candidates', 'Unique to this source', 'UCR', 'Optional cost', 'Cost / unique', ''].map(label => <th key={label} style={{ textAlign:'left', padding:'10px 8px', borderBottom:'1px solid var(--line)' }}>{label}</th>)}
+            {['Source / lane', 'Evidence-fit leads', 'Unique to this source', 'UCR', 'Optional cost', 'Cost / unique', ''].map(label => <th key={label} style={{ textAlign:'left', padding:'10px 8px', borderBottom:'1px solid var(--line)' }}>{label}</th>)}
           </tr>
         </thead>
         <tbody>
           {normalized.map(row => <tr key={row.id}>
             <td style={{ padding:'10px 8px' }}><input className="input" value={row.name} onChange={e => update(row.id, 'name', e.target.value)} /></td>
-            <td style={{ padding:'10px 8px' }}><input className="input" type="number" min="0" value={row.reviewed} onChange={e => update(row.id, 'reviewed', e.target.value)} /></td>
+            <td style={{ padding:'10px 8px' }}><input className="input" type="number" min="0" value={row.reviewed} onChange={e => update(row.id, 'reviewed', e.target.value)} aria-label={`Evidence-fit leads from ${row.name}`} /></td>
             <td style={{ padding:'10px 8px' }}><input className="input" type="number" min="0" max={row.reviewed} value={row.unique} onChange={e => update(row.id, 'unique', e.target.value)} /></td>
             <td style={{ padding:'10px 8px' }}><strong>{pct(row.ucr)}</strong></td>
             <td style={{ padding:'10px 8px' }}><input className="input" type="number" min="0" step="0.01" value={row.cost} onChange={e => update(row.id, 'cost', e.target.value)} /></td>
@@ -81,8 +83,8 @@ export function UniqueContributionRateCalculatorClient() {
     <section style={{ marginTop: 30 }}>
       <h2>How to read the result</h2>
       <div className="grid two">
-        <div className="card"><span className="kicker">High UCR</span><p>A large share of the reviewed candidates from this source were not surfaced by the other sources in the same comparison. The source appears additive for this requisition and test design.</p></div>
-        <div className="card"><span className="kicker">Low UCR</span><p>Most reviewed candidates also appeared elsewhere. That can indicate redundancy, but do not cut a source without considering role family, quality, speed, response, cost, and source-order effects.</p></div>
+        <div className="card"><span className="kicker">High UCR</span><p>A large share of the evidence-fit leads from this source were not surfaced by the other sources in the same comparison. The source appears additive for this requisition and test design.</p></div>
+        <div className="card"><span className="kicker">Low UCR</span><p>Most evidence-fit leads also appeared elsewhere. That can indicate redundancy, but do not cut a source without considering role family, downstream outcomes, speed, response, cost, and source-order effects.</p></div>
       </div>
     </section>
 
@@ -90,7 +92,7 @@ export function UniqueContributionRateCalculatorClient() {
       <h2>Do not compare unlike tests</h2>
       <ul>
         <li>Keep the requisition and search window fixed.</li>
-        <li>Use comparable effort or reviewed-result caps per source.</li>
+        <li>Use comparable effort or evidence-fit review caps per source.</li>
         <li>Rotate source order across repeated tests so the first source does not automatically look more unique.</li>
         <li>Dedupe on stable identity anchors, with human review when identity is uncertain.</li>
         <li>Report UCR by role family rather than blending unlike markets into one headline number.</li>
