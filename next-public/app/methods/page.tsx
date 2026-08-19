@@ -5,6 +5,12 @@ export const metadata = {
   alternates: { canonical: '/methods/' },
   title: 'Sourcing Methods Library',
   description: 'Browse documented source-pack methods, search lanes, research workflows, and recruiter tools for hard-to-fill roles.',
+  openGraph: {
+    title: 'Sourcing Methods Library | SourcingOS',
+    description: 'An index into documented source-pack methods, search lanes, research workflows, and recruiter tools.',
+    url: '/methods/',
+    type: 'website',
+  },
 }
 
 export default function Page(){
