@@ -44,7 +44,7 @@ export default function HiringManagerCalibrationWorkshopPage() {
       <p>The JD Strategy Tool turns intake notes into search lanes and calibration questions. Candidate Search turns those lanes into public evidence you can review with the hiring manager.</p>
       <p>
         <Link className="btn" href="/tools/jd-search-strategy">Generate HM questions</Link>{' '}
-        <Link className="btn secondary" href="/blog/hiring-manager-calibration-questions">Read the full guide</Link>
+        <Link className="btn secondary" href="/blog/senior-sourcer-role-intake/">Read the 25-question intake framework</Link>
       </p>
     </section>
   </main>
