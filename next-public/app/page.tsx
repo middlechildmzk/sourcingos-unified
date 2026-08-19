@@ -7,6 +7,12 @@ export const metadata = {
   title: 'AI Sourcing Software for Recruiters | SourcingOS',
   description:
     'Evidence-first AI sourcing software and free recruiter tools for hard-to-fill technical, cleared, healthcare, and AI roles. Build search lanes, Boolean queries, public-evidence profiles, and recruiter-confirmed Candidate 360 dossiers.',
+  openGraph: {
+    title: 'AI Sourcing Software for Recruiters | SourcingOS',
+    description: 'Build search lanes, Boolean queries, public-evidence profiles, and recruiter-confirmed Candidate 360 dossiers.',
+    url: '/',
+    type: 'website',
+  },
 }
 
 const tools = [
@@ -54,7 +60,15 @@ const trainingModules = [
   },
 ]
 
-const latestArticles = [...articles].slice(-6).reverse()
+const redirectedArticleSlugs = new Set([
+  'open-web-sourcing-stack',
+  'sourcing-tool-stack-for-agency-recruiters',
+  'sourcing-for-founders-and-small-teams',
+  'hard-to-fill-role-intake-template',
+  'hiring-manager-calibration-questions',
+  'govcon-cleared-sourcing-market-map',
+])
+const latestArticles = [...articles].filter(article => !redirectedArticleSlugs.has(article.slug)).slice(-6).reverse()
 
 export default function Home() {
   return (
@@ -68,7 +82,7 @@ export default function Home() {
         </p>
         <div className="hero-actions">
           <Link className="btn" href="/candidate-search">Try Candidate Search</Link>
-          <Link className="btn secondary" href="/tools/boolean-generator">Free Boolean Generator</Link>
+          <Link className="btn secondary" href="/tools/boolean-generator">Try BooleanOS</Link>
           <Link className="btn ghost" href="/blog/ai-sourcing-workflow-2026">How we evaluate AI sourcing →</Link>
         </div>
         <div className="trust-strip">
@@ -82,10 +96,10 @@ export default function Home() {
       <section className="section" style={{ paddingTop: 0 }}>
         <div className="section-eyebrow"><span className="section-tag">AI sourcing workflow</span></div>
         <h2 className="section-title">Use AI where it helps. Keep the evidence boundary visible.</h2>
-        <p className="section-body">SourcingOS is built around a simple operating rule: AI can interpret a req, propose search language, expand source lanes, and summarize evidence. Recruiters still confirm identity, qualification, contact use, merges, and outreach decisions.</p>
+        <p className="section-body">SourcingOS is built around a simple operating rule: AI can interpret a req, propose search language, expand source lanes, and summarize evidence. Recruiters still confirm identity, role relevance, contact use, merges, and outreach decisions.</p>
         <div className="grid two">
           <div className="card featured"><span className="kicker">Good AI work</span><h3>Search strategy and coverage</h3><p className="muted">Role intake, alternate titles, Boolean logic, source-lane expansion, adjacent markets, public-evidence organization, and calibration questions.</p></div>
-          <div className="card"><span className="kicker">Human checkpoint</span><h3>Claims that need confirmation</h3><p className="muted">Identity merges, current clearance or license status, candidate fit, contact-channel decisions, outreach, and any consequential recruiting action.</p></div>
+          <div className="card"><span className="kicker">Human checkpoint</span><h3>Claims that need confirmation</h3><p className="muted">Identity merges, current clearance or license status, role relevance, contact-channel decisions, outreach, and any consequential recruiting action.</p></div>
         </div>
         <div className="home-cta-row" style={{ marginTop: '20px' }}><Link className="btn secondary" href="/blog/ai-sourcing-workflow-2026">Read the 8-task AI sourcing evaluation harness</Link></div>
       </section>
@@ -116,7 +130,7 @@ export default function Home() {
         <h2 className="section-title">Clear value before the login wall.</h2>
         <p className="section-body">SourcingOS should feel useful immediately, then make the private beta obvious when the workflow becomes durable.</p>
         <div className="grid two">
-          <div className="card featured"><span className="kicker">Free, no account</span><h3>Tools, training, and public demo</h3><p className="muted">BooleanOS, X-Ray Launcher, JD Strategy Tool, Clearance Search, Aging Req Rescue, Candidate Search demo, training modules, and sample Candidate 360.</p></div>
+          <div className="card featured"><span className="kicker">Free, no account</span><h3>Tools, training, and public demo</h3><p className="muted">BooleanOS, X-Ray Launcher, JD Strategy Tool, Clearance Search Builder, Aging Req Rescue Planner, Candidate Search demo, training modules, and sample Candidate 360.</p></div>
           <div className="card"><span className="kicker">Private beta</span><h3>Durable sourcing cockpit</h3><p className="muted">Projects, saved candidates, contact enrichment, Candidate Graph, Candidate 360 dossiers, project memory, and admin workflows.</p></div>
         </div>
       </section>
