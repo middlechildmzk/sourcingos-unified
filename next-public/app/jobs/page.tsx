@@ -4,7 +4,14 @@ import { jobCategories } from '@/data/jobs'
 
 export const metadata = {
   title: 'SourcingOS Jobs — Jobs for people who find people',
-  description: 'Recruiter and sourcer job search hub with live public job-source search, career categories, and SourcingOS career intelligence.'
+  description: 'Recruiter and sourcer job search hub with live public job-source search, career categories, and SourcingOS career intelligence.',
+  alternates: { canonical: '/jobs/' },
+  openGraph: {
+    title: 'SourcingOS Jobs — Jobs for people who find people',
+    description: 'Search recruiter and sourcer roles from public job sources and connect the search to SourcingOS tools and career topics.',
+    url: '/jobs/',
+    type: 'website',
+  },
 }
 
 export default function JobsPage() {
@@ -20,9 +27,9 @@ export default function JobsPage() {
           <Link className="btn ghost" href="/waitlist">Join SourcingOS beta</Link>
         </div>
         <div className="grid">
-          <div className="card"><span className="kicker">Trust-first</span><h3>No fake apply links</h3><p className="muted">SourcingOS Jobs links to original public job sources. Demo listings are not presented as real openings.</p></div>
-          <div className="card"><span className="kicker">SEO categories</span><h3>Recruiter career hubs</h3><p className="muted">Remote recruiter, talent sourcer, technical sourcer, recruiting ops, healthcare recruiter, cleared recruiter, and AI recruiter pages.</p></div>
-          <div className="card"><span className="kicker">SourcingOS funnel</span><h3>Jobs + tools + methods</h3><p className="muted">Job categories connect back to SourcingOS tools, source packs, career guides, and private beta workflows.</p></div>
+          <div className="card"><span className="kicker">Trust-first</span><h3>No fake apply links</h3><p className="muted">SourcingOS links to original public job sources. The static production job dataset contains no seeded example openings.</p></div>
+          <div className="card"><span className="kicker">Search presets</span><h3>Recruiter career categories</h3><p className="muted">Remote recruiter, talent sourcer, technical sourcer, recruiting ops, healthcare recruiter, cleared recruiter, AI recruiter, and contract recruiter search presets.</p></div>
+          <div className="card"><span className="kicker">SourcingOS workflow</span><h3>Jobs + tools + methods</h3><p className="muted">Career searches connect back to SourcingOS tools, source packs, training, and private beta workflows.</p></div>
         </div>
       </section>
 
@@ -34,11 +41,11 @@ export default function JobsPage() {
 
       <section className="wrap">
         <div className="eyebrow">Career categories</div>
-        <h2>Explore recruiter job categories.</h2>
+        <h2>Explore recruiter job searches.</h2>
         <div className="grid">
           {jobCategories.map(category => (
             <Link className="card" href={`/jobs/${category.slug}`} key={category.slug}>
-              <span className="kicker">Career hub</span>
+              <span className="kicker">Search preset</span>
               <h3>{category.name}</h3>
               <p className="muted">{category.description}</p>
             </Link>
@@ -49,10 +56,10 @@ export default function JobsPage() {
       <section className="wrap">
         <div className="grid two">
           <div className="card">
-            <span className="kicker">Career hub</span>
-            <h2>Recruiter salary and career guides</h2>
-            <p className="muted">Next up: salary pages, resume positioning, sourcing portfolio examples, and interview prep for sourcers and recruiters.</p>
-            <Link className="btn secondary" href="/jobs/guides">Open career guides</Link>
+            <span className="kicker">Career topics</span>
+            <h2>Recruiter career topics in development</h2>
+            <p className="muted">See the current topic index for sourcing portfolios, remote recruiter searches, recruiting operations, GovCon recruiting, and AI recruiting careers. These are not yet full standalone guides.</p>
+            <Link className="btn secondary" href="/jobs/guides">See career guide topics</Link>
           </div>
           <div className="card">
             <span className="kicker">Employer hub</span>
