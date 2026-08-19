@@ -6,6 +6,12 @@ export const metadata = {
   title: 'Candidate Search Demo | SourcingOS',
   description:
     'Search public talent evidence, review candidate people separately from artifacts, and inspect why each profile surfaced.',
+  openGraph: {
+    title: 'Candidate Search Demo | SourcingOS',
+    description: 'Search public talent evidence, inspect why profiles surfaced, and keep recruiter confirmation separate from public signals.',
+    url: '/candidate-search/',
+    type: 'website',
+  },
 }
 
 // Public demo: one search entry point. Search and evidence review are open;
@@ -23,6 +29,12 @@ export default function PublicCandidateSearchPage() {
       <div className="recruiter-trust-note" style={{ margin: '16px 0' }}>
         <strong>Public evidence, not verified candidate facts.</strong>
         <span>Recruiters confirm identity, current role, location, clearance, contact accuracy, and permission before acting.</span>
+      </div>
+
+      <div className="cta" style={{ marginBottom: '20px' }}>
+        <strong>Want to see the output before you search?</strong>{' '}
+        <Link href="/sample-candidate-360/" style={{ textDecoration: 'underline' }}>Open the synthetic Candidate 360 dossier</Link>{' '}
+        to see how evidence, unknowns, recruiter-confirmed identity resolution, and verify-next steps stay separate.
       </div>
 
       <WorkbenchClient publicMode initialTab="composer" />
