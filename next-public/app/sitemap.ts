@@ -3,7 +3,7 @@ import { articles } from '@/data/articles'
 import { jobs } from '@/data/jobs'
 import { siteUrl } from '@/lib/site'
 
-const redirectedArticleSlugs = new Set([
+const excludedArticleSlugs = new Set([
   'open-web-sourcing-stack',
   'sourcing-tool-stack-for-agency-recruiters',
   'sourcing-for-founders-and-small-teams',
@@ -12,6 +12,7 @@ const redirectedArticleSlugs = new Set([
   'govcon-cleared-sourcing-market-map',
   'source-profile-evidence-ledger',
   'contact-enrichment-compliance-for-recruiters',
+  'candidate-search-ui-smart-composer',
 ])
 
 const verifiedArticleModified: Record<string, string> = {
@@ -34,6 +35,12 @@ const verifiedArticleModified: Record<string, string> = {
   'candidate-360-profile-template': '2026-08-20',
   'cleared-devsecops-sourcing': '2026-08-20',
   'talent-mapping-donor-companies': '2026-08-20',
+  'technical-sourcer-operating-system': '2026-08-20',
+  'cybersecurity-boolean-strings': '2026-08-20',
+  'recruiter-ai-prompts-source-pack': '2026-08-20',
+  'healthcare-recruiting-open-web': '2026-08-20',
+  'aging-req-rescue-framework': '2026-08-20',
+  'ats-rediscovery-sourcing': '2026-08-20',
 }
 
 const dedicatedArticleRoutes = [
@@ -56,6 +63,12 @@ const dedicatedArticleRoutes = [
   'candidate-360-profile-template',
   'cleared-devsecops-sourcing',
   'talent-mapping-donor-companies',
+  'technical-sourcer-operating-system',
+  'cybersecurity-boolean-strings',
+  'recruiter-ai-prompts-source-pack',
+  'healthcare-recruiting-open-web',
+  'aging-req-rescue-framework',
+  'ats-rediscovery-sourcing',
 ]
 const dedicatedArticleSlugs = new Set(dedicatedArticleRoutes)
 
@@ -64,7 +77,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...staticRoutes.map(r=>({url:siteUrl+r})),
     ...dedicatedArticleRoutes.map(slug=>({url:`${siteUrl}/blog/${slug}/`,lastModified:verifiedArticleModified[slug]})),
-    ...articles.filter(a=>!redirectedArticleSlugs.has(a.slug) && !dedicatedArticleSlugs.has(a.slug)).map(a=>({
+    ...articles.filter(a=>!excludedArticleSlugs.has(a.slug) && !dedicatedArticleSlugs.has(a.slug)).map(a=>({
       url:`${siteUrl}/blog/${a.slug}/`,
       lastModified:verifiedArticleModified[a.slug] || a.updatedAt || a.publishedAt
     })),
