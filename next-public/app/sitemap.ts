@@ -72,10 +72,22 @@ const dedicatedArticleRoutes = [
 ]
 const dedicatedArticleSlugs = new Set(dedicatedArticleRoutes)
 
+const jobCategoryRoutes = [
+  '/jobs/remote-recruiter-jobs/',
+  '/jobs/remote-talent-sourcer-jobs/',
+  '/jobs/technical-sourcer-jobs/',
+  '/jobs/recruiting-operations-jobs/',
+  '/jobs/healthcare-recruiter-jobs/',
+  '/jobs/cleared-recruiter-jobs/',
+  '/jobs/ai-recruiter-jobs/',
+  '/jobs/contract-recruiter-jobs/',
+]
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes=['','/candidate-search/','/tools/','/tools/source-stack-coverage/','/tools/search-lane-expander/','/tools/search-exhaustion-calculator/','/tools/unique-contribution-rate-calculator/','/tools/boolean-generator/','/tools/clearance-search/','/tools/aging-req-rescue/','/tools/xray-search/','/tools/jd-search-strategy/','/sources/','/sample-candidate-360/','/methods/','/directory/','/blog/','/playbooks/','/jobs/','/jobs/submit/','/privacy/','/waitlist/','/about/','/methodology/','/training/','/training/ai-sourcing-prompts/','/training/evidence-review-checklist/','/training/hiring-manager-calibration-workshop/','/training/cleared-govcon-sourcing-safety/','/training/candidate-360-workshop/','/trust/','/data-sources/','/terms/','/contact/']
   return [
     ...staticRoutes.map(r=>({url:siteUrl+r})),
+    ...jobCategoryRoutes.map(r=>({url:siteUrl+r,lastModified:'2026-08-20'})),
     ...dedicatedArticleRoutes.map(slug=>({url:`${siteUrl}/blog/${slug}/`,lastModified:verifiedArticleModified[slug]})),
     ...articles.filter(a=>!excludedArticleSlugs.has(a.slug) && !dedicatedArticleSlugs.has(a.slug)).map(a=>({
       url:`${siteUrl}/blog/${a.slug}/`,
