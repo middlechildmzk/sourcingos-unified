@@ -10,10 +10,13 @@ const redirectedArticleSlugs = new Set([
   'hard-to-fill-role-intake-template',
   'hiring-manager-calibration-questions',
   'govcon-cleared-sourcing-market-map',
+  'source-profile-evidence-ledger',
+  'contact-enrichment-compliance-for-recruiters',
 ])
 
 const verifiedArticleModified: Record<string, string> = {
   'linkedin-recruiter-alternatives': '2026-08-18',
+  'best-contact-finders-for-recruiters-2026': '2026-08-20',
   'where-to-find-cleared-candidates': '2026-08-15',
   'unique-contribution-rate': '2026-08-19',
   'senior-sourcer-role-intake': '2026-08-15',
