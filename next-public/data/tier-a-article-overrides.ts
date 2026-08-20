@@ -3,6 +3,12 @@ import type { Article } from '@/data/articles'
 type ArticleOverride = Pick<Article, 'title' | 'description' | 'category'> & { updatedAt: string }
 
 export const tierAArticleOverrides: Record<string, ArticleOverride> = {
+  'best-ai-recruiting-tools-for-sourcers-2026': {
+    title: 'AI Recruiting Tools for Sourcers in 2026: 4 Platforms to Benchmark Before You Buy',
+    description: 'Compare LinkedIn Recruiter, hireEZ, SeekOut, and Juicebox with one sourcing-specific buyer test for evidence-fit discovery, unique contribution, recruiter control, workflow overlap, and automation risk.',
+    category: 'AI Recruiting Tools',
+    updatedAt: '2026-08-20',
+  },
   'source-pack-methodology': {
     title: 'The Source Pack Methodology: A Search Operating System for Hard-to-Fill Roles',
     description: 'Turn a difficult requisition into evidence requirements, search lanes, donor companies, Boolean queries, false-positive rules, calibration questions, and explicit stop conditions.',
