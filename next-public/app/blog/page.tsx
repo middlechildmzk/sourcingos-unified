@@ -65,7 +65,7 @@ const flagship = [
   },
 ]
 
-const redirectedSlugs = new Set([
+const excludedSlugs = new Set([
   'open-web-sourcing-stack',
   'sourcing-tool-stack-for-agency-recruiters',
   'sourcing-for-founders-and-small-teams',
@@ -74,9 +74,10 @@ const redirectedSlugs = new Set([
   'govcon-cleared-sourcing-market-map',
   'source-profile-evidence-ledger',
   'contact-enrichment-compliance-for-recruiters',
+  'candidate-search-ui-smart-composer',
 ])
 const flagshipSlugs = new Set(flagship.map(item => item.href.split('/').filter(Boolean).pop()))
-const latest = [...articles].map(withTierAOverride).filter(article => !flagshipSlugs.has(article.slug) && !redirectedSlugs.has(article.slug)).reverse()
+const latest = [...articles].map(withTierAOverride).filter(article => !flagshipSlugs.has(article.slug) && !excludedSlugs.has(article.slug)).reverse()
 const featured = latest.slice(0, 4)
 const rest = latest.slice(4)
 
