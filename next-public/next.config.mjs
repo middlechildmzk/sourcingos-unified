@@ -43,6 +43,16 @@ const nextConfig = {
         destination: '/blog/where-to-find-cleared-candidates/',
         permanent: true,
       },
+      {
+        source: '/blog/source-profile-evidence-ledger',
+        destination: '/blog/candidate-360-profile-template/',
+        permanent: true,
+      },
+      {
+        source: '/blog/contact-enrichment-compliance-for-recruiters',
+        destination: '/blog/best-contact-finders-for-recruiters-2026/',
+        permanent: true,
+      },
     ]
   },
 }
