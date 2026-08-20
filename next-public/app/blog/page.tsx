@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { articles } from '@/data/articles'
+import { withTierAOverride } from '@/data/tier-a-article-overrides'
 
 export const metadata = {
   alternates: { canonical: '/blog/' },
@@ -73,7 +74,7 @@ const redirectedSlugs = new Set([
   'govcon-cleared-sourcing-market-map',
 ])
 const flagshipSlugs = new Set(flagship.map(item => item.href.split('/').filter(Boolean).pop()))
-const latest = [...articles].filter(article => !flagshipSlugs.has(article.slug) && !redirectedSlugs.has(article.slug)).reverse()
+const latest = [...articles].map(withTierAOverride).filter(article => !flagshipSlugs.has(article.slug) && !redirectedSlugs.has(article.slug)).reverse()
 const featured = latest.slice(0, 4)
 const rest = latest.slice(4)
 
