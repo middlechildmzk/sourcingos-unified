@@ -72,6 +72,8 @@ const redirectedSlugs = new Set([
   'hard-to-fill-role-intake-template',
   'hiring-manager-calibration-questions',
   'govcon-cleared-sourcing-market-map',
+  'source-profile-evidence-ledger',
+  'contact-enrichment-compliance-for-recruiters',
 ])
 const flagshipSlugs = new Set(flagship.map(item => item.href.split('/').filter(Boolean).pop()))
 const latest = [...articles].map(withTierAOverride).filter(article => !flagshipSlugs.has(article.slug) && !redirectedSlugs.has(article.slug)).reverse()
