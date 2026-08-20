@@ -2,14 +2,22 @@ import Link from 'next/link'
 import { BooleanTool } from '@/components/BooleanTool'
 import { siteUrl } from '@/lib/site'
 
+const title = 'Free Boolean Search Generator & String Builder for Recruiters'
+const description = 'Free Boolean search generator and string builder for recruiters. Paste a job description and create Boolean strings for LinkedIn, Google/Bing X-Ray, and GitHub with Precision, Balanced, and Market Map lanes.'
+const canonical = '/tools/boolean-generator/'
+
 export const metadata = {
-  title: 'Free Boolean Search Generator for Recruiters | SourcingOS',
-  description: 'Paste a job description and generate recruiter Boolean search strings for LinkedIn, Google/Bing X-Ray, and GitHub. Build Precision, Balanced, and Market Map lanes free.',
-  alternates: { canonical: '/tools/boolean-generator/' },
+  title,
+  description,
+  alternates: { canonical },
+  keywords: ['boolean search generator','boolean string generator','boolean builder','boolean search creator','free boolean generator','recruiter boolean search','boolean string builder'],
+  openGraph: { title, description, url: canonical, type: 'website' },
+  twitter: { card: 'summary', title, description },
 }
 
 const faq = [
   ['What is a Boolean search generator?', 'A Boolean search generator converts role requirements into search logic using operators such as AND, OR, quotes, parentheses, and exclusions. A useful recruiting generator should also separate synonyms, must-have signals, adjacent titles, and source-specific syntax instead of producing one oversized string.'],
+  ['Is this also a Boolean string builder or Boolean search creator?', 'Yes. Boolean generator, Boolean string builder, Boolean creator, and Boolean search generator describe the same core job: turning recruiting requirements into inspectable search logic. SourcingOS adds multiple search lanes so the output is not limited to one giant string.'],
   ['How do I create a Boolean search string from a job description?', 'Extract the evidence that actually predicts fit: role/title concepts, hard skills, systems, domain context, credentials, and meaningful exclusions. Group true synonyms with OR, combine distinct required concepts deliberately, then test more than one query archetype.'],
   ['Should I use one Boolean string or multiple searches?', 'Use multiple lanes when coverage matters. A title-heavy query, a skill-heavy query, an adjacent-title query, an evidence query, and a donor-company query can surface different candidate populations even when they target the same requisition.'],
   ['Does Boolean search still matter with AI sourcing tools?', 'Yes. AI can draft and expand queries, but the recruiter still needs to understand what evidence each query selects, what it excludes, and which candidate populations another search lane may reach.'],
@@ -19,11 +27,11 @@ export default function Page(){
   const appSchema = {
     '@context':'https://schema.org',
     '@type':'WebApplication',
-    name:'SourcingOS Boolean Search Generator',
+    name:'SourcingOS Boolean Search Generator & String Builder',
     applicationCategory:'BusinessApplication',
     operatingSystem:'Web',
-    url:`${siteUrl}/tools/boolean-generator/`,
-    description: metadata.description,
+    url:`${siteUrl}${canonical}`,
+    description,
     offers:{'@type':'Offer',price:'0',priceCurrency:'USD'},
   }
   const faqSchema = {
@@ -37,9 +45,9 @@ export default function Page(){
     <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
     <main className="wrap article-pro">
       <section className="article-hero-card">
-        <span className="kicker">Free Boolean search generator</span>
-        <h1>Build recruiter Boolean search strings from a job description.</h1>
-        <p className="lead">Paste the JD. SourcingOS extracts search-relevant evidence, removes HR noise, and gives you three ready-to-run search lanes—Precision, Balanced, and Market Map—with LinkedIn, Google/Bing X-Ray, and GitHub versions.</p>
+        <span className="kicker">Free Boolean generator · builder · search creator</span>
+        <h1>Free Boolean search generator and string builder for recruiters.</h1>
+        <p className="lead">Paste the JD. SourcingOS extracts search-relevant evidence, removes HR noise, and creates three ready-to-run Boolean search lanes—Precision, Balanced, and Market Map—with LinkedIn, Google/Bing X-Ray, and GitHub versions.</p>
         <div className="article-meta-grid">
           <div><span>Price</span><strong>Free · no account</strong></div>
           <div><span>Outputs</span><strong>3 search lanes</strong></div>
@@ -57,9 +65,9 @@ export default function Page(){
       <BooleanTool />
 
       <section className="grid" style={{marginTop:28}}>
-        <div className="card authority-card"><span className="kicker">Precision</span><h2>Start narrow.</h2><p>Use the clearest titles, must-have technical evidence, and the smallest synonym set that still reflects how qualified people describe the work.</p></div>
+        <div className="card authority-card"><span className="kicker">Precision</span><h2>Start narrow.</h2><p>Use the clearest titles, must-have technical evidence, and the smallest synonym set that still reflects how relevant professionals describe the work.</p></div>
         <div className="card authority-card"><span className="kicker">Balanced</span><h2>Expand vocabulary.</h2><p>Add realistic title variants, alternate product names, transferable skill language, and adjacent evidence without collapsing everything into one broad OR block.</p></div>
-        <div className="card authority-card"><span className="kicker">Market Map</span><h2>Search beyond the obvious profile.</h2><p>Use adjacent roles, donor-company context, public technical evidence, and broader source lanes to find qualified people the title-first search may miss.</p></div>
+        <div className="card authority-card"><span className="kicker">Market Map</span><h2>Search beyond the obvious profile.</h2><p>Use adjacent roles, donor-company context, public technical evidence, and broader source lanes to find evidence-fit leads the title-first search may miss.</p></div>
       </section>
 
       <section className="card" style={{marginTop:28}}>
