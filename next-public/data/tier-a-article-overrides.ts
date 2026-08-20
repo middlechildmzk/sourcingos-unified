@@ -45,6 +45,42 @@ export const tierAArticleOverrides: Record<string, ArticleOverride> = {
     category: 'Talent Mapping',
     updatedAt: '2026-08-20',
   },
+  'technical-sourcer-operating-system': {
+    title: 'Technical Sourcer Operating System: The Weekly Workflow for Hard-to-Fill Searches',
+    description: 'A weekly system for req triage, source packs, search experiments, hiring-manager calibration, evidence review, rediscovery, and project memory.',
+    category: 'Sourcer Workflow',
+    updatedAt: '2026-08-20',
+  },
+  'cybersecurity-boolean-strings': {
+    title: '30 Boolean Search Strings for Cybersecurity Recruiters: Role-Specific Queries for 2026',
+    description: 'Thirty recruiter-ready cybersecurity Boolean strings for RMF, SOC, AppSec, cloud security, IAM, DFIR, security engineering, offensive security, GRC, and cleared cyber.',
+    category: 'Cybersecurity Recruiting',
+    updatedAt: '2026-08-20',
+  },
+  'recruiter-ai-prompts-source-pack': {
+    title: '15 AI Prompts for Recruiters: Source Packs, Boolean Search, Talent Maps, and Evidence Review',
+    description: 'Fifteen recruiter-safe prompts for intake, title expansion, lanes, Boolean critique, donor mapping, evidence review, no-results rescue, calibration, and retrospectives.',
+    category: 'AI Prompts',
+    updatedAt: '2026-08-20',
+  },
+  'healthcare-recruiting-open-web': {
+    title: 'Healthcare Recruiting Open-Web Sourcing: Licenses, NPI Data, Local Markets, and Healthcare IT Evidence',
+    description: 'Separate clinical licensure, NPI/provider data, local-market evidence, healthcare IT systems, and recruiter-confirmed role evidence into distinct sourcing lanes.',
+    category: 'Healthcare Recruiting',
+    updatedAt: '2026-08-20',
+  },
+  'aging-req-rescue-framework': {
+    title: 'Aging Req Rescue Framework: Diagnose Why a Hard-to-Fill Search Is Stuck',
+    description: 'Distinguish no leads, wrong leads, no response, HM rejection, compensation/location mismatch, and process fallout before choosing the next search experiment.',
+    category: 'Req Rescue',
+    updatedAt: '2026-08-20',
+  },
+  'ats-rediscovery-sourcing': {
+    title: 'ATS Rediscovery Sourcing: Turn Past Candidates and Recruiting History Into a New Search Lane',
+    description: 'A rediscovery framework for prior finalists, silver medalists, past applicants, referrals, rejection reasons, stale-context checks, opt-outs, and search-pattern learning.',
+    category: 'Rediscovery',
+    updatedAt: '2026-08-20',
+  },
 }
 
 export function withTierAOverride(article: Article): Article {
