@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { articles } from '@/data/articles'
 import { methods } from '@/data/methods'
+import { withTierAOverride } from '@/data/tier-a-article-overrides'
 
 export const metadata = {
   alternates: { canonical: '/' },
@@ -60,15 +61,22 @@ const trainingModules = [
   },
 ]
 
-const redirectedArticleSlugs = new Set([
+const excludedArticleSlugs = new Set([
   'open-web-sourcing-stack',
   'sourcing-tool-stack-for-agency-recruiters',
   'sourcing-for-founders-and-small-teams',
   'hard-to-fill-role-intake-template',
   'hiring-manager-calibration-questions',
   'govcon-cleared-sourcing-market-map',
+  'source-profile-evidence-ledger',
+  'contact-enrichment-compliance-for-recruiters',
+  'candidate-search-ui-smart-composer',
 ])
-const latestArticles = [...articles].filter(article => !redirectedArticleSlugs.has(article.slug)).slice(-6).reverse()
+const latestArticles = [...articles]
+  .map(withTierAOverride)
+  .filter(article => !excludedArticleSlugs.has(article.slug))
+  .slice(-6)
+  .reverse()
 
 export default function Home() {
   return (
