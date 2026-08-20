@@ -1,13 +1,38 @@
 import Link from 'next/link'
 import { LiveJobsClient } from '@/components/LiveJobsClient'
 import { getCategoryBySlug, jobCategories } from '@/data/jobs'
+import { siteUrl } from '@/lib/site'
 
-type CategoryGuide = { query: string; location?: string; titles: string[]; skills: string[]; tips: string[] }
+export const revalidate = 1800
+
+type CategoryGuide = {
+  query: string
+  location?: string
+  jobCategory?: string
+  remoteOnly?: boolean
+  titles: string[]
+  skills: string[]
+  tips: string[]
+}
+
+type ServerJobPreview = {
+  id: string
+  title: string
+  company: string
+  location: string
+  remoteType: string
+  salaryRange: string
+  source: string
+  applyUrl: string
+  postedDate: string
+}
 
 const categoryGuides: Record<string, CategoryGuide> = {
   'remote-recruiter-jobs': {
     query: 'remote recruiter talent acquisition partner full cycle recruiter',
     location: 'Remote',
+    jobCategory: 'recruiter',
+    remoteOnly: true,
     titles: ['Recruiter', 'Talent Acquisition Partner', 'Corporate Recruiter', 'Full-Cycle Recruiter'],
     skills: ['sourcing', 'screening', 'ATS workflows', 'hiring manager partnership', 'candidate experience'],
     tips: ['Search both recruiter and talent acquisition partner titles.', 'Use Remote first, then broaden to United States if results are thin.', 'Confirm remote status on the original source before applying.'],
@@ -15,46 +40,84 @@ const categoryGuides: Record<string, CategoryGuide> = {
   'remote-talent-sourcer-jobs': {
     query: 'remote talent sourcer sourcing specialist recruiter sourcer',
     location: 'Remote',
+    jobCategory: 'sourcer',
+    remoteOnly: true,
     titles: ['Talent Sourcer', 'Technical Sourcer', 'Sourcing Specialist', 'Talent Researcher'],
     skills: ['Boolean search', 'X-Ray search', 'pipeline generation', 'market mapping', 'outbound messaging'],
     tips: ['Search sourcer and sourcing specialist separately.', 'Look for postings that mention outbound pipeline ownership.', 'Use portfolio examples to show your search strategy, not just years of experience.'],
   },
   'technical-sourcer-jobs': {
     query: 'technical sourcer engineering sourcer technical recruiter software sourcer',
+    jobCategory: 'technical-sourcer',
     titles: ['Technical Sourcer', 'Engineering Sourcer', 'Technical Recruiter', 'AI Sourcer'],
     skills: ['GitHub sourcing', 'Stack Overflow sourcing', 'technical calibration', 'cloud roles', 'AI/ML terminology'],
     tips: ['Search technical sourcer and engineering sourcer separately.', 'Look for roles that mention GitHub, open source, AI, cloud, or infrastructure.', 'Prepare examples of how you learned a technical role and built a search strategy.'],
   },
   'recruiting-operations-jobs': {
     query: 'recruiting operations talent acquisition operations TA ops recruiting systems',
+    jobCategory: 'recruiting-ops',
     titles: ['Recruiting Operations Specialist', 'TA Operations Specialist', 'Recruiting Systems Analyst', 'Talent Operations Manager'],
     skills: ['ATS administration', 'reporting', 'dashboards', 'process design', 'automation'],
     tips: ['Search TA operations and talent operations too.', 'Look for ATS names like Greenhouse, Lever, Workday, iCIMS, Ashby, and Avature.', 'Highlight process, reporting, and workflow improvements.'],
   },
   'healthcare-recruiter-jobs': {
     query: 'healthcare recruiter clinical recruiter nurse recruiter allied health recruiter provider recruiter',
+    jobCategory: 'healthcare-recruiter',
     titles: ['Healthcare Recruiter', 'Clinical Recruiter', 'Nurse Recruiter', 'Provider Recruiter'],
     skills: ['clinical titles', 'license awareness', 'high-volume recruiting', 'hospital hiring', 'provider sourcing'],
     tips: ['Search clinical recruiter, nurse recruiter, and provider recruiter separately.', 'Try metro and state searches because clinical roles are often location-sensitive.', 'Look for postings that mention licensure, credentialing, or hospital systems.'],
   },
   'cleared-recruiter-jobs': {
     query: 'cleared recruiter govcon recruiter federal recruiter defense recruiter security clearance sourcer',
+    jobCategory: 'govcon-recruiter',
     titles: ['Cleared Recruiter', 'GovCon Recruiter', 'Federal Recruiter', 'Defense Recruiter'],
     skills: ['federal recruiting', 'mission hiring', 'cyber roles', 'cloud roles', 'compliance-aware sourcing'],
     tips: ['Search cleared recruiter, federal recruiter, defense recruiter, and GovCon sourcer.', 'Look for role text mentioning federal contracts, cyber, cloud, or mission programs.', 'Treat any clearance language as recruiter-confirmed only through proper processes.'],
   },
   'ai-recruiter-jobs': {
     query: 'AI recruiter ML recruiter machine learning sourcer AI talent acquisition technical sourcer',
+    jobCategory: 'ai-recruiter',
     titles: ['AI Recruiter', 'Machine Learning Recruiter', 'AI Sourcer', 'Research Recruiter'],
     skills: ['LLM terminology', 'MLOps', 'research profiles', 'GitHub evidence', 'technical calibration'],
     tips: ['Search AI recruiter, ML recruiter, research recruiter, and technical sourcer.', 'Look for postings that mention LLMs, MLOps, AI infrastructure, or applied AI.', 'Study where AI candidates publish code, papers, models, and package work.'],
   },
   'contract-recruiter-jobs': {
     query: 'contract recruiter fractional recruiter embedded recruiter contract sourcer freelance recruiter',
+    jobCategory: 'recruiter',
     titles: ['Contract Recruiter', 'Fractional Recruiter', 'Embedded Recruiter', 'Contract Sourcer'],
     skills: ['fast ramp-up', 'pipeline building', 'client communication', 'contract hiring', 'stakeholder updates'],
     tips: ['Search contract recruiter, embedded recruiter, fractional recruiter, and contract sourcer.', 'Check duration, hourly rate, tools, and employment type carefully.', 'Highlight speed, independence, and proof of pipeline impact.'],
   },
+}
+
+async function fetchServerJobPreview(guide: CategoryGuide): Promise<ServerJobPreview[]> {
+  try {
+    const url = new URL('/api/jobs/search', siteUrl)
+    url.searchParams.set('q', guide.query)
+    if (guide.location) url.searchParams.set('location', guide.location)
+    if (guide.jobCategory) url.searchParams.set('category', guide.jobCategory)
+    if (guide.remoteOnly) url.searchParams.set('remoteOnly', 'true')
+    url.searchParams.set('sources', 'ats,remotive,arbeitnow')
+    url.searchParams.set('limit', '6')
+
+    const response = await fetch(url, { next: { revalidate: 1800 } })
+    if (!response.ok) return []
+    const payload = await response.json()
+    const jobs = Array.isArray(payload.jobs) ? payload.jobs : []
+    return jobs.slice(0, 6).map((job: any) => ({
+      id: String(job.id || job.applyUrl || job.title),
+      title: String(job.title || 'Recruiting role'),
+      company: String(job.company || 'Company not listed'),
+      location: String(job.location || 'Location not listed'),
+      remoteType: String(job.remoteType || ''),
+      salaryRange: String(job.salaryRange || 'Salary not listed'),
+      source: String(job.source || 'Public source'),
+      applyUrl: String(job.applyUrl || '#'),
+      postedDate: String(job.postedDate || ''),
+    }))
+  } catch {
+    return []
+  }
 }
 
 export function generateStaticParams() {
@@ -68,7 +131,7 @@ export function generateMetadata({ params }: { params: { category: string } }) {
     title: category?.seoTitle ?? 'SourcingOS Jobs',
     description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.',
     alternates: { canonical },
-    robots: { index: false, follow: true },
+    robots: { index: true, follow: true },
     openGraph: {
       title: category?.seoTitle ?? 'SourcingOS Jobs',
       description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.',
@@ -78,7 +141,7 @@ export function generateMetadata({ params }: { params: { category: string } }) {
   }
 }
 
-export default function JobCategoryPage({ params }: { params: { category: string } }) {
+export default async function JobCategoryPage({ params }: { params: { category: string } }) {
   const category = getCategoryBySlug(params.category)
 
   if (!category) {
@@ -92,6 +155,7 @@ export default function JobCategoryPage({ params }: { params: { category: string
     skills: ['sourcing', 'recruiting', 'candidate experience'],
     tips: ['Start broad, then narrow by title, location, and source.', 'Always verify the original source before applying.'],
   }
+  const previewJobs = await fetchServerJobPreview(guide)
 
   const faq = [
     {
@@ -100,7 +164,11 @@ export default function JobCategoryPage({ params }: { params: { category: string
     },
     {
       question: 'Are these jobs hosted by SourcingOS?',
-      answer: 'Live results link back to original public job sources or reviewed employer submissions. SourcingOS does not present third-party job posts as its own openings.',
+      answer: 'Current results link back to original public job sources or reviewed employer submissions. SourcingOS does not present third-party job posts as its own openings.',
+    },
+    {
+      question: 'How current are the jobs on this page?',
+      answer: 'The server-rendered snapshot is refreshed regularly from curated public ATS feeds and public job sources, and the interactive search below can fetch a broader live result set. Always confirm availability on the original posting before applying.',
     },
   ]
 
@@ -148,9 +216,31 @@ export default function JobCategoryPage({ params }: { params: { category: string
         </div>
       </section>
 
+      <section className="wrap" id="current-jobs">
+        <div className="eyebrow">Current public-source snapshot</div>
+        <h2>Current {category.name.toLowerCase()} from original employer and public sources.</h2>
+        <p className="muted">This server-rendered snapshot uses job metadata only and refreshes regularly. SourcingOS links to the original posting and does not copy third-party job descriptions.</p>
+        {previewJobs.length ? <div className="job-list">
+          {previewJobs.map(job => <article className="card" key={job.id}>
+            <div className="job-row">
+              <div>
+                <span className="kicker">{job.source}{job.remoteType ? ` · ${job.remoteType}` : ''}</span>
+                <h3>{job.title}</h3>
+                <p className="muted"><strong>{job.company}</strong> · {job.location}</p>
+              </div>
+              <div className="job-side">
+                <div className="salary">{job.salaryRange}</div>
+                <a className="btn" href={job.applyUrl} target="_blank" rel="noreferrer noopener">View original</a>
+                {job.postedDate ? <small className="muted">Source date {job.postedDate.slice(0, 10)}</small> : null}
+              </div>
+            </div>
+          </article>)}
+        </div> : <div className="cta">No server-rendered listings matched this category in the current snapshot. Use the live search below for a broader check.</div>}
+      </section>
+
       <section className="wrap" id="live-jobs">
-        <div className="eyebrow">Live public-source search</div>
-        <h2>Search live {category.name.toLowerCase()}.</h2>
+        <div className="eyebrow">Interactive live search</div>
+        <h2>Search more live {category.name.toLowerCase()}.</h2>
         <LiveJobsClient initialQuery={guide.query} initialLocation={guide.location || ''} />
       </section>
 
