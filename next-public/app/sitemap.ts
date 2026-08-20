@@ -26,7 +26,7 @@ const verifiedArticleModified: Record<string, string> = {
   'search-path-scarcity': '2026-08-15',
   'federal-contract-data-sourcing-lane': '2026-08-15',
   'ai-sourcing-workflow-2026': '2026-08-19',
-  'best-ai-recruiting-tools-for-sourcers-2026': '2026-08-19',
+  'best-ai-recruiting-tools-for-sourcers-2026': '2026-08-20',
   'sourcing-kpi-dashboard': '2026-08-19',
   'source-pack-methodology': '2026-08-20',
   'github-xray-sourcing': '2026-08-20',
