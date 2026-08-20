@@ -28,16 +28,32 @@ const redirectedArticleSlugs = new Set([
   'hard-to-fill-role-intake-template',
   'hiring-manager-calibration-questions',
   'govcon-cleared-sourcing-market-map',
+  'source-profile-evidence-ledger',
+  'contact-enrichment-compliance-for-recruiters',
 ])
 
-// These records remain in the shared index data, but a dedicated static route owns
-// the rendered page. Guard the dedicated route source through SCAN_ROOTS instead.
+// These records remain in shared index data, but dedicated static routes own the
+// rendered pages. The route files themselves are still scanned through SCAN_ROOTS.
 const staticOverrideSlugs = new Set([
   'linkedin-recruiter-alternatives',
   'best-contact-finders-for-recruiters-2026',
   'ai-sourcing-workflow-2026',
   'best-ai-recruiting-tools-for-sourcers-2026',
   'sourcing-kpi-dashboard',
+  'source-pack-methodology',
+  'github-xray-sourcing',
+  'how-to-source-ai-ml-engineers',
+  'boolean-search-operators-for-recruiters',
+  'candidate-360-profile-template',
+  'cleared-devsecops-sourcing',
+  'talent-mapping-donor-companies',
+  'technical-sourcer-operating-system',
+  'cybersecurity-boolean-strings',
+  'recruiter-ai-prompts-source-pack',
+  'healthcare-recruiting-open-web',
+  'aging-req-rescue-framework',
+  'ats-rediscovery-sourcing',
+  'candidate-search-ui-smart-composer',
 ])
 
 function extension(path: string) {
