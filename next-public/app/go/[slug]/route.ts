@@ -8,10 +8,14 @@ type Partner = {
 }
 
 const partners: Record<string, Partner> = {
-  contactout: { official: 'https://contactout.com/' },
-  lusha: { official: 'https://www.lusha.com/recruiters/' },
+  contactout: { official: 'https://contactout.com/', env: 'SOURCINGOS_CONTACTOUT_AFFILIATE_URL' },
+  lusha: { official: 'https://www.lusha.com/recruiters/', env: 'SOURCINGOS_LUSHA_AFFILIATE_URL' },
   apollo: { official: 'https://www.apollo.io/', env: 'SOURCINGOS_APOLLO_AFFILIATE_URL' },
   hunter: { official: 'https://hunter.io/', env: 'SOURCINGOS_HUNTER_AFFILIATE_URL' },
+  linkedin: { official: 'https://business.linkedin.com/talent-solutions/recruiter' },
+  hireez: { official: 'https://hireez.com/', env: 'SOURCINGOS_HIREEZ_AFFILIATE_URL' },
+  seekout: { official: 'https://www.seekout.com/', env: 'SOURCINGOS_SEEKOUT_AFFILIATE_URL' },
+  juicebox: { official: 'https://juicebox.ai/', env: 'SOURCINGOS_JUICEBOX_AFFILIATE_URL' },
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
