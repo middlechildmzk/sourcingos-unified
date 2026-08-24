@@ -38,20 +38,20 @@ export default function Image() {
           >
             S
           </div>
-          <div style={{ fontSize: 38, fontWeight: 900, letterSpacing: -1 }}>SourcingOS</div>
+          <div style={{ display: 'flex', fontSize: 38, fontWeight: 900, letterSpacing: -1 }}>SourcingOS</div>
         </div>
-        <div>
-          <div style={{ fontSize: 82, lineHeight: 0.95, fontWeight: 900, letterSpacing: -4, maxWidth: 940 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', fontSize: 82, lineHeight: 0.95, fontWeight: 900, letterSpacing: -4, maxWidth: 940 }}>
             Find who your search missed.
           </div>
-          <div style={{ marginTop: 28, fontSize: 30, lineHeight: 1.3, color: '#cbd5e1', maxWidth: 920 }}>
+          <div style={{ display: 'flex', marginTop: 28, fontSize: 30, lineHeight: 1.3, color: '#cbd5e1', maxWidth: 920 }}>
             Human-approved sourcing intelligence for hard-to-fill technical, cleared, healthcare, cyber, and AI roles.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 14, fontSize: 24, color: '#f8fafc' }}>
-          <span style={{ padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>Public evidence</span>
-          <span style={{ padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>Recruiter confirmed</span>
-          <span style={{ padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>No silent merges</span>
+          <span style={{ display: 'flex', padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>Public evidence</span>
+          <span style={{ display: 'flex', padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>Recruiter confirmed</span>
+          <span style={{ display: 'flex', padding: '12px 18px', borderRadius: 999, background: 'rgba(255,255,255,.12)' }}>No silent merges</span>
         </div>
       </div>
     ),
