@@ -11,7 +11,9 @@ export default function JobCategoryLayout({
 }) {
   const category = getCategoryBySlug(params.category)
   const location = params.category.startsWith('remote-') ? 'Remote' : ''
-  const alertsEnabled = process.env.JOB_ALERTS_ENABLED === 'true'
+  // Emergency kill switch: set JOB_ALERTS_ENABLED=false to hide the form.
+  // Production defaults on because the persistence migration is now applied.
+  const alertsEnabled = process.env.JOB_ALERTS_ENABLED !== 'false'
 
   return (
     <>
