@@ -1,3 +1,4 @@
+// Research roadmap only: these slugs are intentionally retained for future evidence-backed comparison pages.
 export const comparisons = [
   {
     "slug": "linkedin-recruiter-vs-open-web-stack",
