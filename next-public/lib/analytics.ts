@@ -62,7 +62,7 @@ export function trackClientEvent(type: string, label?: string, meta?: Record<str
     session: getSessionId(),
   }
 
-  fetch('/api/analytics', {
+  fetch('/api/analytics/', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
