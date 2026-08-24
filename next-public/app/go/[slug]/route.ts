@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
@@ -7,6 +8,8 @@ type Partner = {
   official: string
   env?: string
 }
+
+const SESSION_COOKIE = 'sourcingos_analytics_session'
 
 const partners: Record<string, Partner> = {
   contactout: { official: 'https://contactout.com/', env: 'SOURCINGOS_CONTACTOUT_AFFILIATE_URL' },
@@ -29,6 +32,28 @@ function referringPath(req: NextRequest): string | null {
   }
 }
 
+function hashSession(value?: string): string | null {
+  if (!value) return null
+  return createHash('sha256').update(value).digest('hex')
+}
+
+async function persistPartnerExit(req: NextRequest, slug: string, variant: 'affiliate' | 'official') {
+  const sb = createServerSupabaseClient()
+  if (!sb) return
+
+  const session = req.cookies.get(SESSION_COOKIE)?.value
+  const { error } = await sb.from('analytics_events').insert({
+    event: 'partner_exit',
+    label: slug,
+    page: referringPath(req),
+    source: slug,
+    variant,
+    session_hash: hashSession(session),
+    occurred_at: new Date().toISOString(),
+  })
+  if (error) console.error('[partner_exit] analytics write failed:', error.message)
+}
+
 export async function GET(req: NextRequest, { params }: RouteContext) {
   const { slug } = await params
   const partner = partners[slug]
@@ -40,19 +65,9 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const configured = partner.env ? process.env[partner.env]?.trim() : undefined
   const destination = configured || partner.official
 
-  const sb = createServerSupabaseClient()
-  if (sb) {
-    const { error } = await sb.from('analytics_events').insert({
-      event: 'partner_exit',
-      label: slug,
-      page: referringPath(req),
-      source: slug,
-      variant: configured ? 'affiliate' : 'official',
-      session_hash: null,
-      occurred_at: new Date().toISOString(),
-    })
-    if (error) console.error('[partner_exit] analytics write failed:', error.message)
-  }
+  // Best-effort in Next 14: never put the telemetry round trip on the redirect path.
+  // After the Next 16 migration, move this work to after() for guaranteed post-response execution.
+  void persistPartnerExit(req, slug, configured ? 'affiliate' : 'official')
 
   return NextResponse.redirect(destination, { status: 302 })
 }
