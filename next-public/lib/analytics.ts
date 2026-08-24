@@ -18,16 +18,30 @@ type AnalyticsPayload = {
 
 const STORAGE_KEY = 'sourcingos.public.analytics'
 const SESSION_KEY = 'sourcingos.analytics.session'
+const SESSION_COOKIE = 'sourcingos_analytics_session'
+
+function writeSessionCookie(value: string) {
+  try {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+    document.cookie = `${SESSION_COOKIE}=${encodeURIComponent(value)}; Path=/; SameSite=Lax${secure}`
+  } catch {
+    // Best effort only. Analytics must not affect the product workflow.
+  }
+}
 
 function getSessionId(): string | undefined {
   if (typeof window === 'undefined') return undefined
   try {
     const existing = window.sessionStorage.getItem(SESSION_KEY)
-    if (existing) return existing
+    if (existing) {
+      writeSessionCookie(existing)
+      return existing
+    }
     const value = typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`
     window.sessionStorage.setItem(SESSION_KEY, value)
+    writeSessionCookie(value)
     return value
   } catch {
     return undefined
