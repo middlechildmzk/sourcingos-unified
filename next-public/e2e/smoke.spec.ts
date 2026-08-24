@@ -1,5 +1,6 @@
 // e2e/smoke.spec.ts — public-surface smoke suite (Security & Proof sprint).
 import { test, expect, type Page } from '@playwright/test'
+import { createClient } from '@supabase/supabase-js'
 
 const pagesToCheck = ['/', '/tools/', '/sample-candidate-360/', '/jobs/', '/waitlist/']
 
@@ -56,7 +57,46 @@ test('6. waitlist form basic path', async ({ page }) => {
   await expect(page.locator('body')).not.toContainText('Application error')
 })
 
-test('7. no console errors on critical public pages', async ({ page }) => {
+test('7. job alert form persists through API and Supabase', async ({ page }) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  test.skip(!supabaseUrl || !serviceRoleKey, 'Requires service-role credentials to verify and clean up persistence.')
+
+  const email = `playwright-job-alert-${Date.now()}@example.com`
+  const supabase = createClient(supabaseUrl!, serviceRoleKey!, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  })
+
+  try {
+    await page.goto('/jobs/remote-talent-sourcer-jobs/')
+    const input = page.locator('#job-alert-remote-talent-sourcer-jobs')
+    await expect(input).toBeVisible()
+    await input.fill(email)
+
+    const responsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/jobs/alerts/') && response.request().method() === 'POST'
+    )
+    await page.getByRole('button', { name: 'Join alert list' }).click()
+    const response = await responsePromise
+
+    expect(response.status()).toBe(200)
+    await expect(page.getByRole('status')).toContainText('You’re on the list')
+
+    const { data, error } = await supabase
+      .from('job_alert_signups')
+      .select('id,email,category')
+      .eq('email', email)
+      .maybeSingle()
+
+    expect(error).toBeNull()
+    expect(data?.email).toBe(email)
+    expect(data?.category).toBe('remote-talent-sourcer-jobs')
+  } finally {
+    await supabase.from('job_alert_signups').delete().eq('email', email)
+  }
+})
+
+test('8. no console errors on critical public pages', async ({ page }) => {
   for (const path of pagesToCheck) {
     const errors = await collectConsoleErrors(page)
     await page.goto(path)
