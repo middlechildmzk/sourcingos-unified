@@ -11,11 +11,12 @@ export default function JobCategoryLayout({
 }) {
   const category = getCategoryBySlug(params.category)
   const location = params.category.startsWith('remote-') ? 'Remote' : ''
+  const alertsEnabled = process.env.JOB_ALERTS_ENABLED === 'true'
 
   return (
     <>
       {children}
-      {category ? (
+      {category && alertsEnabled ? (
         <section className="wrap">
           <JobAlertSignup
             category={params.category}
