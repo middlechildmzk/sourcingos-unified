@@ -9,11 +9,11 @@ export type NavItem = {
 
 export const publicNav: NavItem[] = [
   { label: 'Free Tools', href: '/tools' },
+  { label: 'AI Sourcing', href: '/ai-sourcing' },
   { label: 'Sourcing Vault', href: '/methods' },
   { label: 'Candidate Search', href: '/candidate-search' },
   { label: 'Training', href: '/training' },
   { label: 'Jobs', href: '/jobs' },
-  { label: 'Directory', href: '/directory' },
   { label: 'Guides', href: '/blog' },
 ]
 
