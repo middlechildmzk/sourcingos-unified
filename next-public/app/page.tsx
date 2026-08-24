@@ -91,6 +91,7 @@ export default function Home() {
         <div className="hero-actions">
           <Link className="btn" href="/candidate-search">Try Candidate Search</Link>
           <Link className="btn secondary" href="/tools/boolean-generator">Try BooleanOS</Link>
+          <Link className="btn ghost" href="/ai-sourcing">AI sourcing guide →</Link>
           <Link className="btn ghost" href="/blog/ai-sourcing-workflow-2026">How we evaluate AI sourcing →</Link>
         </div>
         <div className="trust-strip">
@@ -109,7 +110,10 @@ export default function Home() {
           <div className="card featured"><span className="kicker">Good AI work</span><h3>Search strategy and coverage</h3><p className="muted">Role intake, alternate titles, Boolean logic, source-lane expansion, adjacent markets, public-evidence organization, and calibration questions.</p></div>
           <div className="card"><span className="kicker">Human checkpoint</span><h3>Claims that need confirmation</h3><p className="muted">Identity merges, current clearance or license status, role relevance, contact-channel decisions, outreach, and any consequential recruiting action.</p></div>
         </div>
-        <div className="home-cta-row" style={{ marginTop: '20px' }}><Link className="btn secondary" href="/blog/ai-sourcing-workflow-2026">Read the 8-task AI sourcing evaluation harness</Link></div>
+        <div className="home-cta-row" style={{ marginTop: '20px' }}>
+          <Link className="btn secondary" href="/ai-sourcing">Read the AI sourcing pillar</Link>
+          <Link className="btn secondary" href="/blog/ai-sourcing-workflow-2026">Read the 8-task AI sourcing evaluation harness</Link>
+        </div>
       </section>
 
       <hr className="section-divider" />
