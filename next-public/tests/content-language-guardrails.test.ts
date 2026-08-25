@@ -32,8 +32,6 @@ const redirectedArticleSlugs = new Set([
   'contact-enrichment-compliance-for-recruiters',
 ])
 
-// These records remain in shared index data, but dedicated static routes own the
-// rendered pages. The route files themselves are still scanned through SCAN_ROOTS.
 const staticOverrideSlugs = new Set([
   'linkedin-recruiter-alternatives',
   'best-contact-finders-for-recruiters-2026',
@@ -69,9 +67,13 @@ function filesUnder(path: string): string[] {
   })
 }
 
+function wholePhrase(text: string, phrase: string) {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text)
+}
+
 function collectHits(text: string, label: string) {
-  const lower = text.toLowerCase()
-  return prohibited.filter(phrase => lower.includes(phrase)).map(phrase => `${label}: ${phrase}`)
+  return prohibited.filter(phrase => wholePhrase(text, phrase)).map(phrase => `${label}: ${phrase}`)
 }
 
 describe('public-content language guardrails', () => {
