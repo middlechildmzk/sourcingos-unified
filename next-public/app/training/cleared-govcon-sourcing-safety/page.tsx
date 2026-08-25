@@ -3,7 +3,7 @@ import Link from 'next/link'
 export const metadata = {
   alternates: { canonical: '/training/cleared-govcon-sourcing-safety/' },
   title: 'Cleared GovCon Sourcing Safety | SourcingOS',
-  description: 'A recruiter training module for using public clearance breadcrumbs safely without claiming verified clearance from open-web evidence.',
+  description: 'A recruiter training module for using public clearance breadcrumbs safely without treating open-web evidence as proof of current clearance status.',
 }
 
 export default function ClearedGovConSourcingSafetyPage() {
@@ -14,7 +14,7 @@ export default function ClearedGovConSourcingSafetyPage() {
 
     <section>
       <h2>Safe language</h2>
-      <p>Use phrases like public clearance breadcrumb, public clearance language, possible GovCon signal, and verify next. Avoid verified clearance, active clearance, cleared candidate, or confirmed status unless your authorized process has actually confirmed it.</p>
+      <p>Use phrases like public clearance breadcrumb, public clearance language, possible GovCon signal, and verify next. Avoid claims of current clearance status, active clearance, cleared candidate, or confirmed status unless your authorized process has actually confirmed it.</p>
     </section>
 
     <section>
