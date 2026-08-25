@@ -111,7 +111,7 @@ async function fetchUsaJobs(query: string, location: string): Promise<LiveJob[]>
 }
 
 export async function GET(req: NextRequest) {
-  const rl = await rateLimit(req, 'public')
+  const rl = await rateLimit(req, 'jobsSearch')
   if (!rl.ok) return rl.response
 
   const qpSchema = z.object({
