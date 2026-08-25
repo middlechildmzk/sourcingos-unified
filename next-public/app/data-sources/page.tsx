@@ -36,7 +36,7 @@ export default function DataSourcesPage() {
 
     <section>
       <h2>What these sources are, and are not</h2>
-      <p>A public profile is evidence about a body of work. It is not identity verification, not a verified clearance, not confirmed employment, and not permission to spam someone. Clearance language found in public text is an unverified clearance breadcrumb that requires human verification through your actual hiring process.</p>
+      <p>A public profile is evidence about a body of work. It is not identity verification, not proof of current clearance status, not confirmed employment, and not permission to spam someone. Clearance language found in public text is an unverified clearance breadcrumb that requires human verification through your actual hiring process.</p>
     </section>
 
     <section>
