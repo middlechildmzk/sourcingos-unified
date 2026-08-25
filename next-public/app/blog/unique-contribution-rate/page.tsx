@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 }
 
 const faq = [
-  ['What is Unique Contribution Rate in sourcing?', `${ucrDefinition} ${evidenceFitDefinition} UCR measures additive discovery, not candidate quality or hires.`],
+  ['What is Unique Contribution Rate in sourcing?', `${ucrDefinition} ${evidenceFitDefinition} UCR measures additive discovery, not overall fit quality or hires.`],
   ['Is UCR the same as source of hire?', 'No. Source of hire is an attribution measure tied to an outcome. UCR is a discovery-overlap measure across sources or lanes. They answer different questions and can be used together.'],
   ['Does a high UCR mean a sourcing channel is worth keeping?', 'It means the source was additive in that comparison. Retention decisions should also consider submittal outcomes, response, downstream results, cost, recruiter time, role family, and sample size.'],
   ['How should leads be deduplicated?', 'Use a stable identity anchor where available. If identity is uncertain, require human confirmation and record the merge decision rather than auto-merging on name similarity.'],
