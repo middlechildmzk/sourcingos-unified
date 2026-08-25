@@ -26,13 +26,11 @@ test('3. sample Candidate 360 loads with demo disclaimer and trust language', as
   await page.goto('/sample-candidate-360/')
   await expect(page.locator('body')).toContainText('Synthetic demo data')
   await expect(page.locator('body')).toContainText('No silent merges')
-  await expect(page.locator('table')).toBeVisible() // evidence ledger
+  await expect(page.locator('table')).toBeVisible()
 })
 
 test('4. auth-gated /app route redirects or blocks (never renders workbench anonymously)', async ({ page }) => {
   const resp = await page.goto('/app/candidate-search/')
-  // Acceptable outcomes: redirect to /login, or an explicit preview banner —
-  // but ONLY when the deployment opted in. Production must land on /login.
   const url = page.url()
   const previewOptIn = await page.locator('text=Preview mode').count()
   expect(url.includes('/login') || previewOptIn > 0 || (resp && resp.status() >= 400)).toBeTruthy()
@@ -41,7 +39,6 @@ test('4. auth-gated /app route redirects or blocks (never renders workbench anon
 test('5. jobs page loads with no fake apply links', async ({ page }) => {
   await page.goto('/jobs/')
   await expect(page.locator('body')).toContainText('No fake apply links')
-  // Any rendered job link must be external or a category page — never '#'
   const hrefs = await page.locator('.job-list a').evaluateAll(as => as.map(a => a.getAttribute('href')))
   for (const h of hrefs) expect(h && h !== '#').toBeTruthy()
 })
@@ -53,7 +50,6 @@ test('6. waitlist form basic path', async ({ page }) => {
   await email.fill(`smoke-${Date.now()}@example.com`)
   const submit = page.locator('button[type="submit"], button:has-text("Request")').first()
   await submit.click()
-  // Success or rate-limit are both acceptable outcomes; a crash is not.
   await expect(page.locator('body')).not.toContainText('Application error')
 })
 
@@ -96,7 +92,25 @@ test('7. job alert form persists through API and Supabase', async ({ page }) => 
   }
 })
 
-test('8. no console errors on critical public pages', async ({ page }) => {
+test('8. SearchComposer preserves a locked chip while the query changes', async ({ page }) => {
+  await page.goto('/candidate-search/')
+  const input = page.locator('.composer-input')
+  await expect(input).toBeVisible()
+
+  await input.fill('React TypeScript frontend')
+  const reactChip = page.locator('.composer-chip', { hasText: 'React' }).first()
+  await expect(reactChip).toBeVisible()
+  await reactChip.locator('.chip-value').click()
+  await expect(reactChip).toHaveClass(/chip-locked/)
+
+  await input.fill('Python FastAPI backend')
+  await page.waitForTimeout(350)
+
+  await expect(page.locator('.composer-chip', { hasText: 'React' }).first()).toBeVisible()
+  await expect(page.locator('.composer-chip', { hasText: 'Python' }).first()).toBeVisible()
+})
+
+test('9. no console errors on critical public pages', async ({ page }) => {
   for (const path of pagesToCheck) {
     const errors = await collectConsoleErrors(page)
     await page.goto(path)
