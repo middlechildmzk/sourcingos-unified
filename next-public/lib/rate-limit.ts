@@ -2,23 +2,18 @@
 // lib/rate-limit.ts — Centralized rate limiting for API routes.
 //
 // Backend selection:
-//   • Upstash Redis REST (recommended for Vercel) when both
-//     UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set.
-//     Fixed-window counters via atomic INCR + EXPIRE — no SDK dependency.
-//   • In-memory Map fallback otherwise. NOTE: per-serverless-instance only —
-//     best-effort protection, NOT a substitute for Redis in production.
-//     A warning is logged once per instance when the fallback is active.
+//   1. Upstash Redis REST (preferred on Vercel) when both
+//      UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set.
+//   2. For critical public fan-out endpoints, a shared Supabase RPC fallback.
+//   3. In-memory Map as the final best-effort fallback only.
 //
-// Setup (Vercel):
-//   1. Create an Upstash Redis database (Vercel Marketplace → Upstash).
-//   2. Add UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN to
-//      Production + Preview environments.
-//
-// Error responses are generic 429s with Retry-After. No backend details leak.
+// The jobs-search policy intentionally uses the shared Supabase fallback when
+// Upstash is not available so one serverless instance cannot bypass another.
 // SERVER-ONLY.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
 import { NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export type RatePolicy =
   | 'ai'              // AI copilot generation
@@ -28,10 +23,15 @@ export type RatePolicy =
   | 'sources'         // source connector search
   | 'waitlist'        // public waitlist signup
   | 'submit'          // public job submission
-  | 'public'          // public read endpoints (jobs search)
+  | 'public'          // low-cost public read endpoints
+  | 'jobsSearch'      // public jobs search; fans out to upstream job sources
   | 'analytics'       // public analytics events
 
-interface PolicyDef { limit: number; windowSec: number }
+interface PolicyDef {
+  limit: number
+  windowSec: number
+  sharedFallback?: boolean
+}
 
 const POLICIES: Record<RatePolicy, PolicyDef> = {
   ai:              { limit: 10, windowSec: 60 },
@@ -42,6 +42,7 @@ const POLICIES: Record<RatePolicy, PolicyDef> = {
   waitlist:        { limit: 3,  windowSec: 3_600 },
   submit:          { limit: 5,  windowSec: 3_600 },
   public:          { limit: 30, windowSec: 60 },
+  jobsSearch:      { limit: 20, windowSec: 60, sharedFallback: true },
   analytics:       { limit: 60, windowSec: 60 },
 }
 
@@ -67,7 +68,6 @@ async function upstashHit(key: string, windowSec: number): Promise<number | null
   const url = process.env.UPSTASH_REDIS_REST_URL!
   const token = process.env.UPSTASH_REDIS_REST_TOKEN!
   try {
-    // Pipeline: INCR key; EXPIRE key window NX  (atomic enough for fixed window)
     const res = await fetch(`${url}/pipeline`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -82,13 +82,32 @@ async function upstashHit(key: string, windowSec: number): Promise<number | null
     const count = json?.[0]?.result
     return typeof count === 'number' ? count : null
   } catch {
-    return null // backend trouble → fall through to in-memory
+    return null
+  }
+}
+
+// ── Shared Supabase fallback ──────────────────────────────────────────────────
+async function supabaseHit(key: string, windowSec: number): Promise<number | null> {
+  const sb = createServerSupabaseClient()
+  if (!sb) return null
+
+  try {
+    const { data, error } = await sb.rpc('consume_rate_limit', {
+      counter_key: key,
+      window_seconds: windowSec,
+    })
+    if (error) return null
+    const count = typeof data === 'number' ? data : Number(data)
+    return Number.isFinite(count) ? count : null
+  } catch {
+    return null
   }
 }
 
 // ── In-memory fallback ────────────────────────────────────────────────────────
 const memory = new Map<string, { count: number; resetAt: number }>()
-let warnedFallback = false
+let warnedSharedFallback = false
+let warnedMemoryFallback = false
 
 function memoryHit(key: string, windowSec: number): number {
   const now = Date.now()
@@ -112,9 +131,11 @@ function limited(windowSec: number): RateFail {
 }
 
 /**
- * Apply a rate-limit policy. Usage:
- *   const rl = await rateLimit(req, 'ai', gate.userId)
- *   if (!rl.ok) return rl.response
+ * Apply a rate-limit policy.
+ *
+ * Upstash is preferred. Critical fan-out endpoints can opt into the shared
+ * Supabase fallback. Memory remains a final availability fallback so a Redis or
+ * database incident does not automatically make a public route unavailable.
  *
  * Set RATE_LIMIT_DISABLED=true only in automated tests.
  */
@@ -127,19 +148,30 @@ export async function rateLimit(
 
   const def = POLICIES[policy]
   const id = rateIdentifier(req, userId)
-  // Fixed-window bucketing keeps Upstash keys bounded.
+  const baseKey = `rl:${policy}:${id}`
   const bucket = Math.floor(Date.now() / (def.windowSec * 1000))
-  const key = `rl:${policy}:${id}:${bucket}`
+  const upstashKey = `${baseKey}:${bucket}`
 
   let count: number | null = null
-  if (upstashConfigured()) count = await upstashHit(key, def.windowSec)
+
+  if (upstashConfigured()) {
+    count = await upstashHit(upstashKey, def.windowSec)
+  }
+
+  if (count === null && def.sharedFallback) {
+    count = await supabaseHit(baseKey, def.windowSec)
+    if (count !== null && !warnedSharedFallback && process.env.NODE_ENV === 'production') {
+      console.warn('[rate-limit] Upstash unavailable or unconfigured — using shared Supabase fallback for critical endpoint.')
+      warnedSharedFallback = true
+    }
+  }
 
   if (count === null) {
-    if (!warnedFallback && process.env.NODE_ENV === 'production') {
-      console.warn('[rate-limit] Upstash unavailable or unconfigured — using per-instance in-memory fallback.')
-      warnedFallback = true
+    if (!warnedMemoryFallback && process.env.NODE_ENV === 'production') {
+      console.warn('[rate-limit] Shared rate-limit backend unavailable — using per-instance in-memory fallback.')
+      warnedMemoryFallback = true
     }
-    count = memoryHit(key, def.windowSec)
+    count = memoryHit(upstashKey, def.windowSec)
   }
 
   if (count > def.limit) return limited(def.windowSec)
