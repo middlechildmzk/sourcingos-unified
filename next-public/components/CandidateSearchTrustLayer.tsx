@@ -29,7 +29,7 @@ const sourceLanes = [
   {
     title: 'GovCon / clearance breadcrumb',
     desc: 'Search language for TS/SCI, Secret, RMF, ATO, FedRAMP, GovCloud, SCIF, and mission-tech environments.',
-    trust: 'Clearance language from public text is an unverified breadcrumb, not a verified clearance.',
+    trust: 'Clearance language from public text is an unverified breadcrumb, not proof of current clearance status.',
   },
   {
     title: 'AI / ML ecosystem',
