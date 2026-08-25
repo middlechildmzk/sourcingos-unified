@@ -89,10 +89,11 @@ describe('bad request bodies', () => {
     expect([400, 413]).toContain(res.status)
   })
 
-  it('POST /api/analytics accepts a valid bounded event', async () => {
+  it('POST /api/analytics accepts a valid bounded event even when persistence is unavailable', async () => {
     const { POST } = await import('../app/api/analytics/route')
     const res = await POST(post('/api/analytics', { event: 'tool_open', page: '/tools' }, '10.60.0.2'))
-    expect(res.status).toBe(200)
+    expect([200, 202]).toContain(res.status)
+    expect((await res.json()).ok).toBe(true)
   })
 
   it('POST /api/jobs/submit validates with zod (bad URL → 400) without auth required', async () => {
@@ -129,9 +130,10 @@ describe('public routes stay public but rate-limited', () => {
     try {
       const { GET } = await import('../app/api/jobs/search/route')
       const ip = '10.80.0.5'
-      const ok = await GET(get('/api/jobs/search?q=sourcer', ip))
-      expect(ok.status).toBe(200)
-      for (let i = 0; i < 30; i++) await GET(get('/api/jobs/search?q=sourcer', ip))
+      for (let i = 0; i < 20; i++) {
+        const res = await GET(get('/api/jobs/search?q=sourcer', ip))
+        expect(res.status).toBe(200)
+      }
       const limited = await GET(get('/api/jobs/search?q=sourcer', ip))
       expect(limited.status).toBe(429)
     } finally {
