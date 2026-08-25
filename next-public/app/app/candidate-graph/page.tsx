@@ -53,7 +53,7 @@ export default function CandidateGraphPage() {
           <h3>4. Evidence and inference separation</h3>
           <p className="muted">
             Facts, signals, inferences, and verify-next steps are always separated in the data model.
-            No AI output claims verified contact, verified clearance, or verified job-seeking status.
+            No AI output claims confirmed contact details, current clearance status, or current job-seeking status.
           </p>
         </div>
       </div>
