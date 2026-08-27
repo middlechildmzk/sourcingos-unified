@@ -124,9 +124,10 @@ export function generateStaticParams() {
   return jobCategories.map(category => ({ category: category.slug }))
 }
 
-export function generateMetadata({ params }: { params: { category: string } }) {
-  const category = getCategoryBySlug(params.category)
-  const canonical = `/jobs/${params.category}/`
+export async function generateMetadata({ params }: { params: Promise<{ category: string }> }) {
+  const { category: categorySlug } = await params
+  const category = getCategoryBySlug(categorySlug)
+  const canonical = `/jobs/${categorySlug}/`
   return {
     title: category?.seoTitle ?? 'SourcingOS Jobs',
     description: category?.seoDescription ?? 'Curated recruiting and sourcing jobs from SourcingOS.',
@@ -141,14 +142,15 @@ export function generateMetadata({ params }: { params: { category: string } }) {
   }
 }
 
-export default async function JobCategoryPage({ params }: { params: { category: string } }) {
-  const category = getCategoryBySlug(params.category)
+export default async function JobCategoryPage({ params }: { params: Promise<{ category: string }> }) {
+  const { category: categorySlug } = await params
+  const category = getCategoryBySlug(categorySlug)
 
   if (!category) {
     return <main className="wrap"><h1>Job category not found.</h1><Link className="btn" href="/jobs">Back to jobs</Link></main>
   }
 
-  const guide: CategoryGuide = categoryGuides[params.category] || {
+  const guide: CategoryGuide = categoryGuides[categorySlug] || {
     query: category.name,
     location: '',
     titles: [category.name.replace(' Jobs', '')],

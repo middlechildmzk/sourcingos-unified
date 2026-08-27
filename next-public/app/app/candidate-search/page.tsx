@@ -8,9 +8,12 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function CandidateSearchPage({ searchParams }: { searchParams?: { roleId?: string; laneId?: string } }) {
-  const roleId = typeof searchParams?.roleId === 'string' ? searchParams.roleId : undefined
-  const laneId = typeof searchParams?.laneId === 'string' ? searchParams.laneId : undefined
+export default async function CandidateSearchPage({ searchParams }: { searchParams?: Promise<{ roleId?: string; laneId?: string }> }) {
+  // Next.js 15+: searchParams is a Promise. Reading it synchronously silently
+  // yields undefined, which would drop the active role scope on this page.
+  const sp = (await searchParams) ?? {}
+  const roleId = typeof sp.roleId === 'string' ? sp.roleId : undefined
+  const laneId = typeof sp.laneId === 'string' ? sp.laneId : undefined
 
   return (
     <main className="wrap">

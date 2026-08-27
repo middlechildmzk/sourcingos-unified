@@ -7,12 +7,14 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function RoleDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { tab?: string } }) {
+export default async function RoleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ tab?: string }> }) {
+  const { id } = await params
+  const sp = (await searchParams) ?? {}
   return (
     <main className="wrap">
-      <RoleSearchActions roleId={params.id} />
-      <RoleDetailClient roleId={params.id} initialTab={searchParams?.tab} />
-      <RoleDeleteControl roleId={params.id} />
+      <RoleSearchActions roleId={id} />
+      <RoleDetailClient roleId={id} initialTab={sp.tab} />
+      <RoleDeleteControl roleId={id} />
     </main>
   )
 }

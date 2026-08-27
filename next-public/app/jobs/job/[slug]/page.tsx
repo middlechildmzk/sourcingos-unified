@@ -5,16 +5,18 @@ export function generateStaticParams() {
   return jobs.map(job => ({ slug: job.slug }))
 }
 
-export function generateMetadata({ params }: { params: { slug: string } }) {
-  const job = getJobBySlug(params.slug)
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const job = getJobBySlug(slug)
   return {
     title: job ? `${job.title} at ${job.company} | SourcingOS Jobs` : 'SourcingOS Job',
     description: job?.summary ?? 'Curated recruiting and sourcing job from SourcingOS Jobs.'
   }
 }
 
-export default function JobDetailPage({ params }: { params: { slug: string } }) {
-  const job = getJobBySlug(params.slug)
+export default async function JobDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
+  const job = getJobBySlug(slug)
 
   if (!job) {
     return <main className="wrap"><h1>Job not found.</h1><Link className="btn" href="/jobs">Back to jobs</Link></main>

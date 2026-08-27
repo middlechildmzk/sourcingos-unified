@@ -6,7 +6,9 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default function Candidate360Page({ params, searchParams }: { params: { id: string }; searchParams?: { roleId?: string } }) {
-  const roleId = typeof searchParams?.roleId === 'string' ? searchParams.roleId : undefined
-  return <main className="wrap"><Candidate360Client candidateId={params.id} roleId={roleId} /></main>
+export default async function Candidate360Page({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ roleId?: string }> }) {
+  const { id } = await params
+  const sp = (await searchParams) ?? {}
+  const roleId = typeof sp.roleId === 'string' ? sp.roleId : undefined
+  return <main className="wrap"><Candidate360Client candidateId={id} roleId={roleId} /></main>
 }

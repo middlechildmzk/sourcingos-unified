@@ -12,19 +12,22 @@ export const metadata: Metadata = {
 }
 
 interface Props {
-  searchParams: { from?: string; error?: string; beta?: string }
+  // Next.js 15+: searchParams is a Promise and must be awaited.
+  searchParams: Promise<{ from?: string; error?: string; beta?: string }>
 }
 
 export default async function LoginPage({ searchParams }: Props) {
+  const sp = await searchParams
+
   // Already authenticated? Redirect to the app
   const session = await getSession()
   if (session.authenticated) {
-    const destination = safeRelativePath(searchParams.from)
+    const destination = safeRelativePath(sp.from)
     redirect(destination)
   }
 
   // Sanitise the from param before displaying it in UI or passing to LoginForm
-  const from = safeRelativePath(searchParams.from, '') || undefined
+  const from = safeRelativePath(sp.from, '') || undefined
 
   return (
     <main className="wrap" style={{ maxWidth: '480px', paddingTop: '80px' }}>
@@ -44,7 +47,7 @@ export default async function LoginPage({ searchParams }: Props) {
         </div>
       )}
 
-      <LoginForm from={from} error={searchParams.error} />
+      <LoginForm from={from} error={sp.error} />
 
       <div className="cta" style={{ marginTop: '28px', fontSize: '14px' }}>
         <strong>Beta access:</strong> SourcingOS is invite-only. If you do not

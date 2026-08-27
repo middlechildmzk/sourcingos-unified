@@ -95,13 +95,13 @@ function buildDossierFromSupabase(
   }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const rl = await rateLimit(_req, 'workbench', gate.userId)
   if (!rl.ok) return rl.response
 
-  const candidateId = params.id
+  const { id: candidateId } = await params
 
   // ── Supabase mode ──────────────────────────────────────────────────────────
   if (isSupabaseConfigured()) {

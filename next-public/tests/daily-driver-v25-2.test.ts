@@ -26,7 +26,11 @@ describe('V25.2 daily driver experience', () => {
     expect(rolePortfolio).toContain('Search portfolio')
     expect(rolePortfolio).toContain('<RoleIntakeWizard')
     expect(roleWizard).toContain('Guided role setup')
-    expect(roleDetailPage).toContain('<RoleDetailClient roleId={params.id} initialTab={searchParams?.tab} />')
+    // Next 15+ async params: the page awaits params/searchParams, then passes the
+    // resolved values straight through. Intent is unchanged: the route id and the
+    // tab query param must both reach RoleDetailClient.
+    expect(roleDetailPage).toContain('const { id } = await params')
+    expect(roleDetailPage).toContain('<RoleDetailClient roleId={id} initialTab={sp.tab} />')
   })
 
   it('keeps role context across overview, candidates, strategy, and activity', () => {
@@ -61,7 +65,7 @@ describe('V25.2 daily driver experience', () => {
     expect(roleStore).toContain("method: 'DELETE'")
     expect(roleStore).toContain('expectedVersion=${expectedVersion}')
     expect(roleStore).toContain('The local workspace was preserved.')
-    expect(roleDetailPage).toContain('<RoleDeleteControl roleId={params.id} />')
+    expect(roleDetailPage).toContain('<RoleDeleteControl roleId={id} />')
     expect(roleDelete).toContain('Delete this role workspace')
     expect(roleDelete).toContain('window.confirm')
     expect(roleDelete).toContain('await removeRole(roleId)')

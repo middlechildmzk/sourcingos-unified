@@ -8,12 +8,13 @@ if (typeof window !== 'undefined') {
   throw new Error('[SourcingOS] lib/supabase/session.ts is server-only.')
 }
 
-function buildSessionClient() {
+async function buildSessionClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   if (!url || !anonKey) return null
 
-  const cookieStore = cookies()
+  // Next.js 15+: cookies() is async.
+  const cookieStore = await cookies()
   return createServerClient(url, anonKey, {
     cookies: {
       get(name: string) { return cookieStore.get(name)?.value },
@@ -44,7 +45,7 @@ export async function getSession(): Promise<SessionResult> {
     }
   }
 
-  const sb = buildSessionClient()
+  const sb = await buildSessionClient()
   if (!sb) return { authenticated: false, user: null, mode: 'supabase' }
 
   try {
