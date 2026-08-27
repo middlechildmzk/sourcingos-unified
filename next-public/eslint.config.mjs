@@ -7,7 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import coreWebVitals from 'eslint-config-next/core-web-vitals'
 
-export default [
+const config = [
   {
     ignores: ['.next/**', 'node_modules/**', 'out/**', 'coverage/**', 'playwright-report/**', 'test-results/**'],
   },
@@ -36,3 +36,5 @@ export default [
 // `react-hooks/preserve-manual-memoization` (WorkbenchClient.tsx) are staged for
 // the same reason: both require touching render-time logic.
 // ─────────────────────────────────────────────────────────────────────────────
+
+export default config
