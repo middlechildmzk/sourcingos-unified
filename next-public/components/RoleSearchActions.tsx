@@ -22,13 +22,13 @@ type ImportResumeResponse = {
 }
 
 function roleSearchText(role: NonNullable<ReturnType<typeof useRoleWorkspaces>['roles'][number]>) {
-  if (role.intake.rawDescription.trim()) return role.intake.rawDescription
   return [
     `Title: ${role.intake.title}`,
     role.intake.location && role.intake.location !== 'Not specified' ? `Location: ${role.intake.location}` : '',
     role.intake.clearance && role.intake.clearance !== 'Not specified' ? `Clearance: ${role.intake.clearance}` : '',
     role.intake.mustHaves.length ? `Required: ${role.intake.mustHaves.join(', ')}` : '',
     role.intake.niceToHaves.length ? `Preferred: ${role.intake.niceToHaves.join(', ')}` : '',
+    role.intake.targetCompanies.length ? `Target companies: ${role.intake.targetCompanies.join(', ')}` : '',
     role.intake.adjacentBackgrounds.length ? `Adjacent backgrounds: ${role.intake.adjacentBackgrounds.join(', ')}` : '',
   ].filter(Boolean).join('\n')
 }
