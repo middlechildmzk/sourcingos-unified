@@ -25,7 +25,7 @@ export function resolveLoginCallbackOrigin(currentOrigin: string, currentHostnam
 
 export function LoginForm({ from, error: initialError }: LoginFormProps) {
   const [email, setEmail] = useState('')
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>(initialError ? 'error' : 'idle')
   const [message, setMessage] = useState(initialError ?? '')
 
   const configured = Boolean(
