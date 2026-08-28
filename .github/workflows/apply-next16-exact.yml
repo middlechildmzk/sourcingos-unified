@@ -72,8 +72,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(node -p "require('./package.json').dependencies.next")" = "16.3.3"
-          test "$(node -p "require('./package.json').dependencies['@next/mdx']")" = "16.3.3"
+          test "$(node -p "require('./package.json').dependencies.next")" = "^16.3.3"
+          test "$(node -p "require('./package.json').dependencies['@next/mdx']")" = "^16.3.3"
           node -p "require('next/package.json').version" | grep -Fx '16.3.3'
 
       - name: Remove temporary transfer scaffolding
