@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { buildLanes } from '@/lib/jd-boolean-lanes'
 import { parseJobDescription, parseResume } from '@/lib/jd-parser'
-import { addCanonicalCandidateToRole, type RoleCandidateLinkResult } from '@/lib/role-candidate-link'
+import { addCanonicalCandidateToRole } from '@/lib/role-candidate-link'
 import {
   candidateImportToRoleLinkInput,
   RECRUITER_PASTE_BACK_SURFACES,
@@ -104,21 +104,12 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
         laneLabel: selectedGuidedLane?.name,
         sourceUrl: pasteUrl,
       })
-      let linkReason: RoleCandidateLinkResult['reason'] = 'invalid'
-      const updated = updateRole(role.id, current => {
-        const linked = addCanonicalCandidateToRole(current, linkInput)
-        linkReason = linked.reason
-        return linked.workspace
-      })
+      const updated = updateRole(role.id, current => addCanonicalCandidateToRole(current, linkInput).workspace)
       if (!updated) throw new Error('The candidate was imported, but the role workspace could not be updated.')
+      const linkedCandidate = updated.candidates.find(candidate => candidate.candidateId === json.candidate?.id)
+      if (!linkedCandidate) throw new Error('The candidate import succeeded, but it could not be added to the role review queue.')
 
-      if (linkReason === 'existing') {
-        setStatus(`${linkInput.displayName} was already linked to this role. No duplicate role record was added.`)
-      } else if (linkReason !== 'added') {
-        throw new Error('The candidate import succeeded, but it could not be added to the role review queue.')
-      } else {
-        setStatus(`${linkInput.displayName} is now in this role's review queue with recruiter-provided evidence. SourcingOS did not execute or verify the external source.`)
-      }
+      setStatus(`${linkInput.displayName} is in this role's review queue with recruiter-provided evidence. Canonical candidates are linked once per role; SourcingOS did not execute or verify the external source.`)
       setLastCandidateId(json.candidate.id)
       setPasteName('')
       setPasteUrl('')
