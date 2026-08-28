@@ -15,6 +15,18 @@ import {
 import { persistCandidateGraphSnapshot } from '@/lib/supabase-candidate-graph'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 
+function safeProfileUrl(value: unknown): string | undefined {
+  const raw = String(value || '').trim().slice(0, 1000)
+  if (!raw) return undefined
+  try {
+    const parsed = new URL(raw)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return undefined
+    return parsed.toString().slice(0, 1000)
+  } catch {
+    return undefined
+  }
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -26,6 +38,7 @@ export async function POST(req: NextRequest) {
     const text = String(body.text || '')
     const fileName = String(body.fileName || 'pasted-resume.txt').slice(0, 240)
     const displayName = String(body.name || text.split('\n').find((line: string) => line.trim().length > 2)?.trim() || 'Resume import').slice(0, 300)
+    const profileUrl = safeProfileUrl(body.profileUrl)
     if (text.trim().length < 20) return NextResponse.json({ ok: false, error: 'Resume text is too short to import.' }, { status: 400 })
     if (text.length > 100000) return NextResponse.json({ ok: false, error: 'Resume text exceeds the 100,000 character limit.' }, { status: 413 })
 
@@ -34,6 +47,7 @@ export async function POST(req: NextRequest) {
       id: uid('sp'),
       source: 'uploaded_resume',
       sourceProfileId: `${fileName}:${crypto.randomUUID()}`,
+      profileUrl,
       displayName,
       headline: String(body.headline || 'Imported resume').slice(0, 300),
       location: String(body.location || '').slice(0, 200),
