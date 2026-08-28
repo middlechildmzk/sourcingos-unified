@@ -138,8 +138,10 @@ describe('V29 role-centric sourcing loop', () => {
 
     expect(actions).toContain('/app/candidate-search?roleId=')
     expect(actions).toContain('&laneId=')
-    expect(page).toContain('searchParams?.roleId')
-    expect(page).toContain('searchParams?.laneId')
+    // Next 15+ async searchParams: resolved into `sp` before roleId/laneId are read.
+    expect(page).toContain('const sp = (await searchParams)')
+    expect(page).toContain('sp.roleId')
+    expect(page).toContain('sp.laneId')
     expect(page).toContain('<RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />')
     expect(scoped).toContain("item.status === 'approved'")
     expect(scoped).toContain("mustHaves: lane?.query || role.intake.mustHaves.join(', ')")
@@ -155,7 +157,9 @@ describe('V29 role-centric sourcing loop', () => {
     expect(drawer).toContain('window.dispatchEvent(new CustomEvent')
     expect(drawer.match(/if \(!canSaveCandidate\)/g)).toHaveLength(1)
     expect(drawer).toContain('?roleId=')
-    expect(candidatePage).toContain('searchParams?.roleId')
+    // Next 15+ async searchParams: resolved into `sp` before the roleId is read.
+    expect(candidatePage).toContain('const sp = (await searchParams)')
+    expect(candidatePage).toContain('sp.roleId')
     expect(candidate360).toContain('Back to role queue')
     expect(candidate360).toContain('?tab=candidates')
   })

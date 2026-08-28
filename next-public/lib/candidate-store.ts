@@ -9,7 +9,6 @@ type StoreShape = {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __sourcingosCandidateStore: StoreShape | undefined
 }
 

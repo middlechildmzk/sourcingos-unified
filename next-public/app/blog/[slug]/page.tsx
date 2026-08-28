@@ -5,8 +5,9 @@ import { siteUrl } from '@/lib/site'
 
 export function generateStaticParams(){ return articles.map(a => ({ slug: a.slug })) }
 
-export function generateMetadata({ params }: { params: { slug: string } }){
- const article = articles.find(a => a.slug === params.slug); if(!article) return {};
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }){
+ const { slug } = await params
+ const article = articles.find(a => a.slug === slug); if(!article) return {};
  const articleUrl = `${siteUrl}/blog/${article.slug}/`
  return {
   title: article.title,
@@ -18,8 +19,9 @@ export function generateMetadata({ params }: { params: { slug: string } }){
  }
 }
 
-export default function BlogArticle({ params }: { params: { slug: string } }){
- const article = articles.find(a => a.slug === params.slug); if(!article) return notFound();
+export default async function BlogArticle({ params }: { params: Promise<{ slug: string }> }){
+ const { slug } = await params
+ const article = articles.find(a => a.slug === slug); if(!article) return notFound();
  const articleUrl = `${siteUrl}/blog/${article.slug}/`
  const jsonLd = {
   '@context': 'https://schema.org',

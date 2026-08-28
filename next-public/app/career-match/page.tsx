@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import CareerMatchClient from './CareerMatchClient'
 import './career-match.css'
 
@@ -21,7 +22,7 @@ export default function CareerMatchPage() {
             </p>
             <div className="hero-actions">
               <a className="btn" href="#career-match-tool">Start free match</a>
-              <a className="btn secondary" href="/jobs">Browse recruiting jobs</a>
+              <Link className="btn secondary" href="/jobs/">Browse recruiting jobs</Link>
             </div>
           </div>
           <div className="card cm-hero-card">

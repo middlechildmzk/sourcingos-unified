@@ -17,7 +17,8 @@ const ALLOWED_UPDATE_FIELDS = [
 ] as const
 type AllowedField = typeof ALLOWED_UPDATE_FIELDS[number]
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const rl = await rateLimit(_req, 'workbench', gate.userId)
@@ -31,14 +32,15 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const { data, error } = await sb!
     .from('projects')
     .select('*')
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('owner_id', session.userId!)
     .single()
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 404 })
   return NextResponse.json({ ok: true, project: data })
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const rl = await rateLimit(req, 'workbench', gate.userId)
@@ -67,7 +69,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const { data, error } = await sb!
     .from('projects')
     .update({ ...updateData, updated_at: new Date().toISOString() })
-    .eq('id', params.id)
+    .eq('id', id)
     .eq('owner_id', session.userId!)   // scopes to owner — cannot update other users' projects
     .select('*')
     .single()

@@ -8,12 +8,14 @@ export const metadata: Metadata = {
 }
 
 interface Props {
-  searchParams: { beta?: string; from?: string }
+  // Next.js 15+: searchParams is a Promise and must be awaited.
+  searchParams: Promise<{ beta?: string; from?: string }>
 }
 
-export default function WaitlistPage({ searchParams }: Props) {
-  const isBetaRequired = searchParams.beta === 'required'
-  const from = searchParams.from?.startsWith('/') ? searchParams.from : undefined
+export default async function WaitlistPage({ searchParams }: Props) {
+  const sp = await searchParams
+  const isBetaRequired = sp.beta === 'required'
+  const from = sp.from?.startsWith('/') ? sp.from : undefined
 
   return (
     <main className="wrap" style={{ maxWidth: '560px' }}>

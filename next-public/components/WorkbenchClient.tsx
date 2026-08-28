@@ -65,7 +65,6 @@ export function WorkbenchClient({ publicMode = false, initialTab }: WorkbenchCli
         }
       }
     } catch { /* corrupted draft — ignore */ }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
