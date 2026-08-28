@@ -62,6 +62,14 @@ describe('V30 PR1 role sourcing loop', () => {
     expect(roleActions).toContain('Review role candidates')
   })
 
+  it('builds guided searches from the current editable role intake instead of a stale raw JD shortcut', () => {
+    expect(roleActions).toContain('`Title: ${role.intake.title}`')
+    expect(roleActions).toContain('`Required: ${role.intake.mustHaves.join')
+    expect(roleActions).toContain('`Preferred: ${role.intake.niceToHaves.join')
+    expect(roleActions).toContain('`Target companies: ${role.intake.targetCompanies.join')
+    expect(roleActions).not.toContain("if (role.intake.rawDescription.trim()) return role.intake.rawDescription")
+  })
+
   it('keeps guided sources explicitly recruiter-run', () => {
     expect(roleActions).toContain('Guided searches for recruiter-run sources')
     expect(roleActions).toContain('Copy LinkedIn search')
