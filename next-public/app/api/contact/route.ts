@@ -1,22 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { z } from 'zod'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { rateLimit } from '@/lib/rate-limit'
-
-const contactSchema = z.object({
-  category: z.enum(['privacy', 'security', 'candidate_data', 'general']),
-  email: z.string().email().max(320),
-  subject: z.string().trim().max(160).optional(),
-  candidate_reference: z.string().trim().max(500).optional(),
-  message: z.string().trim().min(10).max(5000),
-})
+import { contactRequestSchema } from '@/lib/contact-request'
 
 export async function POST(req: NextRequest) {
   const rl = await rateLimit(req, 'contact')
   if (!rl.ok) return rl.response
 
   const body = await req.json().catch(() => null)
-  const parsed = contactSchema.safeParse(body)
+  const parsed = contactRequestSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, error: 'Invalid contact request', details: parsed.error.flatten() },
