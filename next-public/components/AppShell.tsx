@@ -26,7 +26,6 @@ const primary: NavigationItem[] = [
   { href: '/app/today', label: 'Today', icon: 'today', description: 'What needs your judgment now' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Search strategy, slate, calibration' },
   { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'People, evidence, rediscovery' },
-  { href: '/app/agent-os', label: 'Ask SourcingOS', icon: 'autosource', description: 'Research and sourcing guidance' },
 ]
 
 const tools: NavigationItem[] = [
