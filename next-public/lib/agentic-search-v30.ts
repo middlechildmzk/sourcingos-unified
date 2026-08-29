@@ -2,7 +2,7 @@ import type { CalibrationState } from './calibration-intelligence'
 import { activeInsights } from './calibration-intelligence'
 import type { RoleIntake } from './role-workspace'
 
-export type AgenticConnectorKey = 'github' | 'orcid' | 'openalex' | 'pubmed' | 'crossref'
+export type AgenticConnectorKey = 'github' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
 
 export type AgenticLaneId =
   | 'exact_title'
@@ -18,6 +18,7 @@ export type AgenticSearchSurface =
   | 'candidate_database'
   | 'github'
   | 'research_publications'
+  | 'healthcare_registry'
   | 'linkedin_recruiter'
   | 'clearancejobs'
   | 'google_xray'
