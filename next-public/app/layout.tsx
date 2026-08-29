@@ -7,9 +7,12 @@ import './v281-product-truth.css'
 import './agentic-role.css'
 import './home-v31.css'
 import './public-v31.css'
+import './theme-v31.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
 import { siteUrl } from '@/lib/site'
+
+const themeBootScript = `(()=>{try{const k='sourcingos.theme';let p=localStorage.getItem(k);if(p!=='light'&&p!=='dark'&&p!=='system')p='system';const r=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;const d=document.documentElement;d.dataset.themePreference=p;d.dataset.theme=r;d.style.colorScheme=r}catch{}})();`
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -25,8 +28,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         {/* DM Sans (body) + Syne (display), loaded once by the root App Router layout. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
