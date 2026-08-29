@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { LogoutButton } from '@/components/LogoutButton'
 import { CommandPalette } from '@/components/CommandPalette'
 import { ProductIcon, type ProductIconName } from '@/components/ProductIcon'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 type AppShellProps = {
   children: React.ReactNode
@@ -119,6 +120,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
         </div>
         <div className="app-topbar-actions">
           <CommandPalette triggerClassName="app-command-trigger app-command-trigger-topbar" />
+          <ThemeToggle />
           <Link className="btn app-topbar-new-role" href="/app/roles?new=1">+ New role</Link>
           <span className={`app-connection-pill ${mode === 'preview' ? 'preview' : ''}`} title={mode === 'preview' ? 'Browser-local preview workspace' : 'Connected account storage'}>
             <span />{mode === 'preview' ? 'Local' : 'Connected'}
@@ -130,6 +132,7 @@ export function AppShell({ children, mode, authenticated, email, role }: AppShel
         <button className="app-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation">☰</button>
         <Link href="/app/today" className="app-mobile-brand">SourcingOS</Link>
         <CommandPalette triggerClassName="app-command-trigger app-command-trigger-mobile" hotkey={false} />
+        <ThemeToggle compact />
         <span className={mode === 'preview' ? 'app-mode-dot preview' : 'app-mode-dot'} title={mode === 'preview' ? 'Preview mode' : 'Connected'} />
       </header>
       {mode === 'preview' && <div className="app-preview-strip"><b>Preview mode</b><span>Role work stays on this browser until authenticated storage is connected.</span></div>}
