@@ -7,6 +7,7 @@ import {
   sourceTruthSummary,
   type AgenticConnectorKey,
   type AgenticLaneId,
+  type AgenticSearchSurface,
 } from '@/lib/agentic-search-v30'
 import { buildCanonicalAgenticSearchPlan, executableTaskDistinctness } from '@/lib/canonical-agentic-search-v30'
 import {
@@ -20,6 +21,8 @@ import {
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 const RESEARCH_CONNECTORS = new Set<AgenticConnectorKey>(['orcid', 'openalex', 'pubmed', 'crossref'])
+const GITHUB_CONNECTORS = new Set<AgenticConnectorKey>(['github'])
+const NPI_CONNECTORS = new Set<AgenticConnectorKey>(['npi'])
 
 type AgenticResult = {
   sourceKey: AgenticConnectorKey
@@ -39,7 +42,7 @@ type RunResponse = {
   error?: string
   sourceStatus?: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }>
   results?: AgenticResult[]
-  trust?: { message?: string; externalContent?: string }
+  trust?: { message?: string; externalContent?: string; registryData?: string }
 }
 
 function memoryKey(roleId: string) {
@@ -53,6 +56,13 @@ function readAttempts(roleId: string): SearchAttempt[] {
   } catch {
     return []
   }
+}
+
+function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnectorKey> {
+  if (surface === 'github') return GITHUB_CONNECTORS
+  if (surface === 'healthcare_registry') return NPI_CONNECTORS
+  if (surface === 'research_publications') return RESEARCH_CONNECTORS
+  return new Set<AgenticConnectorKey>()
 }
 
 export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
@@ -104,6 +114,10 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
     }
 
     const connectors = Array.from(new Set(allowedTasks.flatMap(task => task.connectorKeys || [])))
+    const connectorQueries: Partial<Record<AgenticConnectorKey, string>> = {}
+    for (const task of allowedTasks) {
+      for (const connector of task.connectorKeys || []) connectorQueries[connector] = task.query
+    }
     const query = allowedTasks[0].query
     const startedAt = new Date().toISOString()
     const running: SearchAttempt[] = allowedTasks.map(task => ({
@@ -125,6 +139,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           query,
+          connectorQueries,
           skills: intake.mustHaves,
           targetCompanies: intake.targetCompanies,
           locations: intake.location && intake.location !== 'Not specified' ? [intake.location] : [],
@@ -143,7 +158,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
 
       const completedAt = new Date().toISOString()
       const completed = running.map(attempt => {
-        const connectorSet = attempt.surface === 'github' ? new Set<AgenticConnectorKey>(['github']) : RESEARCH_CONNECTORS
+        const connectorSet = connectorsForSurface(attempt.surface)
         const keys = found.filter(item => connectorSet.has(item.sourceKey)).map(item => `${item.sourceKey}:${item.sourceId}`)
         const statuses = Array.from(connectorSet).map(key => json.sourceStatus?.[key]?.status).filter(Boolean)
         const failed = statuses.length > 0 && statuses.every(value => value === 'failed' || value === 'unavailable')
@@ -175,6 +190,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
       <div className="agentic-integrity"><b>{plan.distinctQueryCount}/{plan.lanes.length}</b><span>distinct strategy queries</span><small>{taskDistinctness.distinctCount}/{taskDistinctness.taskCount} executable task fingerprints</small></div>
     </div>
 
+    {!!plan.domainPacks.length && <div className="agentic-source-status-row" aria-label="Detected domain packs">{plan.domainPacks.map(pack => <span className="status-pill" key={pack.id}>{pack.label} · {Math.round(pack.confidence * 100)}%</span>)}</div>}
     {!!plan.integrityWarnings.length && <div className="agentic-warning-list">{plan.integrityWarnings.map(warning => <span key={warning}>⚠ {warning}</span>)}</div>}
 
     <div className="agentic-lane-tabs" role="tablist" aria-label="Research hypotheses">
@@ -195,7 +211,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
         <div className="agentic-run-metrics"><span><b>{coverage.uniqueSearches}</b><small>unique searches</small></span><span><b>{coverage.surfacesSearched}</b><small>surfaces run</small></span><span><b>{coverage.uniqueResultsSeen}</b><small>identities seen</small></span></div>
         <button className="btn" disabled={working || !executableConnectorKeys(lane).length} onClick={() => void runPublicSources()}>{working ? 'Researching…' : executableConnectorKeys(lane).length ? 'Run public sources' : 'No executable public source'}</button>
         <Link className="btn secondary" href={`/app/candidate-search?roleId=${encodeURIComponent(activeRole.id)}`}>Open Candidate Search</Link>
-        <small className="agentic-run-trust">External content is data, never instructions · no auto-send · no auto-reject · no silent identity merge</small>
+        <small className="agentic-run-trust">External content is data, never instructions · professional registries are evidence, not interest · no auto-send · no auto-reject · no silent identity merge</small>
       </aside>
     </div>
 
@@ -205,7 +221,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
     {!!results.length && <div className="agentic-results">
       <div className="agentic-results-head"><div><span className="kicker">Public-source discoveries</span><h3>{results.length} records to inspect</h3></div>{novelty !== null && <span className="status-pill active">{novelty}% novel vs role search memory</span>}</div>
       <div className="agentic-result-grid">{results.slice(0, 18).map(result => <article className="agentic-result-card" key={`${result.sourceKey}:${result.sourceId}`}><div className="agentic-result-top"><span className="status-pill">{result.sourceKey}</span><span>{result.evidence.length} evidence items</span></div><h4>{result.displayName}</h4><p>{[result.headline, result.organization, result.location].filter(Boolean).join(' · ') || 'Public-source identity'}</p>{result.evidence[0] && <div className="agentic-result-evidence"><b>{result.evidence[0].label}</b><span>{result.evidence[0].value}</span></div>}<div className="agentic-result-foot"><span>Identity {result.identityConfidence}</span><span>Profile {result.profileQuality}</span>{result.sourceUrl && <a href={result.sourceUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}</div></article>)}</div>
-      <div className="agentic-results-note">Read-only discoveries only. Adding a person to a role still requires explicit recruiter action through the existing Candidate Graph/evidence workflow.</div>
+      <div className="agentic-results-note">Read-only discoveries only. Registry and public-source records are evidence for recruiter review. Adding a person to a role still requires explicit recruiter action through the existing Candidate Graph/evidence workflow.</div>
     </div>}
   </section>
 }
