@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['ATS rediscovery sourcing','candidate rediscovery recruiting','silver medalist recruiting','past candidates sourcing','ATS sourcing strategy','recruiting database rediscovery'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -36,7 +36,7 @@ export default function AtsRediscoveryPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['ATS rediscovery','Candidate rediscovery','Talent sourcing','Recruiting operations'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -48,7 +48,7 @@ export default function AtsRediscoveryPage() {
       <div className="article-hero-card">
         <span className="kicker">Rediscovery · owned recruiting history</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Your ATS is not only an archive of old applicants. It is a record of markets already explored, candidates already evaluated, reasons searches failed, and patterns that can make the next requisition smarter, if you preserve context and do not treat historical interest as current intent.</p>
         <div className="article-meta-grid"><div><span>Lane</span><strong>Owned history</strong></div><div><span>Best use</span><strong>Context + pattern reuse</strong></div><div><span>Measure</span><Link href="/tools/unique-contribution-rate-calculator/">Unique contribution</Link></div></div>
       </div>

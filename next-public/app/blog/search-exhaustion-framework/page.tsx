@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['search exhaustion','when to stop sourcing','candidate market exhausted','candidate pool saturation','sourcing coverage metrics','market mapping recruiting'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-19', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-19', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -35,7 +35,7 @@ const faq = [
 
 export default function SearchExhaustionFrameworkPage(){
  const articleUrl = `${siteUrl}${canonical}`
- const articleSchema = {'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-19',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Search-lane exhaustion','Talent sourcing','Market mapping','Recruiting analytics']}
+ const articleSchema = {'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-19',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Search-lane exhaustion','Talent sourcing','Market mapping','Recruiting analytics']}
  const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
  return <>
   <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
@@ -44,7 +44,7 @@ export default function SearchExhaustionFrameworkPage(){
    <div className="article-hero-card">
     <span className="kicker">Sourcing coverage methodology</span>
     <h1>{title}</h1>
-    <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published August 15, 2026 · Updated August 19, 2026</p>
+    <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026 · Updated August 19, 2026</p>
     <p className="lead">{description}</p>
     <div className="article-meta-grid"><div><span>Framework</span><strong>7 observable signals</strong></div><div><span>Tool</span><Link href="/tools/search-exhaustion-calculator/">Calculate your coverage evidence</Link></div><div><span>Validation status</span><strong>Framework published · universal thresholds not claimed</strong></div></div>
    </div>

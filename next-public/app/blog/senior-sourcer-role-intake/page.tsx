@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['hiring manager intake questions','recruiter intake meeting questions','role intake template','sourcing intake questions','kickoff meeting recruiting','hiring manager calibration'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-15', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-15', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -71,13 +71,13 @@ const faq = [
 
 export default function SeniorSourcerRoleIntakePage(){
  const articleUrl=`${siteUrl}${canonical}`
- const articleSchema={'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-15',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Hiring manager intake','Role intake','Talent sourcing','Recruiter calibration']}
+ const articleSchema={'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-15',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Hiring manager intake','Role intake','Talent sourcing','Recruiter calibration']}
  const faqSchema={'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
  return <>
   <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
   <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
   <main className="wrap article article-pro">
-   <div className="article-hero-card"><span className="kicker">Role intake & calibration</span><h1>{title}</h1><p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published August 15, 2026</p><p className="lead">{description}</p><div className="article-meta-grid"><div><span>Framework</span><strong>25 search-relevant questions</strong></div><div><span>Output</span><strong>Titles · skills · evidence · companies · geography</strong></div><div><span>Next action</span><Link href="/tools/jd-search-strategy/">Build the search plan</Link></div></div></div>
+   <div className="article-hero-card"><span className="kicker">Role intake & calibration</span><h1>{title}</h1><p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026</p><p className="lead">{description}</p><div className="article-meta-grid"><div><span>Framework</span><strong>25 search-relevant questions</strong></div><div><span>Output</span><strong>Titles · skills · evidence · companies · geography</strong></div><div><span>Next action</span><Link href="/tools/jd-search-strategy/">Build the search plan</Link></div></div></div>
    <div className="article-layout">
     <aside className="article-sidebar"><div className="mini-card"><span className="kicker">In this guide</span><a href="#answer">Short answer</a><a href="#definition">Search-relevant intake</a><a href="#questions">25 questions</a><a href="#calibration">Follow-up calibration</a><a href="#boundaries">Legal & safety boundaries</a><a href="#research">Research plan</a><a href="#faq">FAQ</a></div><div className="mini-card"><span className="kicker">Operating test</span><p>If an intake answer would not change a title, keyword, evidence lane, company map, geography, or screening threshold, ask whether it belongs in the sourcing intake at all.</p></div></aside>
     <article className="article-main">

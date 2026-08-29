@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['ai sourcing','ai sourcing tools','ai recruiting tools','talent sourcing ai','recruiter ai tools','ai candidate sourcing'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-18', modifiedTime:'2026-08-19', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-18', modifiedTime:'2026-08-19', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -56,7 +56,7 @@ export default function AiSourcingHarnessPage(){
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-08-18',dateModified:'2026-08-19',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-08-18',dateModified:'2026-08-19',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['AI sourcing','AI recruiting tools','Talent sourcing','AI evaluation'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -68,7 +68,7 @@ export default function AiSourcingHarnessPage(){
       <div className="article-hero-card">
         <span className="kicker">AI sourcing · 2026 evaluation framework</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Updated August 19, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Updated August 19, 2026</p>
         <p className="lead">Do not choose an AI sourcing product from a feature checklist or vendor demo. Give every tool the same recruiting tasks, verify the evidence, measure what it uniquely adds, and score unsafe automation separately from search quality.</p>
         <div className="article-meta-grid">
           <div><span>Harness</span><strong>8 sourcing tasks</strong></div>

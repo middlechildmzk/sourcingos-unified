@@ -57,9 +57,9 @@ const templates: RoleTemplate[] = [
   {
     key: 'human-performance',
     label: 'Human Performance',
-    description: 'POTFF, H2F, Warrior Care, recovery, wellness, and force readiness.',
+    description: 'human performance program, readiness program, recovery support, recovery, wellness, and force readiness.',
     mustHaves: ['Program leadership', 'Human performance or readiness'],
-    adjacentBackgrounds: ['POTFF', 'H2F', 'Warrior Care', 'Recovery Care', 'Force and Family Readiness'],
+    adjacentBackgrounds: ['human performance program', 'readiness program', 'recovery support', 'rehabilitation support', 'readiness support'],
   },
   {
     key: 'talent',

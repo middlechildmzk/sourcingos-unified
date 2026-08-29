@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title,
   description,
   alternates: { canonical: '/blog/sourcing-kpi-dashboard/' },
-  openGraph: { title, description, url: '/blog/sourcing-kpi-dashboard/', type: 'article', publishedTime: '2026-06-26', modifiedTime: '2026-08-19', authors: ['Dan Larson'] },
+  openGraph: { title, description, url: '/blog/sourcing-kpi-dashboard/', type: 'article', publishedTime: '2026-06-26', modifiedTime: '2026-08-19', authors: ['SourcingOS Editorial'] },
 }
 
 const metrics = [
@@ -25,7 +25,7 @@ export default function SourcingKpiDashboardPage() {
     <div className="article-hero-card">
       <span className="kicker">Sourcing operations · interim metrics guide</span>
       <h1>{title}</h1>
-      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Updated August 19, 2026</p>
+      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Updated August 19, 2026</p>
       <p className="lead">{description}</p>
     </div>
     <div className="article-main">

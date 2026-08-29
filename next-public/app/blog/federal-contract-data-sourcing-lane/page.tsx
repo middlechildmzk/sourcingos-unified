@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     url: canonical,
     publishedTime: '2026-08-15',
     modifiedTime: '2026-08-15',
-    authors: ['Dan Larson'],
+    authors: ['SourcingOS Editorial'],
   },
   twitter: { card: 'summary_large_image', title, description },
 }
@@ -49,7 +49,7 @@ export default function FederalContractDataSourcingLanePage() {
     mainEntityOfPage: articleUrl,
     datePublished: '2026-08-15',
     dateModified: '2026-08-15',
-    author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl },
     about: ['Federal contract data', 'GovCon recruiting', 'Donor-company mapping', 'Talent sourcing'],
   }
@@ -66,7 +66,7 @@ export default function FederalContractDataSourcingLanePage() {
       <div className="article-hero-card">
         <span className="kicker">GovCon sourcing methodology</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize:13, margin:'4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published August 15, 2026</p>
+        <p className="muted" style={{ fontSize:13, margin:'4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026</p>
         <p className="lead">{description}</p>
         <div className="article-meta-grid">
           <div><span>Core artifact</span><strong>Evidence-backed donor map</strong></div>

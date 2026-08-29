@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     url: canonical,
     publishedTime: '2026-06-26',
     modifiedTime: '2026-08-23',
-    authors: ['Dan Larson'],
+    authors: ['SourcingOS Editorial'],
   },
   twitter: { card: 'summary_large_image', title, description },
 }
@@ -110,7 +110,7 @@ export default function BestAiRecruitingToolsPage() {
     mainEntityOfPage: articleUrl,
     datePublished: '2026-06-26',
     dateModified: '2026-08-23',
-    author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl },
     about: ['AI recruiting tools','AI sourcing tools','Talent sourcing','Recruiting software evaluation'],
   }
@@ -123,7 +123,7 @@ export default function BestAiRecruitingToolsPage() {
       <div className="article-hero-card">
         <span className="kicker">AI recruiting tools · updated August 2026</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 23, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 23, 2026</p>
         <p className="lead">Do not buy an “AI recruiting tool” until you name the sourcing job you need it to perform. This guide compares four major 2026 sourcing platforms, then gives you one repeatable buyer test for discovery, evidence, control, overlap, correction time, and automation risk.</p>
         <div className="article-meta-grid">
           <div><span>Current shortlist</span><strong>4 sourcing platforms</strong></div>

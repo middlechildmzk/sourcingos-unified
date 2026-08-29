@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['AI prompts recruiters','recruiter AI prompts','sourcing prompts ChatGPT','AI sourcing prompts','Boolean prompt recruiter','talent mapping AI prompt'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -172,7 +172,7 @@ export default function RecruiterAiPromptsPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['AI recruiting prompts','Talent sourcing','Source packs','Recruiter workflows'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -184,7 +184,7 @@ export default function RecruiterAiPromptsPage() {
       <div className="article-hero-card">
         <span className="kicker">AI sourcing · prompt reference library</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Use AI to structure sourcing work you can inspect. These prompts create search plans, evidence frameworks, market maps, and retrospectives without asking a model to invent people or turn uncertainty into candidate facts.</p>
         <div className="article-meta-grid"><div><span>Library</span><strong>15 prompts</strong></div><div><span>Guardrail</span><strong>Evidence stays visible</strong></div><div><span>Training</span><Link href="/training/ai-sourcing-prompts/">Open the workshop</Link></div></div>
       </div>

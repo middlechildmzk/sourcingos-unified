@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['how to measure sourcing channel effectiveness','candidate source overlap','source of hire metrics','sourcing analytics','sourcing channel comparison','unique contribution rate'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-19', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-19', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -29,7 +29,7 @@ export default function UniqueContributionRatePage(){
  const articleUrl = `${siteUrl}${canonical}`
  const articleSchema = {
   '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-  datePublished:'2026-08-15',dateModified:'2026-08-19',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+  datePublished:'2026-08-15',dateModified:'2026-08-19',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
   publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Sourcing analytics','Unique Contribution Rate','Candidate source overlap','Talent sourcing']
  }
  const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -40,7 +40,7 @@ export default function UniqueContributionRatePage(){
    <div className="article-hero-card">
     <span className="kicker">Sourcing analytics methodology</span>
     <h1>{title}</h1>
-    <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published August 15, 2026 · Updated August 19, 2026</p>
+    <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026 · Updated August 19, 2026</p>
     <p className="lead">{description}</p>
     <div className="article-meta-grid"><div><span>Metric</span><strong>Additive discovery</strong></div><div><span>Formula</span><strong>Unique evidence-fit leads ÷ evidence-fit leads from source</strong></div><div><span>Tool</span><Link href="/tools/unique-contribution-rate-calculator/">Calculate UCR</Link></div></div>
    </div>

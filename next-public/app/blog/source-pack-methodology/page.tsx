@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['sourcing strategy template','source pack recruiting','technical sourcing methodology','hard to fill recruiting strategy','sourcing plan template','recruiter search strategy'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -39,7 +39,7 @@ export default function SourcePackMethodologyPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context': 'https://schema.org', '@type': 'Article', headline: title, description, url: articleUrl, mainEntityOfPage: articleUrl,
-    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl }, about: ['Talent sourcing','Sourcing strategy','Role intake','Search methodology'],
   }
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
@@ -51,7 +51,7 @@ export default function SourcePackMethodologyPage() {
       <div className="article-hero-card">
         <span className="kicker">Sourcing methodology</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Stop treating a hard requisition like a blank search box. Build one artifact that records what good looks like, where the market should exist, how each lane will be tested, what the team has learned, and what must change next.</p>
         <div className="article-meta-grid">
           <div><span>Input</span><strong>Req + HM context</strong></div>

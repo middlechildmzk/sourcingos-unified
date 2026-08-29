@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['Boolean search recruiters','recruiter Boolean search','Boolean search operators recruiting','Boolean strings recruiters','advanced Boolean recruiting','technical recruiter Boolean search'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -41,7 +41,7 @@ export default function BooleanRecruitingGuidePage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context': 'https://schema.org', '@type': 'Article', headline: title, description, url: articleUrl, mainEntityOfPage: articleUrl,
-    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl }, about: ['Boolean search','Talent sourcing','Recruiting search strategy','Technical sourcing'],
   }
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
@@ -53,7 +53,7 @@ export default function BooleanRecruitingGuidePage() {
       <div className="article-hero-card">
         <span className="kicker">Boolean search · advanced recruiter guide</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Boolean is not a contest to write the longest string. It is a way to make a search hypothesis explicit, run controlled variants, and see exactly which constraint changes the market.</p>
         <div className="article-meta-grid">
           <div><span>Core logic</span><strong>AND · OR · NOT</strong></div>

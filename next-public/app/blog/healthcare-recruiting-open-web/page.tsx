@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['healthcare recruiting sourcing','open web healthcare recruiting','nurse license sourcing recruiters','NPI recruiting','healthcare IT sourcing','Epic recruiter sourcing'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -36,7 +36,7 @@ export default function HealthcareOpenWebPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Healthcare recruiting','Clinical sourcing','Healthcare IT recruiting','Open-web sourcing'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -48,7 +48,7 @@ export default function HealthcareOpenWebPage() {
       <div className="article-hero-card">
         <span className="kicker">Healthcare recruiting · open-web sourcing</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Healthcare sourcing works better when clinical credentials, provider records, local labor markets, and healthcare IT evidence stay in separate lanes. The source that helps identify a provider is not automatically the source that proves license status, specialty depth, or current job interest.</p>
         <div className="article-meta-grid"><div><span>Model</span><strong>6 independent lanes</strong></div><div><span>Boundary</span><strong>NPI ≠ licensure</strong></div><div><span>Tool</span><Link href="/tools/jd-search-strategy/">Build healthcare lanes</Link></div></div>
       </div>

@@ -33,7 +33,7 @@ A search lane is a hypothesis. You are not searching “the whole market.” You
 
 **Lane 2: Adjacent title.** People doing similar work under different titles. For DevSecOps, that may include platform engineer, cloud engineer, SRE, systems engineer, automation engineer, or infrastructure engineer.
 
-**Lane 3: Donor-company map.** Companies likely to produce the talent. For GovCon roles, this may include GDIT, Leidos, Booz Allen, CACI, SAIC, Peraton, ManTech, Maximus, Lockheed Martin, Northrop Grumman, and Raytheon.
+**Lane 3: Donor-company map.** Companies likely to produce the talent. For GovCon roles, this may include GDIT, Leidos, Booz Allen, CACI, SAIC, Peraton, ManTech, Example Federal Integrator, Lockheed Martin, Northrop Grumman, and Raytheon.
 
 **Lane 4: Evidence source.** Open-source, publications, conference talks, Stack Overflow tags, GitHub repos, OpenAlex profiles, Hugging Face models, or portfolio evidence.
 

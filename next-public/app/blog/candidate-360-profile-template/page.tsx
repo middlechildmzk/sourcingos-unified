@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['candidate 360 template','candidate profile template recruiter','candidate dossier template','evidence based sourcing','candidate evidence template','recruiter candidate summary'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -38,7 +38,7 @@ export default function Candidate360GuidePage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context': 'https://schema.org', '@type': 'Article', headline: title, description, url: articleUrl, mainEntityOfPage: articleUrl,
-    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl }, about: ['Candidate 360','Evidence review','Talent sourcing','Candidate research'],
   }
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
@@ -50,7 +50,7 @@ export default function Candidate360GuidePage() {
       <div className="article-hero-card">
         <span className="kicker">Candidate research · evidence methodology</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">A strong candidate summary should make it easier to inspect the recommendation, not easier to hide uncertainty. Candidate 360 keeps observed evidence, identity decisions, missing facts, and verification work visible all the way to the hiring manager.</p>
         <div className="article-meta-grid">
           <div><span>Artifact</span><strong>HM-ready dossier</strong></div>

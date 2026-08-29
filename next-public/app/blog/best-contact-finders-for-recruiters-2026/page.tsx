@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['best contact finders for recruiters 2026','recruiter email finder','recruiter phone number finder','ContactOut recruiter','Lusha recruiter','Apollo recruiter','Hunter email finder'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-18', modifiedTime:'2026-08-23', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-18', modifiedTime:'2026-08-23', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -66,7 +66,7 @@ export default function ContactFinderGuide(){
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-08-18',dateModified:'2026-08-23',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-08-18',dateModified:'2026-08-23',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Recruiter contact finders','Contact data','Talent sourcing','Email finder'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -78,7 +78,7 @@ export default function ContactFinderGuide(){
       <div className="article-hero-card">
         <span className="kicker">Recruiter contact data · updated 2026</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published August 18, 2026 · Updated August 23, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 18, 2026 · Updated August 23, 2026</p>
         <p className="lead">Do not choose a contact finder from a database-size claim. Test the same known candidates across providers, separate email from phone coverage, verify freshness, include correction time, and calculate cost per recruiter-confirmed usable contact.</p>
         <div className="article-meta-grid">
           <div><span>Comparison</span><strong>4 major workflows</strong></div>

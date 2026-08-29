@@ -48,7 +48,7 @@ describe('V20 role workspace', () => {
       fitDecision: 'strong_fit',
       fitReasons: ['Human performance leadership'],
       concerns: [],
-      tags: ['POTFF'],
+      tags: ['human performance program'],
       contactStatus: 'unknown',
       evidenceStatus: 'reviewed',
       addedAt: new Date().toISOString(),
