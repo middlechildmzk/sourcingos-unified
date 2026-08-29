@@ -1,0 +1,185 @@
+/* V31 sitewide public surface.
+   Scoped away from the authenticated .app-shell so marketing refreshes do not
+   mutate recruiter workflow semantics or private product state. */
+
+body:not(:has(.app-shell)) {
+  --public-ink:#111827;
+  --public-muted:#667085;
+  --public-line:#d9ddd8;
+  --public-paper:#f7f5ef;
+  --public-paper-2:#eeece5;
+  --public-card:#ffffff;
+  --public-accent:#3157d5;
+  --public-accent-soft:#e7ecff;
+  --public-green:#0d7a56;
+  --public-dark:#101923;
+  background:var(--public-paper);
+  color:var(--public-ink);
+}
+
+/* Private product gets its own shell only. */
+body:has(.app-shell) > .nav,
+body:has(.app-shell) > .footer { display:none; }
+
+body:not(:has(.app-shell)) > .nav {
+  position:sticky;
+  top:0;
+  z-index:40;
+  min-height:72px;
+  padding:14px max(24px,calc((100vw - 1240px)/2));
+  background:rgba(247,245,239,.92);
+  border-bottom:1px solid rgba(17,24,39,.09);
+  color:var(--public-ink);
+  box-shadow:none;
+  backdrop-filter:blur(18px);
+}
+body:not(:has(.app-shell)) > .nav .brand { color:var(--public-ink); }
+body:not(:has(.app-shell)) > .nav nav { color:#475467; gap:22px; }
+body:not(:has(.app-shell)) > .nav nav > a:not(.pill) { font-size:13px; font-weight:700; }
+body:not(:has(.app-shell)) > .nav nav > a:not(.pill):hover { color:var(--public-ink); }
+body:not(:has(.app-shell)) > .nav .pill {
+  border-radius:10px;
+  padding:10px 15px;
+  background:var(--public-dark);
+  color:#fff;
+  box-shadow:none;
+}
+
+body:not(:has(.app-shell)) main:not(.home-v31) {
+  background:var(--public-paper);
+  color:var(--public-ink);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .wrap,
+body:not(:has(.app-shell)) main:not(.home-v31) .section {
+  max-width:1180px;
+  margin-inline:auto;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .wrap { padding:68px 28px; }
+body:not(:has(.app-shell)) main:not(.home-v31) .hero {
+  padding-top:96px;
+  padding-bottom:72px;
+  border-bottom:1px solid var(--public-line);
+  background:
+    radial-gradient(circle at 88% 10%,rgba(49,87,213,.10),transparent 30%),
+    linear-gradient(180deg,#fbfaf6 0%,var(--public-paper) 100%);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .eyebrow,
+body:not(:has(.app-shell)) main:not(.home-v31) .section-tag,
+body:not(:has(.app-shell)) main:not(.home-v31) .kicker {
+  color:var(--public-accent);
+  letter-spacing:.12em;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) h1,
+body:not(:has(.app-shell)) main:not(.home-v31) h2,
+body:not(:has(.app-shell)) main:not(.home-v31) h3 {
+  color:var(--public-ink);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .hero h1 {
+  max-width:900px;
+  font-size:clamp(48px,7vw,86px);
+  line-height:.94;
+  letter-spacing:-.045em;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .lead {
+  color:var(--public-muted);
+  max-width:780px;
+  font-size:19px;
+  line-height:1.6;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .muted,
+body:not(:has(.app-shell)) main:not(.home-v31) .section-body,
+body:not(:has(.app-shell)) main:not(.home-v31) .article p,
+body:not(:has(.app-shell)) main:not(.home-v31) .article li { color:var(--public-muted); }
+
+body:not(:has(.app-shell)) main:not(.home-v31) .btn,
+body:not(:has(.app-shell)) main:not(.home-v31) .pill {
+  border-radius:10px;
+  background:var(--public-dark);
+  color:#fff;
+  border:1px solid var(--public-dark);
+  box-shadow:none;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .btn.secondary {
+  background:#fff;
+  color:var(--public-ink);
+  border-color:#cfd4d1;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .btn.ghost {
+  background:transparent;
+  color:var(--public-ink);
+  border-color:#cfd4d1;
+}
+
+body:not(:has(.app-shell)) main:not(.home-v31) .card,
+body:not(:has(.app-shell)) main:not(.home-v31) .tool-card,
+body:not(:has(.app-shell)) main:not(.home-v31) .result-card,
+body:not(:has(.app-shell)) main:not(.home-v31) .interactive-tool,
+body:not(:has(.app-shell)) main:not(.home-v31) .filter-panel,
+body:not(:has(.app-shell)) main:not(.home-v31) .beta-preview-card,
+body:not(:has(.app-shell)) main:not(.home-v31) .workbench {
+  background:var(--public-card);
+  color:var(--public-ink);
+  border:1px solid var(--public-line);
+  border-radius:16px;
+  box-shadow:0 18px 45px rgba(16,25,35,.055);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .card.featured {
+  border-color:#aebcf2;
+  box-shadow:0 18px 45px rgba(49,87,213,.08);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .tool-card:hover,
+body:not(:has(.app-shell)) main:not(.home-v31) .card:hover { border-color:#abb7ad; }
+body:not(:has(.app-shell)) main:not(.home-v31) .tool-card .tool-icon {
+  background:var(--public-accent-soft);
+  border-color:#c8d2ff;
+  color:var(--public-accent);
+  border-radius:10px;
+}
+
+body:not(:has(.app-shell)) main:not(.home-v31) .input,
+body:not(:has(.app-shell)) main:not(.home-v31) .textarea,
+body:not(:has(.app-shell)) main:not(.home-v31) input,
+body:not(:has(.app-shell)) main:not(.home-v31) textarea,
+body:not(:has(.app-shell)) main:not(.home-v31) select {
+  background:#fff;
+  color:var(--public-ink);
+  border-color:#cfd4d1;
+  border-radius:10px;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) label { color:#344054; }
+body:not(:has(.app-shell)) main:not(.home-v31) code,
+body:not(:has(.app-shell)) main:not(.home-v31) pre {
+  background:#151d27;
+  color:#eef2f7;
+  border-color:#253240;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .chip,
+body:not(:has(.app-shell)) main:not(.home-v31) .tag {
+  background:#f3f5f3;
+  border-color:#d8ddd8;
+  color:#344054;
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .section-divider { border-color:var(--public-line); }
+body:not(:has(.app-shell)) main:not(.home-v31) .waitlist-section {
+  background:var(--public-dark);
+  color:#fff;
+  border-color:var(--public-dark);
+}
+body:not(:has(.app-shell)) main:not(.home-v31) .waitlist-section h2 { color:#fff; }
+body:not(:has(.app-shell)) main:not(.home-v31) .waitlist-section p { color:#b6c0cb; }
+
+body:not(:has(.app-shell)) > .footer {
+  background:var(--public-dark);
+  color:#aeb8c4;
+  border-top:0;
+  padding:44px max(28px,calc((100vw - 1180px)/2));
+  line-height:1.9;
+}
+body:not(:has(.app-shell)) > .footer a { color:#f4f6f8; }
+
+@media (max-width:900px) {
+  body:not(:has(.app-shell)) > .nav { align-items:flex-start; gap:12px; }
+  body:not(:has(.app-shell)) > .nav nav { gap:12px 16px; }
+  body:not(:has(.app-shell)) main:not(.home-v31) .wrap { padding:48px 20px; }
+  body:not(:has(.app-shell)) main:not(.home-v31) .hero { padding-top:64px; }
+}
