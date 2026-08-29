@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'The Cleared Talent Sourcing Map: Where Recruiters Actually Find Cleared Candidates'
 const description = 'A working 2026 map of eleven sourcing lanes for cleared recruiting, plus a strict rule for treating public clearance language as an unverified breadcrumb rather than proof.'
@@ -48,8 +49,8 @@ export default function ClearedTalentMapPage(){
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Cleared & GovCon sourcing</span>

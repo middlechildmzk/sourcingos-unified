@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { getJobBySlug, jobs } from '@/data/jobs'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 export function generateStaticParams() {
   return jobs.map(job => ({ slug: job.slug }))
@@ -42,7 +43,7 @@ export default async function JobDetailPage({ params }: { params: Promise<{ slug
 
   return (
     <main>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <section className="wrap hero">
         <div className="eyebrow">{job.remoteType} · {job.employmentType}</div>
         <h1>{job.title}</h1>

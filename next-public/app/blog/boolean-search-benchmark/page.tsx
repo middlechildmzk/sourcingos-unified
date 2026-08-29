@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Boolean Search Benchmark: Five Query Archetypes, One Role, Different Talent Pools'
 const description = 'Five Boolean query archetypes for recruiters—title-heavy, skill-heavy, evidence-based, adjacent-title, and donor-company—plus a pre-registered benchmark for measuring what each lane uniquely contributes.'
@@ -70,8 +71,8 @@ export default function BooleanSearchBenchmarkPage(){
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Boolean sourcing methodology</span>

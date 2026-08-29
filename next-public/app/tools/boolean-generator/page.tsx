@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { BooleanTool } from '@/components/BooleanTool'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Free Boolean Search Generator & String Builder for Recruiters'
 const description = 'Free Boolean search generator and string builder for recruiters. Paste a job description and create Boolean strings for LinkedIn, Google/Bing X-Ray, and GitHub with Precision, Balanced, and Market Map lanes.'
@@ -41,8 +42,8 @@ export default function Page(){
   }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(appSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(appSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article-pro">
       <section className="article-hero-card">
         <span className="kicker">Free Boolean generator · builder · search creator</span>
