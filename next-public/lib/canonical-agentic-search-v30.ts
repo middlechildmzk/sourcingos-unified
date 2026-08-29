@@ -4,6 +4,7 @@ import {
   type AgenticLaneId,
   type AgenticSearchPlan,
   type AgenticSearchSurface,
+  type AgenticSourceTask,
 } from './agentic-search-v30'
 import { buildDomainPackProfile, type DomainPackMatch } from './domain-packs-v31'
 import { enrichRoleIntakeWithOnet, type RoleIntelligenceContext } from './onet-role-intelligence'
@@ -12,6 +13,7 @@ import type { RoleIntake } from './role-workspace'
 const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications', 'google_xray'])
 const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications'])
 const SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
+const PROVIDER_ROLE = /\b(?:nurse practitioner|registered nurse|physician assistant|pharmacist|physical therapist|occupational therapist|dentist|psychologist|clinical social worker|physician|doctor)\b/i
 
 export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
   domainPacks: DomainPackMatch[]
@@ -47,6 +49,14 @@ function and(values: string[]): string {
 
 function publicTerms(values: string[]): string[] {
   return values.map(clean).filter(term => term && !SENSITIVE.test(term))
+}
+
+function providerRegistryQuery(intake: RoleIntake): string {
+  const match = clean(intake.title).match(PROVIDER_ROLE)?.[0] || ''
+  if (!match) return ''
+  const value = match.toLowerCase()
+  if (value === 'doctor') return 'Physician'
+  return match.replace(/\b\w/g, char => char.toUpperCase())
 }
 
 export function publicQueryForAgenticLane(intake: RoleIntake, laneId: AgenticLaneId): string {
@@ -88,17 +98,29 @@ export function buildCanonicalAgenticSearchPlan(
   const enrichedIntake = enrichRoleIntakeWithOnet(intake, context.onet)
   const domainProfile = buildDomainPackProfile(enrichedIntake)
   const base = buildAgenticSearchPlan(enrichedIntake, state)
+  const providerQuery = domainProfile.activeIds.has('healthcare') ? providerRegistryQuery(enrichedIntake) : ''
 
   return {
     ...base,
     lanes: base.lanes.map(lane => {
       const publicQuery = publicQueryForAgenticLane(enrichedIntake, lane.id)
-      return {
-        ...lane,
-        tasks: lane.tasks
-          .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
-          .filter(task => !DOMAIN_EXECUTABLE_SURFACES.has(task.surface) || domainProfile.executablePublicSurfaces.has(task.surface)),
+      const tasks = lane.tasks
+        .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
+        .filter(task => !DOMAIN_EXECUTABLE_SURFACES.has(task.surface) || domainProfile.executablePublicSurfaces.has(task.surface))
+
+      if (lane.id === 'exact_title' && providerQuery) {
+        const npiTask: AgenticSourceTask = {
+          surface: 'healthcare_registry',
+          label: 'CMS NPI Registry',
+          mode: 'executable',
+          query: providerQuery,
+          connectorKeys: ['npi'],
+          truth: 'Runs the public CMS NPI Registry for provider-taxonomy discovery. The registry record is professional evidence, not proof of interest, availability, or job fit.',
+        }
+        tasks.splice(1, 0, npiTask)
       }
+
+      return { ...lane, tasks }
     }),
     domainPacks: domainProfile.matches,
     roleIntelligence: {
