@@ -8,8 +8,8 @@ export type NavItem = {
 }
 
 export const publicNav: NavItem[] = [
+  { label: 'Agentic Sourcing', href: '/agentic-sourcing' },
   { label: 'Free Tools', href: '/tools' },
-  { label: 'AI Sourcing', href: '/ai-sourcing' },
   { label: 'Sourcing Vault', href: '/methods' },
   { label: 'Candidate Search', href: '/candidate-search' },
   { label: 'Training', href: '/training' },
@@ -23,6 +23,7 @@ export const requestAccessCTA: NavItem = {
 }
 
 export const appNav: NavItem[] = [
+  { label: 'Agentic Sourcing', href: '/app/agentic-sourcing' },
   { label: 'Candidate Search', href: '/app/candidate-search' },
   { label: 'Candidate Database', href: '/app/candidate-database' },
   { label: 'Candidate 360', href: '/app/candidate-database' },
