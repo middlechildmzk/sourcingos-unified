@@ -4,11 +4,12 @@
 // Backend selection:
 //   1. Upstash Redis REST (preferred on Vercel) when both
 //      UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set.
-//   2. For critical public fan-out endpoints, a shared Supabase RPC fallback.
+//   2. For critical public fan-out/end-user intake endpoints, a shared Supabase RPC fallback.
 //   3. In-memory Map as the final best-effort fallback only.
 //
-// The jobs-search policy intentionally uses the shared Supabase fallback when
-// Upstash is not available so one serverless instance cannot bypass another.
+// The jobs-search and contact policies intentionally use the shared Supabase
+// fallback when Upstash is not available so one serverless instance cannot
+// bypass another.
 // SERVER-ONLY.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
@@ -22,6 +23,7 @@ export type RatePolicy =
   | 'workbench'       // workbench + candidate-db + projects
   | 'sources'         // source connector search
   | 'waitlist'        // public waitlist signup
+  | 'contact'         // public privacy/security/product contact intake
   | 'submit'          // public job submission
   | 'public'          // low-cost public read endpoints
   | 'jobsSearch'      // public jobs search; fans out to upstream job sources
@@ -40,6 +42,7 @@ const POLICIES: Record<RatePolicy, PolicyDef> = {
   workbench:       { limit: 30, windowSec: 60 },
   sources:         { limit: 30, windowSec: 60 },
   waitlist:        { limit: 3,  windowSec: 3_600 },
+  contact:         { limit: 5,  windowSec: 3_600, sharedFallback: true },
   submit:          { limit: 5,  windowSec: 3_600 },
   public:          { limit: 30, windowSec: 60 },
   jobsSearch:      { limit: 20, windowSec: 60, sharedFallback: true },
@@ -133,9 +136,10 @@ function limited(windowSec: number): RateFail {
 /**
  * Apply a rate-limit policy.
  *
- * Upstash is preferred. Critical fan-out endpoints can opt into the shared
- * Supabase fallback. Memory remains a final availability fallback so a Redis or
- * database incident does not automatically make a public route unavailable.
+ * Upstash is preferred. Critical fan-out/end-user intake endpoints can opt
+ * into the shared Supabase fallback. Memory remains a final availability
+ * fallback so a Redis or database incident does not automatically make a
+ * public route unavailable.
  *
  * Set RATE_LIMIT_DISABLED=true only in automated tests.
  */
