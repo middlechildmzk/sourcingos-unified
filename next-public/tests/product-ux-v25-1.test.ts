@@ -17,9 +17,11 @@ const cron = read('app/api/cron/autosource/route.ts')
 const rolesPage = read('app/app/roles/page.tsx')
 
 describe('V25.1 recruiter-first product experience', () => {
-  it('keeps the primary navigation focused on four recruiter destinations', () => {
-    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'AutoSource'", "label: 'Candidates'"]) expect(shell).toContain(destination)
-    expect(shell).toContain('Tools & data')
+  it('keeps the primary navigation focused on canonical recruiter destinations', () => {
+    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'Talent'"]) expect(shell).toContain(destination)
+    expect(shell).toContain('Research & data')
+    expect(shell).toContain("label: 'Search Lab'")
+    expect(shell).toContain("label: 'AutoSource'")
     expect(shell).toContain('app-tools-toggle')
     expect(shellCss).toContain('.app-sidebar')
     expect(shellCss).toContain('.product-row')
@@ -56,7 +58,7 @@ describe('V25.1 recruiter-first product experience', () => {
 
   it('moves operational role controls behind progressive disclosure', () => {
     expect(rolesPage).toContain('<details')
-    expect(rolesPage).toContain('Workspace data, backup, and connected search controls')
+    expect(rolesPage).toContain('Workspace storage, backup, and connected-search controls')
   })
 
   it('uses real database conflict keys for role handoff', () => {

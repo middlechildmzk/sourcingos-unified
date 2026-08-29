@@ -158,7 +158,7 @@ describe('V30 PR2 calibration → guided search release gate', () => {
 
   it('shows recruiter-visible before/after explanation and carries plan revision into paste-back provenance', () => {
     expect(roleActions).toContain('What changed in Search Plan v')
-    expect(roleActions).toContain('Approved calibration is active.')
+    expect(roleActions).toContain('Approved calibration is shaping this search.')
     expect(roleActions).toContain('selectedBaselineLane')
     expect(roleActions).toContain('planRevision: guidedPlan?.revision')
     expect(recruiterPasteBackSourceLabel('clearancejobs', 'Balanced / Recruiter Default', 2))

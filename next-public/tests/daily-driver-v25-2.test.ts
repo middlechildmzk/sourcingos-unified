@@ -23,7 +23,7 @@ describe('V25.2 daily driver experience', () => {
   it('uses a guided role portfolio plus a dedicated role workspace route', () => {
     expect(rolesPage).toContain('<RoleWorkspaceClient />')
     expect(rolePortfolio).toContain('href={`/app/roles/${role.id}`}')
-    expect(rolePortfolio).toContain('Search portfolio')
+    expect(rolePortfolio).toContain('Role portfolio')
     expect(rolePortfolio).toContain('<RoleIntakeWizard')
     expect(roleWizard).toContain('Guided role setup')
     // Next 15+ async params: the page awaits params/searchParams, then passes the
@@ -72,8 +72,8 @@ describe('V25.2 daily driver experience', () => {
     expect(roleDelete).toContain("router.push('/app/roles')")
   })
 
-  it('adds a global role and candidate command palette', () => {
-    expect(shell).toContain('<CommandPalette />')
+  it('keeps the global role and candidate command palette available on desktop and mobile', () => {
+    expect(shell).toContain('CommandPalette triggerClassName="app-command-trigger app-command-trigger-topbar"')
     expect(shell).toContain('app-command-trigger-mobile')
     expect(palette).toContain("event.key.toLowerCase() === 'k'")
     expect(palette).toContain('/api/candidate-db/list?q=')

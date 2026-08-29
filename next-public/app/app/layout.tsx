@@ -7,6 +7,7 @@ import './v25-2.css'
 import './v26.css'
 import './v26-candidate-review.css'
 import './import-center.css'
+import './v30-uiux.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
