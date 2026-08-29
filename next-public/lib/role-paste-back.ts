@@ -22,9 +22,16 @@ function safeHttpUrl(value?: string): string | undefined {
   }
 }
 
-export function recruiterPasteBackSourceLabel(surface: RecruiterPasteBackSurface, laneLabel?: string): string {
-  const base = RECRUITER_PASTE_BACK_SURFACES[surface]
-  return laneLabel?.trim() ? `${base} · ${laneLabel.trim()} · recruiter paste-back` : `${base} · recruiter paste-back`
+export function recruiterPasteBackSourceLabel(
+  surface: RecruiterPasteBackSurface,
+  laneLabel?: string,
+  planRevision?: number,
+): string {
+  const parts = [RECRUITER_PASTE_BACK_SURFACES[surface]]
+  if (laneLabel?.trim()) parts.push(laneLabel.trim())
+  if (Number.isInteger(planRevision) && Number(planRevision) > 0) parts.push(`Search Plan v${planRevision}`)
+  parts.push('recruiter paste-back')
+  return parts.join(' · ')
 }
 
 export function candidateImportToRoleLinkInput(input: {
@@ -32,9 +39,10 @@ export function candidateImportToRoleLinkInput(input: {
   sourceProfile?: SourceProfileRecord
   surface: RecruiterPasteBackSurface
   laneLabel?: string
+  planRevision?: number
   sourceUrl?: string
 }): RoleCandidateLinkInput {
-  const { candidate, sourceProfile, surface, laneLabel, sourceUrl } = input
+  const { candidate, sourceProfile, surface, laneLabel, planRevision, sourceUrl } = input
   return {
     candidateId: candidate.id,
     entityKind: 'person',
@@ -42,7 +50,7 @@ export function candidateImportToRoleLinkInput(input: {
     headline: candidate.headline || sourceProfile?.headline || '',
     organization: candidate.currentCompany || sourceProfile?.organization || '',
     location: candidate.location || sourceProfile?.location || '',
-    source: recruiterPasteBackSourceLabel(surface, laneLabel),
+    source: recruiterPasteBackSourceLabel(surface, laneLabel, planRevision),
     profileUrl: safeHttpUrl(sourceUrl) || safeHttpUrl(sourceProfile?.profileUrl),
     skills: candidate.skills,
     contactSignalCount: candidate.contactSignalIds.length,
