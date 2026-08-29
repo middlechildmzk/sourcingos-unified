@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { articles } from '@/data/articles'
 import { ArticleBody } from '@/components/ArticleBody'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 export function generateStaticParams(){ return articles.map(a => ({ slug: a.slug })) }
 
@@ -59,5 +60,5 @@ export default async function BlogArticle({ params }: { params: Promise<{ slug: 
    },
   ],
  }
- return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /><ArticleBody article={article}/></>
+ return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} /><ArticleBody article={article}/></>
 }

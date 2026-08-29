@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Federal Contract Data Is a Sourcing Lane: Build Donor-Company Maps from USAspending and SAM.gov'
 const description = 'Use public federal award data to build evidence-backed donor-company maps for GovCon sourcing. A recruiter workflow using USAspending, SAM.gov, NAICS, PSC codes, and provenance.'
@@ -60,8 +61,8 @@ export default function FederalContractDataSourcingLanePage() {
   }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqSchema) }} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">GovCon sourcing methodology</span>

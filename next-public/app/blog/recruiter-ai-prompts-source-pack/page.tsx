@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = '15 AI Prompts for Recruiters: Source Packs, Boolean Search, Talent Maps, and Evidence Review'
 const description = 'Fifteen recruiter-safe AI prompts for role intake, title expansion, search lanes, Boolean critique, donor-company mapping, evidence review, no-results rescue, hiring-manager calibration, and sourcing retrospectives.'
@@ -178,8 +179,8 @@ export default function RecruiterAiPromptsPage() {
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">AI sourcing · prompt reference library</span>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Recruiter Search Exhaustion: How to Know When You Have Actually Searched the Market'
 const description = 'A seven-signal framework for separating a tired search from a genuinely covered market using lane coverage, duplicate pressure, new-lead yield, query variation, donor maps, adjacency, and geography.'
@@ -38,8 +39,8 @@ export default function SearchExhaustionFrameworkPage(){
  const articleSchema = {'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-19',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Search-lane exhaustion','Talent sourcing','Market mapping','Recruiting analytics']}
  const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
  return <>
-  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
   <main className="wrap article article-pro">
    <div className="article-hero-card">
     <span className="kicker">Sourcing coverage methodology</span>

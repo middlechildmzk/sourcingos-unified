@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Best AI Recruiting Tools for Sourcers in 2026: LinkedIn, hireEZ, SeekOut & Juicebox'
 const description = 'Compare four major AI recruiting and sourcing platforms for 2026, then use a recruiter-first buyer test for discovery quality, source overlap, evidence, control, correction time, and automation risk.'
@@ -117,8 +118,8 @@ export default function BestAiRecruitingToolsPage() {
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqSchema) }} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">AI recruiting tools · updated August 2026</span>

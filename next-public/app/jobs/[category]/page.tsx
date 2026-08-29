@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { LiveJobsClient } from '@/components/LiveJobsClient'
 import { getCategoryBySlug, jobCategories } from '@/data/jobs'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 export const revalidate = 1800
 
@@ -186,7 +187,7 @@ export default async function JobCategoryPage({ params }: { params: Promise<{ ca
 
   return (
     <main>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <section className="wrap hero">
         <div className="eyebrow">SourcingOS Jobs</div>
         <h1>{category.name}</h1>

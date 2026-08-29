@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { LiveJobsClient } from '@/components/LiveJobsClient'
 import { jobCategories } from '@/data/jobs'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 export const metadata = {
   title: 'Recruiter & Talent Sourcer Jobs (2026) — Live Search | SourcingOS',
@@ -43,7 +44,7 @@ export default function JobsPage() {
 
   return (
     <main>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
       <section className="wrap hero">
         <div className="eyebrow">Recruiter career intelligence · 2026</div>

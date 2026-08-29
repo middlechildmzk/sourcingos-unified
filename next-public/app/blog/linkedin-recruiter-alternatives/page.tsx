@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'LinkedIn Recruiter Alternatives in 2026: 9 Jobs to Replace Before You Cancel'
 const description = 'A recruiter-first LinkedIn Recruiter alternatives guide. Unbundle search, AI-assisted sourcing, evidence, contact, InMail, project memory, and market mapping before you renew, downgrade, or replace seats.'
@@ -88,7 +89,7 @@ export default function LinkedInRecruiterAlternativesPage() {
   }
 
   return <main className="wrap article article-pro">
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
     <div className="article-hero-card">
       <span className="kicker">LinkedIn Recruiter alternatives · updated 2026</span>
