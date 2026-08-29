@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
+import { RoleOrganizationSignals } from '@/components/RoleOrganizationSignals'
 import { RoleSearchActions } from '@/components/RoleSearchActions'
 
 export const metadata = {
@@ -16,6 +17,7 @@ export default async function AgenticRolePage({ params }: { params: Promise<{ id
       <Link className="btn secondary" href={`/app/roles/${encodeURIComponent(id)}?tab=candidates`}>Review slate</Link>
     </div>
     <RoleAgenticSearchPanel roleId={id} />
+    <RoleOrganizationSignals roleId={id} />
     <RoleSearchActions roleId={id} />
   </main>
 }
