@@ -1,3 +1,4 @@
+import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
 import { RoleSearchActions } from '@/components/RoleSearchActions'
@@ -12,6 +13,8 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
   const sp = (await searchParams) ?? {}
   return (
     <main className="wrap">
+      <link rel="stylesheet" href="/agentic-role.css" />
+      <RoleAgenticSearchPanel roleId={id} />
       <RoleSearchActions roleId={id} />
       <RoleDetailClient roleId={id} initialTab={sp.tab} />
       <RoleDeleteControl roleId={id} />
