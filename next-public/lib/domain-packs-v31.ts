@@ -88,7 +88,7 @@ const PACKS: DomainPack[] = [
     guardrails: ['Do not use practice or home-address data as a screening feature.', 'A registry record does not establish current interest, availability, or role fit.'],
     detect: intake => confidenceFromSignals(roleText(intake), [
       /\bhealthcare\b/, /\bclinical\b/, /\bhospital\b/, /\bmedical\b/, /\bhealth system\b/, /\bepic\b/, /\bpharma/, /\bbiotech/
-    ], [/\b(nurse|physician|doctor|clinician|provider|pharmacist|therapist)\b/]),
+    ], [/\bclinical informatics\b/, /\b(nurse|physician|doctor|clinician|provider|pharmacist|therapist)\b/]),
   },
   {
     id: 'research',
