@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { publicNav, requestAccessCTA } from '@/data/nav'
+import { ThemeToggle } from '@/components/ThemeToggle'
 
 export function Nav() {
   return (
@@ -13,6 +14,7 @@ export function Nav() {
           <Link key={item.href} href={item.href}>{item.label}</Link>
         ))}
         <Link href={requestAccessCTA.href} className="pill">{requestAccessCTA.label}</Link>
+        <ThemeToggle />
       </nav>
     </header>
   )
