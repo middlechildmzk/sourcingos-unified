@@ -11,14 +11,18 @@ const requestSchema = z.object({
   title: z.string().trim().min(2).max(120),
 })
 
-const ONET_ORIGIN = 'https://api-v2.onetcenter.org'
-const ATTRIBUTION = 'O*NET® is a trademark of the U.S. Department of Labor, Employment and Training Administration. O*NET data is used under its applicable Creative Commons license.'
+const ONET_DATA_ORIGIN = 'https://www.onetcenter.org'
+const ONET_DATA_ROOT = '/dl_files/database/db_31_0_json'
+const ATTRIBUTION = 'O*NET® is a trademark of the U.S. Department of Labor, Employment and Training Administration. O*NET 31.0 Database data is used under the Creative Commons Attribution 4.0 International license.'
+const CACHE_SECONDS = 60 * 60 * 24 * 7
 
-type OccupationRef = { code?: string; title?: string }
-type SearchResponse = { occupation?: OccupationRef[] }
-type OccupationResponse = { code?: string; title?: string; sample_of_reported_titles?: unknown[] }
-type RelatedResponse = { occupation?: Array<OccupationRef & { supplemental?: boolean }> }
-type TechnologyResponse = { category?: Array<{ example?: Array<{ title?: string }>; example_more?: Array<{ title?: string }> }> }
+type Dataset<T> = { row?: T[] }
+type OccupationRow = { onetsoc_code?: string; title?: string; description?: string }
+type ReportedTitleRow = { onetsoc_code?: string; title?: string; reported_job_title?: string; shown_in_my_next_move?: string }
+type RelatedRow = { onetsoc_code?: string; related_onetsoc_code?: string; related_title?: string; relatedness_tier?: string; related_index?: number | string }
+type SoftwareSkillRow = { onetsoc_code?: string; workplace_example?: string; hot_technology?: string; in_demand?: string }
+
+type MatchCandidate = { code: string; title: string; score: number }
 
 function text(value: unknown, max = 150): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : ''
@@ -28,16 +32,66 @@ function uniq(values: string[], max = 20): string[] {
   return Array.from(new Set(values.map(value => text(value)).filter(Boolean))).slice(0, max)
 }
 
-async function onetJson<T>(path: string, apiKey: string): Promise<T> {
-  if (!path.startsWith('/online/')) throw new Error('Unsupported O*NET path.')
-  const response = await fetch(`${ONET_ORIGIN}${path}`, {
+function normalized(value: string): string {
+  return text(value, 250)
+    .toLowerCase()
+    .replace(/\b(?:senior|sr|junior|jr|principal|staff|lead)\.?\b/g, ' ')
+    .replace(/[^a-z0-9+#./ ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function tokens(value: string): string[] {
+  return normalized(value).split(' ').filter(token => token.length > 1 && !['and', 'the', 'of', 'for'].includes(token))
+}
+
+function titleSimilarity(query: string, candidate: string): number {
+  const q = normalized(query)
+  const c = normalized(candidate)
+  if (!q || !c) return 0
+  if (q === c) return 1
+  if (c.includes(q) || q.includes(c)) return 0.88
+
+  const qTokens = new Set(tokens(q))
+  const cTokens = new Set(tokens(c))
+  if (!qTokens.size || !cTokens.size) return 0
+  let intersection = 0
+  for (const token of qTokens) if (cTokens.has(token)) intersection++
+  const recall = intersection / qTokens.size
+  const precision = intersection / cTokens.size
+  return recall * 0.7 + precision * 0.3
+}
+
+async function datasetJson<T>(file: string): Promise<Dataset<T>> {
+  if (!/^[a-z0-9_]+\.json$/.test(file)) throw new Error('Unsupported O*NET data file.')
+  const url = `${ONET_DATA_ORIGIN}${ONET_DATA_ROOT}/${file}`
+  const response = await fetch(url, {
     method: 'GET',
-    headers: { accept: 'application/json', 'x-api-key': apiKey },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(10_000),
+    headers: { accept: 'application/json', 'user-agent': 'SourcingOS/1.0 role-intelligence' },
+    next: { revalidate: CACHE_SECONDS },
+    signal: AbortSignal.timeout(20_000),
   })
-  if (!response.ok) throw new Error(`O*NET returned ${response.status}.`)
-  return response.json() as Promise<T>
+  if (!response.ok) throw new Error(`O*NET dataset returned ${response.status}.`)
+  return response.json() as Promise<Dataset<T>>
+}
+
+function bestOccupation(title: string, occupations: OccupationRow[], reportedTitles: ReportedTitleRow[]): MatchCandidate | null {
+  const bestByCode = new Map<string, MatchCandidate>()
+  const consider = (codeValue: unknown, canonicalValue: unknown, aliasValue: unknown, boost = 0) => {
+    const code = text(codeValue, 20)
+    const canonical = text(canonicalValue)
+    const alias = text(aliasValue)
+    if (!code || !canonical || !alias) return
+    const score = Math.min(1, titleSimilarity(title, alias) + boost)
+    const previous = bestByCode.get(code)
+    if (!previous || score > previous.score) bestByCode.set(code, { code, title: canonical, score })
+  }
+
+  for (const row of occupations) consider(row.onetsoc_code, row.title, row.title, 0.03)
+  for (const row of reportedTitles) consider(row.onetsoc_code, row.title, row.reported_job_title, row.shown_in_my_next_move === 'Y' ? 0.02 : 0)
+
+  const best = [...bestByCode.values()].sort((a, b) => b.score - a.score)[0]
+  return best && best.score >= 0.46 ? best : null
 }
 
 export async function POST(req: NextRequest) {
@@ -49,59 +103,58 @@ export async function POST(req: NextRequest) {
   const parsed = requestSchema.safeParse(await req.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ ok: false, error: 'Invalid role-intelligence request.' }, { status: 400 })
 
-  const apiKey = process.env.ONET_API_KEY?.trim()
-  if (!apiKey) {
-    return NextResponse.json({
-      ok: true,
-      intelligence: emptyOnetRoleIntelligence('O*NET enrichment is ready but ONET_API_KEY is not configured on this deployment.'),
-    })
-  }
-
   try {
-    // Send only the role title. Full job descriptions, employer notes, candidate
-    // data, and recruiter data are never sent to O*NET by this endpoint.
-    const search = await onetJson<SearchResponse>(`/online/search?keyword=${encodeURIComponent(parsed.data.title)}&start=1&end=5`, apiKey)
-    const first = search.occupation?.find(item => text(item.code) && text(item.title))
-    if (!first?.code || !first.title) {
+    // Only the normalized role title is used to select records from the public,
+    // downloadable O*NET database. Full job descriptions, employer notes,
+    // candidate data, and recruiter data are never sent to O*NET.
+    const [occupationData, reportedData] = await Promise.all([
+      datasetJson<OccupationRow>('occupation_data.json'),
+      datasetJson<ReportedTitleRow>('sample_of_reported_titles.json'),
+    ])
+    const occupations = occupationData.row || []
+    const reportedTitles = reportedData.row || []
+    const match = bestOccupation(parsed.data.title, occupations, reportedTitles)
+
+    if (!match) {
       const intelligence: OnetRoleIntelligence = {
         ...emptyOnetRoleIntelligence(),
         configured: true,
-        error: 'No O*NET occupation match was returned for this role title.',
+        error: 'No sufficiently close O*NET occupation match was found for this role title.',
       }
       return NextResponse.json({ ok: true, intelligence })
     }
 
-    const code = encodeURIComponent(first.code)
-    const [overview, related, technology] = await Promise.all([
-      onetJson<OccupationResponse>(`/online/occupations/${code}/`, apiKey),
-      onetJson<RelatedResponse>(`/online/occupations/${code}/summary/related_occupations?start=1&end=10`, apiKey),
-      onetJson<TechnologyResponse>(`/online/occupations/${code}/details/technology_skills?start=1&end=10`, apiKey),
+    const [relatedData, softwareData] = await Promise.all([
+      datasetJson<RelatedRow>('related_occupations.json'),
+      datasetJson<SoftwareSkillRow>('software_skills.json'),
     ])
 
-    const reportedTitles = uniq((overview.sample_of_reported_titles || []).map(item => {
-      if (typeof item === 'string') return item
-      if (item && typeof item === 'object' && 'title' in item) return text((item as { title?: unknown }).title)
-      return ''
-    }), 10)
+    const reportedForOccupation = reportedTitles
+      .filter(row => text(row.onetsoc_code, 20) === match.code)
+      .sort((a, b) => Number(b.shown_in_my_next_move === 'Y') - Number(a.shown_in_my_next_move === 'Y'))
 
-    const relatedOccupations = (related.occupation || []).map(item => ({
-      code: text(item.code, 20),
-      title: text(item.title),
-    })).filter(item => item.code && item.title).slice(0, 10)
+    const relatedOccupations = (relatedData.row || [])
+      .filter(row => text(row.onetsoc_code, 20) === match.code)
+      .sort((a, b) => Number(a.related_index || 999) - Number(b.related_index || 999))
+      .map(row => ({ code: text(row.related_onetsoc_code, 20), title: text(row.related_title) }))
+      .filter(item => item.code && item.title)
+      .slice(0, 10)
 
-    const technologyExamples = uniq((technology.category || []).flatMap(category => [
-      ...(category.example || []),
-      ...(category.example_more || []),
-    ]).map(item => text(item.title)), 16)
+    const softwareForOccupation = (softwareData.row || [])
+      .filter(row => text(row.onetsoc_code, 20) === match.code)
+      .sort((a, b) => {
+        const rank = (row: SoftwareSkillRow) => Number(row.hot_technology === 'Y') * 2 + Number(row.in_demand === 'Y')
+        return rank(b) - rank(a)
+      })
 
     const intelligence: OnetRoleIntelligence = {
       provider: 'onet',
       version: '31.0',
       configured: true,
-      matchedOccupation: { code: text(overview.code || first.code, 20), title: text(overview.title || first.title) },
-      reportedTitles,
+      matchedOccupation: { code: match.code, title: match.title },
+      reportedTitles: uniq(reportedForOccupation.map(row => text(row.reported_job_title)), 10),
       relatedOccupations,
-      technologyExamples,
+      technologyExamples: uniq(softwareForOccupation.map(row => text(row.workplace_example)), 16),
       attribution: ATTRIBUTION,
     }
 
@@ -109,8 +162,8 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const intelligence: OnetRoleIntelligence = {
       ...emptyOnetRoleIntelligence(),
-      configured: true,
-      error: error instanceof Error ? error.message.slice(0, 240) : 'O*NET enrichment failed.',
+      configured: false,
+      error: error instanceof Error ? error.message.slice(0, 240) : 'O*NET dataset enrichment failed.',
     }
     return NextResponse.json({ ok: true, intelligence })
   }
