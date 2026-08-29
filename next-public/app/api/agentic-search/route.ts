@@ -11,16 +11,25 @@ export const dynamic = 'force-dynamic'
 
 const EXECUTABLE_CONNECTORS = ['github', 'orcid', 'openalex', 'pubmed', 'crossref', 'npi'] as const satisfies readonly AgenticConnectorKey[]
 const connectorEnum = z.enum(EXECUTABLE_CONNECTORS)
+const queryValue = z.string().trim().min(2).max(500)
+const connectorQueriesSchema = z.object({
+  github: queryValue.optional(),
+  orcid: queryValue.optional(),
+  openalex: queryValue.optional(),
+  pubmed: queryValue.optional(),
+  crossref: queryValue.optional(),
+  npi: queryValue.optional(),
+}).strict()
 
 const requestSchema = z.object({
-  query: z.string().trim().min(2).max(500),
-  connectorQueries: z.record(connectorEnum, z.string().trim().min(2).max(500)).partial().optional(),
+  query: queryValue,
+  connectorQueries: connectorQueriesSchema.optional(),
   skills: z.array(z.string().trim().min(1).max(80)).max(40).default([]),
   targetCompanies: z.array(z.string().trim().min(1).max(120)).max(40).default([]),
   locations: z.array(z.string().trim().min(1).max(120)).max(20).default([]),
   connectors: z.array(connectorEnum).min(1).max(EXECUTABLE_CONNECTORS.length),
   limit: z.number().int().min(1).max(50).default(20),
-})
+}).strict()
 
 type AgenticDiscovery = {
   sourceKey: AgenticConnectorKey
