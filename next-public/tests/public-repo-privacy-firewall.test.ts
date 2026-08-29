@@ -19,8 +19,12 @@ const forbidden = [
   ['Max', 'imus'].join(''),
   ['Dan', 'Larson'].join(' '),
   ['Daniel', 'Larson'].join(' '),
+  ['Lar', 'son'].join(''),
+  ['Dan', ' L.'].join(''),
   ['USSO', 'COM'].join(''),
   ['Capitol', 'Careers'].join(' '),
+  ['SISU', ' Search'].join(''),
+  ['Quantum', 'Work'].join(''),
   ['realmiddlechildmzk', 'gmail.com'].join('@'),
   ['Dllarson1991', 'gmail.com'].join('@'),
 ]
