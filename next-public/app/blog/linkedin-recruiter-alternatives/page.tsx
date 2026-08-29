@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     type: 'article',
     publishedTime: '2026-08-16',
     modifiedTime: '2026-08-18',
-    authors: ['Dan Larson'],
+    authors: ['SourcingOS Editorial'],
   },
   twitter: { card:'summary_large_image', title, description },
 }
@@ -76,7 +76,7 @@ export default function LinkedInRecruiterAlternativesPage() {
         mainEntityOfPage: articleUrl,
         datePublished: '2026-08-16',
         dateModified: '2026-08-18',
-        author: { '@type': 'Person', name: 'Dan Larson', url:`${siteUrl}/about/` },
+        author: { '@type': 'Person', name: 'SourcingOS Editorial', url:`${siteUrl}/about/` },
         publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl },
         about: ['LinkedIn Recruiter alternatives', 'source stack', 'AI sourcing tools', 'talent sourcing tools'],
       },
@@ -93,7 +93,7 @@ export default function LinkedInRecruiterAlternativesPage() {
     <div className="article-hero-card">
       <span className="kicker">LinkedIn Recruiter alternatives · updated 2026</span>
       <h1>{title}</h1>
-      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Updated August 18, 2026</p>
+      <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Updated August 18, 2026</p>
       <p className="lead">LinkedIn Recruiter is a bundle of sourcing jobs. Replacing it intelligently means identifying which jobs your team actually depends on—including newer AI-assisted workflows—then testing whether another stack replaces the outcomes without adding hidden labor or losing project state.</p>
       <div className="article-meta-grid">
         <div><span>Framework</span><strong>9 sourcing jobs</strong></div>

@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['where to find cleared candidates','cleared candidate sourcing','security clearance recruiting','sourcing TS SCI candidates','cleared talent sourcing','GovCon recruiting'],
-  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-15', authors:['Dan Larson'] },
+  openGraph: { title, description, type:'article', url:canonical, publishedTime:'2026-08-15', modifiedTime:'2026-08-15', authors:['SourcingOS Editorial'] },
   twitter: { card:'summary_large_image', title, description },
 }
 
@@ -42,7 +42,7 @@ export default function ClearedTalentMapPage(){
   const articleSchema = {
     '@context':'https://schema.org', '@type':'Article', headline:title, description, url:articleUrl, mainEntityOfPage:articleUrl,
     datePublished:'2026-08-15', dateModified:'2026-08-15',
-    author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},
     about:['Cleared recruiting','GovCon sourcing','Security clearance recruiting','Talent sourcing'],
   }
@@ -54,7 +54,7 @@ export default function ClearedTalentMapPage(){
       <div className="article-hero-card">
         <span className="kicker">Cleared & GovCon sourcing</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published August 15, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026</p>
         <p className="lead">{description}</p>
         <div className="article-meta-grid">
           <div><span>Map</span><strong>11 independent sourcing lanes</strong></div>

@@ -28,7 +28,7 @@ export const titleSeeds: Record<SourcingMode, string[]> = {
   'Healthcare IT': ['Healthcare Integration Engineer','Epic Analyst','Clinical Systems Analyst','FHIR Developer','Healthcare Data Engineer'],
   'General Technical': ['Technical Specialist','Engineer','Developer','Analyst','Architect']
 };
-export const govConCompanies = ['Maximus','GDIT','Leidos','Booz Allen Hamilton','SAIC','CACI','Peraton','ManTech','Northrop Grumman','Lockheed Martin','RTX','L3Harris','BAE Systems','Palantir','Anduril','Accenture Federal','Jacobs','Parsons','Amentum','Deloitte'];
+export const govConCompanies = ['Example Federal Integrator','GDIT','Leidos','Booz Allen Hamilton','SAIC','CACI','Peraton','ManTech','Northrop Grumman','Lockheed Martin','RTX','L3Harris','BAE Systems','Palantir','Anduril','Accenture Federal','Jacobs','Parsons','Amentum','Deloitte'];
 export const connectors: Connector[] = [
   { id:'github', name:'GitHub Public API', status:'connected', category:'Technical evidence', safeUse:'Public repos, languages, topics, profile metadata, recent repo activity, owner profile links.', guardrail:'Evidence only. Do not infer job intent, protected traits, or clearance.', source:'github', priority:'P0' },
   { id:'stackoverflow', name:'Stack Overflow / Stack Exchange API', status:'connected', category:'Technical evidence', safeUse:'Public top users, reputation, badges, tags, and profile links.', guardrail:'Evidence only. Reputation is not job intent.', source:'stackoverflow', priority:'P0' },

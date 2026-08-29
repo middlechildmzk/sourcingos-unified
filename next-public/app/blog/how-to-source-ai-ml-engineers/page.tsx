@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['how to source machine learning engineers','AI engineer sourcing','ML engineer sourcing','Hugging Face recruiting','GitHub AI sourcing','machine learning recruiter search','AI talent mapping'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -44,7 +44,7 @@ export default function AiMlSourcingPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context': 'https://schema.org', '@type': 'Article', headline: title, description, url: articleUrl, mainEntityOfPage: articleUrl,
-    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl }, about: ['AI recruiting','Machine learning recruiting','Technical sourcing','AI talent mapping'],
   }
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
@@ -56,7 +56,7 @@ export default function AiMlSourcingPage() {
       <div className="article-hero-card">
         <span className="kicker">AI/ML recruiting · 2026 sourcing playbook</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">AI hiring is especially vulnerable to title inflation and keyword noise. Build the search around evidence of the actual work: model development, evaluation, inference, research, deployment, data systems, and product ownership.</p>
         <div className="article-meta-grid">
           <div><span>Core idea</span><strong>Search work, not hype</strong></div>

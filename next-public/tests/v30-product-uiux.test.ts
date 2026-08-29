@@ -42,9 +42,9 @@ describe('V30 product experience release gate', () => {
   })
 
   it('does not ship the private role demo in the public role portfolio', () => {
-    expect(roles).not.toContain('POTFF')
-    expect(roles).not.toContain('H2F')
-    expect(roles).not.toContain('Try POTFF demo')
+    expect(roles).not.toContain('human performance program')
+    expect(roles).not.toContain('readiness program')
+    expect(roles).not.toContain('Try human performance program demo')
   })
 
   it('presents the role sourcing loop as a coherent five-step studio', () => {

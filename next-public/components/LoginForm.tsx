@@ -40,7 +40,7 @@ export function LoginForm({ from, error: initialError }: LoginFormProps) {
 
     if (!trimmedEmail.includes('@')) {
       setStatus('error')
-      setMessage('Use the email address that was invited to the beta. Usernames like dllarson1991 will not work here.')
+      setMessage('Use the email address that was invited to the beta. Usernames alone will not work here.')
       return
     }
 

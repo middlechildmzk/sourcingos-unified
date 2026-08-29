@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['aging requisition recruiting','hard to fill role sourcing','stuck requisition recruiting','recruiting req rescue','low candidate yield sourcing','hiring manager calibration sourcing'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -35,7 +35,7 @@ export default function AgingReqRescuePage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Aging requisitions','Hard-to-fill recruiting','Sourcing strategy','Hiring manager calibration'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -47,7 +47,7 @@ export default function AgingReqRescuePage() {
       <div className="article-hero-card">
         <span className="kicker">Req rescue · sourcing diagnostics</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">An old requisition is not a diagnosis. Before adding tools, widening Boolean, or increasing outreach, identify exactly where the recruiting system is failing and run the smallest experiment that can distinguish the causes.</p>
         <div className="article-meta-grid"><div><span>Diagnosis</span><strong>5 failure modes</strong></div><div><span>Next step</span><strong>One controlled experiment</strong></div><div><span>Tool</span><Link href="/tools/aging-req-rescue/">Run Req Rescue</Link></div></div>
       </div>

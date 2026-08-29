@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['cybersecurity Boolean strings recruiters','cybersecurity recruiter search strings','ISSO Boolean search','SOC analyst Boolean string','AppSec Boolean search','cloud security recruiter Boolean'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -123,7 +123,7 @@ export default function CyberBooleanPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,
-    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'Dan Larson',url:`${siteUrl}/about/`},
+    datePublished:'2026-06-26',dateModified:'2026-08-20',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},
     publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Cybersecurity recruiting','Boolean search','NICE Framework','Technical sourcing'],
   }
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
@@ -135,7 +135,7 @@ export default function CyberBooleanPage() {
       <div className="article-hero-card">
         <span className="kicker">Cybersecurity recruiting · Boolean library</span>
         <h1>{title}</h1>
-        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">Cybersecurity is not one talent pool. Use role-specific query families that follow the work, then debug each lane separately instead of forcing every cyber title, certification, and tool into one string.</p>
         <div className="article-meta-grid"><div><span>Library</span><strong>30 search strings</strong></div><div><span>Structure</span><strong>10 work patterns</strong></div><div><span>Tool</span><Link href="/tools/boolean-generator/">Generate variants</Link></div></div>
       </div>

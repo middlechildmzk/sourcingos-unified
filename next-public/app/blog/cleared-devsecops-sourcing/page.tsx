@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical },
   keywords: ['cleared DevSecOps sourcing','source TS SCI DevSecOps engineers','GovCon technical recruiting','cleared platform engineer sourcing','RMF ATO recruiting','federal DevSecOps sourcing'],
-  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['Dan Larson'] },
+  openGraph: { title, description, type: 'article', url: canonical, publishedTime: '2026-06-26', modifiedTime: '2026-08-20', authors: ['SourcingOS Editorial'] },
   twitter: { card: 'summary_large_image', title, description },
 }
 
@@ -42,7 +42,7 @@ export default function ClearedDevsecopsPage() {
   const articleUrl = `${siteUrl}${canonical}`
   const articleSchema = {
     '@context': 'https://schema.org', '@type': 'Article', headline: title, description, url: articleUrl, mainEntityOfPage: articleUrl,
-    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'Dan Larson', url: `${siteUrl}/about/` },
+    datePublished: '2026-06-26', dateModified: '2026-08-20', author: { '@type': 'Person', name: 'SourcingOS Editorial', url: `${siteUrl}/about/` },
     publisher: { '@type': 'Organization', name: 'SourcingOS', url: siteUrl }, about: ['Cleared recruiting','DevSecOps recruiting','GovCon sourcing','Technical sourcing'],
   }
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
@@ -54,7 +54,7 @@ export default function ClearedDevsecopsPage() {
       <div className="article-hero-card">
         <span className="kicker">Cleared recruiting · DevSecOps sourcing</span>
         <h1>{title}</h1>
-        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>Dan Larson · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
+        <p className="muted" style={{ fontSize: 13, margin: '4px 0 12px' }}>SourcingOS Editorial · Senior Technical Sourcer · Published June 26, 2026 · Updated August 20, 2026</p>
         <p className="lead">The hard part is not finding people who mention DevSecOps or a clearance. It is finding evidence of platform depth and federal delivery context in the same search while preserving a strict boundary around what public clearance language can and cannot tell you.</p>
         <div className="article-meta-grid">
           <div><span>Search model</span><strong>6 independent lanes</strong></div>
