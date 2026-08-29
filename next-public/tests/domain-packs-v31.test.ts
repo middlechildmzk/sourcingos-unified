@@ -104,16 +104,23 @@ describe('V31 domain packs and role intelligence', () => {
     expect(plan.lanes.find(lane => lane.id === 'adjacent_title')?.query).toMatch(/Software Developers|Platform Software Engineer/)
   })
 
-  it('keeps the O*NET route authenticated, rate-limited, fixed-host, and title-only', () => {
+  it('keeps O*NET enrichment authenticated, title-only, fixed-host, cacheable, and API-key free', () => {
     const route = readFileSync(
       fileURLToPath(new URL('../app/api/role-intelligence/onet/route.ts', import.meta.url)),
       'utf8',
     )
     expect(route).toContain('requireSession()')
     expect(route).toContain("rateLimit(req, 'workbench'")
-    expect(route).toContain("const ONET_ORIGIN = 'https://api-v2.onetcenter.org'")
-    expect(route).toContain('ONET_API_KEY')
-    expect(route).toContain('Send only the role title')
+    expect(route).toContain("const ONET_DATA_ORIGIN = 'https://www.onetcenter.org'")
+    expect(route).toContain("const ONET_DATA_ROOT = '/dl_files/database/db_31_0_json'")
+    expect(route).toContain("datasetJson<OccupationRow>('occupation_data.json')")
+    expect(route).toContain("datasetJson<ReportedTitleRow>('sample_of_reported_titles.json')")
+    expect(route).toContain("datasetJson<RelatedRow>('related_occupations.json')")
+    expect(route).toContain("datasetJson<SoftwareSkillRow>('software_skills.json')")
+    expect(route).toContain('next: { revalidate: CACHE_SECONDS }')
+    expect(route).toContain('Only the normalized role title')
+    expect(route).not.toContain('ONET_API_KEY')
+    expect(route).not.toContain('api-v2.onetcenter.org')
     expect(route).not.toContain('rawDescription')
     expect(route).not.toContain('candidateId')
   })
