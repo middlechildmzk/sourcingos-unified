@@ -142,7 +142,7 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
       <div className="role-search-studio-head">
         <div>
           <div className="role-search-eyebrow"><span>Role sourcing</span><span className="status-pill active">Search Plan v{guidedPlan?.revision || 1}</span></div>
-          <h2>Source this role.</h2>
+          <h2>Source {role.intake.title}.</h2>
           <p>Run the approved strategy across supported SourcingOS sources or copy recruiter-ready searches into the systems you already use. Bring people back here to review and calibrate the next pass.</p>
         </div>
         <Link className="btn role-search-primary-action" href={baseHref}>Run supported search →</Link>
