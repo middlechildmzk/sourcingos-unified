@@ -1,7 +1,8 @@
 import type { CalibrationState } from './calibration-intelligence'
 import { activeInsights } from './calibration-intelligence'
 import type { RoleIntake } from './role-workspace'
-import type { ConnectorKey } from './acquisition-v22'
+
+export type AgenticConnectorKey = 'github' | 'orcid' | 'openalex' | 'pubmed' | 'crossref'
 
 export type AgenticLaneId =
   | 'exact_title'
@@ -29,7 +30,7 @@ export type AgenticSourceTask = {
   label: string
   mode: SearchExecutionMode
   query: string
-  connectorKeys?: ConnectorKey[]
+  connectorKeys?: AgenticConnectorKey[]
   truth: string
 }
 
@@ -53,6 +54,7 @@ export type AgenticSearchPlan = {
 
 const TECHNICAL = /engineer|developer|architect|devops|devsecops|cloud|security|cyber|data|software|platform|infrastructure|sre|machine learning|\bai\b/i
 const RESEARCH = /research|scientist|clinical|medical|health|physician|nurse|biotech|pharma|publication|academic/i
+const PUBLIC_SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 
 function clean(value: string): string {
   return value.replace(/["“”]/g, '').replace(/[^a-zA-Z0-9+#./& -]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90)
@@ -112,9 +114,18 @@ function revision(state?: CalibrationState): number {
   return 1 + state.events.filter(event => altering.has(event.type)).length
 }
 
+function publicSafeQuery(intake: RoleIntake): string {
+  const title = PUBLIC_SENSITIVE.test(intake.title) ? '' : clean(intake.title)
+  const terms = [...intake.mustHaves, ...intake.niceToHaves]
+    .map(clean)
+    .filter(term => term && !PUBLIC_SENSITIVE.test(term))
+  return and([title ? quote(title) : '', or(terms.slice(0, 6))]) || or(terms.slice(0, 6))
+}
+
 function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): AgenticSourceTask[] {
   const technical = TECHNICAL.test(`${intake.title} ${intake.mustHaves.join(' ')} ${intake.niceToHaves.join(' ')}`)
   const research = RESEARCH.test(`${intake.title} ${intake.mustHaves.join(' ')} ${intake.niceToHaves.join(' ')}`)
+  const publicQuery = publicSafeQuery(intake)
   const tasks: AgenticSourceTask[] = [
     {
       surface: 'candidate_database',
@@ -141,8 +152,8 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
       surface: 'google_xray',
       label: 'Google X-Ray',
       mode: 'guided',
-      query,
-      truth: 'Open-web query prepared for recruiter review. Search-result context is not candidate evidence.',
+      query: publicQuery,
+      truth: 'Open-web query prepared for recruiter review. Clearance and citizenship language is removed from the public-web task; search-result context is not candidate evidence.',
     },
     {
       surface: 'exa_people',
@@ -172,9 +183,9 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
       surface: 'github',
       label: 'GitHub public profiles',
       mode: 'executable',
-      query,
+      query: publicQuery,
       connectorKeys: ['github'],
-      truth: 'Runs the existing official GitHub API connector. Public work is evidence; identity linking still requires review.',
+      truth: 'Runs the existing official GitHub API connector with a public-safe capability query. Public work is evidence; identity linking still requires review.',
     })
   }
   if (research || lane === 'evidence_first') {
@@ -182,9 +193,9 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
       surface: 'research_publications',
       label: 'Public research graph',
       mode: 'executable',
-      query,
+      query: publicQuery,
       connectorKeys: ['orcid', 'openalex', 'pubmed', 'crossref'],
-      truth: 'Runs existing public scholarly connectors. Publication authorship is evidence, not proof of current employment or fit.',
+      truth: 'Runs existing public scholarly connectors with a public-safe capability query. Publication authorship is evidence, not proof of current employment or fit.',
     })
   }
   return tasks
@@ -254,7 +265,7 @@ export function buildAgenticSearchPlan(intake: RoleIntake, state?: CalibrationSt
   }
 }
 
-export function executableConnectorKeys(lane: AgenticSearchLane): ConnectorKey[] {
+export function executableConnectorKeys(lane: AgenticSearchLane): AgenticConnectorKey[] {
   return Array.from(new Set(lane.tasks.flatMap(task => task.mode === 'executable' ? (task.connectorKeys || []) : [])))
 }
 
