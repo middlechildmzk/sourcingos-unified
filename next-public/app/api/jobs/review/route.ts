@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getJobSubmissions, updateJobSubmissionStatus } from '@/lib/job-board-db'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { requireAdmin } from '@/lib/auth-gate'
+import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(req: NextRequest) {
   // ── Admin check via cookies (fixes 401 for logged-in admins) ──────────────
   const gate = await requireAdmin()
   if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
 
   // ── Supabase read when configured ──────────────────────────────────────────
   if (isSupabaseConfigured()) {
@@ -50,6 +53,8 @@ export async function POST(req: NextRequest) {
   // ── Admin check via cookies ────────────────────────────────────────────────
   const gate = await requireAdmin()
   if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
 
   try {
     const body = await req.json()

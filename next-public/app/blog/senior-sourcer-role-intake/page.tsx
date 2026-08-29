@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = "The Senior Sourcer's Role Intake: 25 Questions That Change the Search"
 const description = 'Hiring-manager intake questions built around search evidence, title flexibility, skill substitution, donor companies, geography, compensation, verification, and rejection patterns.'
@@ -74,8 +75,8 @@ export default function SeniorSourcerRoleIntakePage(){
  const articleSchema={'@context':'https://schema.org','@type':'Article',headline:title,description,url:articleUrl,mainEntityOfPage:articleUrl,datePublished:'2026-08-15',dateModified:'2026-08-15',author:{'@type':'Person',name:'SourcingOS Editorial',url:`${siteUrl}/about/`},publisher:{'@type':'Organization',name:'SourcingOS',url:siteUrl},about:['Hiring manager intake','Role intake','Talent sourcing','Recruiter calibration']}
  const faqSchema={'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
  return <>
-  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+  <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
   <main className="wrap article article-pro">
    <div className="article-hero-card"><span className="kicker">Role intake & calibration</span><h1>{title}</h1><p className="muted" style={{fontSize:13,margin:'4px 0 12px'}}>SourcingOS Editorial · Senior Technical Sourcer · Published August 15, 2026</p><p className="lead">{description}</p><div className="article-meta-grid"><div><span>Framework</span><strong>25 search-relevant questions</strong></div><div><span>Output</span><strong>Titles · skills · evidence · companies · geography</strong></div><div><span>Next action</span><Link href="/tools/jd-search-strategy/">Build the search plan</Link></div></div></div>
    <div className="article-layout">

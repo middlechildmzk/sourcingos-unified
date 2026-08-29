@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Best Contact Finders for Recruiters in 2026: ContactOut, Lusha, Apollo, Hunter & How to Test Them'
 const description = 'A recruiter-first 2026 guide to ContactOut, Lusha, Apollo, Hunter and contact-data workflows, plus a 25-candidate benchmark for coverage, verification, phone quality, freshness, cost, and policy fit.'
@@ -72,8 +73,8 @@ export default function ContactFinderGuide(){
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Recruiter contact data · updated 2026</span>

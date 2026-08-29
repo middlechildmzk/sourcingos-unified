@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Why Your Candidate Search Returns the Same People Everyone Else Finds'
 const description = 'Search-path scarcity makes a healthy talent market look exhausted. Learn the seven collapse points, how to diagnose them, and how to open independent sourcing lanes.'
@@ -74,8 +75,8 @@ export default function SearchPathScarcityPage() {
   }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqSchema) }} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Sourcing methodology</span>

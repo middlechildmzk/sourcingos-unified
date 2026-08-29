@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'AI Sourcing Tools in 2026: An 8-Task Evaluation Harness for Recruiters'
 const description = 'A practical 2026 framework for testing AI sourcing tools on intake, title expansion, Boolean logic, candidate discovery, evidence accuracy, hallucination risk, recruiter control, and unsafe automation.'
@@ -62,8 +63,8 @@ export default function AiSourcingHarnessPage(){
   const faqSchema = {'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(articleSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(articleSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">AI sourcing · 2026 evaluation framework</span>

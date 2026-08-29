@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'Technical Sourcer Operating System: The Weekly Workflow for Hard-to-Fill Searches'
 const description = 'A practical weekly operating system for senior sourcers: req triage, source packs, search experiments, hiring-manager calibration, evidence review, ATS rediscovery, pipeline learning, and Friday search retrospectives.'
@@ -41,8 +42,8 @@ export default function TechnicalSourcerOperatingSystemPage() {
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqSchema) }} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Sourcer operations · weekly system</span>

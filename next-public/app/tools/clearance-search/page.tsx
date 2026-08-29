@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ClearanceSearchTool } from '@/components/ClearanceSearchTool'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 export const metadata = {
   title: 'Cleared Candidate Search Builder | Find Cleared Talent | SourcingOS',
@@ -33,8 +34,8 @@ export default function Page() {
   }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(appSchema)}} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify(faqSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(appSchema)}} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{__html:safeJsonLd(faqSchema)}} />
     <main className="wrap article-pro">
       <section className="article-hero-card">
         <span className="kicker">Free cleared candidate sourcing tool</span>

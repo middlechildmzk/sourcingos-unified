@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { siteUrl } from '@/lib/site'
+import { safeJsonLd } from '@/lib/safe-json-ld'
 
 const title = 'The Source Pack Methodology: A Search Operating System for Hard-to-Fill Roles'
 const description = 'A practical sourcing methodology for turning a difficult requisition into evidence requirements, search lanes, donor companies, Boolean queries, false-positive rules, calibration questions, and explicit stop conditions.'
@@ -45,8 +46,8 @@ export default function SourcePackMethodologyPage() {
   const faqSchema = { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q,a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }
 
   return <>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(articleSchema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(faqSchema) }} />
     <main className="wrap article article-pro">
       <div className="article-hero-card">
         <span className="kicker">Sourcing methodology</span>
