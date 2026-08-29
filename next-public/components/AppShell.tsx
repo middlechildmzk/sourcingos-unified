@@ -25,6 +25,7 @@ type NavigationItem = {
 const primary: NavigationItem[] = [
   { href: '/app/today', label: 'Today', icon: 'today', description: 'What needs your judgment now' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Search strategy, slate, calibration' },
+  { href: '/app/agentic-sourcing', label: 'Agentic Sourcing', icon: 'agentic', description: 'Plan, run, review, and learn by role' },
   { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'People, evidence, rediscovery' },
 ]
 
