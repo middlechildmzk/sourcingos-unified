@@ -1,0 +1,71 @@
+name: Temporary JSON-LD Migration
+
+on:
+  push:
+    branches:
+      - security-hardening-jsonld
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, '[jsonld-bulk]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security-hardening-jsonld
+          fetch-depth: 0
+
+      - name: Replace unsafe JSON-LD serialization
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('next-public/app')
+          changed = []
+          for p in app.rglob('*.tsx'):
+              text = p.read_text(encoding='utf-8')
+              if 'dangerouslySetInnerHTML' not in text or 'JSON.stringify(' not in text:
+                  continue
+
+              lines = text.splitlines(keepends=True)
+              touched = False
+              for i, line in enumerate(lines):
+                  if 'dangerouslySetInnerHTML' in line and 'JSON.stringify(' in line:
+                      lines[i] = line.replace('JSON.stringify(', 'safeJsonLd(')
+                      touched = True
+
+              if not touched:
+                  continue
+
+              updated = ''.join(lines)
+              if "@/lib/safe-json-ld" not in updated:
+                  import_line = "import { safeJsonLd } from '@/lib/safe-json-ld'\n"
+                  import_indexes = [i for i, line in enumerate(lines) if line.startswith('import ')]
+                  insert_at = (max(import_indexes) + 1) if import_indexes else 0
+                  lines.insert(insert_at, import_line)
+                  updated = ''.join(lines)
+
+              p.write_text(updated, encoding='utf-8')
+              changed.append(str(p))
+
+          print(f'Migrated {len(changed)} JSON-LD files')
+          for item in changed:
+              print(item)
+          PY
+
+      - name: Commit migration
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No same-line JSON-LD sites required migration"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add next-public/app
+          git commit -m "[jsonld-bulk] route JSON-LD through safe serializer"
+          git push origin HEAD:security-hardening-jsonld
