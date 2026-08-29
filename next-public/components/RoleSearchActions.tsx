@@ -138,155 +138,86 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
   }
 
   return (
-    <section className="product-panel" style={{ marginBottom: 14 }} aria-label="Role sourcing actions">
-      <div className="product-panel-head">
+    <section className="role-search-studio" aria-label="Role sourcing actions">
+      <div className="role-search-studio-head">
         <div>
-          <span className="kicker">Role sourcing loop</span>
-          <h2>Search, bring candidates back, review, calibrate</h2>
-          <p className="muted" style={{ margin: '5px 0 0', fontSize: 13 }}>
-            SourcingOS keeps the strategy and evidence in this role. Guided sources stay recruiter-run; supported SourcingOS sources remain available through Candidate Search.
-          </p>
+          <div className="role-search-eyebrow"><span>Role sourcing</span><span className="status-pill active">Search Plan v{guidedPlan?.revision || 1}</span></div>
+          <h2>Source this role.</h2>
+          <p>Run the approved strategy across supported SourcingOS sources or copy recruiter-ready searches into the systems you already use. Bring people back here to review and calibrate the next pass.</p>
         </div>
-        <Link className="btn" href={baseHref}>Search supported sources</Link>
+        <Link className="btn role-search-primary-action" href={baseHref}>Run supported search →</Link>
       </div>
 
-      {approvedLanes.length > 0 && (
-        <div className="button-row" style={{ marginTop: 12 }}>
-          {approvedLanes.map(lane => (
-            <Link
-              key={lane.id}
-              className="btn secondary"
-              href={`${baseHref}&laneId=${encodeURIComponent(lane.id)}`}
-              title={lane.purpose}
-            >
-              Run {lane.label}
-            </Link>
-          ))}
+      <div className="role-search-loop-strip" aria-label="Role sourcing workflow">
+        <span className="active"><b>1</b> Search</span><i>→</i><span><b>2</b> Bring back</span><i>→</i><span><b>3</b> Review</span><i>→</i><span><b>4</b> Learn</span><i>→</i><span><b>5</b> Search again</span>
+      </div>
+
+      {approvedLanes.length > 0 && <div className="role-search-approved-lanes">
+        <span>Approved executable lanes</span>
+        <div>{approvedLanes.map(lane => <Link key={lane.id} className="btn secondary" href={`${baseHref}&laneId=${encodeURIComponent(lane.id)}`} title={lane.purpose}>Run {lane.label}</Link>)}</div>
+      </div>}
+
+      {selectedGuidedLane && <div className="role-guided-search-area">
+        <div className="role-guided-search-head">
+          <div><span className="kicker">Recruiter-run sources</span><h3>{selectedGuidedLane.name}</h3><p>{selectedGuidedLane.useCase}</p></div>
+          <div className="role-lane-switcher" role="group" aria-label="Guided search lane">
+            {guided?.lanes.map(lane => <button key={lane.id} className={guidedLaneId === lane.id ? 'active' : ''} onClick={() => setGuidedLaneId(lane.id)}>{lane.id === 'precision' ? 'Precision' : lane.id === 'balanced' ? 'Balanced' : 'Expanded'}</button>)}
+          </div>
         </div>
-      )}
 
-      {selectedGuidedLane && (
-        <details className="advanced-disclosure" open style={{ marginTop: 14 }}>
-          <summary>Guided searches for recruiter-run sources</summary>
-          <div className="role-section-stack" style={{ marginTop: 12 }}>
-            <div className="product-panel-head">
-              <div>
-                <span className="kicker">Search strategy · Search Plan v{guidedPlan?.revision || 1}</span>
-                <h3>{selectedGuidedLane.name}</h3>
-                <p className="muted" style={{ margin: '4px 0 0' }}>{selectedGuidedLane.useCase}</p>
-              </div>
-              <select value={guidedLaneId} onChange={event => setGuidedLaneId(event.target.value as typeof guidedLaneId)} aria-label="Guided search lane">
-                {guided?.lanes.map(lane => <option key={lane.id} value={lane.id}>{lane.name}</option>)}
-              </select>
-            </div>
+        {guidedPlan?.calibrated && <div className="role-calibration-banner">
+          <div><span className="role-calibration-spark">✦</span><div><b>Approved calibration is shaping this search.</b><p>{appliedChanges.length ? `${appliedChanges.length} approved learning change${appliedChanges.length === 1 ? '' : 's'} rewrites the current guided queries.` : 'Approved learning is active, but it is already represented by the role criteria or remains review guidance, so no duplicate terms were added.'}</p></div></div>
+          <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=calibration`}>Inspect learning</Link>
+        </div>}
 
-            {guidedPlan?.calibrated && (
-              <div className="cta">
-                <div>
-                  <strong>Approved calibration is active.</strong>{' '}
-                  {appliedChanges.length
-                    ? `${appliedChanges.length} approved learning change${appliedChanges.length === 1 ? '' : 's'} currently rewrites the guided search.`
-                    : 'The approved learning is already represented by the current role criteria or remains review guidance, so no duplicate search terms were added.'}
-                </div>
-                <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=calibration`}>Review calibration</Link>
-              </div>
-            )}
+        <div className="role-search-surface-grid">
+          <article className="search-surface-card">
+            <div className="search-surface-card-head"><div><span className="search-surface-brand linkedin">in</span><div><b>LinkedIn Recruiter</b><small>Guided · recruiter-run</small></div></div><span className="status-pill">copy</span></div>
+            <textarea className="input search-query-box" rows={5} readOnly value={selectedGuidedLane.linkedin} />
+            <button className="btn secondary" type="button" onClick={() => void copySearch('LinkedIn Recruiter', selectedGuidedLane.linkedin)}>Copy LinkedIn search</button>
+          </article>
+          <article className="search-surface-card">
+            <div className="search-surface-card-head"><div><span className="search-surface-brand clearance">C</span><div><b>ClearanceJobs / ATS</b><small>Guided · recruiter-run</small></div></div><span className="status-pill">copy</span></div>
+            <textarea className="input search-query-box" rows={5} readOnly value={selectedGuidedLane.boolean} />
+            <button className="btn secondary" type="button" onClick={() => void copySearch('ClearanceJobs / ATS', selectedGuidedLane.boolean)}>Copy Boolean</button>
+          </article>
+          <article className="search-surface-card">
+            <div className="search-surface-card-head"><div><span className="search-surface-brand google">G</span><div><b>Google X-Ray</b><small>Open web · recruiter-run</small></div></div><span className="status-pill">open web</span></div>
+            <textarea className="input search-query-box" rows={5} readOnly value={selectedGuidedLane.googleXray} />
+            <div className="button-row"><button className="btn secondary" type="button" onClick={() => void copySearch('Google X-Ray', selectedGuidedLane.googleXray)}>Copy X-Ray</button><a className="btn ghost" href={`https://www.google.com/search?q=${encodeURIComponent(selectedGuidedLane.googleXray)}`} target="_blank" rel="noreferrer noopener">Open Google ↗</a></div>
+          </article>
+        </div>
 
-            <div className="grid three">
-              <label>LinkedIn Recruiter
-                <textarea className="input" rows={5} readOnly value={selectedGuidedLane.linkedin} />
-                <button className="btn secondary" type="button" onClick={() => void copySearch('LinkedIn Recruiter', selectedGuidedLane.linkedin)}>Copy LinkedIn search</button>
-              </label>
-              <label>ClearanceJobs / ATS
-                <textarea className="input" rows={5} readOnly value={selectedGuidedLane.boolean} />
-                <button className="btn secondary" type="button" onClick={() => void copySearch('ClearanceJobs / ATS', selectedGuidedLane.boolean)}>Copy ClearanceJobs search</button>
-              </label>
-              <label>Google X-Ray
-                <textarea className="input" rows={5} readOnly value={selectedGuidedLane.googleXray} />
-                <div className="button-row">
-                  <button className="btn secondary" type="button" onClick={() => void copySearch('Google X-Ray', selectedGuidedLane.googleXray)}>Copy X-Ray</button>
-                  <a className="btn ghost" href={`https://www.google.com/search?q=${encodeURIComponent(selectedGuidedLane.googleXray)}`} target="_blank" rel="noreferrer noopener">Open Google</a>
-                </div>
-              </label>
-            </div>
+        {!!selectedGuidedLane.verify.length && <div className="role-search-verify"><b>Recruiter verification</b><span>{selectedGuidedLane.verify.join(' ')}</span></div>}
 
-            {!!selectedGuidedLane.verify.length && <p className="muted" style={{ margin: 0 }}>Verify: {selectedGuidedLane.verify.join(' ')}</p>}
-
-            {guidedPlan && guidedPlan.revision > 1 && (
-              <details className="advanced-disclosure">
-                <summary>What changed in Search Plan v{guidedPlan.revision}</summary>
-                <div className="role-section-stack" style={{ marginTop: 10 }}>
-                  <div className="product-list">
-                    {guidedPlan.changes.map(change => (
-                      <div className="product-row" key={change.insightId}>
-                        <div className="product-row-main">
-                          <div className="product-row-title">{change.applied ? 'Applied to guided search' : 'Visible review guidance'} · {change.subject}</div>
-                          <div className="product-row-meta normal-wrap">{change.explanation}</div>
-                        </div>
-                        <span className={change.applied ? 'status-pill success' : 'status-pill'}>{change.kind.replaceAll('_', ' ')}</span>
-                      </div>
-                    ))}
-                    {!guidedPlan.changes.length && (
-                      <div className="product-row"><div className="product-row-main"><div className="product-row-meta">No approved calibration is changing guided queries right now.</div></div></div>
-                    )}
-                  </div>
-
-                  {hasSelectedLaneDiff && selectedBaselineLane && (
-                    <div className="grid three">
-                      {selectedBaselineLane.linkedin !== selectedGuidedLane.linkedin && <label>LinkedIn · before
-                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.linkedin} />
-                        <span className="muted">Now: {selectedGuidedLane.linkedin}</span>
-                      </label>}
-                      {selectedBaselineLane.boolean !== selectedGuidedLane.boolean && <label>ClearanceJobs / ATS · before
-                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.boolean} />
-                        <span className="muted">Now: {selectedGuidedLane.boolean}</span>
-                      </label>}
-                      {selectedBaselineLane.googleXray !== selectedGuidedLane.googleXray && <label>Google X-Ray · before
-                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.googleXray} />
-                        <span className="muted">Now: {selectedGuidedLane.googleXray}</span>
-                      </label>}
-                    </div>
-                  )}
-                </div>
-              </details>
-            )}
+        {guidedPlan && guidedPlan.revision > 1 && <details className="role-plan-change-log">
+          <summary>What changed in Search Plan v{guidedPlan.revision}</summary>
+          <div className="role-plan-change-content">
+            <div className="product-list">{guidedPlan.changes.map(change => <div className="product-row" key={change.insightId}><div className="product-row-main"><div className="product-row-title">{change.applied ? 'Applied to guided search' : 'Visible review guidance'} · {change.subject}</div><div className="product-row-meta normal-wrap">{change.explanation}</div></div><span className={change.applied ? 'status-pill success' : 'status-pill'}>{change.kind.replaceAll('_', ' ')}</span></div>)}{!guidedPlan.changes.length && <div className="product-row"><div className="product-row-main"><div className="product-row-meta">No approved calibration is changing guided queries right now.</div></div></div>}</div>
+            {hasSelectedLaneDiff && selectedBaselineLane && <div className="role-search-before-grid">
+              {selectedBaselineLane.linkedin !== selectedGuidedLane.linkedin && <label>LinkedIn · before<textarea className="input" rows={4} readOnly value={selectedBaselineLane.linkedin} /><span className="muted">Now: {selectedGuidedLane.linkedin}</span></label>}
+              {selectedBaselineLane.boolean !== selectedGuidedLane.boolean && <label>ClearanceJobs / ATS · before<textarea className="input" rows={4} readOnly value={selectedBaselineLane.boolean} /><span className="muted">Now: {selectedGuidedLane.boolean}</span></label>}
+              {selectedBaselineLane.googleXray !== selectedGuidedLane.googleXray && <label>Google X-Ray · before<textarea className="input" rows={4} readOnly value={selectedBaselineLane.googleXray} /><span className="muted">Now: {selectedGuidedLane.googleXray}</span></label>}
+            </div>}
           </div>
-        </details>
-      )}
+        </details>}
+      </div>}
 
-      <details className="advanced-disclosure" open style={{ marginTop: 14 }}>
-        <summary>Paste candidates back into this role</summary>
-        <div className="role-section-stack" style={{ marginTop: 12 }}>
-          <p className="muted" style={{ margin: 0 }}>
-            Run a guided search in a source you are authorized to use, then paste the candidate profile or resume text here. The imported text becomes recruiter-provided evidence; search context never becomes candidate proof.
-          </p>
+      <details className="role-pasteback-panel">
+        <summary><span><b>Bring candidates back to this role</b><small>Paste recruiter-provided profile or resume text and preserve provenance.</small></span><span>Open import ↓</span></summary>
+        <div className="role-pasteback-content">
+          <p>Run a guided search in a source you are authorized to use, then paste the candidate profile or resume text here. The imported text becomes recruiter-provided evidence; search context never becomes candidate proof.</p>
           <div className="grid three">
-            <label>Source surface
-              <select value={surface} onChange={event => setSurface(event.target.value as RecruiterPasteBackSurface)}>
-                {Object.entries(RECRUITER_PASTE_BACK_SURFACES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-            <label>Candidate name (optional)
-              <input className="input" value={pasteName} onChange={event => setPasteName(event.target.value)} placeholder="Uses first meaningful line if blank" />
-            </label>
-            <label>Profile/source URL (optional)
-              <input className="input" value={pasteUrl} onChange={event => setPasteUrl(event.target.value)} placeholder="https://…" inputMode="url" />
-            </label>
+            <label>Source surface<select value={surface} onChange={event => setSurface(event.target.value as RecruiterPasteBackSurface)}>{Object.entries(RECRUITER_PASTE_BACK_SURFACES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label>Candidate name (optional)<input className="input" value={pasteName} onChange={event => setPasteName(event.target.value)} placeholder="Uses first meaningful line if blank" /></label>
+            <label>Profile/source URL (optional)<input className="input" value={pasteUrl} onChange={event => setPasteUrl(event.target.value)} placeholder="https://…" inputMode="url" /></label>
           </div>
-          <label>Candidate profile or resume text
-            <textarea className="input" rows={9} value={pasteText} onChange={event => setPasteText(event.target.value)} placeholder="Paste recruiter-provided candidate text here…" />
-          </label>
-          <div className="button-row">
-            <button className="btn" type="button" disabled={working} onClick={() => void importCandidate()}>{working ? 'Importing…' : 'Import & add to this role'}</button>
-            <span className="muted">Current guided lane: {selectedGuidedLane?.name || 'Role search'} · Search Plan v{guidedPlan?.revision || 1}</span>
-          </div>
+          <label>Candidate profile or resume text<textarea className="input" rows={9} value={pasteText} onChange={event => setPasteText(event.target.value)} placeholder="Paste recruiter-provided candidate text here…" /></label>
+          <div className="role-pasteback-footer"><button className="btn" type="button" disabled={working} onClick={() => void importCandidate()}>{working ? 'Importing…' : 'Import & add to role'}</button><span>Lane: {selectedGuidedLane?.name || 'Role search'} · Search Plan v{guidedPlan?.revision || 1}</span></div>
         </div>
       </details>
 
-      {status && <div className="cta" role="status" style={{ marginTop: 14 }}>
-        <span>{status}</span>
-        {lastCandidateId && <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=candidates`}>Review role candidates</Link>}
-      </div>}
+      {status && <div className="cta role-search-status" role="status"><span>{status}</span>{lastCandidateId && <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=candidates`}>Review role candidates</Link>}</div>}
     </section>
   )
 }
