@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { buildLanes } from '@/lib/jd-boolean-lanes'
+import { buildCalibratedGuidedSearchPlan } from '@/lib/calibrated-guided-search'
 import { parseJobDescription, parseResume } from '@/lib/jd-parser'
 import { addCanonicalCandidateToRole } from '@/lib/role-candidate-link'
 import {
@@ -46,24 +47,38 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
   const [lastCandidateId, setLastCandidateId] = useState('')
 
   const searchText = useMemo(() => role ? roleSearchText(role) : '', [role])
-  const guided = useMemo(() => {
+  const baselineGuided = useMemo(() => {
     if (!role || !searchText) return null
     return buildLanes(parseJobDescription(searchText), searchText, {
       includeLocation: true,
       isCleared: role.intake.clearance !== 'Not specified',
     })
   }, [role, searchText])
+  const guidedPlan = useMemo(() => {
+    if (!role || !baselineGuided) return null
+    return buildCalibratedGuidedSearchPlan(baselineGuided, role.intake, role.calibration)
+  }, [baselineGuided, role])
 
   if (!role || mode === 'checking') return null
 
   const approvedLanes = role.searchLanes.filter(lane => lane.status === 'approved')
   const baseHref = `/app/candidate-search?roleId=${encodeURIComponent(role.id)}`
+  const guided = guidedPlan?.current
   const selectedGuidedLane = guided?.lanes.find(lane => lane.id === guidedLaneId) || guided?.lanes[0]
+  const selectedBaselineLane = guidedPlan?.baseline.lanes.find(lane => lane.id === guidedLaneId) || guidedPlan?.baseline.lanes[0]
+  const appliedChanges = guidedPlan?.changes.filter(change => change.applied) || []
+  const hasSelectedLaneDiff = Boolean(
+    selectedGuidedLane && selectedBaselineLane && (
+      selectedGuidedLane.linkedin !== selectedBaselineLane.linkedin ||
+      selectedGuidedLane.boolean !== selectedBaselineLane.boolean ||
+      selectedGuidedLane.googleXray !== selectedBaselineLane.googleXray
+    )
+  )
 
   async function copySearch(label: string, value: string) {
     try {
       await navigator.clipboard.writeText(value)
-      setStatus(`${label} search copied. SourcingOS prepared the query; you still run the guided source yourself.`)
+      setStatus(`${label} search copied from Search Plan v${guidedPlan?.revision || 1}. SourcingOS prepared the query; you still run the guided source yourself.`)
     } catch {
       setStatus('Copy failed. Select the search text and copy it manually.')
     }
@@ -102,6 +117,7 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
         sourceProfile: json.sourceProfile,
         surface,
         laneLabel: selectedGuidedLane?.name,
+        planRevision: guidedPlan?.revision,
         sourceUrl: pasteUrl,
       })
       const updated = updateRole(role.id, current => addCanonicalCandidateToRole(current, linkInput).workspace)
@@ -109,7 +125,7 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
       const linkedCandidate = updated.candidates.find(candidate => candidate.candidateId === json.candidate?.id)
       if (!linkedCandidate) throw new Error('The candidate import succeeded, but it could not be added to the role review queue.')
 
-      setStatus(`${linkInput.displayName} is in this role's review queue with recruiter-provided evidence. Canonical candidates are linked once per role; SourcingOS did not execute or verify the external source.`)
+      setStatus(`${linkInput.displayName} is in this role's review queue with recruiter-provided evidence from Search Plan v${guidedPlan?.revision || 1}. Canonical candidates are linked once per role; SourcingOS did not execute or verify the external source.`)
       setLastCandidateId(json.candidate.id)
       setPasteName('')
       setPasteUrl('')
@@ -155,7 +171,7 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
           <div className="role-section-stack" style={{ marginTop: 12 }}>
             <div className="product-panel-head">
               <div>
-                <span className="kicker">Search strategy</span>
+                <span className="kicker">Search strategy · Search Plan v{guidedPlan?.revision || 1}</span>
                 <h3>{selectedGuidedLane.name}</h3>
                 <p className="muted" style={{ margin: '4px 0 0' }}>{selectedGuidedLane.useCase}</p>
               </div>
@@ -163,6 +179,18 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
                 {guided?.lanes.map(lane => <option key={lane.id} value={lane.id}>{lane.name}</option>)}
               </select>
             </div>
+
+            {guidedPlan?.calibrated && (
+              <div className="cta">
+                <div>
+                  <strong>Approved calibration is active.</strong>{' '}
+                  {appliedChanges.length
+                    ? `${appliedChanges.length} approved learning change${appliedChanges.length === 1 ? '' : 's'} currently rewrites the guided search.`
+                    : 'The approved learning is already represented by the current role criteria or remains review guidance, so no duplicate search terms were added.'}
+                </div>
+                <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=calibration`}>Review calibration</Link>
+              </div>
+            )}
 
             <div className="grid three">
               <label>LinkedIn Recruiter
@@ -183,6 +211,45 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
             </div>
 
             {!!selectedGuidedLane.verify.length && <p className="muted" style={{ margin: 0 }}>Verify: {selectedGuidedLane.verify.join(' ')}</p>}
+
+            {guidedPlan && guidedPlan.revision > 1 && (
+              <details className="advanced-disclosure">
+                <summary>What changed in Search Plan v{guidedPlan.revision}</summary>
+                <div className="role-section-stack" style={{ marginTop: 10 }}>
+                  <div className="product-list">
+                    {guidedPlan.changes.map(change => (
+                      <div className="product-row" key={change.insightId}>
+                        <div className="product-row-main">
+                          <div className="product-row-title">{change.applied ? 'Applied to guided search' : 'Visible review guidance'} · {change.subject}</div>
+                          <div className="product-row-meta normal-wrap">{change.explanation}</div>
+                        </div>
+                        <span className={change.applied ? 'status-pill success' : 'status-pill'}>{change.kind.replaceAll('_', ' ')}</span>
+                      </div>
+                    ))}
+                    {!guidedPlan.changes.length && (
+                      <div className="product-row"><div className="product-row-main"><div className="product-row-meta">No approved calibration is changing guided queries right now.</div></div></div>
+                    )}
+                  </div>
+
+                  {hasSelectedLaneDiff && selectedBaselineLane && (
+                    <div className="grid three">
+                      {selectedBaselineLane.linkedin !== selectedGuidedLane.linkedin && <label>LinkedIn · before
+                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.linkedin} />
+                        <span className="muted">Now: {selectedGuidedLane.linkedin}</span>
+                      </label>}
+                      {selectedBaselineLane.boolean !== selectedGuidedLane.boolean && <label>ClearanceJobs / ATS · before
+                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.boolean} />
+                        <span className="muted">Now: {selectedGuidedLane.boolean}</span>
+                      </label>}
+                      {selectedBaselineLane.googleXray !== selectedGuidedLane.googleXray && <label>Google X-Ray · before
+                        <textarea className="input" rows={4} readOnly value={selectedBaselineLane.googleXray} />
+                        <span className="muted">Now: {selectedGuidedLane.googleXray}</span>
+                      </label>}
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </div>
         </details>
       )}
@@ -211,7 +278,7 @@ export function RoleSearchActions({ roleId }: { roleId: string }) {
           </label>
           <div className="button-row">
             <button className="btn" type="button" disabled={working} onClick={() => void importCandidate()}>{working ? 'Importing…' : 'Import & add to this role'}</button>
-            <span className="muted">Current guided lane: {selectedGuidedLane?.name || 'Role search'}</span>
+            <span className="muted">Current guided lane: {selectedGuidedLane?.name || 'Role search'} · Search Plan v{guidedPlan?.revision || 1}</span>
           </div>
         </div>
       </details>
