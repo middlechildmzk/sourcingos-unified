@@ -32,6 +32,13 @@ const allowedEmailDomains = new Set([
   'getsourcingos.com',
   'users.noreply.github.com',
 ])
+const allowedFixtureEmails = new Set([
+  'your@email.com',
+  'a@b.co',
+  'a@b.com',
+  'jordan@alpha.dev',
+  'jordan@beta.dev',
+])
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -70,8 +77,9 @@ describe('public repository privacy firewall', () => {
     for (const file of walk(repoRoot)) {
       const text = fs.readFileSync(file, 'utf8')
       for (const match of text.matchAll(emailPattern)) {
+        const email = match[0].toLowerCase()
         const domain = (match[1] || '').toLowerCase()
-        if (!allowedEmailDomains.has(domain)) hits.push(`${relative(file)} -> ${match[0]}`)
+        if (!allowedEmailDomains.has(domain) && !allowedFixtureEmails.has(email)) hits.push(`${relative(file)} -> ${match[0]}`)
       }
     }
     expect(hits, `Unexpected committed email addresses found:\n${hits.join('\n')}`).toEqual([])
