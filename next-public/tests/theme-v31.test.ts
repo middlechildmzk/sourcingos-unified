@@ -11,7 +11,7 @@ describe('V31 global theme system', () => {
     const layout = source('../app/layout.tsx')
     expect(layout).toContain("sourcingos.theme")
     expect(layout).toContain("prefers-color-scheme: dark")
-    expect(layout).toContain("data-theme")
+    expect(layout).toContain('dataset.theme')
     expect(layout).toContain("./theme-v31.css")
     expect(layout).toContain('suppressHydrationWarning')
   })
