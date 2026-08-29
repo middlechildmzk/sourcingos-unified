@@ -57,8 +57,12 @@ function sourceProfile(): SourceProfileRecord {
 describe('V30 PR1 role sourcing loop', () => {
   it('keeps the role route as the single product surface', () => {
     expect(rolePage).toContain('<RoleSearchActions roleId={id} />')
-    expect(roleActions).toContain('Search, bring candidates back, review, calibrate')
-    expect(roleActions).toContain('Paste candidates back into this role')
+    expect(roleActions).toContain('<b>1</b> Search')
+    expect(roleActions).toContain('<b>2</b> Bring back')
+    expect(roleActions).toContain('<b>3</b> Review')
+    expect(roleActions).toContain('<b>4</b> Learn')
+    expect(roleActions).toContain('<b>5</b> Search again')
+    expect(roleActions).toContain('Bring candidates back to this role')
     expect(roleActions).toContain('Review role candidates')
   })
 
@@ -71,9 +75,9 @@ describe('V30 PR1 role sourcing loop', () => {
   })
 
   it('keeps guided sources explicitly recruiter-run', () => {
-    expect(roleActions).toContain('Guided searches for recruiter-run sources')
+    expect(roleActions).toContain('Recruiter-run sources')
     expect(roleActions).toContain('Copy LinkedIn search')
-    expect(roleActions).toContain('Copy ClearanceJobs search')
+    expect(roleActions).toContain('Copy Boolean')
     expect(roleActions).toContain('Copy X-Ray')
     expect(roleActions).toContain('SourcingOS prepared the query; you still run the guided source yourself.')
     expect(roleActions).toContain('SourcingOS did not execute or verify the external source.')
