@@ -3,6 +3,7 @@ import type { SVGProps } from 'react'
 export type ProductIconName =
   | 'today'
   | 'roles'
+  | 'agentic'
   | 'autosource'
   | 'candidates'
   | 'import'
@@ -19,6 +20,7 @@ type ProductIconProps = SVGProps<SVGSVGElement> & {
 const paths: Record<ProductIconName, React.ReactNode> = {
   today: <><path d="M12 3v4" /><path d="M12 17v4" /><path d="m4.22 4.22 2.83 2.83" /><path d="m16.95 16.95 2.83 2.83" /><path d="M3 12h4" /><path d="M17 12h4" /><path d="m4.22 19.78 2.83-2.83" /><path d="m16.95 7.05 2.83-2.83" /><circle cx="12" cy="12" r="3.25" /></>,
   roles: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8" /><path d="M8 13h5" /><path d="M8 17h7" /></>,
+  agentic: <><path d="M5 12a7 7 0 0 1 12.2-4.7" /><path d="m17 3 .2 4.3-4.2.7" /><path d="M19 12a7 7 0 0 1-12.2 4.7" /><path d="m7 21-.2-4.3 4.2-.7" /><path d="M12 8.5v7" /><path d="M8.5 12h7" /></>,
   autosource: <><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" /><path d="M11 7.5v7" /><path d="M7.5 11h7" /></>,
   candidates: <><circle cx="9" cy="8" r="3.5" /><path d="M3.5 19c.7-3.6 2.53-5.5 5.5-5.5s4.8 1.9 5.5 5.5" /><path d="M16 8.5a3 3 0 0 1 0 5" /><path d="M17 14.5c2.05.55 3.22 2.05 3.5 4.5" /></>,
   import: <><path d="M12 3v12" /><path d="m8 11 4 4 4-4" /><path d="M5 20h14" /></>,
