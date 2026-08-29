@@ -17,8 +17,9 @@ describe('V30 product experience release gate', () => {
     expect(shell).toContain("label: 'Today'")
     expect(shell).toContain("label: 'Roles'")
     expect(shell).toContain("label: 'Talent'")
-    expect(shell).toContain("label: 'Ask SourcingOS'")
     expect(shell).toContain('Research & data')
+    expect(shell).toContain("label: 'Search Lab'")
+    expect(shell).toContain("label: 'AutoSource'")
     expect(shell).toContain('Human approval stays in the loop.')
   })
 
