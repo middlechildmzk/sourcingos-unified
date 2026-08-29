@@ -72,7 +72,7 @@ describe('V30 agentic search foundation', () => {
 
   it('blocks exact repeat searches but allows a failed retry', () => {
     const query = 'Kubernetes AND Terraform'
-    const base = {
+    const base: Omit<SearchAttempt, 'status'> = {
       id: 'attempt-1',
       roleId: 'role-1',
       laneId: 'skill_cluster',
@@ -81,7 +81,7 @@ describe('V30 agentic search foundation', () => {
       fingerprint: searchFingerprint('github', query),
       resultKeys: [],
       startedAt: new Date(0).toISOString(),
-    } as const
+    }
 
     const completed: SearchAttempt = { ...base, status: 'completed' }
     expect(shouldExecuteSearch([completed], 'github', query).execute).toBe(false)
