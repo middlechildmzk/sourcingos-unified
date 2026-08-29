@@ -1,5 +1,9 @@
 import type { RoleWorkspace } from './role-workspace'
 import { reconcileCalibrationState, type CalibrationState } from './calibration-intelligence'
+import {
+  reconcileRepeatedRejectionInsights,
+  splitFeedbackRejectionInsights,
+} from './role-rejection-calibration'
 
 function semanticCalibration(state: CalibrationState | undefined): string {
   if (!state) return JSON.stringify({ insights: [], events: [] })
@@ -28,15 +32,26 @@ function semanticCalibration(state: CalibrationState | undefined): string {
   })
 }
 
+export function reconcileRoleCalibrationState(
+  workspace: RoleWorkspace,
+  existing: CalibrationState | undefined,
+  now = new Date().toISOString(),
+): CalibrationState {
+  const { baseState, feedbackInsights } = splitFeedbackRejectionInsights(existing)
+  const base = reconcileCalibrationState(workspace, baseState, now)
+  return reconcileRepeatedRejectionInsights(workspace, base, feedbackInsights, now)
+}
+
 // Keep calibration derivation in the workspace state transition instead of relying
 // on the Calibration tab mounting. Reviewer decisions remain authoritative because
-// reconcileCalibrationState preserves reviewed insight state and only refreshes the
-// evidence linked to those decisions.
+// reconciliation preserves reviewed insight state and only refreshes the evidence
+// linked to those decisions. Repeated exact rejection concerns are treated the same
+// way: proposed first, recruiter-controlled, and never silently applied.
 export function reconcileRoleWorkspaceCalibration(
   workspace: RoleWorkspace,
   now = new Date().toISOString()
 ): RoleWorkspace {
-  const next = reconcileCalibrationState(workspace, workspace.calibration, now)
+  const next = reconcileRoleCalibrationState(workspace, workspace.calibration, now)
   if (semanticCalibration(next) === semanticCalibration(workspace.calibration)) return workspace
   return { ...workspace, calibration: next, updatedAt: now }
 }
