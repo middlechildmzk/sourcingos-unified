@@ -5,10 +5,22 @@ import {
   type AgenticSearchPlan,
   type AgenticSearchSurface,
 } from './agentic-search-v30'
+import { buildDomainPackProfile, type DomainPackMatch } from './domain-packs-v31'
+import { enrichRoleIntakeWithOnet, type RoleIntelligenceContext } from './onet-role-intelligence'
 import type { RoleIntake } from './role-workspace'
 
 const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications', 'google_xray'])
+const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications'])
 const SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
+
+export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
+  domainPacks: DomainPackMatch[]
+  roleIntelligence: {
+    onetConfigured: boolean
+    onetOccupation?: { code: string; title: string }
+    onetAttribution?: string
+  }
+}
 
 function clean(value: string): string {
   return value.replace(/["“”]/g, '').replace(/[^a-zA-Z0-9+#./& -]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90)
@@ -63,17 +75,37 @@ export function publicQueryForAgenticLane(intake: RoleIntake, laneId: AgenticLan
   }
 }
 
-export function buildCanonicalAgenticSearchPlan(intake: RoleIntake, state?: CalibrationState): AgenticSearchPlan {
-  const base = buildAgenticSearchPlan(intake, state)
+/**
+ * The canonical planner is the one recruiter-facing search plan. Domain packs
+ * filter executable public surfaces and O*NET can enrich adjacent-title/search
+ * language without rewriting recruiter-approved must-have requirements.
+ */
+export function buildCanonicalAgenticSearchPlan(
+  intake: RoleIntake,
+  state?: CalibrationState,
+  context: RoleIntelligenceContext = {},
+): CanonicalAgenticSearchPlan {
+  const enrichedIntake = enrichRoleIntakeWithOnet(intake, context.onet)
+  const domainProfile = buildDomainPackProfile(enrichedIntake)
+  const base = buildAgenticSearchPlan(enrichedIntake, state)
+
   return {
     ...base,
     lanes: base.lanes.map(lane => {
-      const publicQuery = publicQueryForAgenticLane(intake, lane.id)
+      const publicQuery = publicQueryForAgenticLane(enrichedIntake, lane.id)
       return {
         ...lane,
-        tasks: lane.tasks.map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task),
+        tasks: lane.tasks
+          .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
+          .filter(task => !DOMAIN_EXECUTABLE_SURFACES.has(task.surface) || domainProfile.executablePublicSurfaces.has(task.surface)),
       }
     }),
+    domainPacks: domainProfile.matches,
+    roleIntelligence: {
+      onetConfigured: Boolean(context.onet?.configured),
+      ...(context.onet?.matchedOccupation ? { onetOccupation: context.onet.matchedOccupation } : {}),
+      ...(context.onet?.attribution ? { onetAttribution: context.onet.attribution } : {}),
+    },
   }
 }
 
