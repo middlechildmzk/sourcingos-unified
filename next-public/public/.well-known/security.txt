@@ -1,0 +1,5 @@
+Contact: https://www.getsourcingos.com/contact/
+Expires: 2027-08-29T23:59:59Z
+Preferred-Languages: en
+Canonical: https://www.getsourcingos.com/.well-known/security.txt
+Policy: https://www.getsourcingos.com/privacy/
