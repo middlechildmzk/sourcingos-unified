@@ -75,6 +75,16 @@ function state(insights: CalibrationInsight[], eventType: CalibrationState['even
   }
 }
 
+function querySnapshot(lane: (typeof baseline.lanes)[number]) {
+  return {
+    boolean: lane.boolean,
+    linkedin: lane.linkedin,
+    googleXray: lane.googleXray,
+    bingXray: lane.bingXray,
+    github: lane.github,
+  }
+}
+
 describe('V30 PR2 calibration → guided search release gate', () => {
   it('does not change any guided query while learning is only proposed', () => {
     const plan = buildCalibratedGuidedSearchPlan(baseline, intake, state([insight()]))
@@ -123,7 +133,11 @@ describe('V30 PR2 calibration → guided search release gate', () => {
     })
     const plan = buildCalibratedGuidedSearchPlan(baseline, intake, state([existing], 'insight_approved'))
     expect(plan.changes[0]).toMatchObject({ kind: 'require_signal', applied: false })
-    expect(plan.current.lanes).toEqual(plan.baseline.lanes)
+    for (const currentLane of plan.current.lanes) {
+      const before = plan.baseline.lanes.find(lane => lane.id === currentLane.id)!
+      expect(querySnapshot(currentLane)).toEqual(querySnapshot(before))
+    }
+    expect(plan.current.lanes.every(lane => lane.included.some(note => note === 'Approved calibration emphasis: Citrix'))).toBe(true)
   })
 
   it('increments revision for later calibration actions without silently activating paused learning', () => {
