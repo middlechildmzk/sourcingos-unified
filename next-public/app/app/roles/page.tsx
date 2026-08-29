@@ -10,18 +10,18 @@ export const metadata = {
 }
 
 export default function RolesPage() {
-  return <main className="wrap">
-    <div className="product-page-head">
+  return <main className="wrap v30-page-wrap">
+    <div className="product-page-head v30-page-head">
       <div>
-        <span className="kicker">Search portfolio</span>
+        <span className="kicker">Role Brain</span>
         <h1>Roles</h1>
-        <p>Turn every intake into an approved search strategy, evidence-backed candidate review queue, and recruiter-controlled operating workspace.</p>
+        <p>One operating workspace per search—from intake and sourcing lanes through candidate evidence, recruiter feedback, and the next search-plan revision.</p>
       </div>
     </div>
     <RoleWorkspaceClient />
-    <details className="advanced-disclosure product-panel" style={{ marginTop: 16 }}>
-      <summary>Workspace data, backup, and connected search controls</summary>
-      <div style={{ marginTop: 16 }}><RoleWorkspaceSyncPanel /><RoleWorkspaceBackupPanel /><RoleSearchLaunchPanel /></div>
+    <details className="advanced-disclosure product-panel v30-admin-disclosure">
+      <summary>Workspace storage, backup, and connected-search controls</summary>
+      <div className="v30-admin-stack"><RoleWorkspaceSyncPanel /><RoleWorkspaceBackupPanel /><RoleSearchLaunchPanel /></div>
     </details>
   </main>
 }
