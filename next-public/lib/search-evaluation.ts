@@ -109,7 +109,7 @@ function recallAt(run: SearchEvaluationRun, ranked: SearchEvaluationResultItem[]
 }
 
 function dcg(grades: SearchRelevanceGrade[]): number {
-  return grades.reduce((sum, grade, index) => sum + ((2 ** grade) - 1) / Math.log2(index + 2), 0)
+  return grades.reduce<number>((sum, grade, index) => sum + ((2 ** grade) - 1) / Math.log2(index + 2), 0)
 }
 
 function ndcgAt(run: SearchEvaluationRun, ranked: SearchEvaluationResultItem[], k: number): number {
