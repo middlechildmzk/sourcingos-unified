@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { buildCanonicalAgenticSearchPlan } from '../lib/canonical-agentic-search-v30'
 import { buildSearchLanes, calibrationInsights, createRoleWorkspace, parseRoleIntake, roleMetrics } from '../lib/role-workspace'
 
 const jd = `Program Director - Human Performance and Readiness
@@ -7,7 +8,7 @@ Compensation: $150,000-$185,000
 Clearance: Secret
 Lead program management, operations, stakeholder management, human performance, AWS, and cybersecurity work.`
 
-describe('V20 role workspace', () => {
+describe('V20 role workspace with canonical V33 Search Brain', () => {
   it('parses a role into a recruiter-reviewable intake', () => {
     const intake = parseRoleIntake(jd)
     expect(intake.title).toContain('Program Director')
@@ -18,13 +19,15 @@ describe('V20 role workspace', () => {
     expect(intake.mustHaves).toContain('AWS')
   })
 
-  it('starts with internal database and network reuse before external discovery', () => {
-    const lanes = buildSearchLanes(parseRoleIntake(jd))
-    expect(lanes[0].source).toBe('candidate_database')
+  it('persists the canonical hypothesis plan instead of a second source-centric plan', () => {
+    const intake = parseRoleIntake(jd)
+    const lanes = buildSearchLanes(intake)
+    const canonical = buildCanonicalAgenticSearchPlan(intake)
+    expect(lanes.map(lane => lane.id)).toEqual(canonical.lanes.map(lane => lane.id))
+    expect(lanes[0].id).toBe('exact_title')
     expect(lanes[0].status).toBe('approved')
-    expect(lanes[1].source).toBe('network')
-    expect(lanes[1].status).toBe('approved')
-    expect(lanes.some(lane => lane.source === 'resume_xray')).toBe(true)
+    expect(lanes.some(lane => lane.id === 'database')).toBe(false)
+    expect(lanes.every(lane => lane.purpose.includes('Blind spot:'))).toBe(true)
   })
 
   it('creates a calibrating role with an audit event and no invented candidates', () => {
