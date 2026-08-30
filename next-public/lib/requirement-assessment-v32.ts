@@ -1,5 +1,5 @@
 import { ALL_TAXONOMY, type EntityType } from '@/data/search-taxonomy'
-import { containsBoundedTerm, type EvidenceSpan } from '@/lib/evidence-span'
+import { containsBoundedTerm, spanMatchesSource, type EvidenceSpan } from '@/lib/evidence-span'
 import type { EvidenceClaim } from '@/lib/evidence-ledger'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
 
@@ -28,6 +28,14 @@ export type RequirementAssessmentTally = {
   unknown: number
   total: number
 }
+
+/**
+ * Optional source text supplied by callers that construct EvidenceClaim objects
+ * outside the canonical Evidence Ledger. The canonical ledger marks spans as
+ * validated after checking them against stored source_profiles.raw_text. Direct
+ * callers must either provide source text here or their spans fail closed.
+ */
+export type RequirementSourceTexts = ReadonlyMap<string, string> | Readonly<Record<string, string>>
 
 type Concept = {
   canonical: string
@@ -98,7 +106,23 @@ function requirementKind(requirementText: string, concepts: Concept[]): Requirem
   return 'general'
 }
 
-function claimSpan(claim: EvidenceClaim): EvidenceSpan | undefined {
+function sourceTextFor(sourceTexts: RequirementSourceTexts | undefined, sourceTextRef: string): string | undefined {
+  if (!sourceTexts) return undefined
+  if (sourceTexts instanceof Map) return sourceTexts.get(sourceTextRef)
+  const value = sourceTexts[sourceTextRef]
+  return typeof value === 'string' ? value : undefined
+}
+
+/**
+ * A span is usable for support only when its offsets are internally valid AND
+ * either the canonical Evidence Ledger already revalidated it against stored
+ * source text (`spanValidated === true`) or this caller independently supplies
+ * the source text and the offsets/text round-trip exactly.
+ *
+ * This prevents future paste-back/provider adapters from manufacturing a
+ * superficially consistent EvidenceClaim that bypasses the ledger.
+ */
+function claimSpan(claim: EvidenceClaim, sourceTexts?: RequirementSourceTexts): EvidenceSpan | undefined {
   if (
     typeof claim.sourceTextRef !== 'string'
     || !Number.isInteger(claim.spanStart)
@@ -107,14 +131,17 @@ function claimSpan(claim: EvidenceClaim): EvidenceSpan | undefined {
     || !claim.spanText
   ) return undefined
 
-  const span = {
+  const span: EvidenceSpan = {
     sourceTextRef: claim.sourceTextRef,
     start: claim.spanStart as number,
     end: claim.spanEnd as number,
     text: claim.spanText,
   }
   if (span.start < 0 || span.end <= span.start || span.text.length !== span.end - span.start) return undefined
-  return span
+
+  const sourceText = sourceTextFor(sourceTexts, span.sourceTextRef)
+  if (typeof sourceText === 'string') return spanMatchesSource(sourceText, span) ? span : undefined
+  return claim.spanValidated === true ? span : undefined
 }
 
 /** Relevance can exist without a span; it may produce Needs verification, never Supported. */
@@ -124,8 +151,8 @@ function claimTextMatchesConcept(claim: EvidenceClaim, concept: Concept): boolea
 }
 
 /** Support is stricter: the recognized concept itself must be inside a validated source span. */
-function claimSpanMatchesConcept(claim: EvidenceClaim, concept: Concept): boolean {
-  const span = claimSpan(claim)
+function claimSpanMatchesConcept(claim: EvidenceClaim, concept: Concept, sourceTexts?: RequirementSourceTexts): boolean {
+  const span = claimSpan(claim, sourceTexts)
   return Boolean(span && concept.aliases.some(alias => containsBoundedTerm(span.text, alias)))
 }
 
@@ -174,10 +201,13 @@ function buildRequirements(intake: RoleIntake): Array<{ text: string; tier: Requ
   })
 }
 
-function conflictingClaimsThatDisagree(matchingClaims: EvidenceClaim[]): EvidenceClaim[] {
+function conflictingClaimsThatDisagree(
+  matchingClaims: EvidenceClaim[],
+  sourceTexts?: RequirementSourceTexts,
+): EvidenceClaim[] {
   const byGroup = new Map<string, EvidenceClaim[]>()
   for (const claim of matchingClaims) {
-    if (!claim.conflictGroup) continue
+    if (!claim.conflictGroup || !claimSpan(claim, sourceTexts)) continue
     const group = byGroup.get(claim.conflictGroup) || []
     group.push(claim)
     byGroup.set(claim.conflictGroup, group)
@@ -199,11 +229,12 @@ function assessRequirement(
   requirementId: string,
   claims: EvidenceClaim[],
   candidate?: RoleCandidate,
+  sourceTexts?: RequirementSourceTexts,
 ): RequirementAssessment {
   const concepts = requirementConcepts(requirementText)
   const kind = requirementKind(requirementText, concepts)
   const matchingClaims = claims.filter(claim => claimTextMatchesRequirement(claim, concepts))
-  const contradictions = conflictingClaimsThatDisagree(matchingClaims)
+  const contradictions = conflictingClaimsThatDisagree(matchingClaims, sourceTexts)
   const recruiterContext = recruiterContextForRequirement(candidate, concepts)
 
   if (contradictions.length) {
@@ -215,10 +246,10 @@ function assessRequirement(
       state: 'contradicted',
       claims: matchingClaims,
       strongestSourceType: strongestSourceType(matchingClaims),
-      spans: matchingClaims.map(claimSpan).filter((span): span is EvidenceSpan => Boolean(span)),
+      spans: matchingClaims.map(claim => claimSpan(claim, sourceTexts)).filter((span): span is EvidenceSpan => Boolean(span)),
       contradictions,
       recruiterContext,
-      rationale: 'Claims in the same conflict group explicitly disagree about this requirement. Absence alone is never treated as contradiction.',
+      rationale: 'Span-backed claims in the same conflict group explicitly disagree about this requirement. Absence alone is never treated as contradiction.',
     }
   }
 
@@ -227,7 +258,7 @@ function assessRequirement(
     const conceptClaims = matchingClaims.filter(claim => claimTextMatchesConcept(claim, concept))
     const strongWithSpan = conceptClaims.filter(claim =>
       (claim.evidenceClass === 'verified_fact' || claim.evidenceClass === 'supported_inference')
-      && claimSpanMatchesConcept(claim, concept),
+      && claimSpanMatchesConcept(claim, concept, sourceTexts),
     )
     const strongAllowed = sensitive
       ? strongWithSpan.filter(claim => claim.sourceType === 'authoritative_registry')
@@ -246,10 +277,10 @@ function assessRequirement(
       state: 'supported',
       claims: supportingClaims,
       strongestSourceType: strongestSourceType(supportingClaims),
-      spans: supportingClaims.map(claimSpan).filter((span): span is EvidenceSpan => Boolean(span)),
+      spans: supportingClaims.map(claim => claimSpan(claim, sourceTexts)).filter((span): span is EvidenceSpan => Boolean(span)),
       contradictions: [],
       recruiterContext,
-      rationale: 'Every recognized requirement concept has span-backed verified or supported evidence from an allowed source class.',
+      rationale: 'Every recognized requirement concept has independently validated span-backed verified or supported evidence from an allowed source class.',
     }
   }
 
@@ -264,7 +295,7 @@ function assessRequirement(
   if (hasReviewableEvidence || recruiterContext.length) {
     const reason = sensitive
       ? 'Relevant evidence exists, but this requirement needs authoritative or recruiter verification before consequential use.'
-      : 'Relevant evidence or recruiter context exists, but it does not satisfy the span-backed support rule for every requirement concept.'
+      : 'Relevant evidence or recruiter context exists, but it does not satisfy the validated span-backed support rule for every requirement concept.'
     return {
       requirementId,
       requirementText,
@@ -273,7 +304,7 @@ function assessRequirement(
       state: 'needs_verification',
       claims: matchingClaims,
       strongestSourceType: strongestSourceType(matchingClaims),
-      spans: matchingClaims.map(claimSpan).filter((span): span is EvidenceSpan => Boolean(span)),
+      spans: matchingClaims.map(claim => claimSpan(claim, sourceTexts)).filter((span): span is EvidenceSpan => Boolean(span)),
       contradictions: [],
       recruiterContext,
       rationale: reason,
@@ -308,6 +339,7 @@ export function buildRequirementAssessments(
   intake: RoleIntake,
   claims: EvidenceClaim[],
   candidate?: RoleCandidate,
+  sourceTexts?: RequirementSourceTexts,
 ): RequirementAssessment[] {
   return buildRequirements(intake).map((requirement, index) =>
     assessRequirement(
@@ -316,6 +348,7 @@ export function buildRequirementAssessments(
       stableRequirementId(requirement.tier, requirement.text, index),
       claims,
       candidate,
+      sourceTexts,
     ),
   )
 }
