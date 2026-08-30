@@ -14,11 +14,7 @@ import {
   type RoleWorkspace,
 } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
-import {
-  CandidateComparisonDialog,
-  CandidateReviewDrawer,
-  candidateReviewScore,
-} from '@/components/CandidateReviewPro'
+import { CandidateComparisonDialog, CandidateReviewDrawer } from '@/components/CandidateReviewPro'
 import { ProductIcon } from '@/components/ProductIcon'
 import { RoleCalibrationPanel } from '@/components/RoleCalibrationPanel'
 import { RoleReportsPanel } from '@/components/RoleReportsPanel'
@@ -311,14 +307,13 @@ export function RoleDetailClient({ roleId, initialTab }: { roleId: string; initi
 
         <div className="candidate-review-list">
           {filteredCandidates.map(candidate => {
-            const score = candidateReviewScore(candidate, role.intake)
             const selected = selectedIds.includes(candidate.id)
             return <article className={`candidate-review-row ${selected ? 'selected' : ''}`} key={candidate.id}>
               <label className="candidate-review-checkbox"><input type="checkbox" checked={selected} onChange={() => toggleSelected(candidate.id)} aria-label={`Select ${candidate.name}`} /></label>
               <button className="candidate-review-open" onClick={() => setSelectedCandidateId(candidate.id)}>
                 <span className="candidate-review-avatar"><ProductIcon name="candidates" /></span>
-                <span className="candidate-review-main"><span className="candidate-review-name-row"><b>{candidate.name}</b><span className={`status-pill ${candidate.fitDecision === 'strong_fit' ? 'success' : candidate.fitDecision === 'possible_fit' ? 'active' : candidate.fitDecision === 'not_fit' ? 'warning' : ''}`}>{words(candidate.fitDecision)}</span>{candidate.evidenceStatus === 'conflicting' && <span className="status-pill warning">evidence conflict</span>}</span><span className="candidate-review-meta">{[candidate.headline, candidate.company, candidate.location, candidate.source].filter(Boolean).join(' · ') || 'Details pending review'}</span><span className="candidate-review-signals">{candidate.fitReasons[0] || candidate.concerns[0] || 'Role evidence has not been summarized yet.'}</span><span className="chips">{candidate.tags.slice(0, 5).map(tag => <span className="tag" key={tag}>{tag}</span>)}</span></span>
-                <span className="candidate-review-row-aside"><span className={`candidate-review-score ${score >= 70 ? 'strong' : score >= 45 ? 'supported' : ''}`}>{score}</span><span className="status-pill">{stageLabel(candidate.stage)}</span><span className="candidate-review-link">Review →</span></span>
+                <span className="candidate-review-main"><span className="candidate-review-name-row"><b>{candidate.name}</b><span className={`status-pill ${candidate.fitDecision === 'strong_fit' ? 'success' : candidate.fitDecision === 'possible_fit' ? 'active' : candidate.fitDecision === 'not_fit' ? 'warning' : ''}`}>{words(candidate.fitDecision)}</span>{candidate.evidenceStatus === 'conflicting' && <span className="status-pill warning">evidence conflict</span>}</span><span className="candidate-review-meta">{[candidate.headline, candidate.company, candidate.location, candidate.source].filter(Boolean).join(' · ') || 'Details pending review'}</span><span className="candidate-review-signals">{candidate.fitReasons[0] || candidate.concerns[0] || 'Recruiter context has not been recorded yet.'}</span><span className="chips">{candidate.tags.slice(0, 5).map(tag => <span className="tag" key={tag}>{tag}</span>)}</span></span>
+                <span className="candidate-review-row-aside"><span className="status-pill">{words(candidate.evidenceStatus)}</span><span className="status-pill">{stageLabel(candidate.stage)}</span><span className="candidate-review-link">Review →</span></span>
               </button>
             </article>
           })}
@@ -346,6 +341,7 @@ export function RoleDetailClient({ roleId, initialTab }: { roleId: string; initi
     {selectedCandidate && <CandidateReviewDrawer
       candidate={selectedCandidate}
       intake={role.intake}
+      roleId={role.id}
       position={Math.max(1, filteredCandidates.findIndex(candidate => candidate.id === selectedCandidate.id) + 1)}
       total={filteredCandidates.length || role.candidates.length}
       hasNext={Boolean(nextCandidateId(selectedCandidate.id))}
