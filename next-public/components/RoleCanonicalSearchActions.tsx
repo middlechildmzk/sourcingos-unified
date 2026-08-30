@@ -33,9 +33,11 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
   const isApproved = Boolean(lane && (approved.has(lane.id) || legacyFallback))
 
   if (!role || !plan || mode === 'checking') return null
+  const activeRole = role
+  const activePlan = plan
 
   function setStatus(targetId: string, status: 'approved' | 'paused') {
-    updateRole(role.id, current => {
+    updateRole(activeRole.id, current => {
       const previous = new Map(current.searchLanes.filter(item => CANONICAL_IDS.has(item.id)).map(item => [item.id, item.status]))
       const searchLanes = buildSearchLanes(current.intake).map(item => ({
         ...item,
@@ -56,7 +58,7 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
     if (!isApproved) return setNotice('Approve this hypothesis before using its recruiter-run query.')
     try {
       await navigator.clipboard.writeText(query)
-      setNotice(`${label} query copied from Search Plan v${plan.revision}. You still run the guided source in your authorized account.`)
+      setNotice(`${label} query copied from Search Plan v${activePlan.revision}. You still run the guided source in your authorized account.`)
     } catch {
       setNotice('Copy failed. Select the query and copy it manually.')
     }
@@ -64,8 +66,8 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
 
   return <section className="role-search-studio" aria-label="Canonical role search plan">
     <div className="role-search-studio-head">
-      <div><div className="role-search-eyebrow"><span>One Search Brain</span><span className="status-pill active">Search Plan v{plan.revision}</span></div><h2>Source {role.intake.title} from one plan.</h2><p>Hypothesis, guided queries, executable sources, and calibration now share the same canonical lane IDs.</p></div>
-      <Link className="btn role-search-primary-action" href={`/app/agentic-sourcing/${encodeURIComponent(role.id)}`}>Open supported-source run →</Link>
+      <div><div className="role-search-eyebrow"><span>One Search Brain</span><span className="status-pill active">Search Plan v{activePlan.revision}</span></div><h2>Source {activeRole.intake.title} from one plan.</h2><p>Hypothesis, guided queries, executable sources, and calibration now share the same canonical lane IDs.</p></div>
+      <Link className="btn role-search-primary-action" href={`/app/agentic-sourcing/${encodeURIComponent(activeRole.id)}`}>Open supported-source run →</Link>
     </div>
 
     {!persisted.length && <div className="cta" style={{ marginBottom: 12 }}><b>Legacy role detected.</b> Approving a hypothesis below migrates its old source-lane state to canonical hypothesis IDs without changing candidates.</div>}
@@ -73,10 +75,10 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
     <div className="role-guided-search-area">
       <div className="role-guided-search-head">
         <div><span className="kicker">Canonical sourcing hypothesis</span><h3>{lane?.label}</h3><p>{lane?.hypothesis}</p>{lane?.blindSpot && <small className="muted">Blind spot: {lane.blindSpot}</small>}</div>
-        <div className="role-lane-switcher" role="group" aria-label="Canonical search hypothesis">{plan.lanes.map(item => <button key={item.id} className={lane?.id === item.id ? 'active' : ''} onClick={() => setLaneId(item.id)}>{item.label}</button>)}</div>
+        <div className="role-lane-switcher" role="group" aria-label="Canonical search hypothesis">{activePlan.lanes.map(item => <button key={item.id} className={lane?.id === item.id ? 'active' : ''} onClick={() => setLaneId(item.id)}>{item.label}</button>)}</div>
       </div>
 
-      {lane && <div className="role-calibration-banner"><div><span className="role-calibration-spark">✦</span><div><b>{isApproved ? 'Approved hypothesis' : 'Awaiting recruiter approval'}</b><p>Calibration changes increment this same plan revision rather than creating a second guided plan.</p></div></div><div className="button-row">{!isApproved ? <button className="btn secondary" onClick={() => setStatus(lane.id, 'approved')}>Approve hypothesis</button> : <button className="btn ghost" onClick={() => setStatus(lane.id, 'paused')}>Pause hypothesis</button>}<Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=calibration`}>Inspect learning</Link></div></div>}
+      {lane && <div className="role-calibration-banner"><div><span className="role-calibration-spark">✦</span><div><b>{isApproved ? 'Approved hypothesis' : 'Awaiting recruiter approval'}</b><p>Calibration changes increment this same plan revision rather than creating a second guided plan.</p></div></div><div className="button-row">{!isApproved ? <button className="btn secondary" onClick={() => setStatus(lane.id, 'approved')}>Approve hypothesis</button> : <button className="btn ghost" onClick={() => setStatus(lane.id, 'paused')}>Pause hypothesis</button>}<Link className="btn ghost" href={`/app/roles/${encodeURIComponent(activeRole.id)}?tab=calibration`}>Inspect learning</Link></div></div>}
 
       {lane && <div className="role-search-surface-grid">{GUIDED.map(meta => {
         const task = taskFor(lane, meta.surface)
@@ -88,11 +90,11 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
           <textarea className="input search-query-box" rows={5} readOnly value={task.query} />
           <p className="muted" style={{ fontSize: 11, lineHeight: 1.5 }}>{task.truth}</p>
           <div className="button-row"><button className="btn secondary" disabled={!isApproved} onClick={() => void copy(meta.label, task.query)}>Copy query</button>{meta.surface === 'google_xray' && isApproved && <a className="btn ghost" href={`https://www.google.com/search?q=${encodeURIComponent(task.query)}`} target="_blank" rel="noreferrer noopener">Open Google ↗</a>}</div>
-          {changed && before && <details className="advanced-disclosure"><summary>What approved learning changed</summary><small>Baseline</small><code>{before.query}</code><small>Search Plan v{plan.revision}</small><code>{task.query}</code></details>}
+          {changed && before && <details className="advanced-disclosure"><summary>What approved learning changed</summary><small>Baseline</small><code>{before.query}</code><small>Search Plan v{activePlan.revision}</small><code>{task.query}</code></details>}
         </article>
       })}</div>}
 
-      {!!plan.integrityWarnings.length && <div className="role-search-verify"><b>Plan integrity</b><span>{plan.integrityWarnings.join(' ')}</span></div>}
+      {!!activePlan.integrityWarnings.length && <div className="role-search-verify"><b>Plan integrity</b><span>{activePlan.integrityWarnings.join(' ')}</span></div>}
     </div>
     {notice && <div className="cta role-search-status" role="status">{notice}</div>}
   </section>
