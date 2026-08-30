@@ -29,6 +29,8 @@ export function RolePasteBackV33({ roleId }: { roleId: string }) {
   const [lastCandidateId, setLastCandidateId] = useState('')
 
   if (!role || !plan || mode === 'checking') return null
+  const activeRole = role
+  const activePlan = plan
 
   async function importCandidate() {
     if (!lane || working) return
@@ -45,7 +47,7 @@ export function RolePasteBackV33({ roleId }: { roleId: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           text,
-          fileName: `role-${role.id}-${surface}.txt`,
+          fileName: `role-${activeRole.id}-${surface}.txt`,
           name: name.trim() || undefined,
           profileUrl: url.trim() || undefined,
           headline: parsed.currentTitle || undefined,
@@ -56,11 +58,11 @@ export function RolePasteBackV33({ roleId }: { roleId: string }) {
       const json = await response.json() as ImportResponse
       if (!response.ok || !json.ok || !json.candidate) throw new Error(json.error || 'Candidate import failed.')
 
-      const linkInput = candidateImportToRoleLinkInput({ candidate: json.candidate, sourceProfile: json.sourceProfile, surface, laneLabel: lane.label, planRevision: plan.revision, sourceUrl: url })
-      const updated = updateRole(role.id, current => addCanonicalCandidateToRole(current, linkInput).workspace)
+      const linkInput = candidateImportToRoleLinkInput({ candidate: json.candidate, sourceProfile: json.sourceProfile, surface, laneLabel: lane.label, planRevision: activePlan.revision, sourceUrl: url })
+      const updated = updateRole(activeRole.id, current => addCanonicalCandidateToRole(current, linkInput).workspace)
       if (!updated) throw new Error('Candidate imported, but the role workspace could not be updated.')
 
-      setNotice(`${linkInput.displayName} is in the review queue from ${lane.label}, Search Plan v${plan.revision}. Pasted text remains recruiter-provided evidence, not verified truth.`)
+      setNotice(`${linkInput.displayName} is in the review queue from ${lane.label}, Search Plan v${activePlan.revision}. Pasted text remains recruiter-provided evidence, not verified truth.`)
       setLastCandidateId(json.candidate.id)
       setName('')
       setUrl('')
@@ -78,15 +80,15 @@ export function RolePasteBackV33({ roleId }: { roleId: string }) {
       <div className="role-pasteback-content">
         <p>Use this after a guided recruiter-run search. Search context explains where the candidate came from; it never becomes candidate proof.</p>
         <div className="grid three">
-          <label>Search hypothesis<select value={lane?.id || ''} onChange={event => setLaneId(event.target.value)}>{(approvedLanes.length ? approvedLanes : plan.lanes.slice(0, 1)).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          <label>Search hypothesis<select value={lane?.id || ''} onChange={event => setLaneId(event.target.value)}>{(approvedLanes.length ? approvedLanes : activePlan.lanes.slice(0, 1)).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
           <label>Source surface<select value={surface} onChange={event => setSurface(event.target.value as RecruiterPasteBackSurface)}>{Object.entries(RECRUITER_PASTE_BACK_SURFACES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Profile/source URL (optional)<input className="input" value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…" /></label>
         </div>
         <label>Candidate name (optional)<input className="input" value={name} onChange={event => setName(event.target.value)} /></label>
         <label>Candidate profile or resume text<textarea className="input" rows={9} value={text} onChange={event => setText(event.target.value)} placeholder="Paste recruiter-provided candidate text here…" /></label>
-        <div className="role-pasteback-footer"><button className="btn" disabled={working} onClick={() => void importCandidate()}>{working ? 'Importing…' : 'Import & add to role'}</button><span>{lane?.label || 'Role search'} · Search Plan v{plan.revision}</span></div>
+        <div className="role-pasteback-footer"><button className="btn" disabled={working} onClick={() => void importCandidate()}>{working ? 'Importing…' : 'Import & add to role'}</button><span>{lane?.label || 'Role search'} · Search Plan v{activePlan.revision}</span></div>
       </div>
     </details>
-    {notice && <div className="cta role-search-status" role="status"><span>{notice}</span>{lastCandidateId && <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(role.id)}?tab=candidates`}>Review role candidates</Link>}</div>}
+    {notice && <div className="cta role-search-status" role="status"><span>{notice}</span>{lastCandidateId && <Link className="btn ghost" href={`/app/roles/${encodeURIComponent(activeRole.id)}?tab=candidates`}>Review role candidates</Link>}</div>}
   </section>
 }
