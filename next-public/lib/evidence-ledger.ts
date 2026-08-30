@@ -1,3 +1,5 @@
+import { sourceProfileTextRef, spanMatchesSource, type EvidenceSpan } from '@/lib/evidence-span'
+
 export const EVIDENCE_CLASSES = [
   'verified_fact',
   'supported_inference',
@@ -24,6 +26,7 @@ export type LegacyCandidateDbSnapshot = {
     candidateId?: string
     source: string
     profileUrl?: string
+    rawText?: string
   }>
   evidenceItems: Array<{
     id: string
@@ -34,6 +37,10 @@ export type LegacyCandidateDbSnapshot = {
     detail: string
     confidence: 'low' | 'medium' | 'high'
     url?: string
+    spanStart?: number
+    spanEnd?: number
+    spanText?: string
+    sourceTextRef?: string
     createdAt: string
   }>
   contactSignals: Array<{
@@ -95,6 +102,13 @@ export type EvidenceClaim = {
   permittedUse: PermittedUse
   containsPii: boolean
   notes: string[]
+  /** Exact offsets are exposed only after they validate against stored source text. */
+  spanStart?: number
+  spanEnd?: number
+  spanText?: string
+  sourceTextRef?: string
+  /** Set only by a canonical adapter after the span round-trips against stored source text. */
+  spanValidated?: boolean
 }
 
 export type CandidateEvidenceCard = {
@@ -200,6 +214,31 @@ function summarizeClaims(claims: EvidenceClaim[]): CandidateEvidenceCard['summar
   }, emptySummary())
 }
 
+function validatedSpanForItem(
+  item: LegacyCandidateDbSnapshot['evidenceItems'][number],
+  sourceProfileTexts: Map<string, string | undefined>,
+): EvidenceSpan | undefined {
+  if (
+    typeof item.spanStart !== 'number'
+    || typeof item.spanEnd !== 'number'
+    || typeof item.spanText !== 'string'
+    || typeof item.sourceTextRef !== 'string'
+  ) return undefined
+
+  const span: EvidenceSpan = {
+    start: item.spanStart,
+    end: item.spanEnd,
+    text: item.spanText,
+    sourceTextRef: item.sourceTextRef,
+  }
+
+  if (!item.sourceProfileId) return undefined
+  if (item.sourceTextRef !== sourceProfileTextRef(item.sourceProfileId)) return undefined
+  const storedSourceText = sourceProfileTexts.get(item.sourceProfileId)
+  if (typeof storedSourceText !== 'string' || !spanMatchesSource(storedSourceText, span)) return undefined
+  return span
+}
+
 export function buildEvidenceLedger(
   snapshot: LegacyCandidateDbSnapshot,
   options: { candidateId?: string; now?: Date } = {},
@@ -207,6 +246,7 @@ export function buildEvidenceLedger(
   const now = options.now || new Date()
   const sourceProfileOwners = new Map(snapshot.sourceProfiles.map(profile => [profile.id, profile.candidateId]))
   const sourceProfileUrls = new Map(snapshot.sourceProfiles.map(profile => [profile.id, profile.profileUrl]))
+  const sourceProfileTexts = new Map(snapshot.sourceProfiles.map(profile => [profile.id, profile.rawText]))
   const claims: EvidenceClaim[] = []
 
   for (const item of snapshot.evidenceItems) {
@@ -215,6 +255,7 @@ export function buildEvidenceLedger(
     const freshnessWindowDays = item.label.toLowerCase().includes('skill') ? 180 : 120
     const freshness = freshnessFor(item.createdAt, freshnessWindowDays, now)
     const baseEvidenceClass = baseClassForEvidence(item.label, item.source)
+    const span = validatedSpanForItem(item, sourceProfileTexts)
     claims.push({
       id: `evidence:${item.id}`,
       candidateId,
@@ -234,9 +275,19 @@ export function buildEvidenceLedger(
       reviewerStatus: baseEvidenceClass === 'verified_fact' ? 'unreviewed' : 'requires_review',
       permittedUse: 'research_only',
       containsPii: false,
-      notes: baseEvidenceClass === 'verified_fact'
-        ? ['Verified means the artifact or URL exists; identity and employment implications still require review.']
-        : ['Legacy evidence was adapted into the V19 ledger and has not been independently re-verified.'],
+      notes: [
+        baseEvidenceClass === 'verified_fact'
+          ? 'Verified means the artifact or URL exists; identity and employment implications still require review.'
+          : 'Legacy evidence was adapted into the V19 ledger and has not been independently re-verified.',
+        span ? 'Source span revalidated against stored source text.' : 'No valid stored source span is available; this claim cannot by itself support a V32 requirement.',
+      ],
+      ...(span ? {
+        spanStart: span.start,
+        spanEnd: span.end,
+        spanText: span.text,
+        sourceTextRef: span.sourceTextRef,
+        spanValidated: true,
+      } : {}),
     })
   }
 
@@ -364,6 +415,7 @@ export function buildEvidenceLedger(
       'Verified Fact means the specific claim is directly supported; it does not verify unrelated identity, employment, clearance, availability, or consent conclusions.',
       'Supported Inference requires corroborating evidence and human review before consequential use.',
       'Weak, stale, unknown, and conflicting claims remain visible and cannot silently become facts.',
+      'A V32 supported role requirement always requires a source span revalidated against stored source text.',
       'Contact and availability signals never imply consent or permission to contact.',
       'Identity conflicts and merges remain recruiter-controlled and reversible.',
     ],

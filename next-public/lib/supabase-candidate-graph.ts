@@ -135,6 +135,10 @@ export async function persistCandidateGraphSnapshot(
       detail: e.detail,
       confidence: e.confidence || 'medium',
       url: e.url || null,
+      span_start: e.spanStart ?? null,
+      span_end: e.spanEnd ?? null,
+      span_text: e.spanText || null,
+      source_text_ref: e.sourceTextRef || null,
       created_at: e.createdAt,
     }))
     const { error, count } = await sb
@@ -156,7 +160,7 @@ export async function persistCandidateGraphSnapshot(
       value: ct.value,
       source: ct.source,
       confidence: ct.confidence || 'medium',
-      verified: false as const,   // always false — enforced at DB level too
+      verified: false as const,
       permission_status: ct.permissionStatus || 'unknown',
       created_at: ct.createdAt,
     }))
@@ -179,7 +183,7 @@ export async function persistCandidateGraphSnapshot(
       label: s.label,
       detail: s.detail,
       confidence: s.confidence || 'medium',
-      requires_review: true as const,  // always true
+      requires_review: true as const,
       created_at: s.createdAt,
     }))
     const { error, count } = await sb

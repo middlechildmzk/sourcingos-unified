@@ -6,7 +6,7 @@ const root = path.resolve(__dirname, '..')
 const detail = fs.readFileSync(path.join(root, 'components/RoleDetailClient.tsx'), 'utf8')
 const panel = fs.readFileSync(path.join(root, 'components/RoleCalibrationPanel.tsx'), 'utf8')
 
-describe('V27 role calibration surface', () => {
+describe('V27 role calibration surface under V32 evidence semantics', () => {
   it('adds a calibration tab with a pending-review badge', () => {
     expect(detail).toContain("'overview', 'candidates', 'calibration', 'strategy', 'activity'")
     expect(detail).toContain('pendingCalibration')
@@ -28,17 +28,20 @@ describe('V27 role calibration surface', () => {
     expect(panel).toContain('Nothing is learned silently')
   })
 
-  it('shows before-and-after ranking explanation and lane recommendations without auto-applying', () => {
-    expect(panel).toContain('How approved learning changes this search')
-    expect(panel).toContain('rankCandidatesWithCalibration')
+  it('uses approved learning for search-lane recommendations without candidate qualification ranking', () => {
+    expect(panel).toContain('How calibration can change search strategy')
     expect(panel).toContain('recommendLaneChanges')
     expect(panel).toContain('Review in strategy')
+    expect(panel).toContain('does not assign 0–100 qualification scores')
+    expect(panel).not.toContain('rankCandidatesWithCalibration')
+    expect(panel).not.toContain('candidateReviewScore')
     expect(panel).not.toContain('lane.status =')
   })
 
   it('keeps uncertain evidence visible instead of resolving it through learning', () => {
-    expect(panel).toContain('Still uncertain')
-    expect(panel).toContain('Learning does not resolve evidence')
+    expect(panel).toContain('Evidence review still required')
+    expect(panel).toContain('Calibration cannot resolve that evidence')
+    expect(panel).toContain('Candidate 360')
   })
 
   it('uses accessible controls with labels', () => {

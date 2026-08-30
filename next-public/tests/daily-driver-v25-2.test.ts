@@ -26,9 +26,6 @@ describe('V25.2 daily driver experience', () => {
     expect(rolePortfolio).toContain('Role portfolio')
     expect(rolePortfolio).toContain('<RoleIntakeWizard')
     expect(roleWizard).toContain('Guided role setup')
-    // Next 15+ async params: the page awaits params/searchParams, then passes the
-    // resolved values straight through. Intent is unchanged: the route id and the
-    // tab query param must both reach RoleDetailClient.
     expect(roleDetailPage).toContain('const { id } = await params')
     expect(roleDetailPage).toContain('<RoleDetailClient roleId={id} initialTab={sp.tab} />')
   })
@@ -45,8 +42,9 @@ describe('V25.2 daily driver experience', () => {
     expect(roleDetail).toContain('CandidateReviewDrawer')
     expect(roleDetail).toContain('Candidate Review Pro')
     expect(candidateReview).toContain('candidate-drawer-layer')
-    expect(candidateReview).toContain('Role evidence matrix')
-    expect(candidateReview).toContain('Strongest source evidence')
+    expect(candidateReview).toContain('Workflow context')
+    expect(candidateReview).toContain('Source evidence and recruiter context')
+    expect(candidateReview).toContain('Requirement support is calculated separately from source-linked Evidence Claims in Candidate 360.')
     expect(candidateReview).toContain('Save & next')
     expect(candidateReview).toContain('/api/candidate-db/360/')
     expect(candidateReview).toContain("action: 'queue_enrichment'")

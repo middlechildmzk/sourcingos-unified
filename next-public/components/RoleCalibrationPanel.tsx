@@ -6,14 +6,12 @@ import {
   applyInsightAction,
   insightDisplayStatement,
   pendingInsightCount,
-  rankCandidatesWithCalibration,
   recommendLaneChanges,
   reconcileCalibrationState,
   type CalibrationInsight,
   type InsightAction,
   type InsightScope,
 } from '@/lib/calibration-intelligence'
-import { candidateReviewScore } from '@/components/CandidateReviewPro'
 
 function words(value: string): string {
   return value.replaceAll('_', ' ')
@@ -53,9 +51,6 @@ export function RoleCalibrationPanel({
   const [notice, setNotice] = useState('')
   const reconciling = useRef(false)
 
-  // Re-derive patterns whenever recorded decisions change. Reviewer decisions are
-  // preserved by reconcileCalibrationState; we only persist when content changed,
-  // so this cannot loop.
   const decisionsKey = useMemo(
     () => role.candidates.map(candidate => `${candidate.id}:${candidate.fitDecision}:${candidate.evidenceStatus}:${candidate.concerns.length}:${candidate.fitReasons.length}`).join('|'),
     [role.candidates]
@@ -74,13 +69,12 @@ export function RoleCalibrationPanel({
   const insights = state?.insights || []
   const pending = pendingInsightCount(state)
   const candidateById = useMemo(() => new Map(role.candidates.map(candidate => [candidate.id, candidate])), [role.candidates])
-
-  const ranking = useMemo(
-    () => rankCandidatesWithCalibration(role.candidates, candidate => candidateReviewScore(candidate, role.intake), state),
-    [role.candidates, role.intake, state]
-  )
   const laneRecommendations = useMemo(() => recommendLaneChanges(role.searchLanes, state), [role.searchLanes, state])
   const timeline = useMemo(() => [...(state?.events || [])].reverse().slice(0, 40), [state])
+  const uncertainEvidenceCount = useMemo(
+    () => role.candidates.filter(candidate => candidate.evidenceStatus === 'conflicting' || candidate.evidenceStatus === 'stale').length,
+    [role.candidates]
+  )
 
   function review(insightId: string, action: InsightAction, options: { editedStatement?: string; scope?: InsightScope } = {}) {
     onUpdate(workspace => {
@@ -112,8 +106,8 @@ export function RoleCalibrationPanel({
         </div>
         <p className="muted normal-wrap">
           These are patterns detected in your recorded candidate decisions. They are not verified facts, and none of them
-          changes ranking or search strategy until you approve it. Approve, edit, reject, or pause each one; every action
-          can be rolled back.
+          changes search strategy until you approve it. Approval can suggest search-lane changes; it never turns recruiter
+          notes into requirement evidence, reorders people by qualification, or makes a hiring decision.
         </p>
         {notice && <p className="muted normal-wrap" role="status">{notice}</p>}
         <div className="product-list">
@@ -139,10 +133,10 @@ export function RoleCalibrationPanel({
                   {insight.contradictionNote && <div className="product-row-meta normal-wrap">Contradiction: {insight.contradictionNote}</div>}
                   {expanded && (
                     <div className="product-row-meta normal-wrap">
-                      <div><b>Supporting:</b> {supporting.length ? supporting.map(item => (
+                      <div><b>Supporting decisions:</b> {supporting.length ? supporting.map(item => (
                         <button key={item.id} className="btn ghost" onClick={() => onOpenCandidate(item.id)} aria-label={`Open ${item.name}`}>{item.name}</button>
                       )) : 'None recorded'}</div>
-                      <div><b>Contradicting:</b> {contradicting.length ? contradicting.map(item => (
+                      <div><b>Contradicting decisions:</b> {contradicting.length ? contradicting.map(item => (
                         <button key={item.id} className="btn ghost" onClick={() => onOpenCandidate(item.id)} aria-label={`Open ${item.name}`}>{item.name}</button>
                       )) : 'None recorded'}</div>
                     </div>
@@ -206,55 +200,46 @@ export function RoleCalibrationPanel({
       <section className="product-panel">
         <div className="product-panel-head">
           <div>
-            <span className="kicker">Before and after</span>
-            <h2>How approved learning changes this search</h2>
+            <span className="kicker">Approved learning</span>
+            <h2>How calibration can change search strategy</h2>
           </div>
-          <span>{ranking.changes.length} ranking change{ranking.changes.length === 1 ? '' : 's'}</span>
+          <span>{laneRecommendations.length} lane recommendation{laneRecommendations.length === 1 ? '' : 's'}</span>
         </div>
+        <p className="muted normal-wrap">
+          Approved learning may recommend which search lanes to review next. It does not assign 0–100 qualification scores or
+          modify the requirement evidence matrix. Lane changes still require recruiter action in Strategy.
+        </p>
         <div className="product-list">
-          {ranking.changes.map(change => (
-            <div className="product-row" key={change.candidateId}>
+          {laneRecommendations.map(recommendation => (
+            <div className="product-row" key={`${recommendation.laneId}-${recommendation.recommendation}`}>
               <div className="product-row-main">
-                <div className="product-row-title">{change.candidateName} moved {change.direction} ({change.delta > 0 ? '+' : ''}{change.delta})</div>
-                <div className="product-row-meta normal-wrap">{change.explanation}</div>
+                <div className="product-row-title">{recommendation.laneLabel}: {words(recommendation.recommendation)}</div>
+                <div className="product-row-meta normal-wrap">{recommendation.explanation}</div>
               </div>
-              <button className="btn ghost" onClick={() => onOpenCandidate(change.candidateId)} aria-label={`Open ${change.candidateName}`}>Open</button>
+              <button className="btn secondary" onClick={onOpenStrategy}>Review in strategy</button>
             </div>
           ))}
-          {!ranking.changes.length && (
+          {!laneRecommendations.length && (
             <div className="product-row">
               <div className="product-row-main">
                 <div className="product-row-meta normal-wrap">
-                  No approved learning is adjusting candidate order right now. Review order still follows recorded role signals only.
+                  No approved learning is suggesting a search-lane change right now. Candidate requirement conclusions remain in Candidate 360.
                 </div>
               </div>
             </div>
           )}
-          {ranking.uncertain.length > 0 && (
+          {uncertainEvidenceCount > 0 && (
             <div className="product-row">
               <div className="product-row-main">
-                <div className="product-row-title">Still uncertain</div>
+                <div className="product-row-title">Evidence review still required</div>
                 <div className="product-row-meta normal-wrap">
-                  {ranking.uncertain.length} candidate{ranking.uncertain.length === 1 ? ' has' : 's have'} conflicting or stale evidence. Learning does not resolve evidence; review it in the candidate queue.
+                  {uncertainEvidenceCount} candidate{uncertainEvidenceCount === 1 ? ' has' : 's have'} conflicting or stale evidence. Calibration cannot resolve that evidence; review the source-linked claims in Candidate 360.
                 </div>
               </div>
               <span className="status-pill warning">evidence</span>
             </div>
           )}
         </div>
-        {laneRecommendations.length > 0 && (
-          <div className="product-list">
-            {laneRecommendations.map(recommendation => (
-              <div className="product-row" key={`${recommendation.laneId}-${recommendation.recommendation}`}>
-                <div className="product-row-main">
-                  <div className="product-row-title">{recommendation.laneLabel}: {words(recommendation.recommendation)}</div>
-                  <div className="product-row-meta normal-wrap">{recommendation.explanation}</div>
-                </div>
-                <button className="btn secondary" onClick={onOpenStrategy}>Review in strategy</button>
-              </div>
-            ))}
-          </div>
-        )}
       </section>
 
       <section className="product-panel">
