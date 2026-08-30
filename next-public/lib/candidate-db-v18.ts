@@ -1,3 +1,5 @@
+import { findBoundedTextSpan, sourceProfileTextRef } from '@/lib/evidence-span'
+
 export type CandidateSourceName =
   | 'github'
   | 'stackoverflow'
@@ -73,6 +75,10 @@ export type EvidenceItemRecord = {
   detail: string
   confidence: EvidenceConfidence
   url?: string
+  spanStart?: number
+  spanEnd?: number
+  spanText?: string
+  sourceTextRef?: string
   createdAt: string
 }
 
@@ -193,13 +199,78 @@ export function inferOpenToWorkSignals(text: string, source: CandidateSourceName
   return signals
 }
 
+function withStoredSpan(
+  item: EvidenceItemRecord,
+  sourceText: string,
+  sourceProfileId: string | undefined,
+  terms: string[],
+): EvidenceItemRecord {
+  if (!sourceProfileId) return item
+  const span = findBoundedTextSpan(sourceText, terms, sourceProfileTextRef(sourceProfileId))
+  if (!span) return item
+  return {
+    ...item,
+    spanStart: span.start,
+    spanEnd: span.end,
+    spanText: span.text,
+    sourceTextRef: span.sourceTextRef,
+  }
+}
+
 export function evidenceFromText(text: string, source: CandidateSourceName, sourceProfileId?: string): EvidenceItemRecord[] {
   const normalized = normalizeWhitespace(text)
   const skills = splitSkills(normalized)
   const items: EvidenceItemRecord[] = []
-  if (normalized) items.push({ id: uid('ev'), source, sourceProfileId, label: 'Profile summary text', detail: normalized.slice(0, 420), confidence: 'medium', createdAt: nowIso() })
-  skills.forEach(skill => items.push({ id: uid('ev'), source, sourceProfileId, label: 'Skill signal', detail: skill, confidence: 'medium', createdAt: nowIso() }))
-  extractUrls(text).forEach(url => items.push({ id: uid('ev'), source, sourceProfileId, label: 'Public URL', detail: url, confidence: 'medium', url, createdAt: nowIso() }))
+  const createdAt = nowIso()
+
+  if (normalized) {
+    const item: EvidenceItemRecord = {
+      id: uid('ev'),
+      source,
+      sourceProfileId,
+      label: 'Profile summary text',
+      detail: normalized.slice(0, 420),
+      confidence: 'medium',
+      createdAt,
+    }
+    if (sourceProfileId && text.length) {
+      const end = Math.min(text.length, 420)
+      item.spanStart = 0
+      item.spanEnd = end
+      item.spanText = text.slice(0, end)
+      item.sourceTextRef = sourceProfileTextRef(sourceProfileId)
+    }
+    items.push(item)
+  }
+
+  skills.forEach(skill => {
+    const item: EvidenceItemRecord = {
+      id: uid('ev'),
+      source,
+      sourceProfileId,
+      label: 'Skill signal',
+      detail: skill,
+      confidence: 'medium',
+      createdAt,
+    }
+    const spanned = withStoredSpan(item, text, sourceProfileId, [skill])
+    // If a heuristic skill was only found inside another word, do not persist it
+    // as source evidence. Legacy skill extraction can still feed non-evidence UI.
+    if (!sourceProfileId || spanned.spanText) items.push(spanned)
+  })
+
+  extractUrls(text).forEach(url => {
+    items.push(withStoredSpan({
+      id: uid('ev'),
+      source,
+      sourceProfileId,
+      label: 'Public URL',
+      detail: url,
+      confidence: 'medium',
+      url,
+      createdAt,
+    }, text, sourceProfileId, [url]))
+  })
   return items
 }
 
