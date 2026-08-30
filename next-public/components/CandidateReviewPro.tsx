@@ -11,12 +11,7 @@ import {
   type RoleStage,
 } from '@/lib/role-workspace'
 import { ProductIcon } from '@/components/ProductIcon'
-import {
-  candidateEvidenceDimensions,
-  candidateReviewScore,
-  matchedRoleSignals,
-} from '@/lib/candidate-review-pro'
-export { candidateReviewScore } from '@/lib/candidate-review-pro'
+import { candidateEvidenceDimensions } from '@/lib/candidate-review-pro'
 
 type DossierEvidence = {
   id?: string
@@ -100,7 +95,6 @@ export function CandidateReviewDrawer({
   }, [candidate])
 
   const dimensions = useMemo(() => candidateEvidenceDimensions(draft, intake), [draft, intake])
-  const score = useMemo(() => candidateReviewScore(draft, intake), [draft, intake])
   const evidence = Array.isArray(dossier?.evidence) ? dossier.evidence : []
   const profiles = Array.isArray(dossier?.sourceProfiles) ? dossier.sourceProfiles : []
 
@@ -168,7 +162,7 @@ export function CandidateReviewDrawer({
       <div className="candidate-drawer-head candidate-review-head">
         <div>
           <span className="kicker">{intake.title}</span>
-          <div className="candidate-review-title-row"><h2>{candidate.name}</h2><span className={`candidate-review-score ${score >= 70 ? 'strong' : score >= 45 ? 'supported' : ''}`}>{score}</span></div>
+          <div className="candidate-review-title-row"><h2>{candidate.name}</h2></div>
           <p>{[candidate.headline, candidate.company, candidate.location].filter(Boolean).join(' · ') || 'Candidate details pending review'}</p>
           <div className="candidate-review-progress">Candidate {position} of {total}</div>
         </div>
@@ -198,23 +192,24 @@ export function CandidateReviewDrawer({
           <label>Evidence state<select value={draft.evidenceStatus} onChange={event => setDraft(current => ({ ...current, evidenceStatus: event.target.value as RoleCandidate['evidenceStatus'] }))}><option value="unreviewed">Unreviewed</option><option value="reviewed">Reviewed</option><option value="conflicting">Conflicting</option><option value="stale">Stale</option></select></label>
           <label>Contact state<select value={draft.contactStatus} onChange={event => setDraft(current => ({ ...current, contactStatus: event.target.value as RoleCandidate['contactStatus'] }))}><option value="unknown">Unknown</option><option value="signals_found">Signals found</option><option value="verified">Verified</option><option value="blocked">Blocked</option></select></label>
         </div>
-        <label>Why this candidate fits<input className="input" value={listInput(draft.fitReasons)} onChange={event => setDraft(current => ({ ...current, fitReasons: parseList(event.target.value) }))} placeholder="Relevant leadership, domain, technical, mission, or delivery evidence" /></label>
+        <label>Why this candidate fits<input className="input" value={listInput(draft.fitReasons)} onChange={event => setDraft(current => ({ ...current, fitReasons: parseList(event.target.value) }))} placeholder="Recruiter reasoning or evidence to verify — not source proof" /></label>
         <label>Concerns or missing evidence<input className="input" value={listInput(draft.concerns)} onChange={event => setDraft(current => ({ ...current, concerns: parseList(event.target.value) }))} placeholder="Missing scope, tenure, clearance verification, location, depth…" /></label>
         <label>Role tags<input className="input" value={listInput(draft.tags)} onChange={event => setDraft(current => ({ ...current, tags: parseList(event.target.value) }))} /></label>
       </section>
 
       <section className="candidate-drawer-section">
-        <div className="product-panel-head"><div><span className="kicker">Role evidence matrix</span><h2>Why this record may fit</h2></div><span>{dimensions.filter(item => item.tone === 'strong' || item.tone === 'supported').length}/{dimensions.length} supported</span></div>
+        <div className="product-panel-head"><div><span className="kicker">Workflow context</span><h2>Recorded review state</h2></div><span>{dimensions.length} checks</span></div>
+        <p className="muted">These cards describe workflow and provenance only. Requirement support is calculated separately from source-linked Evidence Claims in Candidate 360.</p>
         <div className="candidate-evidence-grid">
           {dimensions.map(item => <article className={`candidate-evidence-dimension ${item.tone}`} key={item.label}><div><span>{item.label}</span><b>{item.value}</b></div><p>{item.detail}</p></article>)}
         </div>
       </section>
 
       <section className="candidate-drawer-section">
-        <div className="product-panel-head"><div><span className="kicker">Evidence first</span><h2>Strongest source evidence</h2></div><span>{evidence.length || candidate.fitReasons.length} items</span></div>
+        <div className="product-panel-head"><div><span className="kicker">Evidence first</span><h2>Source evidence and recruiter context</h2></div><span>{evidence.length || candidate.fitReasons.length} items</span></div>
         <div className="product-list">
           {evidence.slice(0, 6).map((item, index) => <div className="product-row" key={item.id || `${item.label}-${index}`}><div className="product-row-main"><div className="product-row-title">{item.label || 'Evidence'}</div><div className="product-row-meta normal-wrap">{item.detail || 'Evidence detail unavailable.'}</div></div><span className="status-pill">{item.confidence || 'medium'}</span></div>)}
-          {!evidence.length && candidate.fitReasons.map(reason => <div className="product-row" key={reason}><div className="product-row-main"><div className="product-row-title">Role evidence</div><div className="product-row-meta normal-wrap">{reason}</div></div></div>)}
+          {!evidence.length && candidate.fitReasons.map(reason => <div className="product-row" key={reason}><div className="product-row-main"><div className="product-row-title">Recruiter note — not source evidence</div><div className="product-row-meta normal-wrap">{reason}</div></div></div>)}
           {!evidence.length && !candidate.fitReasons.length && <div className="product-row"><div className="product-row-main"><div className="product-row-title">Evidence review needed</div><div className="product-row-meta normal-wrap">Open Candidate 360 or queue enrichment before making a high-confidence decision.</div></div></div>}
         </div>
       </section>
@@ -250,8 +245,7 @@ export function CandidateComparisonDialog({
   const rows = [
     { label: 'Fit decision', value: (candidate: RoleCandidate) => words(candidate.fitDecision) },
     { label: 'Pipeline', value: (candidate: RoleCandidate) => stageLabel(candidate.stage) },
-    { label: 'Must-have signals', value: (candidate: RoleCandidate) => { const matches = matchedRoleSignals(candidate, intake.mustHaves); return matches.length ? matches.join(', ') : 'None recorded' } },
-    { label: 'Role evidence', value: (candidate: RoleCandidate) => candidate.fitReasons.join('; ') || 'Not recorded' },
+    { label: 'Recruiter fit notes', value: (candidate: RoleCandidate) => candidate.fitReasons.join('; ') || 'Not recorded' },
     { label: 'Concerns', value: (candidate: RoleCandidate) => candidate.concerns.join('; ') || 'None recorded' },
     { label: 'Evidence state', value: (candidate: RoleCandidate) => words(candidate.evidenceStatus) },
     { label: 'Contact', value: (candidate: RoleCandidate) => words(candidate.contactStatus) },
@@ -261,10 +255,10 @@ export function CandidateComparisonDialog({
   return <div className="candidate-compare-layer" role="dialog" aria-modal="true" aria-label="Compare selected candidates">
     <button className="candidate-compare-backdrop" onClick={onClose} aria-label="Close candidate comparison" />
     <section className="candidate-compare-dialog">
-      <header className="candidate-compare-head"><div><span className="kicker">Candidate comparison</span><h2>Compare role evidence side by side</h2><p>Signals below come from the role workspace. Unknown stays unknown until a recruiter verifies it.</p></div><button className="candidate-drawer-close" onClick={onClose} aria-label="Close comparison">×</button></header>
+      <header className="candidate-compare-head"><div><span className="kicker">Candidate comparison · {intake.title}</span><h2>Compare recruiter workspace context</h2><p>Requirement coverage is not guessed from tags or notes. Open Candidate 360 for the canonical source-span evidence matrix.</p></div><button className="candidate-drawer-close" onClick={onClose} aria-label="Close comparison">×</button></header>
       <div className="candidate-compare-scroll">
         <table className="candidate-compare-table">
-          <thead><tr><th>Dimension</th>{limited.map(candidate => <th key={candidate.id}><div className="candidate-compare-person"><span><ProductIcon name="candidates" /></span><div><b>{candidate.name}</b><small>{candidate.company || candidate.headline || 'Details pending'}</small></div></div><div className="candidate-compare-score">Review score {candidateReviewScore(candidate, intake)}</div><button className="btn ghost" onClick={() => onReview(candidate.id)}>Open review</button></th>)}</tr></thead>
+          <thead><tr><th>Dimension</th>{limited.map(candidate => <th key={candidate.id}><div className="candidate-compare-person"><span><ProductIcon name="candidates" /></span><div><b>{candidate.name}</b><small>{candidate.company || candidate.headline || 'Details pending'}</small></div></div><button className="btn ghost" onClick={() => onReview(candidate.id)}>Open review</button></th>)}</tr></thead>
           <tbody>{rows.map(row => <tr key={row.label}><th>{row.label}</th>{limited.map(candidate => <td key={candidate.id}>{row.value(candidate)}</td>)}</tr>)}</tbody>
         </table>
       </div>
