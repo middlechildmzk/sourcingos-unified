@@ -1,7 +1,8 @@
 import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
+import { RoleCanonicalSearchActions } from '@/components/RoleCanonicalSearchActions'
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
-import { RoleSearchActions } from '@/components/RoleSearchActions'
+import { RolePasteBackV33 } from '@/components/RolePasteBackV33'
 
 export const metadata = {
   title: 'Role Workspace | SourcingOS',
@@ -15,7 +16,8 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
     <main className="wrap">
       <link rel="stylesheet" href="/agentic-role.css" />
       <RoleAgenticSearchPanel roleId={id} />
-      <RoleSearchActions roleId={id} />
+      <RoleCanonicalSearchActions roleId={id} />
+      <RolePasteBackV33 roleId={id} />
       <RoleDetailClient roleId={id} initialTab={sp.tab} />
       <RoleDeleteControl roleId={id} />
     </main>
