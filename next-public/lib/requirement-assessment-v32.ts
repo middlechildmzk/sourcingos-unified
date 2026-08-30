@@ -35,7 +35,7 @@ export type RequirementAssessmentTally = {
  * validated after checking them against stored source_profiles.raw_text. Direct
  * callers must either provide source text here or their spans fail closed.
  */
-export type RequirementSourceTexts = ReadonlyMap<string, string> | Readonly<Record<string, string>>
+export type RequirementSourceTexts = Map<string, string> | Record<string, string>
 
 type Concept = {
   canonical: string
@@ -108,9 +108,7 @@ function requirementKind(requirementText: string, concepts: Concept[]): Requirem
 
 function sourceTextFor(sourceTexts: RequirementSourceTexts | undefined, sourceTextRef: string): string | undefined {
   if (!sourceTexts) return undefined
-  if (sourceTexts instanceof Map) return sourceTexts.get(sourceTextRef)
-  const value = sourceTexts[sourceTextRef]
-  return typeof value === 'string' ? value : undefined
+  return sourceTexts instanceof Map ? sourceTexts.get(sourceTextRef) : sourceTexts[sourceTextRef]
 }
 
 /**
