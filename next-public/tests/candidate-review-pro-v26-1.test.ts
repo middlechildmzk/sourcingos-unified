@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import {
-  candidateEvidenceDimensions,
-  candidateReviewScore,
-  matchedRoleSignals,
-} from '@/lib/candidate-review-pro'
+import { candidateEvidenceDimensions } from '@/lib/candidate-review-pro'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
 
 const root = path.resolve(__dirname, '..')
@@ -13,6 +9,8 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 
 const roleDetail = read('components/RoleDetailClient.tsx')
 const review = read('components/CandidateReviewPro.tsx')
+const calibration = read('components/RoleCalibrationPanel.tsx')
+const reviewLib = read('lib/candidate-review-pro.ts')
 const styles = read('app/app/v26-candidate-review.css')
 const layout = read('app/app/layout.tsx')
 
@@ -54,30 +52,23 @@ function candidate(overrides: Partial<RoleCandidate> = {}): RoleCandidate {
   }
 }
 
-describe('V26.1 Candidate Review Pro', () => {
-  it('scores only recorded role signals and review state', () => {
-    const strong = candidate()
-    expect(matchedRoleSignals(strong, intake.mustHaves)).toEqual(['AWS', 'Kubernetes', 'Terraform'])
-    expect(candidateReviewScore(strong, intake)).toBe(100)
-
-    const incomplete = candidate({
-      candidateId: undefined,
-      sourceUrl: undefined,
-      tags: ['AWS'],
-      fitReasons: [],
-      headline: 'Engineer',
-      fitDecision: 'unreviewed',
-      evidenceStatus: 'unreviewed',
-      contactStatus: 'unknown',
-    })
-    expect(candidateReviewScore(incomplete, intake)).toBeLessThan(45)
+describe('V26.1 Candidate Review Pro under V32 evidence semantics', () => {
+  it('keeps candidate qualification scores and substring matchers retired from review surfaces', () => {
+    for (const source of [reviewLib, review, roleDetail, calibration]) {
+      expect(source).not.toContain('candidateReviewScore')
+      expect(source).not.toContain('matchedRoleSignals')
+    }
+    expect(review).not.toContain('Review score')
+    expect(roleDetail).not.toContain('candidate-review-score')
+    expect(calibration).toContain('does not assign candidate quality scores')
   })
 
-  it('keeps missing and conflicting evidence visible', () => {
+  it('keeps workflow provenance separate from requirement support', () => {
     const dimensions = candidateEvidenceDimensions(candidate({ evidenceStatus: 'conflicting', location: '' }), intake)
-    expect(dimensions.find(item => item.label === 'Evidence state')).toMatchObject({ tone: 'risk', value: 'conflicting' })
+    expect(dimensions.find(item => item.label === 'Evidence review state')).toMatchObject({ tone: 'risk', value: 'conflicting' })
     expect(dimensions.find(item => item.label === 'Location and work mode')).toMatchObject({ tone: 'unknown', value: 'Unknown' })
     expect(dimensions.some(item => item.detail.includes('before presentation or outreach'))).toBe(true)
+    expect(dimensions.map(item => item.label)).not.toContain('Required experience')
   })
 
   it('supports keyboard review and save-next flow', () => {
@@ -87,11 +78,11 @@ describe('V26.1 Candidate Review Pro', () => {
     expect(review).toContain("if (key === 's')")
     expect(review).toContain("if (key === 'e')")
     expect(review).toContain("if (key === 'n' && hasNext)")
-    expect(review).toContain("event.metaKey || event.ctrlKey")
+    expect(review).toContain('event.metaKey || event.ctrlKey')
     expect(review).toContain('Save & next')
   })
 
-  it('adds bulk actions, undo, prioritization, and finalist comparison', () => {
+  it('keeps bulk actions, undo, prioritization, and comparison without invented qualification scoring', () => {
     expect(roleDetail).toContain('candidatePriority')
     expect(roleDetail).toContain('updateCandidates')
     expect(roleDetail).toContain('undoLastCandidateChange')
@@ -99,8 +90,8 @@ describe('V26.1 Candidate Review Pro', () => {
     expect(roleDetail).toContain('Apply stage')
     expect(roleDetail).toContain('Compare')
     expect(roleDetail).toContain('CandidateComparisonDialog')
-    expect(review).toContain('Compare role evidence side by side')
-    expect(review).toContain('Unknown stays unknown until a recruiter verifies it.')
+    expect(review).toContain('Compare recruiter workspace context')
+    expect(review).toContain('Requirement coverage is not guessed from tags or notes.')
   })
 
   it('loads the responsive Candidate Review Pro design layer', () => {
