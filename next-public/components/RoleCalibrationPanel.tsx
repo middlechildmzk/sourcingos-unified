@@ -51,9 +51,6 @@ export function RoleCalibrationPanel({
   const [notice, setNotice] = useState('')
   const reconciling = useRef(false)
 
-  // Re-derive patterns whenever recorded decisions change. Reviewer decisions are
-  // preserved by reconcileCalibrationState; we only persist when content changed,
-  // so this cannot loop.
   const decisionsKey = useMemo(
     () => role.candidates.map(candidate => `${candidate.id}:${candidate.fitDecision}:${candidate.evidenceStatus}:${candidate.concerns.length}:${candidate.fitReasons.length}`).join('|'),
     [role.candidates]
@@ -110,7 +107,7 @@ export function RoleCalibrationPanel({
         <p className="muted normal-wrap">
           These are patterns detected in your recorded candidate decisions. They are not verified facts, and none of them
           changes search strategy until you approve it. Approval can suggest search-lane changes; it never turns recruiter
-          notes into requirement evidence, reorders candidates by qualification, or makes a hiring decision.
+          notes into requirement evidence, reorders people by qualification, or makes a hiring decision.
         </p>
         {notice && <p className="muted normal-wrap" role="status">{notice}</p>}
         <div className="product-list">
@@ -209,7 +206,7 @@ export function RoleCalibrationPanel({
           <span>{laneRecommendations.length} lane recommendation{laneRecommendations.length === 1 ? '' : 's'}</span>
         </div>
         <p className="muted normal-wrap">
-          Approved learning may recommend which search lanes to review next. It does not assign candidate quality scores or
+          Approved learning may recommend which search lanes to review next. It does not assign 0–100 qualification scores or
           modify the requirement evidence matrix. Lane changes still require recruiter action in Strategy.
         </p>
         <div className="product-list">
