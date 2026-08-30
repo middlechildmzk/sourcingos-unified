@@ -60,7 +60,7 @@ describe('V26.1 Candidate Review Pro under V32 evidence semantics', () => {
     }
     expect(review).not.toContain('Review score')
     expect(roleDetail).not.toContain('candidate-review-score')
-    expect(calibration).toContain('does not assign candidate quality scores')
+    expect(calibration).toContain('does not assign 0–100 qualification scores')
   })
 
   it('keeps workflow provenance separate from requirement support', () => {
