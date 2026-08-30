@@ -117,15 +117,20 @@ function claimSpan(claim: EvidenceClaim): EvidenceSpan | undefined {
   return span
 }
 
-function claimMatchesConcept(claim: EvidenceClaim, concept: Concept): boolean {
-  const span = claimSpan(claim)
-  if (!span) return false
-  return concept.aliases.some(alias => containsBoundedTerm(span.text, alias))
-    || concept.aliases.some(alias => containsBoundedTerm(claim.claimedValue, alias))
+/** Relevance can exist without a span; it may produce Needs verification, never Supported. */
+function claimTextMatchesConcept(claim: EvidenceClaim, concept: Concept): boolean {
+  const text = `${claim.claimedValue} ${claim.detail}`
+  return concept.aliases.some(alias => containsBoundedTerm(text, alias))
 }
 
-function claimMatchesRequirement(claim: EvidenceClaim, concepts: Concept[]): boolean {
-  return concepts.some(concept => claimMatchesConcept(claim, concept))
+/** Support is stricter: the recognized concept itself must be inside a validated source span. */
+function claimSpanMatchesConcept(claim: EvidenceClaim, concept: Concept): boolean {
+  const span = claimSpan(claim)
+  return Boolean(span && concept.aliases.some(alias => containsBoundedTerm(span.text, alias)))
+}
+
+function claimTextMatchesRequirement(claim: EvidenceClaim, concepts: Concept[]): boolean {
+  return concepts.some(concept => claimTextMatchesConcept(claim, concept))
 }
 
 function hasNegativeLanguage(value: string): boolean {
@@ -169,6 +174,25 @@ function buildRequirements(intake: RoleIntake): Array<{ text: string; tier: Requ
   })
 }
 
+function conflictingClaimsThatDisagree(matchingClaims: EvidenceClaim[]): EvidenceClaim[] {
+  const byGroup = new Map<string, EvidenceClaim[]>()
+  for (const claim of matchingClaims) {
+    if (!claim.conflictGroup) continue
+    const group = byGroup.get(claim.conflictGroup) || []
+    group.push(claim)
+    byGroup.set(claim.conflictGroup, group)
+  }
+
+  const contradictions: EvidenceClaim[] = []
+  for (const group of byGroup.values()) {
+    if (!group.some(claim => claim.evidenceClass === 'conflicting')) continue
+    const negatives = group.filter(claim => hasNegativeLanguage(`${claim.claimedValue} ${claim.detail}`))
+    const positives = group.filter(claim => !hasNegativeLanguage(`${claim.claimedValue} ${claim.detail}`))
+    if (negatives.length && positives.length) contradictions.push(...negatives)
+  }
+  return uniqueClaims(contradictions)
+}
+
 function assessRequirement(
   requirementText: string,
   tier: RequirementTier,
@@ -178,12 +202,8 @@ function assessRequirement(
 ): RequirementAssessment {
   const concepts = requirementConcepts(requirementText)
   const kind = requirementKind(requirementText, concepts)
-  const matchingClaims = claims.filter(claim => claimMatchesRequirement(claim, concepts))
-  const contradictions = matchingClaims.filter(claim =>
-    claim.evidenceClass === 'conflicting'
-    && Boolean(claim.conflictGroup)
-    && hasNegativeLanguage(`${claim.claimedValue} ${claim.detail}`),
-  )
+  const matchingClaims = claims.filter(claim => claimTextMatchesRequirement(claim, concepts))
+  const contradictions = conflictingClaimsThatDisagree(matchingClaims)
   const recruiterContext = recruiterContextForRequirement(candidate, concepts)
 
   if (contradictions.length) {
@@ -198,17 +218,20 @@ function assessRequirement(
       spans: matchingClaims.map(claimSpan).filter((span): span is EvidenceSpan => Boolean(span)),
       contradictions,
       recruiterContext,
-      rationale: 'A source-linked conflicting claim explicitly disagrees with this requirement. Absence alone is never treated as contradiction.',
+      rationale: 'Claims in the same conflict group explicitly disagree about this requirement. Absence alone is never treated as contradiction.',
     }
   }
 
   const sensitive = isSensitiveRequirement(tier, kind, requirementText)
   const conceptCoverage = concepts.map(concept => {
-    const conceptClaims = matchingClaims.filter(claim => claimMatchesConcept(claim, concept))
-    const strong = conceptClaims.filter(claim => claim.evidenceClass === 'verified_fact' || claim.evidenceClass === 'supported_inference')
+    const conceptClaims = matchingClaims.filter(claim => claimTextMatchesConcept(claim, concept))
+    const strongWithSpan = conceptClaims.filter(claim =>
+      (claim.evidenceClass === 'verified_fact' || claim.evidenceClass === 'supported_inference')
+      && claimSpanMatchesConcept(claim, concept),
+    )
     const strongAllowed = sensitive
-      ? strong.filter(claim => claim.sourceType === 'authoritative_registry')
-      : strong
+      ? strongWithSpan.filter(claim => claim.sourceType === 'authoritative_registry')
+      : strongWithSpan
     return { concept, conceptClaims, strongAllowed }
   })
   const everyConceptSupported = conceptCoverage.length > 0 && conceptCoverage.every(item => item.strongAllowed.length > 0)
@@ -240,7 +263,7 @@ function assessRequirement(
 
   if (hasReviewableEvidence || recruiterContext.length) {
     const reason = sensitive
-      ? 'This requirement needs authoritative or recruiter verification before consequential use.'
+      ? 'Relevant evidence exists, but this requirement needs authoritative or recruiter verification before consequential use.'
       : 'Relevant evidence or recruiter context exists, but it does not satisfy the span-backed support rule for every requirement concept.'
     return {
       requirementId,
