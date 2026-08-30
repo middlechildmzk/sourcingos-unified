@@ -19,6 +19,11 @@ function optionalString(row: Row, key: string): string | undefined {
   return typeof value === 'string' && value ? value : undefined
 }
 
+function optionalNumber(row: Row, key: string): number | undefined {
+  const value = row[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
 function stringArray(row: Row, key: string): string[] {
   const value = row[key]
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
@@ -66,13 +71,15 @@ export async function listEvidenceLedgerFromSupabase(
 
   let sourceProfileQuery = sb
     .from('source_profiles')
-    .select('id, candidate_id, source, profile_url')
+    // raw_text is read server-side only so span offsets can be revalidated. It is
+    // not returned in the Evidence Ledger API response.
+    .select('id, candidate_id, source, profile_url, raw_text')
     .eq('owner_id', ownerId)
     .limit(2000)
 
   const evidenceQuery = sb
     .from('evidence_items')
-    .select('id, candidate_id, source_profile_id, source, label, detail, confidence, url, created_at')
+    .select('id, candidate_id, source_profile_id, source, label, detail, confidence, url, span_start, span_end, span_text, source_text_ref, created_at')
     .eq('owner_id', ownerId)
     .order('created_at', { ascending: false })
     .limit(5000)
@@ -132,6 +139,7 @@ export async function listEvidenceLedgerFromSupabase(
     candidateId: optionalString(row, 'candidate_id'),
     source: stringValue(row, 'source', 'unknown'),
     profileUrl: optionalString(row, 'profile_url'),
+    rawText: optionalString(row, 'raw_text'),
   }))
 
   const evidenceItems = rows(evidenceResult.data).map(row => ({
@@ -143,6 +151,10 @@ export async function listEvidenceLedgerFromSupabase(
     detail: stringValue(row, 'detail'),
     confidence: confidenceValue(row, 'confidence'),
     url: optionalString(row, 'url'),
+    spanStart: optionalNumber(row, 'span_start'),
+    spanEnd: optionalNumber(row, 'span_end'),
+    spanText: optionalString(row, 'span_text'),
+    sourceTextRef: optionalString(row, 'source_text_ref'),
     createdAt: stringValue(row, 'created_at', new Date(0).toISOString()),
   }))
 
