@@ -98,12 +98,22 @@ function isNaturalLanguageBrief(rawText: string): boolean {
  */
 export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const parsed = parseJobDescription(rawText)
+  const natural = isNaturalLanguageBrief(rawText)
   const naturalTitle = naturalLanguageTitle(rawText)
   const location = parsed.location || naturalLanguageLocation(rawText) || 'Not specified'
   const clearance = parsed.clearance[0] || 'Not specified'
   const targetCompanies = labeledValues(rawText, ['target companies', 'target company', 'donor companies', 'companies'])
   const disqualifiers = labeledValues(rawText, ['disqualifiers', 'exclude', 'avoid'])
   const explicitAdjacent = labeledValues(rawText, ['adjacent backgrounds', 'adjacent titles', 'adjacent roles'])
+  const explicitPreferenceLanguage = /\b(?:ideally|preferably|nice[ -]to[ -]have|bonus|optional)\b/i.test(rawText)
+  // In a short natural-language command, recognized technologies are literal
+  // requested attributes. Treat them as proposed must-haves unless the recruiter
+  // explicitly marks part of the sentence as preferred; the next UI step still
+  // requires recruiter confirmation before the role is committed.
+  const mustHaves = natural && !explicitPreferenceLanguage
+    ? uniq([...parsed.mustHaveSkills, ...parsed.preferredSkills], 16)
+    : uniq(parsed.mustHaveSkills, 16)
+  const niceToHaves = natural && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
 
   const intake: RoleIntake = {
     title: naturalTitle || clean(parsed.roleTitle, 100) || 'Untitled role',
@@ -111,8 +121,8 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
     workMode: workMode(rawText),
     compensation: compensation(rawText),
     clearance,
-    mustHaves: uniq(parsed.mustHaveSkills, 16),
-    niceToHaves: uniq(parsed.preferredSkills, 16),
+    mustHaves,
+    niceToHaves,
     disqualifiers,
     targetCompanies: uniq([...parsed.targetCompanies, ...targetCompanies], 12),
     adjacentBackgrounds: uniq([...explicitAdjacent, ...parsed.relatedTitles], 16),
@@ -122,7 +132,7 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
 
   return {
     intake,
-    mode: isNaturalLanguageBrief(rawText) ? 'natural_language' : 'job_description',
+    mode: natural ? 'natural_language' : 'job_description',
     questions: reviewQuestions(rawText, intake),
     detected: {
       seniority: parsed.seniority,
