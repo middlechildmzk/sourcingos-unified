@@ -54,6 +54,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 export function CandidateReviewDrawer({
   candidate,
   intake,
+  roleId,
   position,
   total,
   hasNext,
@@ -63,6 +64,7 @@ export function CandidateReviewDrawer({
 }: {
   candidate: RoleCandidate
   intake: RoleIntake
+  roleId?: string
   position: number
   total: number
   hasNext: boolean
@@ -156,6 +158,10 @@ export function CandidateReviewDrawer({
     return () => window.removeEventListener('keydown', handleKeyboard)
   })
 
+  const full360Href = candidate.candidateId
+    ? `/app/candidate/${candidate.candidateId}${roleId ? `?roleId=${encodeURIComponent(roleId)}` : ''}`
+    : ''
+
   return <div className="candidate-drawer-layer" role="dialog" aria-modal="true" aria-label={`Review ${candidate.name}`}>
     <button className="candidate-drawer-backdrop" onClick={onClose} aria-label="Close candidate review" />
     <aside className="candidate-drawer candidate-drawer-pro">
@@ -174,7 +180,7 @@ export function CandidateReviewDrawer({
       </div>
 
       <div className="candidate-drawer-actions">
-        {candidate.candidateId && <Link className="btn ghost" href={`/app/candidate/${candidate.candidateId}`}>Full 360</Link>}
+        {candidate.candidateId && <Link className="btn ghost" href={full360Href}>Full 360</Link>}
         {candidate.sourceUrl && <a className="btn ghost" href={candidate.sourceUrl} target="_blank" rel="noreferrer noopener">Source</a>}
         {candidate.candidateId && <button className="btn secondary" disabled={!!working} onClick={enrich}>Enrich</button>}
         {candidate.candidateId && <button className="btn secondary" disabled={!!working} onClick={() => void runAction('Building graph…', () => fetch('/api/agent-os', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'extract_graph', candidateId: candidate.candidateId }) }))}>Build graph</button>}
