@@ -32,7 +32,7 @@ describe('V27 role calibration surface under V32 evidence semantics', () => {
     expect(panel).toContain('How calibration can change search strategy')
     expect(panel).toContain('recommendLaneChanges')
     expect(panel).toContain('Review in strategy')
-    expect(panel).toContain('does not assign candidate quality scores')
+    expect(panel).toContain('does not assign 0–100 qualification scores')
     expect(panel).not.toContain('rankCandidatesWithCalibration')
     expect(panel).not.toContain('candidateReviewScore')
     expect(panel).not.toContain('lane.status =')
