@@ -107,6 +107,8 @@ export type EvidenceClaim = {
   spanEnd?: number
   spanText?: string
   sourceTextRef?: string
+  /** Set only by a canonical adapter after the span round-trips against stored source text. */
+  spanValidated?: boolean
 }
 
 export type CandidateEvidenceCard = {
@@ -279,7 +281,13 @@ export function buildEvidenceLedger(
           : 'Legacy evidence was adapted into the V19 ledger and has not been independently re-verified.',
         span ? 'Source span revalidated against stored source text.' : 'No valid stored source span is available; this claim cannot by itself support a V32 requirement.',
       ],
-      ...(span ? { spanStart: span.start, spanEnd: span.end, spanText: span.text, sourceTextRef: span.sourceTextRef } : {}),
+      ...(span ? {
+        spanStart: span.start,
+        spanEnd: span.end,
+        spanText: span.text,
+        sourceTextRef: span.sourceTextRef,
+        spanValidated: true,
+      } : {}),
     })
   }
 
