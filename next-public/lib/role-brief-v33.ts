@@ -49,11 +49,16 @@ function naturalLanguageLocation(rawText: string): string {
   return titleCaseFirst(value)
 }
 
-function labeledValues(rawText: string, labels: string[]): string[] {
+function labeledValue(rawText: string, labels: string[], max = 100): string {
   const escaped = labels.map(label => label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
   const match = rawText.match(new RegExp(`(?:^|\\n)\\s*(?:${escaped})\\s*[:\\-]\\s*([^\\n]+)`, 'i'))
-  if (!match?.[1]) return []
-  return uniq(match[1].split(/,|;|\||\bor\b/i).map(value => value.trim()), 12)
+  return match?.[1] ? clean(match[1], max) : ''
+}
+
+function labeledValues(rawText: string, labels: string[]): string[] {
+  const value = labeledValue(rawText, labels, 500)
+  if (!value) return []
+  return uniq(value.split(/,|;|\||\bor\b/i).map(item => item.trim()), 12)
 }
 
 function workMode(rawText: string): RoleIntake['workMode'] {
@@ -64,8 +69,8 @@ function workMode(rawText: string): RoleIntake['workMode'] {
 }
 
 function compensation(rawText: string): string {
-  const labeled = rawText.match(/(?:^|\n)\s*(?:compensation|salary|pay\s+range)\s*[:\-]\s*([^\n]+)/i)?.[1]
-  if (labeled) return clean(labeled, 120)
+  const labeled = labeledValue(rawText, ['compensation', 'salary', 'pay range'], 120)
+  if (labeled) return labeled
   const range = rawText.match(/\$\s?[\d,]+(?:\.\d+)?\s*(?:-|–|to)\s*\$?\s?[\d,]+(?:\.\d+)?(?:\s*(?:per\s+year|annually|\/yr|\/hour|\/hr))?/i)?.[0]
   return range ? clean(range, 120) : 'Not specified'
 }
@@ -100,8 +105,9 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const parsed = parseJobDescription(rawText)
   const natural = isNaturalLanguageBrief(rawText)
   const naturalTitle = naturalLanguageTitle(rawText)
-  const location = parsed.location || naturalLanguageLocation(rawText) || 'Not specified'
-  const clearance = parsed.clearance[0] || 'Not specified'
+  const naturalLocation = naturalLanguageLocation(rawText)
+  const location = (natural ? naturalLocation || parsed.location : parsed.location || naturalLocation) || 'Not specified'
+  const clearance = parsed.clearance[0] || labeledValue(rawText, ['clearance', 'security clearance'], 100) || 'Not specified'
   const targetCompanies = labeledValues(rawText, ['target companies', 'target company', 'donor companies', 'companies'])
   const disqualifiers = labeledValues(rawText, ['disqualifiers', 'exclude', 'avoid'])
   const explicitAdjacent = labeledValues(rawText, ['adjacent backgrounds', 'adjacent titles', 'adjacent roles'])
