@@ -9,15 +9,17 @@ import type { AgenticConnectorKey } from '@/lib/agentic-search-v30'
 import { classifyRealSourceResults } from '@/lib/entity-classification'
 import { searchGitHubPeople } from '@/lib/github-person-discovery'
 import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
+import { searchStackOverflowTalent } from '@/lib/stackoverflow-talent-source-v33-2'
 import type { SourceResult } from '@/lib/source-types'
 
 export const dynamic = 'force-dynamic'
 
-const EXECUTABLE_CONNECTORS = ['github', 'orcid', 'openalex', 'pubmed', 'crossref', 'npi'] as const satisfies readonly AgenticConnectorKey[]
+const EXECUTABLE_CONNECTORS = ['github', 'stackoverflow', 'orcid', 'openalex', 'pubmed', 'crossref', 'npi'] as const satisfies readonly AgenticConnectorKey[]
 const connectorEnum = z.enum(EXECUTABLE_CONNECTORS)
 const queryValue = z.string().trim().min(2).max(500)
 const connectorQueriesSchema = z.object({
   github: queryValue.optional(),
+  stackoverflow: queryValue.optional(),
   orcid: queryValue.optional(),
   openalex: queryValue.optional(),
   pubmed: queryValue.optional(),
@@ -140,9 +142,6 @@ export async function POST(req: NextRequest) {
       let discoveries: AgenticDiscovery[] = []
 
       if (connector === 'github') {
-        // Agentic GitHub now uses the same dependable repository/contributor
-        // discovery and source-truth boundary as Candidate Search. This is the
-        // canonical technical-person path; query terms cannot become skills.
         const response = await searchGitHubPeople({
           query: connectorQuery,
           location: body.locations[0] || '',
@@ -154,6 +153,17 @@ export async function POST(req: NextRequest) {
         discoveries = classified.map(discoveryFromSourceResult)
         if (response.warnings.length) {
           sourceStatus.github = { status: 'completed', discovered: 0, message: response.warnings.join(' ').slice(0, 240) }
+        }
+      } else if (connector === 'stackoverflow') {
+        const response = await searchStackOverflowTalent({
+          query: connectorQuery,
+          limit: Math.min(body.limit, 20),
+        })
+        const classified = classifyRealSourceResults(response.results)
+          .filter(result => result.entityKind === 'person')
+        discoveries = classified.map(discoveryFromSourceResult)
+        if (response.warnings.length) {
+          sourceStatus.stackoverflow = { status: 'completed', discovered: 0, message: response.warnings.join(' ').slice(0, 240) }
         }
       } else if (connector === 'npi') {
         discoveries = await discoverNpiByTaxonomy({
