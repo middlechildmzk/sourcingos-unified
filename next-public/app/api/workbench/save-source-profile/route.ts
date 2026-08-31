@@ -6,6 +6,7 @@ import { getRouteSession } from '@/lib/supabase/route-session'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getCandidateDb, nowIso, uid } from '@/lib/candidate-db-v18'
 import { classifySourceResult } from '@/lib/entity-classification'
+import { createDeterministicIdentityProposals } from '@/lib/identity-proposal-service-v33-2'
 import type { SourceResult } from '@/lib/source-types'
 
 // Save one person source profile to the Candidate Graph.
@@ -59,7 +60,9 @@ export async function POST(req: NextRequest) {
       }, { status: 422 })
     }
 
-    // Preview mode remains idempotent within the current process.
+    // Preview mode remains idempotent within the current process. Cross-source
+    // proposal creation is durable-only so preview state cannot imply a review
+    // exists when the page/process disappears.
     if (!isSupabaseConfigured()) {
       const db = getCandidateDb()
       const existingProfile = db.sourceProfiles.find(profile =>
@@ -75,6 +78,7 @@ export async function POST(req: NextRequest) {
           candidateId: existingProfile.candidateId,
           sourceProfileId: existingProfile.id,
           candidateUrl: `/app/candidate/${existingProfile.candidateId}`,
+          identityProposals: { created: [], considered: 0, anchored: 0 },
           note: 'Existing source profile reused. Identity remains pending recruiter review.',
         })
       }
@@ -128,6 +132,7 @@ export async function POST(req: NextRequest) {
         candidateId,
         sourceProfileId: spId,
         candidateUrl: `/app/candidate/${candidateId}`,
+        identityProposals: { created: [], considered: 0, anchored: 0 },
         note: 'Preview mode data is in-memory only. Candidate remains pending recruiter review.',
       })
     }
@@ -179,6 +184,7 @@ export async function POST(req: NextRequest) {
     if (profileError) return errorResponse('source_profiles write', profileError.message)
 
     const sourceProfileId = profileData.id
+    const isNewSourceIdentity = !existingProfile?.candidate_id && !profileData.candidate_id
     let candidateId: string | null = profileData.candidate_id || existingProfile?.candidate_id || null
     let createdCandidateId: string | null = null
 
@@ -310,6 +316,16 @@ export async function POST(req: NextRequest) {
       if (contactError) return errorResponse('contact write', contactError.message)
     }
 
+    const identityProposals = isNewSourceIdentity
+      ? await createDeterministicIdentityProposals({
+          sb,
+          ownerId,
+          incomingSourceProfileId: sourceProfileId,
+          incomingCandidateId: candidateId,
+          incomingResult: normalizedResult,
+        })
+      : { created: [], considered: 0, anchored: 0 }
+
     let projectCandidateId: string | null = null
     if (projectId) {
       const { data: projectCandidate, error: projectError } = await sb.from('project_candidates').upsert({
@@ -334,8 +350,11 @@ export async function POST(req: NextRequest) {
       candidateId,
       sourceProfileId,
       projectCandidateId,
+      identityProposals,
       candidateUrl: `/app/candidate/${candidateId}`,
-      note: 'Source profile saved. Candidate is pending recruiter identity review.',
+      note: identityProposals.created.length
+        ? `Source profile saved. ${identityProposals.created.length} deterministic cross-source identity proposal${identityProposals.created.length === 1 ? '' : 's'} await recruiter review; nothing was merged automatically.`
+        : 'Source profile saved. Candidate is pending recruiter identity review.',
     })
   } catch (err) {
     return NextResponse.json({ ok: false, error: err instanceof Error ? err.message : 'Save failed.' }, { status: 500 })
