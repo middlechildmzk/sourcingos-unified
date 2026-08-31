@@ -13,8 +13,8 @@ import { militaryTalentGate } from './military-role-gating-v33'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from './onet-role-intelligence'
 import type { RoleIntake } from './role-workspace'
 
-const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications', 'google_xray'])
-const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'research_publications'])
+const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'research_publications', 'google_xray'])
+const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'research_publications'])
 const SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 const PROVIDER_ROLE = /\b(?:nurse practitioner|registered nurse|physician assistant|pharmacist|physical therapist|occupational therapist|dentist|psychologist|clinical social worker|physician|doctor)\b/i
 
