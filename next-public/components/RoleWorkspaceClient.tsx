@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
-import { RoleIntakeWizard } from '@/components/RoleIntakeWizard'
+import { RoleIntakeWizardV33 } from '@/components/RoleIntakeWizardV33'
 
 function statusClass(status: RoleWorkspace['status']) {
   if (status === 'active') return 'active'
@@ -19,7 +19,7 @@ function workflowReadiness(role: RoleWorkspace): { score: number; next: string }
   const reviewed = role.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length
   const steps = [
     { done: Boolean(role.intake.title.trim() && role.intake.mustHaves.length), next: 'Confirm the role brief' },
-    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Approve a search lane' },
+    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Approve a sourcing hypothesis' },
     { done: metrics.candidateCount > 0, next: 'Build the first slate' },
     { done: reviewed > 0, next: 'Review the first candidates' },
   ]
@@ -80,7 +80,7 @@ export function RoleWorkspaceClient() {
   function createRole(role: RoleWorkspace) {
     addRole(role)
     setShowCreate(false)
-    setStatus(`Created ${role.intake.title}. Review the role brief and approve the first search lane.`)
+    setStatus(`Created ${role.intake.title}. The approved hypothesis is now the same Search Plan used by agentic and guided sourcing.`)
     router.push(`/app/roles/${role.id}`)
   }
 
@@ -91,7 +91,7 @@ export function RoleWorkspaceClient() {
       <div>
         <span className="kicker">Role portfolio</span>
         <h2>Every search starts with one role brain.</h2>
-        <p>Intake, search strategy, candidate evidence, calibration, and the next sourcing pass stay connected to the same role.</p>
+        <p>Natural-language intent, search strategy, candidate evidence, calibration, and the next sourcing pass stay connected to the same role.</p>
       </div>
       <div className="role-portfolio-command-actions">
         <button className="btn" onClick={() => showCreate ? setShowCreate(false) : openWizard()}>{showCreate ? 'Close setup' : '+ Create role'}</button>
@@ -100,14 +100,14 @@ export function RoleWorkspaceClient() {
     </section>
 
     {showCreate && <div className="role-create-stage">
-      <div className="role-create-stage-head"><div><span className="kicker">Guided setup</span><h2>Paste the role. Shape the search.</h2><p>SourcingOS will structure the intake, propose search lanes, and keep every later decision attached to this role.</p></div></div>
-      <RoleIntakeWizard key={wizardKey} initialText={wizardText} onCancel={() => setShowCreate(false)} onCreate={createRole} />
+      <div className="role-create-stage-head"><div><span className="kicker">Role Brain</span><h2>Describe the talent. Shape the search.</h2><p>Use one sentence, intake notes, or a full JD. SourcingOS will structure the role and propose distinct canonical sourcing hypotheses.</p></div></div>
+      <RoleIntakeWizardV33 key={wizardKey} initialText={wizardText} onCancel={() => setShowCreate(false)} onCreate={createRole} />
     </div>}
 
     <div className="product-summary-grid role-portfolio-summary">
       <div className="product-stat"><small>Active roles</small><b>{totals.active}</b><span>Currently sourcing</span></div>
       <div className="product-stat"><small>Decisions waiting</small><b>{totals.needsReview}</b><span>Recruiter review required</span></div>
-      <div className="product-stat"><small>Strong fits</small><b>{totals.strongFits}</b><span>Recorded role decisions</span></div>
+      <div className="product-stat"><small>Strong fits</small><b>{totals.strongFits}</b><span>Recorded recruiter decisions</span></div>
       <div className="product-stat"><small>Talent in roles</small><b>{totals.candidates}</b><span>Canonical candidate links</span></div>
     </div>
 
@@ -144,7 +144,7 @@ export function RoleWorkspaceClient() {
               <span><b>{metrics.candidateCount}</b><small>candidates</small></span>
               <span><b>{metrics.needsReview}</b><small>to review</small></span>
               <span><b>{metrics.strongFits}</b><small>strong</small></span>
-              <span><b>{approvedLanes}</b><small>lanes</small></span>
+              <span><b>{approvedLanes}</b><small>hypotheses</small></span>
             </div>
             <div className="role-card-footer">
               <div>{pendingLearning ? <span className="status-pill warning">{pendingLearning} learning review</span> : <span className="status-pill success">calibration clear</span>}</div>
@@ -155,7 +155,7 @@ export function RoleWorkspaceClient() {
 
         {!filteredRoles.length && <div className="role-portfolio-empty-v30">
           <div className="role-portfolio-empty-mark">✦</div>
-          <div><h3>{roles.length ? 'No roles match this search' : 'Your sourcing workspace starts here'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Paste a JD or intake notes. Confirm the requirements. Approve the search strategy. Then source and calibrate from one place.'}</p></div>
+          <div><h3>{roles.length ? 'No roles match this search' : 'Your sourcing workspace starts here'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Describe who you need. Confirm the structured role brain. Approve the search strategy. Then source and calibrate from one place.'}</p></div>
           {!roles.length && <button className="btn" onClick={() => openWizard()}>Create first role</button>}
         </div>}
       </div>

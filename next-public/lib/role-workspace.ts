@@ -1,3 +1,7 @@
+import { buildCanonicalAgenticSearchPlan } from './canonical-agentic-search-v30'
+import { interpretRoleBrief } from './role-brief-v33'
+import type { AgenticSearchLane } from './agentic-search-v30'
+
 export const ROLE_STAGES = [
   'discovered',
   'needs_review',
@@ -34,6 +38,11 @@ export type RoleIntake = {
   rawDescription: string
 }
 
+/**
+ * Persisted approval projection of the canonical Search Brain hypotheses.
+ * `source` is retained for storage/backward compatibility; lane id/label/query
+ * now mirror canonical agentic hypotheses rather than defining a second plan.
+ */
 export type SearchLane = {
   id: string
   label: string
@@ -82,81 +91,46 @@ export type RoleWorkspace = {
   updatedAt: string
 }
 
-const technicalTerms = [
-  'AWS', 'Azure', 'GCP', 'Kubernetes', 'Docker', 'Terraform', 'Linux', 'Python', 'Java', 'JavaScript',
-  'TypeScript', 'React', 'Next.js', 'Node.js', 'C#', '.NET', 'PostgreSQL', 'DevSecOps', 'Cybersecurity',
-  'Machine Learning', 'Artificial Intelligence', 'Data Engineering', 'Cloud Security', 'CI/CD',
-]
-
-const softRequirements = ['leadership', 'stakeholder management', 'program management', 'operations', 'strategy', 'communication', 'capture', 'proposal']
-
 function unique(values: string[], max = 20): string[] {
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean))).slice(0, max)
 }
 
-function matchList(text: string, values: string[]): string[] {
-  const lower = text.toLowerCase()
-  return values.filter(value => lower.includes(value.toLowerCase()))
-}
-
-function extractLabeledLine(text: string, labels: string[]): string {
-  for (const label of labels) {
-    const match = text.match(new RegExp(`(?:^|\n)\s*${label}\s*[:\-]\s*([^\n]+)`, 'i'))
-    if (match?.[1]) return match[1].trim()
-  }
-  return ''
-}
-
+/**
+ * One deterministic Role Brain entry point. The shared JD parser handles full
+ * descriptions while role-brief-v33 adds conservative natural-language command
+ * interpretation. Uncertain preference language stays reviewable, not binding.
+ */
 export function parseRoleIntake(rawDescription: string): RoleIntake {
-  const lines = rawDescription.split('\n').map(line => line.trim()).filter(Boolean)
-  const title = extractLabeledLine(rawDescription, ['title', 'role', 'position']) ||
-    lines.find(line => /director|manager|engineer|developer|architect|analyst|recruiter|sourcer|specialist|consultant|lead/i.test(line)) ||
-    'Untitled role'
-  const location = extractLabeledLine(rawDescription, ['location', 'work location']) || 'Not specified'
-  const compensation = extractLabeledLine(rawDescription, ['compensation', 'salary', 'pay range']) || 'Not specified'
-  const clearanceMatches = rawDescription.match(/\b(?:TS\/?SCI|Top Secret|Secret|Public Trust|CI Poly|Full Scope Poly)\b/gi) || []
-  const lower = rawDescription.toLowerCase()
-  const workMode: RoleIntake['workMode'] = lower.includes('remote') ? 'remote' : lower.includes('hybrid') ? 'hybrid' : lower.includes('onsite') || lower.includes('on-site') ? 'onsite' : 'unknown'
-  const skills = matchList(rawDescription, technicalTerms)
-  const capabilitySignals = matchList(rawDescription, softRequirements).map(value => value.replace(/\b\w/g, char => char.toUpperCase()))
-
-  return {
-    title: title.replace(/^\s*(title|role|position)\s*[:\-]\s*/i, '').slice(0, 120),
-    location: location.slice(0, 120),
-    workMode,
-    compensation: compensation.slice(0, 120),
-    clearance: unique(clearanceMatches).join(', ') || 'Not specified',
-    mustHaves: unique([...skills, ...capabilitySignals], 15),
-    niceToHaves: [],
-    disqualifiers: [],
-    targetCompanies: [],
-    adjacentBackgrounds: [],
-    hiringManagerNotes: '',
-    rawDescription,
-  }
+  return interpretRoleBrief(rawDescription).intake
 }
 
-export function buildSearchLanes(intake: RoleIntake): SearchLane[] {
-  const core = [intake.title, ...intake.mustHaves.slice(0, 5), intake.clearance !== 'Not specified' ? intake.clearance : ''].filter(Boolean).join(' ')
-  const adjacent = [intake.title, ...intake.adjacentBackgrounds, ...intake.niceToHaves.slice(0, 4)].filter(Boolean).join(' ')
-  const lanes: SearchLane[] = [
-    { id: 'database', label: 'Existing Candidate Database', purpose: 'Reuse known candidates and prior evidence before spending on external discovery.', query: core, source: 'candidate_database', status: 'approved' },
-    { id: 'network', label: 'Relationship Network', purpose: 'Find warm paths and known connections relevant to the role.', query: core, source: 'network', status: 'approved' },
-    { id: 'github', label: 'Technical Public Work', purpose: 'Find public technical artifacts and contributor profiles. Evidence is reviewed before identity linking.', query: core, source: 'github', status: 'proposed' },
-    { id: 'resume-xray', label: 'Public Resume X-Ray', purpose: 'Generate manual-safe open-web resume discovery queries with no auto-import.', query: core, source: 'resume_xray', status: 'proposed' },
-    { id: 'web-xray', label: 'Conference and Portfolio X-Ray', purpose: 'Find speakers, portfolio pages, bios, and public leadership artifacts.', query: core, source: 'web_xray', status: 'proposed' },
-  ]
+function compatibilitySource(lane: AgenticSearchLane): SearchLane['source'] {
+  const executable = lane.tasks.filter(task => task.mode === 'executable')
+  if (executable.some(task => task.surface === 'healthcare_registry')) return 'healthcare'
+  if (executable.some(task => task.surface === 'github')) return 'github'
+  if (executable.some(task => task.surface === 'research_publications')) return 'research'
+  if (lane.tasks.some(task => task.surface === 'google_xray')) return 'web_xray'
+  if (lane.id === 'skill_cluster') return 'resume_xray'
+  return 'candidate_database'
+}
 
-  if (/research|scientist|ai|machine learning|clinical|medical|health|nurse|physician/i.test(`${intake.title} ${core}`)) {
-    lanes.push({ id: 'research', label: 'Research and Publication Graph', purpose: 'Search public research identities, publications, institutions, and topic evidence.', query: core, source: 'research', status: 'proposed' })
-  }
-  if (/nurse|physician|clinical|medical|healthcare|provider/i.test(`${intake.title} ${core}`)) {
-    lanes.push({ id: 'healthcare', label: 'Healthcare Registry', purpose: 'Search authoritative public provider and credential breadcrumbs.', query: core, source: 'healthcare', status: 'proposed' })
-  }
-  if (adjacent.trim() && adjacent !== intake.title) {
-    lanes.push({ id: 'adjacent', label: 'Adjacent Backgrounds', purpose: 'Explore approved transferable backgrounds without weakening must-have requirements.', query: adjacent, source: 'web_xray', status: 'proposed' })
-  }
-  return lanes
+/**
+ * Backward-compatible persistence projection of the canonical Search Brain.
+ * Existing role storage keeps `searchLanes`, but recruiter-facing lane IDs,
+ * labels and queries now originate from buildCanonicalAgenticSearchPlan.
+ */
+export function buildSearchLanes(intake: RoleIntake): SearchLane[] {
+  const plan = buildCanonicalAgenticSearchPlan(intake)
+  return plan.lanes.map(lane => ({
+    id: lane.id,
+    label: lane.label,
+    purpose: `${lane.hypothesis} Blind spot: ${lane.blindSpot}`,
+    query: lane.query,
+    source: compatibilitySource(lane),
+    // Preserve the historical non-executing baseline approval so API-created
+    // roles remain usable. External execution still requires an explicit click.
+    status: lane.id === 'exact_title' ? 'approved' : 'proposed',
+  }))
 }
 
 export function createRoleWorkspace(rawDescription: string, id = crypto.randomUUID(), now = new Date()): RoleWorkspace {
