@@ -30,8 +30,8 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
           <summary>Run sourcing / create another review slate</summary>
           <RoleSourcingAgentV33_3 roleId={id} />
         </details>
-        <details className="agentic-advanced-v33 role-legacy-intelligence-v33-4">
-          <summary>Advanced search strategy, military intelligence, and source inspection</summary>
+        <details className="agentic-advanced-v33">
+          <summary>Advanced research strategy and individual source inspection</summary>
           <RoleAgenticSearchPanel roleId={id} />
           <RoleMilitaryIntelligencePanel roleId={id} />
           <RoleCanonicalSearchActions roleId={id} />
