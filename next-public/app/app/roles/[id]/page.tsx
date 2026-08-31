@@ -30,8 +30,8 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
       <RoleUnifiedWorkbenchV33_4 roleId={id} />
 
       <RoleIntelligenceProviderV33 roleId={id}>
-        <details className="role-sourcing-execution-v33-4" open={sp.start === '1'}>
-          <summary>Run sourcing / create another review slate</summary>
+        <details className="role-sourcing-execution-v33-4">
+          <summary>Execution details / run another sourcing pass</summary>
           <RoleSourcingAgentV33_3 roleId={id} />
         </details>
         <details className="agentic-advanced-v33">
