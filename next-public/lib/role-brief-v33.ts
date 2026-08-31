@@ -55,6 +55,12 @@ function labeledValue(rawText: string, labels: string[], max = 100): string {
   return match?.[1] ? clean(match[1], max) : ''
 }
 
+function labeledLocation(rawText: string): string {
+  const value = labeledValue(rawText, ['location', 'job location'], 120)
+  if (!value) return ''
+  return clean(value.replace(/\s*\/\s*(?:hybrid|remote|on[ -]?site|in[ -]?office)\b.*$/i, ''), 100)
+}
+
 function labeledValues(rawText: string, labels: string[]): string[] {
   const value = labeledValue(rawText, labels, 500)
   if (!value) return []
@@ -106,7 +112,8 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const natural = isNaturalLanguageBrief(rawText)
   const naturalTitle = naturalLanguageTitle(rawText)
   const naturalLocation = naturalLanguageLocation(rawText)
-  const location = (natural ? naturalLocation || parsed.location : parsed.location || naturalLocation) || 'Not specified'
+  const explicitLocation = labeledLocation(rawText)
+  const location = (natural ? naturalLocation || explicitLocation || parsed.location : explicitLocation || parsed.location || naturalLocation) || 'Not specified'
   const clearance = parsed.clearance[0] || labeledValue(rawText, ['clearance', 'security clearance'], 100) || 'Not specified'
   const targetCompanies = labeledValues(rawText, ['target companies', 'target company', 'donor companies', 'companies'])
   const disqualifiers = labeledValues(rawText, ['disqualifiers', 'exclude', 'avoid'])
