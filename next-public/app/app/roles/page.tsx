@@ -9,6 +9,7 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
+// V33.4 preview gate: keep the sourcing desk on the same deploy as the prompt-first intake.
 export default function RolesPage() {
   return <main className="wrap v30-page-wrap role-agent-entry-page-v33-4">
     <link rel="stylesheet" href="/role-workbench-v33-4.css" />
