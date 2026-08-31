@@ -47,4 +47,11 @@ describe('V33.4 agent-first intake', () => {
     expect(source).toContain('router.push(`/app/roles/${role.id}?start=1`)')
     expect(source).not.toContain("setShowCreate] = useState(false)")
   })
+
+  it('keeps O*NET technology examples as search context instead of recruiter-authored preferences', () => {
+    const onet = readFileSync(new URL('../lib/onet-role-intelligence.ts', import.meta.url), 'utf8')
+    expect(onet).toContain('technology examples remain source/search hints only')
+    expect(onet).not.toContain('...expansion.technologyHints')
+    expect(onet).toContain('adjacentBackgrounds: uniq')
+  })
 })
