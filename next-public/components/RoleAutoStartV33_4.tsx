@@ -22,7 +22,6 @@ export function RoleAutoStartV33_4({ roleId }: { roleId: string }) {
     const interval = window.setInterval(() => {
       ticks += 1
       const shell = document.querySelector('.role-sourcing-execution-v33-4') as HTMLDetailsElement | null
-      if (shell) shell.open = true
 
       if (phase === 'search') {
         const button = shell?.querySelector('.agent-review-command-actions button.btn') as HTMLButtonElement | null
@@ -43,13 +42,14 @@ export function RoleAutoStartV33_4({ roleId }: { roleId: string }) {
       }
 
       // Do not loop forever if a source returns no eligible records or is slow.
-      // The agent surface stays open so the recruiter can see the real status.
+      // The detailed agent remains available on demand while the primary
+      // workbench shows live lane progress and candidate state.
       if (phase === 'done' || ticks >= 450) {
         window.clearInterval(interval)
         if (ticks >= 450) {
           url.searchParams.delete('start')
           window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-          setMessage('Initial agent pass is still visible below. No candidate decision was made automatically.')
+          setMessage('Initial pass completed or paused without an automatic candidate decision. Open execution details only if you need to inspect it.')
         } else {
           window.setTimeout(() => setMessage(''), 3500)
         }
