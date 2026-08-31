@@ -24,6 +24,7 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
       <link rel="stylesheet" href="/agent-review-slate-v33-3.css" />
       <link rel="stylesheet" href="/role-workbench-v33-4.css" />
       <link rel="stylesheet" href="/role-workbench-v33-4-light.css" />
+      <link rel="stylesheet" href="/role-agent-intake-v33-4.css" />
 
       <RoleAutoStartV33_4 roleId={id} />
       <RoleUnifiedWorkbenchV33_4 roleId={id} />
