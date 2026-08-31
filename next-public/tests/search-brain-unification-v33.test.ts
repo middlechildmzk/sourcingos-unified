@@ -76,16 +76,18 @@ describe('V33 one Role Brain and one Search Brain', () => {
     const wizard = read('components/RoleIntakeWizardV33_4.tsx')
     expect(wizard).toContain('/api/role-intelligence/onet?title=')
     expect(wizard).toContain('enrichRoleIntakeWithOnet')
-    expect(wizard).toContain('cannot add hidden must-haves')
+    expect(wizard).toContain('do not become hidden requirements')
   })
 
-  it('makes the approved V33.4 Role Brief the live natural-language role creation experience', () => {
+  it('makes V33.4 a prompt-first natural-language role creation experience', () => {
     const portfolio = read('components/RoleWorkspaceClient.tsx')
     const wizard = read('components/RoleIntakeWizardV33_4.tsx')
     expect(portfolio).toContain('RoleIntakeWizardV33_4')
-    expect(portfolio).toContain('One brief. One sourcing workspace.')
+    expect(portfolio).toContain('useState(true)')
+    expect(portfolio).toContain('router.push(`/app/roles/${role.id}?start=1`)')
     expect(wizard).toContain('Who are you looking for?')
-    expect(wizard).toContain('Nothing searches until you approve the structured brief')
+    expect(wizard).toContain('Here’s what I’m going to look for.')
+    expect(wizard).toContain('Start sourcing →')
     expect(wizard).toContain('initializeApprovedRoleBrief')
     expect(portfolio).not.toContain('<RoleIntakeWizard ')
   })
