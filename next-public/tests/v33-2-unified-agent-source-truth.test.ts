@@ -34,6 +34,16 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(acquisition).toContain('skills: uniq((r.x_concepts || [])')
   })
 
+  it('keeps unattended acquisition discovery-only until recruiter review', () => {
+    const engine = read('lib/acquisition-engine-v22.ts')
+    const vercel = read('vercel.json')
+    expect(vercel).toContain('"crons": []')
+    expect(engine).toContain("const disposition = 'needs_review' as const")
+    expect(engine).toContain('Automated Candidate Graph promotion is disabled; recruiter review is required.')
+    expect(engine).not.toContain("'auto_promoted'")
+    expect(engine).not.toContain("merge_status: manual ? 'pending' :")
+  })
+
   it('uses the proposal-only rich resolver in the live identity-review route', () => {
     const route = read('app/api/candidate-db/match-review/route.ts')
     expect(route).toContain('compareSourceProfiles')
@@ -60,6 +70,17 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(route).toContain("'github', 'stackoverflow'")
     expect(plan).toContain("surface: 'stackoverflow'")
     expect(plan).toContain("connectorKeys: ['stackoverflow']")
+  })
+
+  it('moves an explicitly saved canonical candidate into the active role review slate', () => {
+    const panel = read('components/RoleAgenticSearchPanel.tsx')
+    expect(panel).toContain('const { roles, mode, updateRole } = useRoleWorkspaces()')
+    expect(panel).toContain('workspace.candidates.some(candidate => candidate.candidateId === candidateId)')
+    expect(panel).toContain("source: 'candidate_database'")
+    expect(panel).toContain("stage: 'needs_review'")
+    expect(panel).toContain("fitDecision: 'unreviewed'")
+    expect(panel).toContain("evidenceStatus: 'unreviewed'")
+    expect(panel).toContain('Save + add to role review')
   })
 
   it('admits Stack Overflow skills only from observed top-answerer tags', () => {
