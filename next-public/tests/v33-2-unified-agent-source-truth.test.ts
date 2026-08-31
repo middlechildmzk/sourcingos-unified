@@ -83,6 +83,22 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(panel).toContain('Save + add to role review')
   })
 
+  it('builds a source-linked pre-shortlist evidence slate without converting unknowns into fit decisions', () => {
+    const route = read('app/api/role-candidate-assessment/route.ts')
+    const slate = read('components/RoleEvidenceSlateV33_2.tsx')
+    const page = read('app/app/roles/[id]/page.tsx')
+    expect(route).toContain('buildEvidenceLedger')
+    expect(route).toContain('buildRequirementAssessments')
+    expect(route).toContain('Missing evidence remains unknown and never becomes a negative finding.')
+    expect(route).toContain('This is an evidence review slate, not a fit score, ranking, rejection, or hiring recommendation.')
+    expect(route).toContain("? 'evidence_ready'")
+    expect(route).not.toContain("fitDecision: 'strong_fit'")
+    expect(slate).toContain('Pre-shortlist evidence review')
+    expect(slate).toContain('This is not a fit score or hiring recommendation.')
+    expect(slate).toContain('needs verification')
+    expect(page).toContain('<RoleEvidenceSlateContainerV33_2 roleId={id} />')
+  })
+
   it('admits Stack Overflow skills only from observed top-answerer tags', () => {
     const observed = classifySourceResult(person({
       id: 'stackoverflow:42',
