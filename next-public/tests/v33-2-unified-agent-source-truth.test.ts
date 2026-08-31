@@ -83,9 +83,9 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(panel).toContain('Save + add to role review')
   })
 
-  it('builds a source-linked pre-shortlist evidence slate without converting unknowns into fit decisions', () => {
+  it('keeps the source-linked pre-shortlist evidence contract in the V33.4 unified workbench', () => {
     const route = read('app/api/role-candidate-assessment/route.ts')
-    const slate = read('components/RoleEvidenceSlateV33_2.tsx')
+    const workbench = read('components/RoleUnifiedWorkbenchV33_4.tsx')
     const page = read('app/app/roles/[id]/page.tsx')
     expect(route).toContain('buildEvidenceLedger')
     expect(route).toContain('buildRequirementAssessments')
@@ -93,10 +93,12 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(route).toContain('This is an evidence review slate, not a fit score, ranking, rejection, or hiring recommendation.')
     expect(route).toContain("? 'evidence_ready'")
     expect(route).not.toContain("fitDecision: 'strong_fit'")
-    expect(slate).toContain('Pre-shortlist evidence review')
-    expect(slate).toContain('This is not a fit score or hiring recommendation.')
-    expect(slate).toContain('needs verification')
-    expect(page).toContain('<RoleEvidenceSlateContainerV33_2 roleId={id} />')
+    expect(workbench).toContain("fetch('/api/role-candidate-assessment'")
+    expect(workbench).toContain('Requirement evidence')
+    expect(workbench).toContain('No opaque fit score')
+    expect(workbench).toContain('Missing evidence is not a red X.')
+    expect(workbench).toContain('Needs verification')
+    expect(page).toContain('<RoleUnifiedWorkbenchV33_4 roleId={id} />')
   })
 
   it('admits Stack Overflow skills only from observed top-answerer tags', () => {
