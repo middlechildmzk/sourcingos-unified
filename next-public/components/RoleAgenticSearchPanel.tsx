@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
+import { useRoleIntelligenceV33 } from '@/components/RoleIntelligenceProviderV33'
 import {
   executableConnectorKeys,
   sourceTruthSummary,
@@ -10,7 +11,6 @@ import {
   type AgenticSearchSurface,
 } from '@/lib/agentic-search-v30'
 import { buildCanonicalAgenticSearchPlan, executableTaskDistinctness } from '@/lib/canonical-agentic-search-v30'
-import type { OnetRoleIntelligence } from '@/lib/onet-role-intelligence'
 import {
   accumulatedResultKeys,
   resultNoveltyRate,
@@ -46,8 +46,6 @@ type RunResponse = {
   trust?: { message?: string; externalContent?: string; registryData?: string }
 }
 
-type OnetResponse = { ok?: boolean; intelligence?: OnetRoleIntelligence }
-
 function memoryKey(roleId: string) {
   return `sourcingos.v30.search-memory.${roleId}`
 }
@@ -70,9 +68,9 @@ function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnect
 
 export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
   const { roles, mode } = useRoleWorkspaces()
+  const { onet, military, militaryApproved, militaryDataset } = useRoleIntelligenceV33()
   const role = useMemo(() => roles.find(item => item.id === roleId), [roleId, roles])
-  const [onet, setOnet] = useState<OnetRoleIntelligence | undefined>()
-  const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet }) : null, [role, onet])
+  const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved }) : null, [role, onet, military, militaryApproved])
   const [laneId, setLaneId] = useState<AgenticLaneId>('exact_title')
   const [attempts, setAttempts] = useState<SearchAttempt[]>([])
   const [results, setResults] = useState<AgenticResult[]>([])
@@ -85,19 +83,6 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
   useEffect(() => {
     if (plan && !plan.lanes.some(lane => lane.id === laneId)) setLaneId(plan.lanes[0]?.id || 'exact_title')
   }, [laneId, plan])
-  useEffect(() => {
-    const title = role?.intake.title?.trim()
-    if (!title || title === 'Untitled role') {
-      setOnet(undefined)
-      return
-    }
-    const controller = new AbortController()
-    void fetch(`/api/role-intelligence/onet?title=${encodeURIComponent(title)}`, { signal: controller.signal })
-      .then(response => response.json() as Promise<OnetResponse>)
-      .then(json => { if (json.intelligence) setOnet(json.intelligence) })
-      .catch(error => { if ((error as Error)?.name !== 'AbortError') setOnet(undefined) })
-    return () => controller.abort()
-  }, [role?.intake.title])
 
   if (!role || !plan || mode === 'checking') return null
   const activeRole = role
@@ -211,6 +196,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
       {plan.domainPacks.map(pack => <span className="status-pill" key={pack.id}>{pack.label} · {Math.round(pack.confidence * 100)}%</span>)}
       {onet?.matchedOccupation && <span className="status-pill active">O*NET · {onet.matchedOccupation.title}</span>}
       {onet?.relatedOccupations?.length ? <span className="status-pill">{onet.relatedOccupations.length} occupation adjacencies</span> : null}
+      {military?.applicable && <span className={`status-pill ${plan.roleIntelligence.militaryApproved ? 'success' : militaryDataset?.verified ? 'active' : 'warning'}`}>Military MOC · {military.occupations.length}{plan.roleIntelligence.militaryApproved ? ' · approved' : militaryDataset?.verified ? ' · review' : ' · provisional'}</span>}
     </div>
     {!!plan.integrityWarnings.length && <div className="agentic-warning-list">{plan.integrityWarnings.map(warning => <span key={warning}>⚠ {warning}</span>)}</div>}
 

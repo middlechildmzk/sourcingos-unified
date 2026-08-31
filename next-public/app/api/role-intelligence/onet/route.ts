@@ -21,7 +21,6 @@ type OccupationRow = { onetsoc_code?: string; title?: string; description?: stri
 type ReportedTitleRow = { onetsoc_code?: string; title?: string; reported_job_title?: string; shown_in_my_next_move?: string }
 type RelatedRow = { onetsoc_code?: string; related_onetsoc_code?: string; related_title?: string; relatedness_tier?: string; related_index?: number | string }
 type SoftwareSkillRow = { onetsoc_code?: string; workplace_example?: string; hot_technology?: string; in_demand?: string }
-
 type MatchCandidate = { code: string; title: string; score: number }
 
 function text(value: unknown, max = 150): string {
@@ -94,15 +93,7 @@ function bestOccupation(title: string, occupations: OccupationRow[], reportedTit
   return best && best.score >= 0.46 ? best : null
 }
 
-export async function POST(req: NextRequest) {
-  const gate = await requireSession()
-  if (!gate.ok) return gate.response
-  const rl = await rateLimit(req, 'workbench', gate.userId)
-  if (!rl.ok) return rl.response
-
-  const parsed = requestSchema.safeParse(await req.json().catch(() => ({})))
-  if (!parsed.success) return NextResponse.json({ ok: false, error: 'Invalid role-intelligence request.' }, { status: 400 })
-
+async function intelligenceForTitle(title: string): Promise<OnetRoleIntelligence> {
   try {
     // Only the normalized role title is used to select records from the public,
     // downloadable O*NET database. Full job descriptions, employer notes,
@@ -113,15 +104,14 @@ export async function POST(req: NextRequest) {
     ])
     const occupations = occupationData.row || []
     const reportedTitles = reportedData.row || []
-    const match = bestOccupation(parsed.data.title, occupations, reportedTitles)
+    const match = bestOccupation(title, occupations, reportedTitles)
 
     if (!match) {
-      const intelligence: OnetRoleIntelligence = {
+      return {
         ...emptyOnetRoleIntelligence(),
         configured: true,
         error: 'No sufficiently close O*NET occupation match was found for this role title.',
       }
-      return NextResponse.json({ ok: true, intelligence })
     }
 
     const [relatedData, softwareData] = await Promise.all([
@@ -147,7 +137,7 @@ export async function POST(req: NextRequest) {
         return rank(b) - rank(a)
       })
 
-    const intelligence: OnetRoleIntelligence = {
+    return {
       provider: 'onet',
       version: '31.0',
       configured: true,
@@ -157,14 +147,33 @@ export async function POST(req: NextRequest) {
       technologyExamples: uniq(softwareForOccupation.map(row => text(row.workplace_example)), 16),
       attribution: ATTRIBUTION,
     }
-
-    return NextResponse.json({ ok: true, intelligence })
   } catch (error) {
-    const intelligence: OnetRoleIntelligence = {
+    return {
       ...emptyOnetRoleIntelligence(),
       configured: false,
       error: error instanceof Error ? error.message.slice(0, 240) : 'O*NET dataset enrichment failed.',
     }
-    return NextResponse.json({ ok: true, intelligence })
   }
+}
+
+async function respond(req: NextRequest, input: unknown) {
+  const gate = await requireSession()
+  if (!gate.ok) return gate.response
+  const rl = await rateLimit(req, 'workbench', gate.userId)
+  if (!rl.ok) return rl.response
+
+  const parsed = requestSchema.safeParse(input)
+  if (!parsed.success) return NextResponse.json({ ok: false, error: 'Invalid role-intelligence request.' }, { status: 400 })
+  const intelligence = await intelligenceForTitle(parsed.data.title)
+  return NextResponse.json({ ok: true, intelligence })
+}
+
+/** Backward-compatible transport for the V33 intake wizard. */
+export async function GET(req: NextRequest) {
+  return respond(req, { title: req.nextUrl.searchParams.get('title') || '' })
+}
+
+/** Preferred transport for shared role-intelligence clients. */
+export async function POST(req: NextRequest) {
+  return respond(req, await req.json().catch(() => ({})))
 }
