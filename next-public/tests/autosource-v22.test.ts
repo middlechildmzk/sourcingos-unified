@@ -10,6 +10,7 @@ describe('AutoSource V22 contract', () => {
   const engine = read('lib/acquisition-engine-v22.ts')
   const cron = read('app/api/cron/autosource/route.ts')
   const route = read('app/api/autosource/campaigns/route.ts')
+  const vercel = read('vercel.json')
 
   it('owner-scopes every durable acquisition table', () => {
     for (const table of ['acquisition_campaigns','acquisition_runs','acquisition_discoveries','acquisition_source_cursors','candidate_quality_snapshots','autosource_inbox']) {
@@ -19,17 +20,24 @@ describe('AutoSource V22 contract', () => {
     expect(migration).toContain('revoke all on public.acquisition_campaigns')
   })
 
-  it('requires authenticated server routes and a secret-gated cron', () => {
+  it('requires authenticated server routes and keeps the legacy cron endpoint secret-gated', () => {
     expect(route).toContain('requireSession()')
     expect(route).toContain("rateLimit(req, 'workbench'")
     expect(cron).toContain('process.env.CRON_SECRET')
     expect(cron).toContain("status: 401")
   })
 
-  it('uses strict auto-promotion thresholds and preserves review', () => {
-    expect(engine).toContain('d.identityConfidence >= input.autoPromoteThreshold')
-    expect(engine).toContain("'needs_review'")
-    expect(engine).toContain("'auto_promoted'")
+  it('does not schedule unattended autosource while trust hardening is in progress', () => {
+    expect(vercel).toContain('"crons": []')
+    expect(vercel).not.toContain('/api/cron/autosource')
+  })
+
+  it('keeps every automated discovery in recruiter review and forbids automated Candidate Graph promotion', () => {
+    expect(engine).toContain("const disposition = 'needs_review' as const")
+    expect(engine).toContain('Automated Candidate Graph promotion is disabled; recruiter review is required.')
+    expect(engine).not.toContain("'auto_promoted'")
+    expect(engine).toContain("merge_status: 'pending'")
+    expect(engine).toContain("confidence: 'medium'")
     expect(engine).toContain("'duplicate'")
   })
 
