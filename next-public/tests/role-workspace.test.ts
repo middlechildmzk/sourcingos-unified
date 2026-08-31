@@ -2,21 +2,22 @@ import { describe, expect, it } from 'vitest'
 import { buildCanonicalAgenticSearchPlan } from '../lib/canonical-agentic-search-v30'
 import { buildSearchLanes, calibrationInsights, createRoleWorkspace, parseRoleIntake, roleMetrics } from '../lib/role-workspace'
 
-const jd = `Program Director - Human Performance and Readiness
-Location: Tampa, FL / Hybrid
+const jd = `Senior Platform Program Director
+Location: Minneapolis, MN / Hybrid
 Compensation: $150,000-$185,000
-Clearance: Secret
-Lead program management, operations, stakeholder management, human performance, AWS, and cybersecurity work.`
+Required: AWS, Kubernetes, Terraform
+Preferred: stakeholder management, program management
+Lead a synthetic cloud infrastructure program.`
 
 describe('V20 role workspace with canonical V33 Search Brain', () => {
-  it('parses a role into a recruiter-reviewable intake', () => {
+  it('parses only recruiter-authored requirements into a reviewable intake', () => {
     const intake = parseRoleIntake(jd)
-    expect(intake.title).toContain('Program Director')
-    expect(intake.location).toContain('Tampa')
+    expect(intake.title).toContain('Senior Platform Program Director')
+    expect(intake.location).toContain('Minneapolis')
     expect(intake.workMode).toBe('hybrid')
-    expect(intake.clearance).toContain('Secret')
-    expect(intake.mustHaves).toContain('Program Management')
     expect(intake.mustHaves).toContain('AWS')
+    expect(intake.mustHaves).toContain('Kubernetes')
+    expect(intake.mustHaves).not.toContain('Program Management')
   })
 
   it('persists the canonical hypothesis plan instead of a second source-centric plan', () => {
@@ -43,15 +44,15 @@ describe('V20 role workspace with canonical V33 Search Brain', () => {
     role.candidates.push({
       id: 'candidate-1',
       name: 'Jordan Rivera',
-      headline: 'Program Director',
+      headline: 'Platform Program Director',
       company: 'Example Co',
-      location: 'Tampa, FL',
+      location: 'Minneapolis, MN',
       source: 'manual research',
       stage: 'shortlisted',
       fitDecision: 'strong_fit',
-      fitReasons: ['Human performance leadership'],
+      fitReasons: ['Recruiter observed relevant infrastructure leadership'],
       concerns: [],
-      tags: ['human performance program'],
+      tags: ['synthetic platform program'],
       contactStatus: 'unknown',
       evidenceStatus: 'reviewed',
       addedAt: new Date().toISOString(),
