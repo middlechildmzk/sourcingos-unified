@@ -14,6 +14,7 @@ export default function RolesPage() {
     <link rel="stylesheet" href="/role-workbench-v33-4.css" />
     <link rel="stylesheet" href="/role-workbench-v33-4-light.css" />
     <link rel="stylesheet" href="/role-agent-intake-v33-4.css" />
+    <link rel="stylesheet" href="/role-product-intelligence-v33-4.css" />
     <RoleWorkspaceClient />
     <details className="advanced-disclosure product-panel v30-admin-disclosure">
       <summary>Workspace storage, backup, and connected-search controls</summary>
