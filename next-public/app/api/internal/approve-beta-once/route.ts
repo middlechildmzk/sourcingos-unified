@@ -18,10 +18,6 @@ function safeHashEquals(actual: string, expected: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (process.env.VERCEL_ENV !== 'preview') {
-    return NextResponse.json({ ok: false, error: 'preview_only' }, { status: 404 })
-  }
-
   const token = request.nextUrl.searchParams.get('token') ?? ''
   const email = (request.nextUrl.searchParams.get('email') ?? '').trim().toLowerCase()
 
