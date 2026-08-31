@@ -6,7 +6,7 @@ import { initializeApprovedRoleBrief } from '@/lib/role-brief-artifact-v33-4'
 import { roleBriefInterpretations } from '@/lib/role-workbench-v33-4'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from '@/lib/onet-role-intelligence'
 
-type Props = { initialText?: string; onCancel: () => void; onCreate: (workspace: RoleWorkspace) => void }
+type Props = { initialText?: string; onCreate: (workspace: RoleWorkspace) => void }
 type ParseResponse = { ok?: boolean; error?: string; result?: { intake: RoleIntake; questions: string[]; aiGenerated: boolean; summary: string } }
 
 function unique(values: string[]): string[] {
@@ -15,12 +15,11 @@ function unique(values: string[]): string[] {
 function parseList(value: string) { return unique(value.split(/[,\n]/)) }
 function list(value: string[]) { return value.join(', ') }
 
-export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: Props) {
+export function RoleIntakeWizardV33_4({ initialText = '', onCreate }: Props) {
   const [step, setStep] = useState<1 | 2>(1)
   const [rawText, setRawText] = useState(initialText)
   const [draft, setDraft] = useState<RoleWorkspace | null>(null)
   const [questions, setQuestions] = useState<string[]>([])
-  const [summary, setSummary] = useState('')
   const [showDetails, setShowDetails] = useState(false)
   const [onet, setOnet] = useState<OnetRoleIntelligence | undefined>()
   const [working, setWorking] = useState(false)
@@ -48,7 +47,6 @@ export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: 
       let workspace = createRoleWorkspace(text)
       workspace = { ...workspace, intake: json.result.intake, searchLanes: buildSearchLanes(json.result.intake) }
       setQuestions(json.result.questions || [])
-      setSummary(json.result.summary || '')
 
       try {
         const onetResponse = await fetch(`/api/role-intelligence/onet?title=${encodeURIComponent(workspace.intake.title)}`)
@@ -110,9 +108,8 @@ export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: 
         <h2>{step === 1 ? 'Who are you looking for?' : 'Here’s what I’m looking for.'}</h2>
         <p>{step === 1
           ? 'One or two sentences is enough. You can also paste the full job description.'
-          : 'If this looks right, start the search. You only need to edit details if I misunderstood something.'}</p>
+          : 'If this looks right, start the search. Edit details only if I misunderstood something.'}</p>
       </div>
-      <button className="role-wizard-close" onClick={onCancel} aria-label="Close role setup">×</button>
     </header>
 
     {error && <div className="role-wizard-alert" role="alert">{error}</div>}
@@ -133,7 +130,6 @@ export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: 
         </div>
       </div>
       <div className="role-wizard-footer role-wizard-footer-simple-v33-4">
-        <button className="btn ghost" onClick={onCancel}>Cancel</button>
         <button className="btn" disabled={working} onClick={() => void begin()}>{working ? 'Understanding your search…' : 'Continue →'}</button>
       </div>
     </div>}
@@ -144,7 +140,7 @@ export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: 
           <div>
             <span className="kicker">Search brief</span>
             <h3>{draft.intake.title}</h3>
-            <p>{summary || [draft.intake.location, draft.intake.workMode].filter(Boolean).join(' · ')}</p>
+            <p>{[draft.intake.location !== 'Not specified' ? draft.intake.location : '', draft.intake.workMode !== 'unknown' ? draft.intake.workMode : ''].filter(Boolean).join(' · ') || 'Search can start without a location constraint.'}</p>
           </div>
           <button className="btn ghost" onClick={() => setShowDetails(current => !current)}>{showDetails ? 'Done editing' : 'Edit details'}</button>
         </div>
@@ -152,7 +148,6 @@ export function RoleIntakeWizardV33_4({ initialText = '', onCancel, onCreate }: 
         <div className="role-agent-brief-grid-v33-4">
           {draft.intake.mustHaves.length > 0 && <div><small>Must have</small><div className="chips">{draft.intake.mustHaves.slice(0, 8).map(item => <span className="chip" key={item}>{item}</span>)}</div></div>}
           {draft.intake.niceToHaves.length > 0 && <div><small>Preferred</small><div className="chips">{draft.intake.niceToHaves.slice(0, 8).map(item => <span className="chip" key={item}>{item}</span>)}</div></div>}
-          {(draft.intake.location !== 'Not specified' || draft.intake.workMode !== 'unknown') && <div><small>Location / work</small><p>{[draft.intake.location !== 'Not specified' ? draft.intake.location : '', draft.intake.workMode !== 'unknown' ? draft.intake.workMode : ''].filter(Boolean).join(' · ')}</p></div>}
           {draft.intake.clearance !== 'Not specified' && <div><small>Needs verification</small><p>{draft.intake.clearance}</p></div>}
           {draft.intake.disqualifiers.length > 0 && <div><small>Avoid / flag</small><p>{draft.intake.disqualifiers.join(' · ')}</p></div>}
         </div>
