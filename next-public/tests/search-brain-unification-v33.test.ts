@@ -73,17 +73,20 @@ describe('V33 one Role Brain and one Search Brain', () => {
     expect(provider).toContain("method: 'POST'")
     expect(route).toContain('export async function GET')
     expect(route).toContain('export async function POST')
-    const wizard = read('components/RoleIntakeWizardV33.tsx')
+    const wizard = read('components/RoleIntakeWizardV33_4.tsx')
     expect(wizard).toContain('/api/role-intelligence/onet?title=')
     expect(wizard).toContain('enrichRoleIntakeWithOnet')
-    expect(wizard).toContain('they do not rewrite your must-haves')
+    expect(wizard).toContain('cannot add hidden must-haves')
   })
 
-  it('makes natural-language V33 intake the live role creation experience', () => {
+  it('makes the approved V33.4 Role Brief the live natural-language role creation experience', () => {
     const portfolio = read('components/RoleWorkspaceClient.tsx')
-    expect(portfolio).toContain('RoleIntakeWizardV33')
-    expect(portfolio).toContain('Every search starts with one role brain')
-    expect(portfolio).toContain('Describe the talent. Shape the search.')
+    const wizard = read('components/RoleIntakeWizardV33_4.tsx')
+    expect(portfolio).toContain('RoleIntakeWizardV33_4')
+    expect(portfolio).toContain('One brief. One sourcing workspace.')
+    expect(wizard).toContain('Who are you looking for?')
+    expect(wizard).toContain('Nothing searches until you approve the structured brief')
+    expect(wizard).toContain('initializeApprovedRoleBrief')
     expect(portfolio).not.toContain('<RoleIntakeWizard ')
   })
 
