@@ -127,17 +127,25 @@ describe('V33.3B recruiter-controlled review slate', () => {
     expect(buildRoleReviewSlateCandidates(saved, ['candidate-1'])).toEqual([])
   })
 
-  it('runs only recruiter-approved hypotheses and requires explicit Create review slate persistence', () => {
+  it('runs only recruiter-approved hypotheses and requires an explicit review-slate save', () => {
     const component = read('components/RoleSourcingAgentV33_3.tsx')
     expect(component).toContain("lane.status === 'approved'")
     expect(component).toContain('shouldExecuteSearch(nextAttempts')
     expect(component).toContain("fetch('/api/agentic-search'")
     expect(component).toContain("fetch('/api/workbench/save-source-profile'")
     expect(component).toContain('Create review slate')
-    expect(component).toContain("stage: 'needs_review'") === false // stage contract lives in the pure builder
+    expect(component).toContain('No candidate was shortlisted, rejected, merged across sources, or contacted.')
     expect(component).not.toContain("fitDecision: 'strong_fit'")
     expect(component).not.toContain("fitDecision: 'not_fit'")
-    expect(component).not.toContain('auto-shortlist')
+  })
+
+  it('keeps the consequential role-candidate state contract in the pure builder', () => {
+    const builder = read('lib/agent-review-slate-v33-3.ts')
+    expect(builder).toContain("stage: 'needs_review'")
+    expect(builder).toContain("fitDecision: 'unreviewed'")
+    expect(builder).toContain("evidenceStatus: 'unreviewed'")
+    expect(builder).not.toContain("fitDecision: 'strong_fit'")
+    expect(builder).not.toContain("fitDecision: 'not_fit'")
   })
 
   it('makes the batch agent primary while preserving advanced source inspection', () => {
