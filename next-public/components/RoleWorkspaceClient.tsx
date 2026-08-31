@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
-import { RoleIntakeWizardV33 } from '@/components/RoleIntakeWizardV33'
+import { RoleIntakeWizardV33_4 } from '@/components/RoleIntakeWizardV33_4'
 
 function statusClass(status: RoleWorkspace['status']) {
   if (status === 'active') return 'active'
@@ -18,8 +18,8 @@ function workflowReadiness(role: RoleWorkspace): { score: number; next: string }
   const metrics = roleMetrics(role)
   const reviewed = role.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length
   const steps = [
-    { done: Boolean(role.intake.title.trim() && role.intake.mustHaves.length), next: 'Confirm the role brief' },
-    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Approve a sourcing hypothesis' },
+    { done: Boolean(role.intake.title.trim() && role.intake.mustHaves.length), next: 'Confirm the Role Brief' },
+    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Approve a sourcing angle' },
     { done: metrics.candidateCount > 0, next: 'Build the first slate' },
     { done: reviewed > 0, next: 'Review the first candidates' },
   ]
@@ -80,7 +80,7 @@ export function RoleWorkspaceClient() {
   function createRole(role: RoleWorkspace) {
     addRole(role)
     setShowCreate(false)
-    setStatus(`Created ${role.intake.title}. The approved hypothesis is now the same Search Plan used by agentic and guided sourcing.`)
+    setStatus(`Created ${role.intake.title}. Role Brief v1 and the recruiter-approved search angles are now attached to the same persistent role workspace.`)
     router.push(`/app/roles/${role.id}`)
   }
 
@@ -90,8 +90,8 @@ export function RoleWorkspaceClient() {
     <section className="role-portfolio-command">
       <div>
         <span className="kicker">Role portfolio</span>
-        <h2>Every search starts with one role brain.</h2>
-        <p>Natural-language intent, search strategy, candidate evidence, calibration, and the next sourcing pass stay connected to the same role.</p>
+        <h2>One brief. One sourcing workspace.</h2>
+        <p>Describe who you need, approve what SourcingOS understood, then keep sourcing, evidence, review decisions, and calibration attached to that role.</p>
       </div>
       <div className="role-portfolio-command-actions">
         <button className="btn" onClick={() => showCreate ? setShowCreate(false) : openWizard()}>{showCreate ? 'Close setup' : '+ Create role'}</button>
@@ -100,8 +100,7 @@ export function RoleWorkspaceClient() {
     </section>
 
     {showCreate && <div className="role-create-stage">
-      <div className="role-create-stage-head"><div><span className="kicker">Role Brain</span><h2>Describe the talent. Shape the search.</h2><p>Use one sentence, intake notes, or a full JD. SourcingOS will structure the role and propose distinct canonical sourcing hypotheses.</p></div></div>
-      <RoleIntakeWizardV33 key={wizardKey} initialText={wizardText} onCancel={() => setShowCreate(false)} onCreate={createRole} />
+      <RoleIntakeWizardV33_4 key={wizardKey} initialText={wizardText} onCancel={() => setShowCreate(false)} onCreate={createRole} />
     </div>}
 
     <div className="product-summary-grid role-portfolio-summary">
@@ -126,10 +125,11 @@ export function RoleWorkspaceClient() {
           const readiness = workflowReadiness(role)
           const approvedLanes = role.searchLanes.filter(lane => lane.status === 'approved').length
           const pendingLearning = role.calibration?.insights.filter(insight => insight.status === 'proposed').length || 0
+          const briefVersion = role.roleBriefVersions?.find(version => version.id === role.activeRoleBriefVersionId)?.version || role.roleBriefVersions?.at(-1)?.version || 1
           return <Link className="role-card-v30" href={`/app/roles/${role.id}`} key={role.id}>
             <div className="role-card-topline">
               <span className={`status-pill ${statusClass(role.status)}`}>{role.status}</span>
-              <span className="role-card-updated">{formatUpdated(role.updatedAt)}</span>
+              <span className="role-card-updated">Role Brief v{briefVersion} · {formatUpdated(role.updatedAt)}</span>
             </div>
             <div className="role-card-title">
               <h3>{role.intake.title}</h3>
@@ -144,7 +144,7 @@ export function RoleWorkspaceClient() {
               <span><b>{metrics.candidateCount}</b><small>candidates</small></span>
               <span><b>{metrics.needsReview}</b><small>to review</small></span>
               <span><b>{metrics.strongFits}</b><small>strong</small></span>
-              <span><b>{approvedLanes}</b><small>hypotheses</small></span>
+              <span><b>{approvedLanes}</b><small>angles</small></span>
             </div>
             <div className="role-card-footer">
               <div>{pendingLearning ? <span className="status-pill warning">{pendingLearning} learning review</span> : <span className="status-pill success">calibration clear</span>}</div>
@@ -155,7 +155,7 @@ export function RoleWorkspaceClient() {
 
         {!filteredRoles.length && <div className="role-portfolio-empty-v30">
           <div className="role-portfolio-empty-mark">✦</div>
-          <div><h3>{roles.length ? 'No roles match this search' : 'Your sourcing workspace starts here'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Describe who you need. Confirm the structured role brain. Approve the search strategy. Then source and calibrate from one place.'}</p></div>
+          <div><h3>{roles.length ? 'No roles match this search' : 'Who are you looking for?'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Describe the person in plain English. SourcingOS will turn it into an approved Role Brief and search plan before any research runs.'}</p></div>
           {!roles.length && <button className="btn" onClick={() => openWizard()}>Create first role</button>}
         </div>}
       </div>
