@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { roleMetrics, type RoleWorkspace } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 import { RoleIntakeWizardV33_4 } from '@/components/RoleIntakeWizardV33_4'
+import { RolePortfolioIntelligenceV33_4 } from '@/components/RolePortfolioIntelligenceV33_4'
 
 function statusClass(status: RoleWorkspace['status']) {
   if (status === 'active') return 'active'
@@ -97,6 +98,8 @@ export function RoleWorkspaceClient() {
       <div className="role-portfolio-context-v33-4">
         <div><span className={`app-connection-pill ${mode === 'preview' ? 'preview' : ''}`}><span />{mode === 'checking' ? 'Connecting' : mode === 'supabase' ? 'Account storage' : mode === 'preview' ? 'Browser local' : 'Reconnect needed'}</span><small>{message}</small></div>
       </div>
+
+      <RolePortfolioIntelligenceV33_4 roles={roles} />
 
       <div className="product-summary-grid role-portfolio-summary">
         <div className="product-stat"><small>Active searches</small><b>{totals.active}</b><span>Currently sourcing</span></div>
