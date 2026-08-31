@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
+import { useRoleIntelligenceV33 } from '@/components/RoleIntelligenceProviderV33'
 import { buildCanonicalAgenticSearchPlan } from '@/lib/canonical-agentic-search-v30'
 import type { AgenticSearchLane, AgenticSearchSurface } from '@/lib/agentic-search-v30'
 import { buildSearchLanes } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
-const CANONICAL_IDS = new Set(['exact_title', 'adjacent_title', 'skill_cluster', 'evidence_first', 'target_company', 'clearance_first'])
+const CANONICAL_IDS = new Set(['exact_title', 'adjacent_title', 'skill_cluster', 'evidence_first', 'target_company', 'clearance_first', 'military_transition'])
 const GUIDED: Array<{ surface: AgenticSearchSurface; label: string; brand: string }> = [
   { surface: 'linkedin_recruiter', label: 'LinkedIn Recruiter', brand: 'in' },
   { surface: 'clearancejobs', label: 'ClearanceJobs / ATS', brand: 'C' },
@@ -20,11 +21,12 @@ function taskFor(lane: AgenticSearchLane | undefined, surface: AgenticSearchSurf
 
 export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
   const { roles, mode, updateRole } = useRoleWorkspaces()
+  const { onet, military, militaryApproved } = useRoleIntelligenceV33()
   const role = useMemo(() => roles.find(item => item.id === roleId), [roles, roleId])
   const [laneId, setLaneId] = useState('')
   const [notice, setNotice] = useState('')
-  const baseline = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake) : null, [role])
-  const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration) : null, [role])
+  const baseline = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, undefined, { onet, military, militaryApproved: false }) : null, [role, onet, military])
+  const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved }) : null, [role, onet, military, militaryApproved])
   const persisted = useMemo(() => role?.searchLanes.filter(lane => CANONICAL_IDS.has(lane.id)) || [], [role])
   const approved = useMemo(() => new Set(persisted.filter(lane => lane.status === 'approved').map(lane => lane.id)), [persisted])
   const lane = plan?.lanes.find(item => item.id === laneId) || plan?.lanes.find(item => approved.has(item.id)) || plan?.lanes[0]
@@ -38,12 +40,25 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
 
   function setStatus(targetId: string, status: 'approved' | 'paused') {
     updateRole(activeRole.id, current => {
+      const now = new Date().toISOString()
+      if (targetId === 'military_transition') {
+        const searchLanes = current.searchLanes.map(item => item.id === targetId ? { ...item, status } : item)
+        return {
+          ...current,
+          searchLanes,
+          updatedAt: now,
+          activity: [{ id: crypto.randomUUID(), type: 'lane_approved' as const, message: `${status === 'approved' ? 'Approved' : 'Paused'} canonical military occupation hypothesis.`, createdAt: now }, ...current.activity],
+        }
+      }
+
       const previous = new Map(current.searchLanes.filter(item => CANONICAL_IDS.has(item.id)).map(item => [item.id, item.status]))
-      const searchLanes = buildSearchLanes(current.intake).map(item => ({
+      const standard = buildSearchLanes(current.intake).map(item => ({
         ...item,
         status: item.id === targetId ? status : previous.get(item.id) || item.status,
       }))
-      const now = new Date().toISOString()
+      const standardIds = new Set(standard.map(item => item.id))
+      const extras = current.searchLanes.filter(item => !standardIds.has(item.id))
+      const searchLanes = [...standard, ...extras]
       return {
         ...current,
         searchLanes,
@@ -66,7 +81,7 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
 
   return <section className="role-search-studio" aria-label="Canonical role search plan">
     <div className="role-search-studio-head">
-      <div><div className="role-search-eyebrow"><span>One Search Brain</span><span className="status-pill active">Search Plan v{activePlan.revision}</span></div><h2>Source {activeRole.intake.title} from one plan.</h2><p>Hypothesis, guided queries, executable sources, and calibration now share the same canonical lane IDs.</p></div>
+      <div><div className="role-search-eyebrow"><span>One Search Brain</span><span className="status-pill active">Search Plan v{activePlan.revision}</span></div><h2>Source {activeRole.intake.title} from one plan.</h2><p>Hypothesis, guided queries, executable sources, occupation intelligence, and calibration share the same canonical plan.</p></div>
       <Link className="btn role-search-primary-action" href={`/app/agentic-sourcing/${encodeURIComponent(activeRole.id)}`}>Open supported-source run →</Link>
     </div>
 
@@ -78,7 +93,7 @@ export function RoleCanonicalSearchActions({ roleId }: { roleId: string }) {
         <div className="role-lane-switcher" role="group" aria-label="Canonical search hypothesis">{activePlan.lanes.map(item => <button key={item.id} className={lane?.id === item.id ? 'active' : ''} onClick={() => setLaneId(item.id)}>{item.label}</button>)}</div>
       </div>
 
-      {lane && <div className="role-calibration-banner"><div><span className="role-calibration-spark">✦</span><div><b>{isApproved ? 'Approved hypothesis' : 'Awaiting recruiter approval'}</b><p>Calibration changes increment this same plan revision rather than creating a second guided plan.</p></div></div><div className="button-row">{!isApproved ? <button className="btn secondary" onClick={() => setStatus(lane.id, 'approved')}>Approve hypothesis</button> : <button className="btn ghost" onClick={() => setStatus(lane.id, 'paused')}>Pause hypothesis</button>}<Link className="btn ghost" href={`/app/roles/${encodeURIComponent(activeRole.id)}?tab=calibration`}>Inspect learning</Link></div></div>}
+      {lane && <div className="role-calibration-banner"><div><span className="role-calibration-spark">✦</span><div><b>{isApproved ? 'Approved hypothesis' : 'Awaiting recruiter approval'}</b><p>{String(lane.id) === 'military_transition' ? 'Military occupation context is approved for discovery only; candidate requirements still use span-backed evidence.' : 'Calibration changes increment this same plan revision rather than creating a second guided plan.'}</p></div></div><div className="button-row">{!isApproved ? <button className="btn secondary" onClick={() => setStatus(String(lane.id), 'approved')}>Approve hypothesis</button> : <button className="btn ghost" onClick={() => setStatus(String(lane.id), 'paused')}>Pause hypothesis</button>}<Link className="btn ghost" href={`/app/roles/${encodeURIComponent(activeRole.id)}?tab=calibration`}>Inspect learning</Link></div></div>}
 
       {lane && <div className="role-search-surface-grid">{GUIDED.map(meta => {
         const task = taskFor(lane, meta.surface)
