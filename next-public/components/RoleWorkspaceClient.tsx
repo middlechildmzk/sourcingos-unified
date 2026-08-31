@@ -19,8 +19,8 @@ function workflowReadiness(role: RoleWorkspace): { score: number; next: string }
   const reviewed = role.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length
   const steps = [
     { done: Boolean(role.intake.title.trim() && role.intake.mustHaves.length), next: 'Confirm the Role Brief' },
-    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Approve a sourcing angle' },
-    { done: metrics.candidateCount > 0, next: 'Build the first slate' },
+    { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Start the sourcing agent' },
+    { done: metrics.candidateCount > 0, next: 'Review the first slate' },
     { done: reviewed > 0, next: 'Review the first candidates' },
   ]
   const completed = steps.filter(step => step.done).length
@@ -80,8 +80,8 @@ export function RoleWorkspaceClient() {
   function createRole(role: RoleWorkspace) {
     addRole(role)
     setShowCreate(false)
-    setStatus(`Created ${role.intake.title}. Role Brief v1 and the recruiter-approved search angles are now attached to the same persistent role workspace.`)
-    router.push(`/app/roles/${role.id}`)
+    setStatus(`Starting the sourcing agent for ${role.intake.title}.`)
+    router.push(`/app/roles/${role.id}?start=1`)
   }
 
   return <div className="interactive-tool role-portfolio-v30">
@@ -90,11 +90,11 @@ export function RoleWorkspaceClient() {
     <section className="role-portfolio-command">
       <div>
         <span className="kicker">Role portfolio</span>
-        <h2>One brief. One sourcing workspace.</h2>
-        <p>Describe who you need, approve what SourcingOS understood, then keep sourcing, evidence, review decisions, and calibration attached to that role.</p>
+        <h2>Tell SourcingOS who you need.</h2>
+        <p>One prompt becomes a structured Role Brief, a search plan, and an agent run. Edit the details only when you want to.</p>
       </div>
       <div className="role-portfolio-command-actions">
-        <button className="btn" onClick={() => showCreate ? setShowCreate(false) : openWizard()}>{showCreate ? 'Close setup' : '+ Create role'}</button>
+        <button className="btn" onClick={() => showCreate ? setShowCreate(false) : openWizard()}>{showCreate ? 'Close' : '+ New search'}</button>
         <span className={`app-connection-pill ${mode === 'preview' ? 'preview' : ''}`}><span />{mode === 'checking' ? 'Connecting' : mode === 'supabase' ? 'Account storage' : mode === 'preview' ? 'Browser local' : 'Reconnect needed'}</span>
       </div>
     </section>
@@ -112,7 +112,7 @@ export function RoleWorkspaceClient() {
 
     <section className="role-portfolio-panel-v30">
       <div className="role-portfolio-panel-head">
-        <div><span className="kicker">Searches</span><h2>{roles.length ? 'Your role workspaces' : 'Create your first role workspace'}</h2><p>{message}</p></div>
+        <div><span className="kicker">Searches</span><h2>{roles.length ? 'Your sourcing searches' : 'Start your first sourcing search'}</h2><p>{message}</p></div>
         {!!roles.length && <div className="role-portfolio-toolbar">
           <input className="input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search roles…" aria-label="Search roles" />
           {query && <button className="btn ghost" onClick={() => setQuery('')}>Clear</button>}
@@ -155,8 +155,8 @@ export function RoleWorkspaceClient() {
 
         {!filteredRoles.length && <div className="role-portfolio-empty-v30">
           <div className="role-portfolio-empty-mark">✦</div>
-          <div><h3>{roles.length ? 'No roles match this search' : 'Who are you looking for?'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Describe the person in plain English. SourcingOS will turn it into an approved Role Brief and search plan before any research runs.'}</p></div>
-          {!roles.length && <button className="btn" onClick={() => openWizard()}>Create first role</button>}
+          <div><h3>{roles.length ? 'No roles match this search' : 'Who are you looking for?'}</h3><p>{roles.length ? 'Try a title, location, clearance term, or role status.' : 'Type one or two sentences. SourcingOS will parse the request, show you a compact confirmation, and start the agent after one click.'}</p></div>
+          {!roles.length && <button className="btn" onClick={() => openWizard()}>Start a search</button>}
         </div>}
       </div>
     </section>
