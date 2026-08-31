@@ -34,11 +34,11 @@ describe('V26 guided role setup and product polish', () => {
     expect(wizard).toContain('enhanceWithTemplate(createRoleWorkspace')
   })
 
-  it('opens the created workspace and surfaces explainable workflow readiness', () => {
-    expect(roles).toContain("router.push(`/app/roles/${role.id}`)")
+  it('opens the created workspace through the V33.4 auto-start path and keeps readiness explainable', () => {
+    expect(roles).toContain("router.push(`/app/roles/${role.id}?start=1`)")
     expect(roles).toContain('workflowReadiness(role)')
-    expect(roles).toContain('Role portfolio')
-    expect(roles).toContain('Create first role')
+    expect(roles).toContain('Start the sourcing agent')
+    expect(roles).toContain('Review the first slate')
     expect(roles).not.toContain('roleHealth(role)')
   })
 
