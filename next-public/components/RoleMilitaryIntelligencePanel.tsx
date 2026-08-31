@@ -15,6 +15,7 @@ export function RoleMilitaryIntelligencePanel({ roleId }: { roleId: string }) {
   const [notice, setNotice] = useState('')
 
   if (!role || mode === 'checking' || !militaryGate?.enabled) return null
+  const activeRole = role
   const draft = militaryDrafts.find(item => item.id === 'military-occupation')
   const canApprove = Boolean(military?.applicable && draft && militaryDataset?.verified && !military.provisionalDataInUse)
 
@@ -25,7 +26,7 @@ export function RoleMilitaryIntelligencePanel({ roleId }: { roleId: string }) {
     }
     if (!draft || !military) return
 
-    updateRole(role.id, current => {
+    updateRole(activeRole.id, current => {
       const nextLane = {
         id: 'military_transition',
         label: 'Military occupation transition',
