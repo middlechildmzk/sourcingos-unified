@@ -6,6 +6,7 @@ import { RoleEvidenceSlateContainerV33_2 } from '@/components/RoleEvidenceSlateC
 import { RoleIntelligenceProviderV33 } from '@/components/RoleIntelligenceProviderV33'
 import { RoleMilitaryIntelligencePanel } from '@/components/RoleMilitaryIntelligencePanel'
 import { RolePasteBackV33 } from '@/components/RolePasteBackV33'
+import { RoleSourcingAgentV33_3 } from '@/components/RoleSourcingAgentV33_3'
 
 export const metadata = {
   title: 'Role Workspace | SourcingOS',
@@ -18,8 +19,13 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
   return (
     <main className="wrap">
       <link rel="stylesheet" href="/agentic-role.css" />
+      <link rel="stylesheet" href="/agent-review-slate-v33-3.css" />
       <RoleIntelligenceProviderV33 roleId={id}>
-        <RoleAgenticSearchPanel roleId={id} />
+        <RoleSourcingAgentV33_3 roleId={id} />
+        <details className="agentic-advanced-v33">
+          <summary>Advanced research strategy and individual source inspection</summary>
+          <RoleAgenticSearchPanel roleId={id} />
+        </details>
         <RoleMilitaryIntelligencePanel roleId={id} />
         <RoleCanonicalSearchActions roleId={id} />
       </RoleIntelligenceProviderV33>
