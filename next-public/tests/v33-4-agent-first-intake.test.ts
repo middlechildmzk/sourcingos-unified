@@ -40,9 +40,11 @@ describe('V33.4 agent-first intake', () => {
     expect(parser).toContain('Maximum 2 follow-up questions')
   })
 
-  it('enters a new confirmed role through the auto-start URL', () => {
+  it('lands directly on the prompt and enters a confirmed role through the auto-start URL', () => {
     const source = readFileSync(new URL('../components/RoleWorkspaceClient.tsx', import.meta.url), 'utf8')
+    expect(source).toContain('useState(true)')
+    expect(source).toContain('Describe the person and let the agent do the setup.')
     expect(source).toContain('router.push(`/app/roles/${role.id}?start=1`)')
-    expect(source).toContain('One prompt becomes a structured Role Brief, a search plan, and an agent run.')
+    expect(source).not.toContain("setShowCreate] = useState(false)")
   })
 })
