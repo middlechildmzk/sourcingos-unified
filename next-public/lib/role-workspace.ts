@@ -38,6 +38,25 @@ export type RoleIntake = {
   rawDescription: string
 }
 
+export type RoleBriefInterpretationNote = {
+  id: string
+  label: string
+  category: 'scope' | 'location' | 'clearance' | 'work_mode' | 'trust'
+  statement: string
+  verificationGated?: boolean
+}
+
+export type RoleBriefVersion = {
+  id: string
+  version: number
+  status: 'draft' | 'approved' | 'superseded'
+  intake: RoleIntake
+  interpretations: RoleBriefInterpretationNote[]
+  changeSummary: string[]
+  createdAt: string
+  approvedAt?: string
+}
+
 /**
  * Persisted approval projection of the canonical Search Brain hypotheses.
  * `source` is retained for storage/backward compatibility; lane id/label/query
@@ -74,7 +93,7 @@ export type RoleCandidate = {
 
 export type RoleActivity = {
   id: string
-  type: 'role_created' | 'intake_updated' | 'lane_approved' | 'candidate_added' | 'candidate_reviewed' | 'stage_changed' | 'note_added'
+  type: 'role_created' | 'intake_updated' | 'lane_approved' | 'candidate_added' | 'candidate_reviewed' | 'stage_changed' | 'note_added' | 'brief_version_created' | 'brief_approved'
   message: string
   createdAt: string
 }
@@ -87,6 +106,9 @@ export type RoleWorkspace = {
   candidates: RoleCandidate[]
   activity: RoleActivity[]
   calibration?: import('./calibration-intelligence').CalibrationState
+  /** V33.4 additive brief artifact metadata. Older workspaces normalize without it. */
+  roleBriefVersions?: RoleBriefVersion[]
+  activeRoleBriefVersionId?: string
   createdAt: string
   updatedAt: string
 }
