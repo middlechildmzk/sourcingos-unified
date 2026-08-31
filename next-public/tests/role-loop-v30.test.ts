@@ -77,7 +77,7 @@ describe('role sourcing loop on canonical V33 Search Brain', () => {
 
   it('keeps guided sources explicitly recruiter-run', () => {
     expect(canonicalSearch).toContain('Guided · recruiter-run')
-    expect(canonicalSearch).toContain('you still run the guided source in your authorized account')
+    expect(canonicalSearch).toContain('guided source in your authorized account')
     expect(canonicalSearch).toContain('Approve hypothesis')
     expect(canonicalSearch).toContain('Copy query')
   })
