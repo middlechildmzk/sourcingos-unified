@@ -1,10 +1,9 @@
 import type { SearchAttempt } from './search-state-memory-v30'
-import {
-  buildSearchLanes,
-  type RoleBriefInterpretationNote,
-  type RoleBriefVersion,
-  type RoleIntake,
-  type RoleWorkspace,
+import type {
+  RoleBriefInterpretationNote,
+  RoleBriefVersion,
+  RoleIntake,
+  RoleWorkspace,
 } from './role-workspace'
 
 export type WorkbenchLaneState = 'proposed' | 'planned' | 'searching' | 'assessing' | 'complete' | 'failed' | 'paused'
@@ -53,18 +52,6 @@ export type SlateGapAnalysis = {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter(Boolean)))
-}
-
-function nowIso(now: Date | string): string {
-  return typeof now === 'string' ? now : now.toISOString()
-}
-
-function changedFields(before: RoleIntake, after: RoleIntake): string[] {
-  const fields: Array<keyof RoleIntake> = [
-    'title', 'location', 'workMode', 'compensation', 'clearance', 'mustHaves', 'niceToHaves',
-    'disqualifiers', 'targetCompanies', 'adjacentBackgrounds', 'hiringManagerNotes',
-  ]
-  return fields.filter(field => JSON.stringify(before[field]) !== JSON.stringify(after[field])).map(String)
 }
 
 export function roleBriefInterpretations(intake: RoleIntake): RoleBriefInterpretationNote[] {
@@ -139,63 +126,6 @@ export function roleBriefVersions(role: RoleWorkspace): RoleBriefVersion[] {
 export function activeRoleBriefVersion(role: RoleWorkspace): RoleBriefVersion {
   const versions = roleBriefVersions(role)
   return versions.find(version => version.id === role.activeRoleBriefVersionId) || versions[versions.length - 1]
-}
-
-export function createRoleBriefRevision(role: RoleWorkspace, intake: RoleIntake, now: Date | string = new Date()): RoleWorkspace {
-  const timestamp = nowIso(now)
-  const versions = roleBriefVersions(role)
-  const active = activeRoleBriefVersion(role)
-  const changes = changedFields(active.intake, intake)
-  if (!changes.length) return role
-  const nextVersionNumber = Math.max(...versions.map(version => version.version), 0) + 1
-  const version: RoleBriefVersion = {
-    id: `${role.id}-brief-${nextVersionNumber}-${timestamp.replace(/\D/g, '').slice(0, 14)}`,
-    version: nextVersionNumber,
-    status: 'draft',
-    intake,
-    interpretations: roleBriefInterpretations(intake),
-    changeSummary: changes.map(field => `Changed ${field}.`),
-    createdAt: timestamp,
-  }
-  return {
-    ...role,
-    intake,
-    searchLanes: buildSearchLanes(intake).map(lane => ({ ...lane, status: lane.status === 'approved' ? 'proposed' : lane.status })),
-    roleBriefVersions: [...versions, version],
-    activeRoleBriefVersionId: version.id,
-    status: role.status === 'closed' ? role.status : 'calibrating',
-    activity: [{
-      id: crypto.randomUUID(),
-      type: 'brief_version_created',
-      message: `Created Role Brief v${nextVersionNumber} as a draft. Search-plan changes require recruiter approval.`,
-      createdAt: timestamp,
-    }, ...role.activity],
-    updatedAt: timestamp,
-  }
-}
-
-export function approveActiveRoleBrief(role: RoleWorkspace, now: Date | string = new Date()): RoleWorkspace {
-  const timestamp = nowIso(now)
-  const versions = roleBriefVersions(role)
-  const active = activeRoleBriefVersion(role)
-  if (active.status === 'approved') return role
-  const updated = versions.map(version => {
-    if (version.id === active.id) return { ...version, status: 'approved' as const, approvedAt: timestamp }
-    if (version.status === 'approved') return { ...version, status: 'superseded' as const }
-    return version
-  })
-  return {
-    ...role,
-    roleBriefVersions: updated,
-    activeRoleBriefVersionId: active.id,
-    activity: [{
-      id: crypto.randomUUID(),
-      type: 'brief_approved',
-      message: `Approved Role Brief v${active.version}. Search hypotheses remain separately recruiter-controlled.`,
-      createdAt: timestamp,
-    }, ...role.activity],
-    updatedAt: timestamp,
-  }
 }
 
 export function searchLaneProgress(role: RoleWorkspace, attempts: SearchAttempt[]): WorkbenchLaneProgress[] {
