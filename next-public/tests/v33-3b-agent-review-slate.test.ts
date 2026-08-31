@@ -78,7 +78,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
 
   it('previews deterministic cross-source identity review without granting merge permission', () => {
     const github = discovery({
-      sourceResult: source({ contactSignals: [{ type: 'website', value: 'https://jane.dev', source: 'github', verified: false }] }),
+      sourceResult: source({ contactSignals: [{ type: 'website', value: 'https://jane.dev', source: 'github', verified: false, note: 'Public GitHub website.' }] }),
     })
     const stack = discovery({
       sourceKey: 'stackoverflow',
@@ -87,7 +87,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
         id: 'stackoverflow:42',
         source: 'stackoverflow',
         sourceProfileId: '42',
-        contactSignals: [{ type: 'website', value: 'https://jane.dev/about', source: 'stackoverflow', verified: false }],
+        contactSignals: [{ type: 'website', value: 'https://jane.dev/about', source: 'stackoverflow', verified: false, note: 'Public Stack Overflow website.' }],
         raw: { observedTags: [] },
       }),
     })
