@@ -86,7 +86,7 @@ describe('V33 one Role Brain and one Search Brain', () => {
     expect(portfolio).toContain('useState(true)')
     expect(portfolio).toContain('router.push(`/app/roles/${role.id}?start=1`)')
     expect(wizard).toContain('Who are you looking for?')
-    expect(wizard).toContain('Here’s what I’m going to look for.')
+    expect(wizard).toContain('Here’s what I’m looking for.')
     expect(wizard).toContain('Start sourcing →')
     expect(wizard).toContain('initializeApprovedRoleBrief')
     expect(portfolio).not.toContain('<RoleIntakeWizard ')
