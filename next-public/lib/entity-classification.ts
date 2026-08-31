@@ -121,6 +121,14 @@ function observedSkills(result: SourceResult): string[] {
     return unique(result.skills)
   }
 
+  if (result.source === 'stackoverflow') {
+    // V33.2's technical-talent connector writes a tag only after the official
+    // Stack Exchange top-answerer endpoint returns this person for that tag.
+    // Legacy user-search payloads have no observedTags and therefore still
+    // yield no candidate skills.
+    return unique(stringList(root.observedTags))
+  }
+
   if (result.source === 'openalex') {
     const concepts = Array.isArray(root.x_concepts) ? root.x_concepts : []
     return unique(concepts.map(item => text(record(item).display_name)).filter(Boolean))
@@ -150,10 +158,10 @@ function observedSkills(result: SourceResult): string[] {
     return unique(stringList(root.keywords))
   }
 
-  // Stack Overflow user search, ORCID search, Semantic Scholar author search,
-  // publications, package search, and discovery lanes do not return verified
-  // person-skill claims in their current connector payloads. Search terms may
-  // explain discovery, but they must not become candidate skills.
+  // ORCID search, Semantic Scholar author search, publications, package search,
+  // and discovery lanes do not return verified person-skill claims in their
+  // current connector payloads. Search terms may explain discovery, but they
+  // must not become candidate skills.
   return []
 }
 
