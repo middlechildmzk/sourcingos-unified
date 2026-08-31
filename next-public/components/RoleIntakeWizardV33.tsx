@@ -115,7 +115,7 @@ export function RoleIntakeWizardV33({ initialText = '', onCancel, onCreate }: Pr
     </div>}
 
     {step === 2 && draft && <div className="role-wizard-body">
-      <div className="role-wizard-score"><div><span>Search readiness</span><b>{readiness}%</b></div><div className="role-wizard-score-track"><span style={{ width: `${readiness}%` }} /></div><small>Readiness measures workflow completeness, never candidate quality.</small></div>
+      <div className="role-wizard-score"><div><span>Search readiness</span><b>{readiness}%</b></div><div className="role-wizard-score-track"><span style={{ width: `${readiness}%` }} /></div><small>Readiness measures workflow completeness, not a person or hiring outcome.</small></div>
       {questions.length > 0 && <div className="cta"><b>Confirm before search</b>{questions.map(question => <p className="muted" key={question}>• {question}</p>)}</div>}
       {onet?.matchedOccupation && <div className="cta"><b>O*NET 31.0 role context</b><p className="muted">Matched occupation: {onet.matchedOccupation.title}. Related occupations and technologies can expand search hypotheses; they do not rewrite your must-haves.</p></div>}
       <div className="role-wizard-calibration-grid"><div className="role-wizard-form">
