@@ -82,7 +82,7 @@ function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnect
 }
 
 export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
-  const { roles, mode } = useRoleWorkspaces()
+  const { roles, mode, updateRole } = useRoleWorkspaces()
   const { onet, military, militaryApproved, militaryDataset } = useRoleIntelligenceV33()
   const role = useMemo(() => roles.find(item => item.id === roleId), [roleId, roles])
   const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved }) : null, [role, onet, military, militaryApproved])
@@ -131,17 +131,59 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
       })
       const json = await response.json() as SaveResponse
       if (!response.ok || !json.ok || !json.candidateId) throw new Error(json.error || 'Candidate Graph save failed.')
-      const candidateUrl = json.candidateUrl || `/app/candidate/${json.candidateId}`
+      const candidateId = json.candidateId
+      const candidateUrl = json.candidateUrl || `/app/candidate/${candidateId}`
       setSavedCandidates(current => ({
         ...current,
-        [key]: { candidateId: json.candidateId!, candidateUrl, reused: Boolean(json.reused) },
+        [key]: { candidateId, candidateUrl, reused: Boolean(json.reused) },
       }))
+
+      let alreadyInRole = false
+      updateRole(roleId, workspace => {
+        if (workspace.candidates.some(candidate => candidate.candidateId === candidateId)) {
+          alreadyInRole = true
+          return workspace
+        }
+        const now = new Date().toISOString()
+        return {
+          ...workspace,
+          candidates: [{
+            id: crypto.randomUUID(),
+            candidateId,
+            name: result.displayName,
+            headline: result.headline || '',
+            company: result.organization || '',
+            location: result.location || '',
+            source: 'candidate_database',
+            sourceUrl: result.sourceUrl,
+            stage: 'needs_review',
+            fitDecision: 'unreviewed',
+            fitReasons: [],
+            concerns: [],
+            tags: result.sourceResult?.skills.slice(0, 12) || [],
+            contactStatus: result.sourceResult?.contactSignals.length ? 'signals_found' : 'unknown',
+            evidenceStatus: 'unreviewed',
+            addedAt: now,
+            updatedAt: now,
+          }, ...workspace.candidates],
+          activity: [{
+            id: crypto.randomUUID(),
+            type: 'candidate_added',
+            message: `Added ${result.displayName} from Candidate Graph to the review queue after an explicit recruiter save.`,
+            createdAt: now,
+          }, ...workspace.activity],
+          updatedAt: now,
+        }
+      })
+
       const proposals = json.identityProposals?.created?.length || 0
-      setStatus(json.note || (json.reused
-        ? `${result.displayName} already existed in Candidate Graph. The same source identity was reused without a new merge.`
-        : proposals
-          ? `${result.displayName} was saved. ${proposals} cross-source identity proposal${proposals === 1 ? '' : 's'} await recruiter review.`
-          : `${result.displayName} was saved to Candidate Graph for recruiter review. No cross-source identity was silently merged.`))
+      const roleMessage = alreadyInRole
+        ? `${result.displayName} was already in ${activeRole.intake.title}'s review queue.`
+        : `${result.displayName} was added to ${activeRole.intake.title}'s review queue as unreviewed.`
+      const identityMessage = proposals
+        ? `${proposals} cross-source identity proposal${proposals === 1 ? '' : 's'} await recruiter review; nothing was merged automatically.`
+        : 'No cross-source identity was silently merged.'
+      setStatus(`${json.reused ? 'Reused the existing Candidate Graph identity.' : 'Saved to Candidate Graph.'} ${roleMessage} ${identityMessage}`)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Candidate Graph save failed.')
     } finally {
@@ -286,11 +328,11 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
           {saved
             ? <Link className="btn secondary" href={saved.candidateUrl}>{saved.reused ? 'Existing Candidate 360 →' : 'Open Candidate 360 →'}</Link>
             : result.saveEligible && result.sourceResult
-              ? <button className="btn secondary" disabled={Boolean(savingKey)} onClick={() => void saveToCandidateGraph(result)}>{savingKey === key ? 'Saving…' : 'Save to Candidate Graph'}</button>
+              ? <button className="btn secondary" disabled={Boolean(savingKey)} onClick={() => void saveToCandidateGraph(result)}>{savingKey === key ? 'Saving…' : 'Save + add to role review'}</button>
               : <small className="muted">Preview evidence only · this connector is not yet on the canonical person-save path.</small>}
         </article>
       })}</div>
-      <div className="agentic-results-note">Discovery stays read-only by default. Save-eligible GitHub and Stack Overflow people require an explicit recruiter action, pass the canonical source-truth boundary again on write, and reuse exact same-source identities instead of creating duplicates. Deterministic cross-source anchors create review proposals only; they never merge profiles automatically.</div>
+      <div className="agentic-results-note">Discovery stays read-only by default. Save-eligible GitHub and Stack Overflow people require an explicit recruiter action, pass the canonical source-truth boundary again on write, reuse exact same-source identities instead of creating duplicates, and enter this role as unreviewed candidates. Deterministic cross-source anchors create review proposals only; they never merge profiles automatically.</div>
     </div>}
   </section>
 }
