@@ -12,6 +12,7 @@ export const metadata = {
 export default function RolesPage() {
   return <main className="wrap v30-page-wrap">
     <link rel="stylesheet" href="/role-workbench-v33-4.css" />
+    <link rel="stylesheet" href="/role-workbench-v33-4-light.css" />
     <div className="product-page-head v30-page-head">
       <div>
         <span className="kicker">Role Brain</span>
