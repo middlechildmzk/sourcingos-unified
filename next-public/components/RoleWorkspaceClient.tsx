@@ -18,7 +18,7 @@ function workflowReadiness(role: RoleWorkspace): { score: number; next: string }
   const metrics = roleMetrics(role)
   const reviewed = role.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length
   const steps = [
-    { done: Boolean(role.intake.title.trim() && role.intake.mustHaves.length), next: 'Confirm the search' },
+    { done: Boolean(role.intake.title.trim() && role.intake.title !== 'Untitled role'), next: 'Confirm the search' },
     { done: role.searchLanes.some(lane => lane.status === 'approved'), next: 'Start the sourcing agent' },
     { done: metrics.candidateCount > 0, next: 'Review the first slate' },
     { done: reviewed > 0, next: 'Review the first candidates' },
@@ -87,7 +87,7 @@ export function RoleWorkspaceClient() {
     {status && <div className="cta" role="status">{status}</div>}
 
     {showCreate ? <div className="role-create-stage role-create-stage-primary-v33-4">
-      <RoleIntakeWizardV33_4 key={wizardKey} initialText={wizardText} onCancel={() => setShowCreate(false)} onCreate={createRole} />
+      <RoleIntakeWizardV33_4 key={wizardKey} initialText={wizardText} onCreate={createRole} />
     </div> : <div className="role-new-search-bar-v33-4">
       <div><b>Ready for another search?</b><span>Describe the person and let the agent do the setup.</span></div>
       <button className="btn" onClick={() => openWizard()}>+ New search</button>
