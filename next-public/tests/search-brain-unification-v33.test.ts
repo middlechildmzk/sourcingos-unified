@@ -30,9 +30,7 @@ describe('V33 one Role Brain and one Search Brain', () => {
     expect(projected.map(lane => lane.id)).toEqual(canonical.lanes.map(lane => lane.id))
     expect(projected[0]?.id).toBe('exact_title')
     expect(projected[0]?.status).toBe('approved')
-    for (const oldId of ['database', 'network', 'resume-xray', 'web-xray']) {
-      expect(projected.some(lane => lane.id === oldId)).toBe(false)
-    }
+    for (const oldId of ['database', 'network', 'resume-xray', 'web-xray']) expect(projected.some(lane => lane.id === oldId)).toBe(false)
   })
 
   it('projects canonical hypotheses with blind spots rather than source-centric pseudo-plans', () => {
@@ -67,8 +65,14 @@ describe('V33 one Role Brain and one Search Brain', () => {
 
   it('uses the existing O*NET transport in the live canonical planner without rewriting requirements', () => {
     const panel = read('components/RoleAgenticSearchPanel.tsx')
-    expect(panel).toContain('/api/role-intelligence/onet?title=')
-    expect(panel).toContain('buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet })')
+    const provider = read('components/RoleIntelligenceProviderV33.tsx')
+    const route = read('app/api/role-intelligence/onet/route.ts')
+    expect(panel).toContain('useRoleIntelligenceV33')
+    expect(panel).toContain('buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved })')
+    expect(provider).toContain("fetch('/api/role-intelligence/onet'")
+    expect(provider).toContain("method: 'POST'")
+    expect(route).toContain('export async function GET')
+    expect(route).toContain('export async function POST')
     const wizard = read('components/RoleIntakeWizardV33.tsx')
     expect(wizard).toContain('/api/role-intelligence/onet?title=')
     expect(wizard).toContain('enrichRoleIntakeWithOnet')
