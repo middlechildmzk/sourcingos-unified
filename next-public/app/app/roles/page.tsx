@@ -5,17 +5,18 @@ import { RoleWorkspaceBackupPanel } from '@/components/RoleWorkspaceBackupPanel'
 
 export const metadata = {
   title: 'Roles — SourcingOS',
-  description: 'Create calibrated roles, review candidates, approve sourcing strategy, and manage role-specific pipelines from one workspace.',
+  description: 'Create recruiter-approved Role Briefs, source candidates, review evidence, and calibrate each search from one persistent workspace.',
   robots: { index: false, follow: false },
 }
 
 export default function RolesPage() {
   return <main className="wrap v30-page-wrap">
+    <link rel="stylesheet" href="/role-workbench-v33-4.css" />
     <div className="product-page-head v30-page-head">
       <div>
         <span className="kicker">Role Brain</span>
         <h1>Roles</h1>
-        <p>One operating workspace per search—from intake and sourcing lanes through candidate evidence, recruiter feedback, and the next search-plan revision.</p>
+        <p>Describe who you need, approve the Role Brief, then keep sourcing, evidence, recruiter decisions, and search-plan learning attached to one workspace.</p>
       </div>
     </div>
     <RoleWorkspaceClient />
