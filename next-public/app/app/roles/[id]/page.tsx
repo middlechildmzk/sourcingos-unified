@@ -1,4 +1,5 @@
 import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
+import { RoleAutoStartV33_4 } from '@/components/RoleAutoStartV33_4'
 import { RoleCanonicalSearchActions } from '@/components/RoleCanonicalSearchActions'
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
@@ -13,7 +14,7 @@ export const metadata = {
   robots: { index: false, follow: false },
 }
 
-export default async function RoleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ tab?: string }> }) {
+export default async function RoleDetailPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ tab?: string; start?: string }> }) {
   const { id } = await params
   const sp = (await searchParams) ?? {}
   const showLegacyControls = Boolean(sp.tab)
@@ -24,10 +25,11 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
       <link rel="stylesheet" href="/role-workbench-v33-4.css" />
       <link rel="stylesheet" href="/role-workbench-v33-4-light.css" />
 
+      <RoleAutoStartV33_4 roleId={id} />
       <RoleUnifiedWorkbenchV33_4 roleId={id} />
 
       <RoleIntelligenceProviderV33 roleId={id}>
-        <details className="role-sourcing-execution-v33-4">
+        <details className="role-sourcing-execution-v33-4" open={sp.start === '1'}>
           <summary>Run sourcing / create another review slate</summary>
           <RoleSourcingAgentV33_3 roleId={id} />
         </details>
