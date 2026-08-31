@@ -10,7 +10,8 @@ import {
 const root = path.resolve(__dirname, '..')
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 
-const roleActions = read('components/RoleSearchActions.tsx')
+const canonicalSearch = read('components/RoleCanonicalSearchActions.tsx')
+const pasteBack = read('components/RolePasteBackV33.tsx')
 const rolePage = read('app/app/roles/[id]/page.tsx')
 const importRoute = read('app/api/candidate-db/import-resume/route.ts')
 
@@ -54,40 +55,40 @@ function sourceProfile(): SourceProfileRecord {
   }
 }
 
-describe('V30 PR1 role sourcing loop', () => {
-  it('keeps the role route as the single product surface', () => {
-    expect(rolePage).toContain('<RoleSearchActions roleId={id} />')
-    expect(roleActions).toContain('<b>1</b> Search')
-    expect(roleActions).toContain('<b>2</b> Bring back')
-    expect(roleActions).toContain('<b>3</b> Review')
-    expect(roleActions).toContain('<b>4</b> Learn')
-    expect(roleActions).toContain('<b>5</b> Search again')
-    expect(roleActions).toContain('Bring candidates back to this role')
-    expect(roleActions).toContain('Review role candidates')
+describe('role sourcing loop on canonical V33 Search Brain', () => {
+  it('keeps search and guided paste-back on the role route without the legacy second planner', () => {
+    expect(rolePage).toContain('<RoleCanonicalSearchActions roleId={id} />')
+    expect(rolePage).toContain('<RolePasteBackV33 roleId={id} />')
+    expect(rolePage).not.toContain('<RoleSearchActions roleId={id} />')
+    expect(canonicalSearch).toContain('One Search Brain')
+    expect(canonicalSearch).toContain('Search Plan v')
+    expect(pasteBack).toContain('Bring candidates back to this role')
+    expect(pasteBack).toContain('Review role candidates')
   })
 
-  it('builds guided searches from the current editable role intake instead of a stale raw JD shortcut', () => {
-    expect(roleActions).toContain('`Title: ${role.intake.title}`')
-    expect(roleActions).toContain('`Required: ${role.intake.mustHaves.join')
-    expect(roleActions).toContain('`Preferred: ${role.intake.niceToHaves.join')
-    expect(roleActions).toContain('`Target companies: ${role.intake.targetCompanies.join')
-    expect(roleActions).not.toContain("if (role.intake.rawDescription.trim()) return role.intake.rawDescription")
+  it('derives guided source queries from the canonical role plan', () => {
+    expect(canonicalSearch).toContain('buildCanonicalAgenticSearchPlan')
+    expect(canonicalSearch).toContain("surface: 'linkedin_recruiter'")
+    expect(canonicalSearch).toContain("surface: 'clearancejobs'")
+    expect(canonicalSearch).toContain("surface: 'google_xray'")
+    expect(canonicalSearch).not.toContain('calibrated-guided-search')
+    expect(canonicalSearch).not.toContain('jd-boolean-lanes')
   })
 
   it('keeps guided sources explicitly recruiter-run', () => {
-    expect(roleActions).toContain('Recruiter-run sources')
-    expect(roleActions).toContain('Copy LinkedIn search')
-    expect(roleActions).toContain('Copy Boolean')
-    expect(roleActions).toContain('Copy X-Ray')
-    expect(roleActions).toContain('SourcingOS prepared the query; you still run the guided source yourself.')
-    expect(roleActions).toContain('SourcingOS did not execute or verify the external source.')
+    expect(canonicalSearch).toContain('Guided · recruiter-run')
+    expect(canonicalSearch).toContain('you still run the guided source in your authorized account')
+    expect(canonicalSearch).toContain('Approve hypothesis')
+    expect(canonicalSearch).toContain('Copy query')
   })
 
-  it('imports recruiter-provided text through the existing Candidate Graph pipeline and links it to the role', () => {
-    expect(roleActions).toContain("fetch('/api/candidate-db/import-resume'")
-    expect(roleActions).toContain('candidateImportToRoleLinkInput')
-    expect(roleActions).toContain('addCanonicalCandidateToRole')
-    expect(roleActions).toContain('parseResume(pasteText)')
+  it('imports recruiter-provided text through Candidate Graph and links it back to the canonical role', () => {
+    expect(pasteBack).toContain("fetch('/api/candidate-db/import-resume'")
+    expect(pasteBack).toContain('candidateImportToRoleLinkInput')
+    expect(pasteBack).toContain('addCanonicalCandidateToRole')
+    expect(pasteBack).toContain('parseResume(text)')
+    expect(pasteBack).toContain('planRevision: activePlan.revision')
+    expect(pasteBack).toContain('laneLabel: lane.label')
   })
 
   it('maps Candidate Graph records into the role without turning search context into evidence', () => {
@@ -95,7 +96,8 @@ describe('V30 PR1 role sourcing loop', () => {
       candidate: candidate(),
       sourceProfile: sourceProfile(),
       surface: 'clearancejobs',
-      laneLabel: 'Balanced / Recruiter Default',
+      laneLabel: 'Exact-title hypothesis',
+      planRevision: 2,
     })
 
     expect(linked).toMatchObject({
@@ -105,7 +107,7 @@ describe('V30 PR1 role sourcing loop', () => {
       headline: 'Citrix Infrastructure Engineer',
       organization: 'Example Integrator',
       location: 'Northern Virginia',
-      source: 'ClearanceJobs · Balanced / Recruiter Default · recruiter paste-back',
+      source: 'ClearanceJobs · Exact-title hypothesis · Search Plan v2 · recruiter paste-back',
       profileUrl: 'https://example.com/candidate',
       skills: ['Citrix', 'VMware'],
       contactSignalCount: 0,
