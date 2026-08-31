@@ -19,10 +19,12 @@ import {
   shouldExecuteSearch,
   type SearchAttempt,
 } from '@/lib/search-state-memory-v30'
+import type { SourceResult } from '@/lib/source-types'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 const RESEARCH_CONNECTORS = new Set<AgenticConnectorKey>(['orcid', 'openalex', 'pubmed', 'crossref'])
 const GITHUB_CONNECTORS = new Set<AgenticConnectorKey>(['github'])
+const STACKOVERFLOW_CONNECTORS = new Set<AgenticConnectorKey>(['stackoverflow'])
 const NPI_CONNECTORS = new Set<AgenticConnectorKey>(['npi'])
 
 type AgenticResult = {
@@ -36,6 +38,8 @@ type AgenticResult = {
   evidence: Array<{ kind: string; label: string; value: string; url?: string; observedAt?: string }>
   identityConfidence: number
   profileQuality: number
+  saveEligible?: boolean
+  sourceResult?: SourceResult
 }
 
 type RunResponse = {
@@ -43,7 +47,17 @@ type RunResponse = {
   error?: string
   sourceStatus?: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }>
   results?: AgenticResult[]
-  trust?: { message?: string; externalContent?: string; registryData?: string }
+  trust?: { message?: string; externalContent?: string; registryData?: string; sourceTruth?: string }
+}
+
+type SaveResponse = {
+  ok?: boolean
+  error?: string
+  reused?: boolean
+  candidateId?: string
+  candidateUrl?: string
+  identityProposals?: { created?: Array<unknown> }
+  note?: string
 }
 
 function memoryKey(roleId: string) {
@@ -61,13 +75,14 @@ function readAttempts(roleId: string): SearchAttempt[] {
 
 function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnectorKey> {
   if (surface === 'github') return GITHUB_CONNECTORS
+  if (surface === 'stackoverflow') return STACKOVERFLOW_CONNECTORS
   if (surface === 'healthcare_registry') return NPI_CONNECTORS
   if (surface === 'research_publications') return RESEARCH_CONNECTORS
   return new Set<AgenticConnectorKey>()
 }
 
 export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
-  const { roles, mode } = useRoleWorkspaces()
+  const { roles, mode, updateRole } = useRoleWorkspaces()
   const { onet, military, militaryApproved, militaryDataset } = useRoleIntelligenceV33()
   const role = useMemo(() => roles.find(item => item.id === roleId), [roleId, roles])
   const plan = useMemo(() => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved }) : null, [role, onet, military, militaryApproved])
@@ -78,6 +93,8 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState(false)
   const [novelty, setNovelty] = useState<number | null>(null)
+  const [savingKey, setSavingKey] = useState('')
+  const [savedCandidates, setSavedCandidates] = useState<Record<string, { candidateId: string; candidateUrl: string; reused: boolean }>>({})
 
   useEffect(() => setAttempts(readAttempts(roleId)), [roleId])
   useEffect(() => {
@@ -100,6 +117,78 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
     const trimmed = next.slice(-100)
     setAttempts(trimmed)
     try { localStorage.setItem(memoryKey(roleId), JSON.stringify(trimmed)) } catch { /* best effort */ }
+  }
+
+  async function saveToCandidateGraph(result: AgenticResult) {
+    const key = `${result.sourceKey}:${result.sourceId}`
+    if (!result.saveEligible || !result.sourceResult || savingKey) return
+    setSavingKey(key)
+    try {
+      const response = await fetch('/api/workbench/save-source-profile', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sourceResult: result.sourceResult }),
+      })
+      const json = await response.json() as SaveResponse
+      if (!response.ok || !json.ok || !json.candidateId) throw new Error(json.error || 'Candidate Graph save failed.')
+      const candidateId = json.candidateId
+      const candidateUrl = json.candidateUrl || `/app/candidate/${candidateId}`
+      setSavedCandidates(current => ({
+        ...current,
+        [key]: { candidateId, candidateUrl, reused: Boolean(json.reused) },
+      }))
+
+      let alreadyInRole = false
+      updateRole(roleId, workspace => {
+        if (workspace.candidates.some(candidate => candidate.candidateId === candidateId)) {
+          alreadyInRole = true
+          return workspace
+        }
+        const now = new Date().toISOString()
+        return {
+          ...workspace,
+          candidates: [{
+            id: crypto.randomUUID(),
+            candidateId,
+            name: result.displayName,
+            headline: result.headline || '',
+            company: result.organization || '',
+            location: result.location || '',
+            source: 'candidate_database',
+            sourceUrl: result.sourceUrl,
+            stage: 'needs_review',
+            fitDecision: 'unreviewed',
+            fitReasons: [],
+            concerns: [],
+            tags: result.sourceResult?.skills.slice(0, 12) || [],
+            contactStatus: result.sourceResult?.contactSignals.length ? 'signals_found' : 'unknown',
+            evidenceStatus: 'unreviewed',
+            addedAt: now,
+            updatedAt: now,
+          }, ...workspace.candidates],
+          activity: [{
+            id: crypto.randomUUID(),
+            type: 'candidate_added',
+            message: `Added ${result.displayName} from Candidate Graph to the review queue after an explicit recruiter save.`,
+            createdAt: now,
+          }, ...workspace.activity],
+          updatedAt: now,
+        }
+      })
+
+      const proposals = json.identityProposals?.created?.length || 0
+      const roleMessage = alreadyInRole
+        ? `${result.displayName} was already in ${activeRole.intake.title}'s review queue.`
+        : `${result.displayName} was added to ${activeRole.intake.title}'s review queue as unreviewed.`
+      const identityMessage = proposals
+        ? `${proposals} cross-source identity proposal${proposals === 1 ? '' : 's'} await recruiter review; nothing was merged automatically.`
+        : 'No cross-source identity was silently merged.'
+      setStatus(`${json.reused ? 'Reused the existing Candidate Graph identity.' : 'Saved to Candidate Graph.'} ${roleMessage} ${identityMessage}`)
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Candidate Graph save failed.')
+    } finally {
+      setSavingKey('')
+    }
   }
 
   async function runPublicSources() {
@@ -214,11 +303,11 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
       </div>
 
       <aside className="agentic-run-card">
-        <div><span className="kicker">Research pass</span><h3>Run what SourcingOS can actually access.</h3><p>Read-only public research. Discoveries are not saved, merged, rejected, contacted, or treated as verified.</p></div>
+        <div><span className="kicker">Research pass</span><h3>Run what SourcingOS can actually access.</h3><p>Public research stays preview-only until you explicitly save a supported person to Candidate Graph.</p></div>
         <div className="agentic-run-metrics"><span><b>{coverage.uniqueSearches}</b><small>unique searches</small></span><span><b>{coverage.surfacesSearched}</b><small>surfaces run</small></span><span><b>{coverage.uniqueResultsSeen}</b><small>identities seen</small></span></div>
         <button className="btn" disabled={working || !executableConnectorKeys(lane).length} onClick={() => void runPublicSources()}>{working ? 'Researching…' : executableConnectorKeys(lane).length ? 'Run public sources' : 'No executable public source'}</button>
         <Link className="btn secondary" href={`/app/candidate-search?roleId=${encodeURIComponent(activeRole.id)}`}>Open Candidate Search</Link>
-        <small className="agentic-run-trust">External content is data, never instructions · professional registries are evidence, not interest · no auto-send · no auto-reject · no silent identity merge</small>
+        <small className="agentic-run-trust">External content is data, never instructions · explicit save only · no auto-send · no auto-reject · no silent identity merge</small>
       </aside>
     </div>
 
@@ -227,8 +316,23 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
 
     {!!results.length && <div className="agentic-results">
       <div className="agentic-results-head"><div><span className="kicker">Public-source discoveries</span><h3>{results.length} records to inspect</h3></div>{novelty !== null && <span className="status-pill active">{novelty}% novel vs role search memory</span>}</div>
-      <div className="agentic-result-grid">{results.slice(0, 18).map(result => <article className="agentic-result-card" key={`${result.sourceKey}:${result.sourceId}`}><div className="agentic-result-top"><span className="status-pill">{result.sourceKey}</span><span>{result.evidence.length} evidence items</span></div><h4>{result.displayName}</h4><p>{[result.headline, result.organization, result.location].filter(Boolean).join(' · ') || 'Public-source identity'}</p>{result.evidence[0] && <div className="agentic-result-evidence"><b>{result.evidence[0].label}</b><span>{result.evidence[0].value}</span></div>}<div className="agentic-result-foot"><span>Identity {result.identityConfidence}</span><span>Profile {result.profileQuality}</span>{result.sourceUrl && <a href={result.sourceUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}</div></article>)}</div>
-      <div className="agentic-results-note">Read-only discoveries only. Registry and public-source records are evidence for recruiter review. Adding a person to a role still requires explicit recruiter action through the existing Candidate Graph/evidence workflow.</div>
+      <div className="agentic-result-grid">{results.slice(0, 18).map(result => {
+        const key = `${result.sourceKey}:${result.sourceId}`
+        const saved = savedCandidates[key]
+        return <article className="agentic-result-card" key={key}>
+          <div className="agentic-result-top"><span className="status-pill">{result.sourceKey}</span><span>{result.evidence.length} evidence items</span></div>
+          <h4>{result.displayName}</h4>
+          <p>{[result.headline, result.organization, result.location].filter(Boolean).join(' · ') || 'Public-source identity'}</p>
+          {result.evidence[0] && <div className="agentic-result-evidence"><b>{result.evidence[0].label}</b><span>{result.evidence[0].value}</span></div>}
+          <div className="agentic-result-foot"><span>Identity {result.identityConfidence}</span><span>Profile {result.profileQuality}</span>{result.sourceUrl && <a href={result.sourceUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}</div>
+          {saved
+            ? <Link className="btn secondary" href={saved.candidateUrl}>{saved.reused ? 'Existing Candidate 360 →' : 'Open Candidate 360 →'}</Link>
+            : result.saveEligible && result.sourceResult
+              ? <button className="btn secondary" disabled={Boolean(savingKey)} onClick={() => void saveToCandidateGraph(result)}>{savingKey === key ? 'Saving…' : 'Save + add to role review'}</button>
+              : <small className="muted">Preview evidence only · this connector is not yet on the canonical person-save path.</small>}
+        </article>
+      })}</div>
+      <div className="agentic-results-note">Discovery stays read-only by default. Save-eligible GitHub and Stack Overflow people require an explicit recruiter action, pass the canonical source-truth boundary again on write, reuse exact same-source identities instead of creating duplicates, and enter this role as unreviewed candidates. Deterministic cross-source anchors create review proposals only; they never merge profiles automatically.</div>
     </div>}
   </section>
 }

@@ -43,6 +43,10 @@ async function getJson(url: string, headers: Record<string,string> = {}) {
   return response.json() as Promise<any>
 }
 
+// Permanent evidence boundary: role/search criteria may retrieve a person, but
+// they never become candidate facts. Discovery skills below contain only values
+// directly observed in the connector payload. Sources without a trustworthy
+// person-level skill field deliberately return an empty array.
 export async function discoverGitHub(input: CampaignInput, cursor?: string | null): Promise<{ discoveries: Discovery[]; cursor: string | null }> {
   const page = Math.max(1, Number(cursor || 1))
   const token = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN
@@ -56,7 +60,7 @@ export async function discoverGitHub(input: CampaignInput, cursor?: string | nul
     discoveries: profiles.map((p: any) => ({
       sourceKey: 'github', sourceId: String(p.id || p.login), sourceUrl: clean(p.html_url) || `https://github.com/${p.login}`,
       displayName: clean(p.name) || clean(p.login), headline: clean(p.bio), organization: clean(p.company).replace(/^@/, ''), location: clean(p.location), summary: clean(p.bio),
-      skills: uniq(input.skills), identityConfidence: p.name ? 88 : 76, profileQuality: Math.min(100, 35 + (p.name ? 15 : 0) + (p.bio ? 15 : 0) + (p.company ? 10 : 0) + (p.location ? 10 : 0) + Math.min(15, Number(p.public_repos || 0))),
+      skills: [], identityConfidence: p.name ? 88 : 76, profileQuality: Math.min(100, 35 + (p.name ? 15 : 0) + (p.bio ? 15 : 0) + (p.company ? 10 : 0) + (p.location ? 10 : 0) + Math.min(15, Number(p.public_repos || 0))),
       evidence: [{ kind: 'public_profile', label: 'GitHub profile', value: clean(p.login), url: clean(p.html_url) }, ...(p.public_repos ? [{ kind: 'public_work', label: 'Public repositories', value: String(p.public_repos), url: clean(p.html_url) }] : [])], raw: p,
     })),
     cursor: items.length === 50 ? String(page + 1) : null,
@@ -70,7 +74,7 @@ export async function discoverOrcid(input: CampaignInput, cursor?: string | null
   return { discoveries: rows.map((r: any) => {
     const id = clean(r['orcid-id']); const name = [clean(r['given-names']), clean(r['family-names'])].filter(Boolean).join(' ') || id
     const orgs = Array.isArray(r['institution-name']) ? r['institution-name'] : []
-    return { sourceKey: 'orcid' as const, sourceId: id, sourceUrl: `https://orcid.org/${id}`, displayName: name, organization: clean(orgs[0]), summary: clean(r['biography']), skills: uniq(input.skills), identityConfidence: 94, profileQuality: Math.min(100, 55 + (orgs.length ? 15 : 0) + (r['email'] ? 5 : 0)), evidence: [{ kind: 'persistent_identity', label: 'ORCID', value: id, url: `https://orcid.org/${id}` }], raw: r }
+    return { sourceKey: 'orcid' as const, sourceId: id, sourceUrl: `https://orcid.org/${id}`, displayName: name, organization: clean(orgs[0]), summary: clean(r['biography']), skills: [], identityConfidence: 94, profileQuality: Math.min(100, 55 + (orgs.length ? 15 : 0) + (r['email'] ? 5 : 0)), evidence: [{ kind: 'persistent_identity', label: 'ORCID', value: id, url: `https://orcid.org/${id}` }], raw: r }
   }), cursor: rows.length === 50 ? String(start + 50) : null }
 }
 
@@ -78,7 +82,7 @@ export async function discoverOpenAlex(input: CampaignInput, cursor?: string | n
   const page = Math.max(1, Number(cursor || 1))
   const data = await getJson(`https://api.openalex.org/authors?search=${encodeURIComponent(input.query)}&per-page=50&page=${page}&mailto=${encodeURIComponent(process.env.OPENALEX_MAILTO || 'admin@sourcingos.com')}`)
   const rows = Array.isArray(data.results) ? data.results : []
-  return { discoveries: rows.map((r: any) => ({ sourceKey: 'openalex' as const, sourceId: clean(r.id), sourceUrl: clean(r.id), displayName: clean(r.display_name), organization: clean(r.last_known_institutions?.[0]?.display_name), summary: `${Number(r.works_count || 0)} works · ${Number(r.cited_by_count || 0)} citations`, skills: uniq([...(r.x_concepts || []).slice(0,8).map((c:any)=>clean(c.display_name)), ...input.skills]), identityConfidence: r.orcid ? 96 : 86, profileQuality: Math.min(100, 45 + (r.orcid ? 20 : 0) + (r.last_known_institutions?.length ? 15 : 0) + Math.min(20, Number(r.works_count || 0))), evidence: [{ kind: 'research_profile', label: 'OpenAlex author', value: clean(r.display_name), url: clean(r.id) }, ...(r.orcid ? [{ kind: 'persistent_identity', label: 'ORCID', value: clean(r.orcid), url: clean(r.orcid) }] : [])], raw: r })), cursor: rows.length === 50 ? String(page + 1) : null }
+  return { discoveries: rows.map((r: any) => ({ sourceKey: 'openalex' as const, sourceId: clean(r.id), sourceUrl: clean(r.id), displayName: clean(r.display_name), organization: clean(r.last_known_institutions?.[0]?.display_name), summary: `${Number(r.works_count || 0)} works · ${Number(r.cited_by_count || 0)} citations`, skills: uniq((r.x_concepts || []).slice(0,8).map((c:any)=>clean(c.display_name))), identityConfidence: r.orcid ? 96 : 86, profileQuality: Math.min(100, 45 + (r.orcid ? 20 : 0) + (r.last_known_institutions?.length ? 15 : 0) + Math.min(20, Number(r.works_count || 0))), evidence: [{ kind: 'research_profile', label: 'OpenAlex author', value: clean(r.display_name), url: clean(r.id) }, ...(r.orcid ? [{ kind: 'persistent_identity', label: 'ORCID', value: clean(r.orcid), url: clean(r.orcid) }] : [])], raw: r })), cursor: rows.length === 50 ? String(page + 1) : null }
 }
 
 export async function discoverPubMed(input: CampaignInput, cursor?: string | null): Promise<{ discoveries: Discovery[]; cursor: string | null }> {
@@ -94,7 +98,7 @@ export async function discoverPubMed(input: CampaignInput, cursor?: string | nul
       const name = clean(author.name); if (!name) continue
       const key = `${name.toLowerCase()}|${clean(article.sortfirstauthor)}`
       if (!people.has(key)) {
-        people.set(key, { sourceKey: 'pubmed', sourceId: key, sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, displayName: name, headline: 'Published researcher', summary: clean(article.title), skills: uniq(input.skills), identityConfidence: 72, profileQuality: 58, evidence: [{ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) }], raw: { author, article } })
+        people.set(key, { sourceKey: 'pubmed', sourceId: key, sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, displayName: name, headline: 'Published researcher', summary: clean(article.title), skills: [], identityConfidence: 72, profileQuality: 58, evidence: [{ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) }], raw: { author, article } })
       } else {
         people.get(key)!.evidence.push({ kind: 'publication', label: clean(article.fulljournalname) || 'PubMed publication', value: clean(article.title), url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`, observedAt: clean(article.pubdate) })
       }
@@ -115,7 +119,7 @@ export async function discoverCrossref(input: CampaignInput, cursor?: string | n
       const id = clean(author.ORCID) || `${name.toLowerCase()}|${clean(work.publisher)}`
       const ev = { kind: 'publication', label: clean(work.publisher) || 'Crossref work', value: clean(work.title?.[0]), url: clean(work.URL) }
       if (!people.has(id)) {
-        people.set(id, { sourceKey: 'crossref', sourceId: id, sourceUrl: clean(author.ORCID) || clean(work.URL), displayName: name, organization: clean(author.affiliation?.[0]?.name), headline: 'Published professional', skills: uniq(input.skills), identityConfidence: author.ORCID ? 94 : 70, profileQuality: author.ORCID ? 78 : 55, evidence: [ev], raw: { author, work } })
+        people.set(id, { sourceKey: 'crossref', sourceId: id, sourceUrl: clean(author.ORCID) || clean(work.URL), displayName: name, organization: clean(author.affiliation?.[0]?.name), headline: 'Published professional', skills: [], identityConfidence: author.ORCID ? 94 : 70, profileQuality: author.ORCID ? 78 : 55, evidence: [ev], raw: { author, work } })
       } else {
         people.get(id)!.evidence.push(ev)
       }

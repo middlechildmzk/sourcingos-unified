@@ -2,6 +2,7 @@ import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
 import { RoleCanonicalSearchActions } from '@/components/RoleCanonicalSearchActions'
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
+import { RoleEvidenceSlateContainerV33_2 } from '@/components/RoleEvidenceSlateContainerV33_2'
 import { RoleIntelligenceProviderV33 } from '@/components/RoleIntelligenceProviderV33'
 import { RoleMilitaryIntelligencePanel } from '@/components/RoleMilitaryIntelligencePanel'
 import { RolePasteBackV33 } from '@/components/RolePasteBackV33'
@@ -22,6 +23,7 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
         <RoleMilitaryIntelligencePanel roleId={id} />
         <RoleCanonicalSearchActions roleId={id} />
       </RoleIntelligenceProviderV33>
+      <RoleEvidenceSlateContainerV33_2 roleId={id} />
       <RolePasteBackV33 roleId={id} />
       <RoleDetailClient roleId={id} initialTab={sp.tab} />
       <RoleDeleteControl roleId={id} />

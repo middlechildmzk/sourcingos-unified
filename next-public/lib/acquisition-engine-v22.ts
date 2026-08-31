@@ -5,6 +5,8 @@ import { CampaignInput, connectorRunners, Discovery, scoreDiscovery } from '@/li
 const safeText = (value: unknown, max = 1000) => typeof value === 'string' ? value.trim().slice(0, max) : ''
 
 export async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createServerSupabaseClient>>, ownerId: string, campaignId: string, discoveryId: string, d: Discovery, score: number, manual = false) {
+  if (!manual) throw new Error('Automated Candidate Graph promotion is disabled; recruiter review is required.')
+
   const { data: existingProfile } = await sb.from('source_profiles').select('id,candidate_id').eq('owner_id', ownerId).eq('source', d.sourceKey).eq('source_profile_id', d.sourceId).maybeSingle()
   if (existingProfile?.candidate_id) {
     await sb.from('acquisition_discoveries').update({ candidate_id: existingProfile.candidate_id, source_profile_id: existingProfile.id, disposition: 'duplicate', last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId)
@@ -20,7 +22,7 @@ export async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createS
     current_title: safeText(d.headline, 200) || null,
     summary: safeText(d.summary, 2000) || null,
     skills: d.skills.slice(0, 50),
-    merge_status: manual ? 'pending' : d.identityConfidence >= 92 ? 'source_verified' : 'pending',
+    merge_status: 'pending',
     last_refreshed_at: new Date().toISOString(),
   }).select('id').single()
   if (candidateError || !candidate) throw candidateError || new Error('Candidate creation failed')
@@ -37,22 +39,22 @@ export async function promoteDiscovery(sb: NonNullable<ReturnType<typeof createS
     organization: safeText(d.organization, 200) || null,
     raw_text: safeText(d.summary, 5000) || null,
     raw: d.raw,
-    status: manual || d.identityConfidence >= 92 ? 'confirmed' : 'pending',
+    status: 'confirmed',
     match_score: d.identityConfidence,
-    match_reasons: [manual ? 'Recruiter accepted discovery' : `Unique ${d.sourceKey} source identity`, `Campaign score ${score}`],
+    match_reasons: ['Recruiter accepted discovery', `Unique ${d.sourceKey} source identity`, `Campaign relevance ${score}`],
     last_seen_at: new Date().toISOString(),
   }).select('id').single()
   if (profileError || !profile) throw profileError || new Error('Source profile creation failed')
 
   if (d.evidence.length) {
-    const evidenceRows = d.evidence.slice(0, 50).map(e => ({ owner_id: ownerId, candidate_id: candidate.id, source_profile_id: profile.id, source: d.sourceKey, label: safeText(e.label, 200) || e.kind, detail: safeText(e.value, 2000), confidence: manual || d.identityConfidence >= 90 ? 'high' : 'medium', url: safeText(e.url, 1000) || null }))
+    const evidenceRows = d.evidence.slice(0, 50).map(e => ({ owner_id: ownerId, candidate_id: candidate.id, source_profile_id: profile.id, source: d.sourceKey, label: safeText(e.label, 200) || e.kind, detail: safeText(e.value, 2000), confidence: 'medium', url: safeText(e.url, 1000) || null }))
     await sb.from('evidence_items').insert(evidenceRows)
   }
 
-  const disposition = manual ? 'accepted' : 'auto_promoted'
+  const disposition = 'accepted'
   await Promise.all([
-    sb.from('acquisition_discoveries').update({ candidate_id: candidate.id, source_profile_id: profile.id, disposition, review_reason: manual ? 'Accepted by recruiter and promoted to Candidate Graph.' : null, last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId),
-    sb.from('autosource_inbox').upsert({ owner_id: ownerId, campaign_id: campaignId, candidate_id: candidate.id, priority: score, reason: `${manual ? 'Recruiter-approved' : 'Auto-discovered'} from ${d.sourceKey}; identity ${d.identityConfidence}, campaign ${score}.`, status: 'unreviewed' }, { onConflict: 'owner_id,campaign_id,candidate_id' }),
+    sb.from('acquisition_discoveries').update({ candidate_id: candidate.id, source_profile_id: profile.id, disposition, review_reason: 'Accepted by recruiter and promoted to Candidate Graph.', last_seen_at: new Date().toISOString() }).eq('id', discoveryId).eq('owner_id', ownerId),
+    sb.from('autosource_inbox').upsert({ owner_id: ownerId, campaign_id: campaignId, candidate_id: candidate.id, priority: score, reason: `Recruiter-approved from ${d.sourceKey}; source identity signal ${d.identityConfidence}, campaign relevance ${score}.`, status: 'unreviewed' }, { onConflict: 'owner_id,campaign_id,candidate_id' }),
   ])
   return { disposition, candidateId: candidate.id }
 }
@@ -103,15 +105,12 @@ export async function runCampaign(ownerId: string, campaignId: string) {
       const limited = batch.discoveries.slice(0, Math.min(250, input.dailyLimit - discovered))
       for (const d of limited) {
         const campaignScore = scoreDiscovery(d, input)
-        const disposition = d.identityConfidence >= input.autoPromoteThreshold && campaignScore >= input.autoPromoteThreshold ? 'new' : 'needs_review'
+        const disposition = 'needs_review' as const
         const { data: row, error: upsertError } = await sb.from('acquisition_discoveries').upsert({ owner_id: ownerId, campaign_id: campaignId, run_id: run.id, source_key: d.sourceKey, source_id: d.sourceId, source_url: d.sourceUrl, display_name: d.displayName, headline: d.headline || null, organization: d.organization || null, location: d.location || null, summary: d.summary || null, skills: d.skills, evidence: d.evidence, identity_confidence: d.identityConfidence, profile_quality: d.profileQuality, campaign_score: campaignScore, disposition, raw: d.raw, last_seen_at: new Date().toISOString() }, { onConflict: 'owner_id,source_key,source_id' }).select('id,disposition,candidate_id').single()
         if (upsertError || !row) { errors++; continue }
         discovered++
         if (row.candidate_id) { duplicates++; continue }
-        if (disposition === 'new') {
-          const result = await promoteDiscovery(sb, ownerId, campaignId, row.id, d, campaignScore)
-          if (result.disposition === 'auto_promoted') promoted++; else duplicates++
-        } else review++
+        review++
       }
       await sb.from('acquisition_source_cursors').upsert({ owner_id: ownerId, campaign_id: campaignId, source_key: sourceKey, cursor: batch.cursor, consecutive_errors: 0, last_error: null, last_run_at: new Date().toISOString() }, { onConflict: 'owner_id,campaign_id,source_key' })
       connectorStatus[sourceKey] = { status: 'completed', discovered: limited.length, nextCursor: batch.cursor }

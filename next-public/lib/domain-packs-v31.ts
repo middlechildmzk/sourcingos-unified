@@ -70,10 +70,10 @@ const PACKS: DomainPack[] = [
     id: 'technical',
     label: 'Technical',
     description: 'Software, cloud, data, infrastructure, security, AI, and engineering roles.',
-    executablePublicSurfaces: ['github'],
-    evidenceHints: ['public code or repositories', 'technical artifacts', 'technology usage evidence'],
-    heuristics: ['Prefer capability combinations over title-only matching.', 'Treat public code as evidence of work, not proof of employment or overall fit.'],
-    guardrails: ['Do not infer seniority, employment status, or identity solely from a repository.'],
+    executablePublicSurfaces: ['github', 'stackoverflow'],
+    evidenceHints: ['public code or repositories', 'technical artifacts', 'observed Stack Overflow answer expertise', 'technology usage evidence'],
+    heuristics: ['Prefer capability combinations over title-only matching.', 'Treat public code and Q&A expertise as evidence of public work, not proof of employment or overall fit.'],
+    guardrails: ['Do not infer seniority, employment status, or identity solely from a repository or Q&A account.', 'Search terms do not become candidate skills without person-level source evidence.'],
     detect: intake => confidenceFromSignals(roleText(intake), [
       /\bsoftware\b/, /\bcloud\b/, /\bplatform\b/, /\bdevops\b/, /\bsre\b/, /\bdata engineer/, /\bsecurity\b/, /\bcyber/, /\bkubernetes\b/, /\bterraform\b/, /\bpython\b/, /\bjava\b/, /\btypescript\b/, /\bmachine learning\b/, /\bartificial intelligence\b/
     ], [/\b(engineer|developer|architect)\b/]),
@@ -106,8 +106,6 @@ const PACKS: DomainPack[] = [
     id: 'federal',
     label: 'Federal / GovCon',
     description: 'Federal, public-sector contracting, cleared, and government-adjacent roles.',
-    // Intentionally empty. Federal market intelligence can change target organizations,
-    // but this pack does not pretend a federal contract API is a people-search source.
     executablePublicSurfaces: [],
     evidenceHints: ['public contract and award context at the organization level', 'candidate-stated clearance breadcrumbs', 'public program or agency context'],
     heuristics: ['Use contract intelligence to identify organizations worth searching, not to manufacture candidates.', 'Keep capability requirements separate from clearance breadcrumbs.'],

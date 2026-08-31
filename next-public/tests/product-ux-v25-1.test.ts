@@ -36,10 +36,13 @@ describe('V25.1 recruiter-first product experience', () => {
     expect(agentApi).toContain("sb.from('role_workspaces')")
   })
 
-  it('promotes recruiter-accepted discoveries into canonical candidates', () => {
+  it('promotes only recruiter-accepted discoveries into canonical candidates', () => {
     expect(autoSourceApi).toContain('promoteStoredDiscovery')
-    expect(acquisition).toContain("manual ? 'accepted' : 'auto_promoted'")
-    expect(acquisition).toContain("status: manual || d.identityConfidence >= 92 ? 'confirmed' : 'pending'")
+    expect(acquisition).toContain('Automated Candidate Graph promotion is disabled; recruiter review is required.')
+    expect(acquisition).toContain("const disposition = 'needs_review' as const")
+    expect(acquisition).toContain("merge_status: 'pending'")
+    expect(acquisition).not.toContain("'auto_promoted'")
+    expect(acquisition).not.toContain("status: manual || d.identityConfidence >= 92 ? 'confirmed' : 'pending'")
   })
 
   it('learns recruiter memory only after repeated decisions and approval', () => {
@@ -50,7 +53,7 @@ describe('V25.1 recruiter-first product experience', () => {
     expect(agentEngine).toContain("approval.approval_type === 'calibration'")
   })
 
-  it('connects scheduled acquisition, workflows, enrichment, and daily briefs', () => {
+  it('keeps acquisition workflow, enrichment, and daily-brief functions available behind explicit controls', () => {
     expect(cron).toContain('runDueAgentWorkflows')
     expect(cron).toContain('processEnrichmentQueue')
     expect(cron).toContain('generateDailyBrief')
