@@ -87,7 +87,7 @@ describe('V33 one Role Brain and one Search Brain', () => {
     const pasteBack = read('components/RolePasteBackV33.tsx')
     expect(pasteBack).toContain('buildCanonicalAgenticSearchPlan')
     expect(pasteBack).toContain('laneLabel: lane.label')
-    expect(pasteBack).toContain('planRevision: plan.revision')
+    expect(pasteBack).toContain('planRevision: activePlan.revision')
     expect(pasteBack).toContain('Pasted text remains recruiter-provided evidence, not verified truth.')
   })
 })
