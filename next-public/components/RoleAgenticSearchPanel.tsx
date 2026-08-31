@@ -24,6 +24,7 @@ import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 const RESEARCH_CONNECTORS = new Set<AgenticConnectorKey>(['orcid', 'openalex', 'pubmed', 'crossref'])
 const GITHUB_CONNECTORS = new Set<AgenticConnectorKey>(['github'])
+const STACKOVERFLOW_CONNECTORS = new Set<AgenticConnectorKey>(['stackoverflow'])
 const NPI_CONNECTORS = new Set<AgenticConnectorKey>(['npi'])
 
 type AgenticResult = {
@@ -55,6 +56,8 @@ type SaveResponse = {
   reused?: boolean
   candidateId?: string
   candidateUrl?: string
+  identityProposals?: { created?: Array<unknown> }
+  note?: string
 }
 
 function memoryKey(roleId: string) {
@@ -72,6 +75,7 @@ function readAttempts(roleId: string): SearchAttempt[] {
 
 function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnectorKey> {
   if (surface === 'github') return GITHUB_CONNECTORS
+  if (surface === 'stackoverflow') return STACKOVERFLOW_CONNECTORS
   if (surface === 'healthcare_registry') return NPI_CONNECTORS
   if (surface === 'research_publications') return RESEARCH_CONNECTORS
   return new Set<AgenticConnectorKey>()
@@ -132,9 +136,12 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
         ...current,
         [key]: { candidateId: json.candidateId!, candidateUrl, reused: Boolean(json.reused) },
       }))
-      setStatus(json.reused
+      const proposals = json.identityProposals?.created?.length || 0
+      setStatus(json.note || (json.reused
         ? `${result.displayName} already existed in Candidate Graph. The same source identity was reused without a new merge.`
-        : `${result.displayName} was saved to Candidate Graph for recruiter review. No cross-source identity was silently merged.`)
+        : proposals
+          ? `${result.displayName} was saved. ${proposals} cross-source identity proposal${proposals === 1 ? '' : 's'} await recruiter review.`
+          : `${result.displayName} was saved to Candidate Graph for recruiter review. No cross-source identity was silently merged.`))
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Candidate Graph save failed.')
     } finally {
@@ -283,7 +290,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
               : <small className="muted">Preview evidence only · this connector is not yet on the canonical person-save path.</small>}
         </article>
       })}</div>
-      <div className="agentic-results-note">Discovery stays read-only by default. Save-eligible people require an explicit recruiter action, pass the canonical source-truth boundary again on write, and reuse exact same-source identities instead of creating duplicates. Cross-source identity remains recruiter-reviewed.</div>
+      <div className="agentic-results-note">Discovery stays read-only by default. Save-eligible GitHub and Stack Overflow people require an explicit recruiter action, pass the canonical source-truth boundary again on write, and reuse exact same-source identities instead of creating duplicates. Deterministic cross-source anchors create review proposals only; they never merge profiles automatically.</div>
     </div>}
   </section>
 }
