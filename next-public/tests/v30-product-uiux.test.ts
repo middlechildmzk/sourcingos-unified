@@ -8,11 +8,12 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 const shell = read('components/AppShell.tsx')
 const today = read('components/TodayInboxClient.tsx')
 const roles = read('components/RoleWorkspaceClient.tsx')
-const search = read('components/RoleSearchActions.tsx')
+const canonicalSearch = read('components/RoleCanonicalSearchActions.tsx')
+const pasteBack = read('components/RolePasteBackV33.tsx')
 const layout = read('app/app/layout.tsx')
 const ui = read('app/app/v30-uiux.css')
 
-describe('V30 product experience release gate', () => {
+describe('V30 product experience release gate on the canonical V33 role loop', () => {
   it('keeps the primary navigation focused on the recruiter workflow', () => {
     expect(shell).toContain("label: 'Today'")
     expect(shell).toContain("label: 'Roles'")
@@ -34,7 +35,7 @@ describe('V30 product experience release gate', () => {
   it('uses explainable workflow readiness rather than an opaque role health score', () => {
     expect(roles).toContain('function workflowReadiness')
     expect(roles).toContain('Confirm the role brief')
-    expect(roles).toContain('Approve a search lane')
+    expect(roles).toContain('Approve a sourcing hypothesis')
     expect(roles).toContain('Build the first slate')
     expect(roles).toContain('Review the first candidates')
     expect(roles).not.toContain('function roleHealth')
@@ -47,17 +48,15 @@ describe('V30 product experience release gate', () => {
     expect(roles).not.toContain('Try human performance program demo')
   })
 
-  it('presents the role sourcing loop as a coherent five-step studio', () => {
-    expect(search).toContain('Search Plan v')
-    expect(search).toContain('<b>1</b> Search')
-    expect(search).toContain('<b>2</b> Bring back')
-    expect(search).toContain('<b>3</b> Review')
-    expect(search).toContain('<b>4</b> Learn')
-    expect(search).toContain('<b>5</b> Search again')
-    expect(search).toContain('LinkedIn Recruiter')
-    expect(search).toContain('ClearanceJobs / ATS')
-    expect(search).toContain('Google X-Ray')
-    expect(search).toContain('Bring candidates back to this role')
+  it('presents one canonical Search Plan with guided sourcing and role-aware paste-back', () => {
+    expect(canonicalSearch).toContain('One Search Brain')
+    expect(canonicalSearch).toContain('Search Plan v')
+    expect(canonicalSearch).toContain('LinkedIn Recruiter')
+    expect(canonicalSearch).toContain('ClearanceJobs / ATS')
+    expect(canonicalSearch).toContain('Google X-Ray')
+    expect(canonicalSearch).toContain('Guided · recruiter-run')
+    expect(pasteBack).toContain('Bring candidates back to this role')
+    expect(pasteBack).toContain('Preserve canonical hypothesis and Search Plan revision')
   })
 
   it('loads the V30 design layer after legacy product styles', () => {
