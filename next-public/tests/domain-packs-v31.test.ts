@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { buildCanonicalAgenticSearchPlan } from '../lib/canonical-agentic-search-v30'
 import { buildDomainPackProfile, detectDomainPacks } from '../lib/domain-packs-v31'
-import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from '../lib/onet-role-intelligence'
+import { enrichRoleIntakeWithOnet, onetSearchExpansion, type OnetRoleIntelligence } from '../lib/onet-role-intelligence'
 import type { RoleIntake } from '../lib/role-workspace'
 
 function roleIntake(patch: Partial<RoleIntake> = {}): RoleIntake {
@@ -87,17 +87,19 @@ describe('V31 domain packs and role intelligence', () => {
     expect(plan.lanes.some(lane => lane.tasks.some(task => task.surface === 'linkedin_recruiter' && task.mode === 'guided'))).toBe(true)
   })
 
-  it('uses O*NET as search expansion context without changing recruiter-approved must-haves', () => {
+  it('uses O*NET as search expansion context without changing recruiter-approved requirements', () => {
     const intake = roleIntake({
       title: 'Platform Engineer',
       mustHaves: ['AWS'],
       adjacentBackgrounds: ['Site Reliability Engineer'],
     })
+    const expansion = onetSearchExpansion(onetFixture)
     const enriched = enrichRoleIntakeWithOnet(intake, onetFixture)
+    expect(expansion.technologyHints).toContain('Kubernetes')
     expect(enriched.mustHaves).toEqual(['AWS'])
+    expect(enriched.niceToHaves).toEqual([])
     expect(enriched.adjacentBackgrounds).toContain('Software Developers')
     expect(enriched.adjacentBackgrounds).toContain('Platform Software Engineer')
-    expect(enriched.niceToHaves).toContain('Kubernetes')
 
     const plan = buildCanonicalAgenticSearchPlan(intake, undefined, { onet: onetFixture })
     expect(plan.roleIntelligence.onetOccupation?.code).toBe('15-1252.00')
