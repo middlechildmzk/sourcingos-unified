@@ -1,5 +1,6 @@
 import 'server-only'
 import { z } from 'zod'
+import { openAlexApiUrl } from './openalex-access-v33-3'
 
 export const CONNECTOR_KEYS = ['github','orcid','openalex','pubmed','crossref','uspto','usaspending'] as const
 export type ConnectorKey = typeof CONNECTOR_KEYS[number]
@@ -80,7 +81,7 @@ export async function discoverOrcid(input: CampaignInput, cursor?: string | null
 
 export async function discoverOpenAlex(input: CampaignInput, cursor?: string | null): Promise<{ discoveries: Discovery[]; cursor: string | null }> {
   const page = Math.max(1, Number(cursor || 1))
-  const data = await getJson(`https://api.openalex.org/authors?search=${encodeURIComponent(input.query)}&per-page=50&page=${page}&mailto=${encodeURIComponent(process.env.OPENALEX_MAILTO || 'admin@sourcingos.com')}`)
+  const data = await getJson(openAlexApiUrl('/authors', { search: input.query, 'per-page': 50, page }))
   const rows = Array.isArray(data.results) ? data.results : []
   return { discoveries: rows.map((r: any) => ({ sourceKey: 'openalex' as const, sourceId: clean(r.id), sourceUrl: clean(r.id), displayName: clean(r.display_name), organization: clean(r.last_known_institutions?.[0]?.display_name), summary: `${Number(r.works_count || 0)} works · ${Number(r.cited_by_count || 0)} citations`, skills: uniq((r.x_concepts || []).slice(0,8).map((c:any)=>clean(c.display_name))), identityConfidence: r.orcid ? 96 : 86, profileQuality: Math.min(100, 45 + (r.orcid ? 20 : 0) + (r.last_known_institutions?.length ? 15 : 0) + Math.min(20, Number(r.works_count || 0))), evidence: [{ kind: 'research_profile', label: 'OpenAlex author', value: clean(r.display_name), url: clean(r.id) }, ...(r.orcid ? [{ kind: 'persistent_identity', label: 'ORCID', value: clean(r.orcid), url: clean(r.orcid) }] : [])], raw: r })), cursor: rows.length === 50 ? String(page + 1) : null }
 }
