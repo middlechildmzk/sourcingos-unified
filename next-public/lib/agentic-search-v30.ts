@@ -2,7 +2,7 @@ import type { CalibrationState } from './calibration-intelligence'
 import { activeInsights } from './calibration-intelligence'
 import type { RoleIntake } from './role-workspace'
 
-export type AgenticConnectorKey = 'github' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
+export type AgenticConnectorKey = 'github' | 'stackoverflow' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
 
 export type AgenticLaneId =
   | 'exact_title'
@@ -17,6 +17,7 @@ export type SearchExecutionMode = 'executable' | 'guided' | 'provider_optional' 
 export type AgenticSearchSurface =
   | 'candidate_database'
   | 'github'
+  | 'stackoverflow'
   | 'research_publications'
   | 'healthcare_registry'
   | 'linkedin_recruiter'
@@ -180,17 +181,27 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
   ]
 
   if (technical || lane === 'evidence_first') {
-    tasks.splice(1, 0, {
-      surface: 'github',
-      label: 'GitHub public profiles',
-      mode: 'executable',
-      query: publicQuery,
-      connectorKeys: ['github'],
-      truth: 'Runs the existing official GitHub API connector with a public-safe capability query. Public work is evidence; identity linking still requires review.',
-    })
+    tasks.splice(1, 0,
+      {
+        surface: 'github',
+        label: 'GitHub public work',
+        mode: 'executable',
+        query: publicQuery,
+        connectorKeys: ['github'],
+        truth: 'Runs the official GitHub API through the dependable repository/contributor discovery path. Skills come only from observed public repository languages/topics; identity linking still requires review.',
+      },
+      {
+        surface: 'stackoverflow',
+        label: 'Stack Overflow expertise',
+        mode: 'executable',
+        query: publicQuery,
+        connectorKeys: ['stackoverflow'],
+        truth: 'Runs the official Stack Exchange API against role-relevant tags. A tag becomes candidate evidence only when the person is returned as a public top answerer for that tag; query terms alone never become skills.',
+      },
+    )
   }
   if (research || lane === 'evidence_first') {
-    tasks.splice(technical || lane === 'evidence_first' ? 2 : 1, 0, {
+    tasks.splice(technical || lane === 'evidence_first' ? 3 : 1, 0, {
       surface: 'research_publications',
       label: 'Public research graph',
       mode: 'executable',
