@@ -13,6 +13,13 @@ import {
   slateGapAnalysis,
   type WorkbenchCandidateAssessment,
 } from '@/lib/role-workbench-v33-4'
+import {
+  NEGATIVE_REVIEW_REASONS,
+  concernsAfterReviewDecision,
+  reviewReasonLabel,
+  type NegativeReviewReasonCode,
+} from '@/lib/recruiter-review-reasons-v33-4'
+import { pickSlateEvidenceSnippet } from '@/lib/slate-evidence-v33-4'
 import type { SearchAttempt } from '@/lib/search-state-memory-v30'
 
 type EvidenceState = 'supported' | 'contradicted' | 'unknown' | 'needs_verification'
@@ -46,6 +53,11 @@ type AssessmentResponse = {
 }
 
 type Decision = 'strong_fit' | 'possible_fit' | 'not_fit'
+
+type RejectionSuggestion = {
+  code: NegativeReviewReasonCode | ''
+  detail: string
+}
 
 function memoryKey(roleId: string) {
   return `sourcingos.v30.search-memory.${roleId}`
@@ -116,12 +128,14 @@ function eventTargetIsEditable(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || element.isContentEditable
 }
 
-function rejectionSuggestion(assessment?: CandidateAssessment): string {
-  if (!assessment) return ''
+function rejectionSuggestion(assessment?: CandidateAssessment): RejectionSuggestion {
+  if (!assessment) return { code: '', detail: '' }
   const disqualifier = assessment.requirements.find(requirement => requirement.tier === 'disqualifier' && (requirement.state === 'supported' || requirement.state === 'contradicted'))
-  if (disqualifier) return `Recruiter-defined disqualifier requires review: ${disqualifier.requirementText}`
+  if (disqualifier) return { code: 'explicit_requirement_conflict', detail: `Recruiter-defined disqualifier requires review: ${disqualifier.requirementText}` }
   const contradicted = assessment.requirements.find(requirement => requirement.tier === 'must_have' && requirement.state === 'contradicted')
-  return contradicted ? `Contradicted must-have: ${contradicted.requirementText}` : ''
+  return contradicted
+    ? { code: 'explicit_requirement_conflict', detail: `Contradicted must-have: ${contradicted.requirementText}` }
+    : { code: '', detail: '' }
 }
 
 export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
@@ -137,6 +151,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   const [editingBrief, setEditingBrief] = useState(false)
   const [briefDraft, setBriefDraft] = useState<RoleIntake | null>(null)
   const [rejectionCandidateId, setRejectionCandidateId] = useState('')
+  const [rejectionReasonCode, setRejectionReasonCode] = useState<NegativeReviewReasonCode | ''>('')
   const [rejectionReason, setRejectionReason] = useState('')
   const [status, setStatus] = useState('')
   const candidateSearchRef = useRef<HTMLInputElement>(null)
@@ -236,20 +251,25 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   })), [assessment.candidates])
   const gap = useMemo(() => slateGapAnalysis(gapInput), [gapInput])
 
-  function updateCandidateDecision(candidate: RoleCandidate, decision: Decision, reason?: string) {
+  function updateCandidateDecision(candidate: RoleCandidate, decision: Decision, reasonCode: NegativeReviewReasonCode | '' = '', reasonDetail = '') {
     const now = new Date().toISOString()
+    const reasonLabel = reviewReasonLabel(reasonCode)
+    const detail = reasonDetail.trim()
+    const reasonText = decision === 'not_fit'
+      ? [reasonLabel, detail].filter(Boolean).join(' — ')
+      : ''
     updateRole(roleId, workspace => ({
       ...workspace,
       candidates: workspace.candidates.map(item => item.id === candidate.id ? {
         ...item,
         fitDecision: decision,
-        concerns: decision === 'not_fit' && reason ? Array.from(new Set([reason, ...item.concerns])).slice(0, 20) : item.concerns,
+        concerns: concernsAfterReviewDecision(item.concerns, decision, reasonCode, detail),
         updatedAt: now,
       } : item),
       activity: [{
         id: crypto.randomUUID(),
         type: 'candidate_reviewed',
-        message: `Recruiter marked ${candidate.name} ${decision === 'strong_fit' ? 'Yes' : decision === 'possible_fit' ? 'Maybe' : 'No'}${reason ? ` — ${reason}` : ''}.`,
+        message: `Recruiter marked ${candidate.name} ${decision === 'strong_fit' ? 'Yes' : decision === 'possible_fit' ? 'Maybe' : 'No'}${reasonText ? ` — ${reasonText}` : ''}.`,
         createdAt: now,
       }, ...workspace.activity],
       updatedAt: now,
@@ -260,20 +280,27 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   function chooseDecision(decision: Decision) {
     if (!selectedCandidate) return
     if (decision === 'not_fit') {
+      const suggestion = rejectionSuggestion(selectedAssessment)
       setRejectionCandidateId(selectedCandidate.id)
-      setRejectionReason(rejectionSuggestion(selectedAssessment))
+      setRejectionReasonCode(suggestion.code)
+      setRejectionReason(suggestion.detail)
       return
     }
     updateCandidateDecision(selectedCandidate, decision)
+    setRejectionCandidateId('')
+    setRejectionReasonCode('')
+    setRejectionReason('')
   }
 
   function confirmNo() {
     const candidate = role?.candidates.find(item => item.id === rejectionCandidateId)
     if (!candidate) return
     const reason = rejectionReason.trim()
-    if (!reason) { setStatus('Add a recruiter reason before recording No. Unknown evidence is not a rejection reason by itself.'); return }
-    updateCandidateDecision(candidate, 'not_fit', reason)
+    if (!rejectionReasonCode) { setStatus('Choose a recruiter reason before recording No. Unknown evidence is not a rejection reason by itself.'); return }
+    if (rejectionReasonCode === 'other' && !reason) { setStatus('Add a short recruiter note when using Other so the feedback remains useful.'); return }
+    updateCandidateDecision(candidate, 'not_fit', rejectionReasonCode, reason)
     setRejectionCandidateId('')
+    setRejectionReasonCode('')
     setRejectionReason('')
   }
 
@@ -342,6 +369,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   const briefIsDraft = brief.status === 'draft'
 
   return <section className="role-workbench-v33-4" aria-label="Unified Role Workbench">
+    <link rel="stylesheet" href="/role-review-speed-v33-4.css" />
     <header className="role-workbench-head-v33-4">
       <div>
         <div className="role-workbench-eyebrow-v33-4"><span className="kicker">Unified Role Workbench · V33.4</span><span className={`status-pill ${mode === 'supabase' ? 'success' : mode === 'error' ? 'warning' : ''}`}>{mode}</span></div>
@@ -427,12 +455,16 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
           {filteredCandidates.map(candidate => {
             const item = candidate.candidateId ? assessmentById.get(candidate.candidateId) : undefined
             const must = item?.mustHaveTally
+            const snippet = pickSlateEvidenceSnippet(item?.requirements || [])
             const disqualifierFlags = item?.requirements.filter(requirement => requirement.tier === 'disqualifier' && requirement.state !== 'unknown').length || 0
-            return <button className={`role-candidate-row-v33-4 ${candidate.id === selectedCandidateId ? 'selected' : ''}`} key={candidate.id} onClick={() => setSelectedCandidateId(candidate.id)}>
-              <span className="role-candidate-identity-v33-4"><b>{candidate.name}</b><small>{[candidate.headline, candidate.company, candidate.location].filter(Boolean).join(' · ') || candidate.source}</small><em>{candidate.source}</em></span>
-              <span className="role-candidate-coverage-v33-4">{must ? <><b>{must.supported}/{must.total} must-haves supported</b><small>{must.needsVerification} verify · {must.unknown} unknown{must.contradicted ? ` · ${must.contradicted} contradicted` : ''}</small>{disqualifierFlags ? <em>{disqualifierFlags} disqualifier review flag{disqualifierFlags === 1 ? '' : 's'}</em> : null}</> : <><b>{candidate.candidateId ? assessmentLoading ? 'Assessing evidence…' : 'Evidence pending' : 'No canonical evidence link'}</b><small>Missing evidence is not a negative finding.</small></>}</span>
-              <span className={`role-candidate-decision-v33-4 decision-${candidate.fitDecision}`}>{decisionLabel(candidate)}</span>
-            </button>
+            return <div className="role-candidate-row-shell-v33-4" key={candidate.id}>
+              <button className={`role-candidate-row-v33-4 ${candidate.id === selectedCandidateId ? 'selected' : ''}`} onClick={() => setSelectedCandidateId(candidate.id)}>
+                <span className="role-candidate-identity-v33-4"><b>{candidate.name}</b><small>{[candidate.headline, candidate.company, candidate.location].filter(Boolean).join(' · ') || candidate.source}</small><em>{candidate.source}</em></span>
+                <span className="role-candidate-coverage-v33-4">{must ? <><b>{must.supported}/{must.total} must-haves supported</b><small>{must.needsVerification} verify · {must.unknown} unknown{must.contradicted ? ` · ${must.contradicted} contradicted` : ''}</small>{disqualifierFlags ? <em>{disqualifierFlags} disqualifier review flag{disqualifierFlags === 1 ? '' : 's'}</em> : null}{snippet ? <span className="role-candidate-evidence-snippet-v33-4"><i>{evidenceStateLabel(snippet.state)} · {snippet.requirementText}</i><small title={snippet.detail}>{snippet.detail}</small><em>{snippet.source}</em></span> : <span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span>}</> : <><b>{candidate.candidateId ? assessmentLoading ? 'Assessing evidence…' : 'Evidence pending' : 'No canonical evidence link'}</b><small>Missing evidence is not a negative finding.</small><span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span></>}</span>
+                <span className={`role-candidate-decision-v33-4 decision-${candidate.fitDecision}`}>{decisionLabel(candidate)}</span>
+              </button>
+              {snippet?.sourceUrl && <a className="role-candidate-row-source-v33-4" href={snippet.sourceUrl} target="_blank" rel="noreferrer noopener" aria-label={`Open evidence source for ${candidate.name}`}>Open {snippet.source} evidence ↗</a>}
+            </div>
           })}
           {!filteredCandidates.length && <div className="role-candidate-empty-v33-4"><b>{role.candidates.length ? 'No candidates match this filter.' : 'No review slate yet.'}</b><span>{role.candidates.length ? 'Clear the filter to continue reviewing.' : 'Run the approved sourcing agent below, select discoveries, and create a review slate.'}</span><button className="btn" onClick={scrollToSourcingAgent}>Open sourcing agent</button></div>}
         </div>
@@ -452,7 +484,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
           </div>
           <p className="role-decision-note-v33-4">These are explicit recruiter decisions. They can inform proposed calibration, but they do not alter source evidence or silently reject/shortlist anyone.</p>
 
-          {rejectionCandidateId === selectedCandidate.id && <div className="role-rejection-reason-v33-4"><b>Why No?</b><p>Unknown or unverifiable evidence is not automatically a rejection reason. Confirm the recruiting reason yourself.</p><textarea className="textarea" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Wrong background, explicit disqualifier, location mismatch, contradicted must-have…" autoFocus /><div><button onClick={() => { setRejectionCandidateId(''); setRejectionReason('') }}>Cancel</button><button className="primary" onClick={confirmNo}>Record No</button></div></div>}
+          {rejectionCandidateId === selectedCandidate.id && <div className="role-rejection-reason-v33-4"><b>Why No?</b><p>Choose the recruiting reason first. Unknown or unverifiable evidence is not automatically a rejection reason.</p><div className="role-rejection-chips-v33-4" role="group" aria-label="Recruiter rejection reason">{NEGATIVE_REVIEW_REASONS.map(reason => <button type="button" key={reason.id} className={rejectionReasonCode === reason.id ? 'selected' : ''} aria-pressed={rejectionReasonCode === reason.id} onClick={() => setRejectionReasonCode(reason.id)}>{reason.label}</button>)}</div><label className="role-rejection-detail-label-v33-4">Optional detail{rejectionReasonCode === 'other' ? ' (required for Other)' : ''}<textarea className="textarea" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Add context that would help future calibration…" /></label><div><button onClick={() => { setRejectionCandidateId(''); setRejectionReasonCode(''); setRejectionReason('') }}>Cancel</button><button className="primary" onClick={confirmNo}>Record No</button></div></div>}
 
           <section className="role-candidate-summary-v33-4">
             <div><span>Decision</span><b>{decisionLabel(selectedCandidate)}</b></div><div><span>Evidence</span><b>{selectedAssessment?.claimCount ?? 0} claims</b></div><div><span>Contact</span><b>{selectedCandidate.contactStatus.replace('_', ' ')}</b></div>
