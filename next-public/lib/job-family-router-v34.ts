@@ -151,7 +151,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   {
     id: 'research_science',
     strong: [
-      /\b(?:research scientist|applied scientist|researcher|postdoc|principal investigator|scientist|biostatistician)\b/,
+      /\b(?:research scientist|applied scientist|researcher|postdoc|principal investigator|biostatistician)\b/,
     ],
     signals: [
       /\bresearch\b/, /\bpublication\b/, /\bacademic\b/, /\buniversity\b/, /\blaboratory\b/, /\br&d\b/, /\bscientific\b/,
@@ -262,7 +262,13 @@ export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): 
   const matches = scored.length
     ? scored
     : [{ id: 'general' as const, score: 0.25, reasons: ['no specialized family reached routing threshold'] }]
-  const primaryFamily = matches[0].id
+  // Federal/GovCon is usually a market/clearance modifier rather than the
+  // occupation itself. When a substantive occupational family is present, keep
+  // federal in the match set but do not let clearance replace the role family.
+  // A role such as "Federal Program Manager" with no other supported family may
+  // still use federal_govcon as its primary routing family.
+  const occupationalPrimary = matches.find(match => match.id !== 'federal_govcon')
+  const primaryFamily = occupationalPrimary?.id ?? matches[0].id
   const activeDefinitions = DEFINITIONS.filter(definition => matches.some(match => match.id === definition.id))
   const preferredPublicSurfaces = uniq(activeDefinitions.flatMap(definition => definition.preferred))
   const explicitlyDeprioritized = uniq(activeDefinitions.flatMap(definition => definition.deprioritized || []))
