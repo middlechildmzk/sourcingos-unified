@@ -119,12 +119,38 @@ function revision(state?: CalibrationState): number {
   return 1 + state.events.filter(event => altering.has(event.type)).length
 }
 
-function publicSafeQuery(intake: RoleIntake): string {
+function publicCapabilityTerm(value: string): string {
+  return clean(value)
+    .replace(/\b\d+\s*\+?\s*years?(?:\s+of)?\b/gi, ' ')
+    .replace(/\b(?:recent|hands-on|professional|commercial)\s+experience\b/gi, ' ')
+    .replace(/\bexperience\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function technicalTitleAliases(title: string): string[] {
+  const aliases: string[] = []
+  if (/\brhel\b|red\s+hat/i.test(title)) aliases.push('RHEL', 'Red Hat', 'Linux')
+  if (/\b(?:administrator|admin|sysadmin)\b/i.test(title)) aliases.push('sysadmin', 'systems administrator')
+  return uniq(aliases, 6)
+}
+
+function publicSafeQuery(intake: RoleIntake, lane: AgenticLaneId): string {
   const title = PUBLIC_SENSITIVE.test(intake.title) ? '' : clean(intake.title)
-  const terms = [...intake.mustHaves, ...intake.niceToHaves]
-    .map(clean)
+  const aliases = technicalTitleAliases(title)
+  const skills = [...intake.mustHaves, ...intake.niceToHaves]
+    .map(publicCapabilityTerm)
     .filter(term => term && !PUBLIC_SENSITIVE.test(term))
-  return and([title ? quote(title) : '', or(terms.slice(0, 6))]) || or(terms.slice(0, 6))
+  const adjacent = intake.adjacentBackgrounds.map(publicCapabilityTerm).filter(Boolean)
+
+  if (lane === 'skill_cluster') return or([...skills, ...aliases], 10)
+  if (lane === 'adjacent_title') return and([or([title, ...adjacent, ...aliases], 10), or(skills, 6)]) || or([title, ...adjacent, ...aliases], 10)
+  if (lane === 'evidence_first') return and([or([...skills, ...aliases], 10), or(['open source', 'maintainer', 'contributor'], 3)]) || or([...skills, ...aliases], 10)
+  if (lane === 'target_company' && intake.targetCompanies.length) return and([or(intake.targetCompanies, 8), or([title, ...aliases, ...skills], 10)])
+  // A clearance lane may guide an authorized recruiter surface, but the public
+  // connectors still receive capability-only terms.
+  if (lane === 'clearance_first') return or([title, ...aliases, ...skills], 10)
+  return and([or([title, ...aliases], 8), or(skills, 6)]) || or([title, ...aliases, ...skills], 10)
 }
 
 function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): AgenticSourceTask[] {
@@ -132,7 +158,7 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
   const technical = TECHNICAL.test(roleText)
   const aiTechnical = AI_TECHNICAL.test(roleText)
   const research = RESEARCH.test(roleText)
-  const publicQuery = publicSafeQuery(intake)
+  const publicQuery = publicSafeQuery(intake, lane)
   const tasks: AgenticSourceTask[] = [
     {
       surface: 'candidate_database',

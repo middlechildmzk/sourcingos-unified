@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildCanonicalAgenticSearchPlan } from '@/lib/canonical-agentic-search-v30'
 import { buildDomainPackProfile } from '@/lib/domain-packs-v31'
+import { interpretRoleBrief } from '@/lib/role-brief-v33'
 import type { RoleIntake } from '@/lib/role-workspace'
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -26,6 +27,13 @@ function intake(title: string): RoleIntake {
 }
 
 describe('RHEL agent-start hotfix', () => {
+  it('accepts a terse role-first request without requiring a title edit', () => {
+    const result = interpretRoleBrief('RHEL admin in Washington DC area with 5+ years of Linux experience and a secret clearance or higher')
+    expect(result.intake.title).toBe('RHEL admin')
+    expect(result.intake.location).toBe('Washington DC')
+    expect(result.intake.mustHaves.some(item => /5\+ years.*linux/i.test(item))).toBe(true)
+  })
+
   it.each(['RHEL admin', 'Linux administrator', 'Systems administrator', 'sysadmin'])('classifies %s as technical and keeps executable technical sources', title => {
     const role = intake(title)
     const profile = buildDomainPackProfile(role)
@@ -37,6 +45,18 @@ describe('RHEL agent-start hotfix', () => {
     const connectors = plan.lanes.flatMap(lane => lane.tasks.flatMap(task => task.connectorKeys || []))
     expect(connectors).toContain('github')
     expect(connectors).toContain('stackoverflow')
+  })
+
+  it('uses distinct capability queries across public-source search angles', () => {
+    const plan = buildCanonicalAgenticSearchPlan({
+      ...intake('RHEL Administrator'),
+      mustHaves: ['5+ years Linux experience'],
+      adjacentBackgrounds: ['Linux systems engineer'],
+    })
+    const publicQueries = plan.lanes.map(lane => lane.tasks.find(task => task.surface === 'github')?.query).filter(Boolean)
+    expect(new Set(publicQueries).size).toBeGreaterThan(2)
+    expect(publicQueries.join(' ')).toContain('Linux')
+    expect(publicQueries.join(' ')).not.toContain('5+ years Linux experience')
   })
 
   it('does not leave auto-start silently spinning when no executable source or no eligible slate exists', () => {

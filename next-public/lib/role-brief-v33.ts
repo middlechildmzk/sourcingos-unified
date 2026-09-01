@@ -41,6 +41,16 @@ function naturalLanguageTitle(rawText: string): string {
   return ''
 }
 
+function terseRoleTitle(rawText: string): string {
+  const compact = clean(rawText, 500)
+  if (!compact || rawText.split(/\r?\n/).filter(line => line.trim()).length > 2) return ''
+  const match = compact.match(/^(.+?)(?=\s+(?:in|near|around|based\s+in|with|who|that|from)\b|[,.;]|$)/i)
+  if (!match?.[1]) return ''
+  const value = clean(match[1], 100)
+  if (value.length < 3 || value.length > 80 || /^(title|role|location|job description)$/i.test(value)) return ''
+  return titleCaseFirst(value)
+}
+
 function naturalLanguageLocation(rawText: string): string {
   const compact = clean(rawText, 700)
   const match = compact.match(/\b(?:in|near|around|based\s+in)\s+([a-z][a-z .'-]{1,60}?)(?=\s+(?:with|who|that|from|and|but|where)\b|[,.;]|$)/i)
@@ -112,6 +122,10 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const parsed = parseJobDescription(rawText)
   const natural = isNaturalLanguageBrief(rawText)
   const naturalTitle = naturalLanguageTitle(rawText)
+  // Recruiters often type the role directly ("RHEL admin in Washington DC")
+  // without a conversational prefix. Keep that valid shorthand from falling
+  // through to "Untitled role" and forcing a meaningless edit/retry loop.
+  const directTitle = terseRoleTitle(rawText)
   const naturalLocation = naturalLanguageLocation(rawText)
   const explicitLocation = labeledLocation(rawText)
   const location = (natural ? naturalLocation || explicitLocation || parsed.location : explicitLocation || parsed.location || naturalLocation) || 'Not specified'
@@ -133,7 +147,7 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const niceToHaves = natural && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
 
   const intake: RoleIntake = {
-    title: naturalTitle || clean(parsed.roleTitle, 100) || 'Untitled role',
+    title: naturalTitle || directTitle || clean(parsed.roleTitle, 100) || 'Untitled role',
     location,
     workMode: workMode(rawText),
     compensation: compensation(rawText),
