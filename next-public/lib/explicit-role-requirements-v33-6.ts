@@ -5,13 +5,26 @@ export type ExplicitExperienceRequirement = {
   phrase: string
 }
 
-function cleanCapability(value: string): string {
+function displayCapability(value: string): string {
   return value
+    .replace(/\brhel\b/gi, 'RHEL')
+    .replace(/\bred\s+hat\b/gi, 'Red Hat')
+    .replace(/\blinux\b/gi, 'Linux')
+    .replace(/\bunix\b/gi, 'Unix')
+    .replace(/\baws\b/gi, 'AWS')
+    .replace(/\bgcp\b/gi, 'GCP')
+    .replace(/\bkubernetes\b/gi, 'Kubernetes')
+    .replace(/\bterraform\b/gi, 'Terraform')
+    .replace(/\bpython\b/gi, 'Python')
+}
+
+function cleanCapability(value: string): string {
+  return displayCapability(value
     .replace(/\b(?:experience|expertise|background)\b\s*$/i, '')
     .replace(/^[\s,;:-]+|[\s,;:.-]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 80)
+    .slice(0, 80))
 }
 
 function normalized(value: string): string {
