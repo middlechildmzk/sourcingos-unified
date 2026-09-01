@@ -36,8 +36,8 @@ export default async function LoginPage({ searchParams }: Props) {
         Sign in to SourcingOS
       </h1>
       <p className="lead" style={{ fontSize: '16px', marginBottom: '28px' }}>
-        Enter your beta-access email and we&rsquo;ll send a sign-in link.
-        No password required.
+        Sign in with the email and password attached to your approved beta account.
+        A sign-in link remains available as a backup.
       </p>
 
       {from && (
