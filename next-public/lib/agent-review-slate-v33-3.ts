@@ -62,6 +62,11 @@ function observableRoleSignals(intake: RoleIntake): string[] {
   return Array.from(new Set(words)).slice(0, 30)
 }
 
+/**
+ * Evidence-equivalent aliases are deliberately narrow and capability-specific.
+ * They expand common observed spellings, not conceptual adjacency: `EMR` can
+ * support an `EMR/EHR` requirement, while a generic "healthcare" mention cannot.
+ */
 function requirementProofAliases(requirement: string): string[] {
   const capability = requirementToRetrievalCapability(requirement).toLowerCase().trim()
   if (!capability || NON_OBSERVABLE_REQUIREMENTS.has(capability)) return []
@@ -69,6 +74,13 @@ function requirementProofAliases(requirement: string): string[] {
   if (/^red\s+hat$/.test(capability)) return ['red hat', 'rhel']
   if (/^linux$/.test(capability)) return ['linux', 'rhel', 'red hat enterprise linux', 'red hat']
   if (/^unix$/.test(capability)) return ['unix']
+  if (/^emr\/?ehr$/.test(capability)) return ['emr/ehr', 'emr', 'ehr', 'electronic medical record', 'electronic health record']
+  if (/^nist\s+rmf$/.test(capability)) return ['nist rmf', 'risk management framework', 'rmf']
+  if (/^llm$/.test(capability)) return ['llm', 'large language model', 'large language models']
+  if (/^hugging\s+face$/.test(capability)) return ['hugging face', 'huggingface']
+  if (/^kubernetes$/.test(capability)) return ['kubernetes', 'k8s']
+  if (/^ci\/?cd$/.test(capability)) return ['ci/cd', 'cicd', 'continuous integration', 'continuous delivery', 'continuous deployment']
+  if (/^rest\s+api$/.test(capability)) return ['rest api', 'restful api', 'restful services']
   return [capability]
 }
 
