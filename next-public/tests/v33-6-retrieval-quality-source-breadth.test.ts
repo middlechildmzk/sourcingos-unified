@@ -3,6 +3,7 @@ import { interpretRoleBrief } from '@/lib/role-brief-v33'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from '@/lib/onet-role-intelligence'
 import { buildCanonicalAgenticSearchPlan } from '@/lib/canonical-agentic-search-v30'
 import { discoverDevToTalent } from '@/lib/connectors/devto-v33-6'
+import { classifySourceResult } from '@/lib/entity-classification'
 
 const rhelRequest = 'find a rhel admin near washington dc with 5+ years of linux and secret clearance'
 
@@ -54,7 +55,7 @@ describe('V33.6 retrieval quality and source breadth', () => {
     }
   })
 
-  it('builds DEV people from observed authored tags without turning the query into skills', async () => {
+  it('builds canonical DEV people from observed authored tags without turning the query into skills', async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {
       const url = String(input)
       if (url.includes('/api/articles?')) {
@@ -90,11 +91,12 @@ describe('V33.6 retrieval quality and source breadth', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const [person] = await discoverDevToTalent({
+    const [rawPerson] = await discoverDevToTalent({
       query: 'RHEL admin 5+ years Linux experience',
       location: 'Washington, DC',
       limit: 8,
     })
+    const person = classifySourceResult(rawPerson)
 
     expect(person.entityKind).toBe('person')
     expect(person.source).toBe('devto')
