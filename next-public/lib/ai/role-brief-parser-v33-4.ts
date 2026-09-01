@@ -37,10 +37,10 @@ function compactSummary(intake: RoleIntake): string {
 
 /**
  * Short recruiter commands are closer to a search contract than a prose JD.
- * The deterministic parser is intentionally conservative and literal, so its
- * consequential fields remain authoritative. The model may explain/enrich the
- * request, but it must never replace an explicit RHEL requirement with
- * TypeScript, Secret with TS/SCI, Annapolis Junction with no location, etc.
+ * The deterministic parser is intentionally conservative and literal, so every
+ * retrieval-affecting field remains authoritative. The model may ask a useful
+ * clarification, but it must never replace RHEL with TypeScript, Secret with
+ * TS/SCI, Annapolis Junction with no location, or add unrelated adjacent roles.
  */
 export function shortRecruiterBriefV33_11(rawText: string): boolean {
   const lines = rawText.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
@@ -56,26 +56,14 @@ export function mergeAiRoleBriefV33_11(
   const shortBrief = shortRecruiterBriefV33_11(rawText)
   const modelMustHaves = strings(model.mustHaves, fallback.mustHaves, 16)
 
-  if (shortBrief) {
-    return {
-      title: fallback.title,
-      location: fallback.location,
-      workMode: fallback.workMode,
-      compensation: fallback.compensation,
-      clearance: fallback.clearance,
-      mustHaves: [...fallback.mustHaves],
-      niceToHaves: [...fallback.niceToHaves],
-      disqualifiers: [...fallback.disqualifiers],
-      targetCompanies: [...fallback.targetCompanies],
-      // Adjacent titles are retrieval expansion only, not candidate facts or
-      // requirements, so model suggestions may augment the deterministic set.
-      adjacentBackgrounds: Array.from(new Set([
-        ...fallback.adjacentBackgrounds,
-        ...strings(model.adjacentBackgrounds, [], 16),
-      ])).slice(0, 16),
-      hiringManagerNotes: clean(model.hiringManagerNotes, '', 600),
-      rawDescription: rawText,
-    }
+  if (shortBrief) return {
+    ...fallback,
+    mustHaves: [...fallback.mustHaves],
+    niceToHaves: [...fallback.niceToHaves],
+    disqualifiers: [...fallback.disqualifiers],
+    targetCompanies: [...fallback.targetCompanies],
+    adjacentBackgrounds: [...fallback.adjacentBackgrounds],
+    rawDescription: rawText,
   }
 
   return {
@@ -110,7 +98,7 @@ Rules:
 - adjacentBackgrounds may include close title synonyms, but must stay in the same job family. Never expand a technical administrator into education, school, office, or business administration titles.
 - Ask a follow-up question ONLY when an ambiguity would materially change who gets searched. Missing optional information is not a blocker.
 - Maximum 2 follow-up questions.
-- IMPORTANT: the deterministic baseline below contains literal recruiter-stated constraints. Never replace an explicit baseline capability, location, work mode, quantified experience requirement, or clearance with a different value. Your output may conservatively enrich long-form JDs, but explicit recruiter text wins.
+- IMPORTANT: the deterministic baseline below contains literal recruiter-stated constraints. Never replace an explicit baseline capability, location, work mode, quantified experience requirement, clearance, or retrieval expansion with a different value. For short recruiter commands the application will use the deterministic Role Brief as the search contract even if your JSON differs. Your output may conservatively enrich long-form JDs, but explicit recruiter text wins.
 
 Recruiter request:
 ${JSON.stringify(rawText)}
