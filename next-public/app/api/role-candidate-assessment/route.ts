@@ -17,6 +17,23 @@ type RequestBody = {
   candidates?: CandidateInput[]
 }
 
+type PublicIdentity = {
+  profiles: Array<{
+    source: string
+    sourceProfileId: string
+    displayName: string
+    profileUrl?: string
+    headline?: string
+  }>
+  contacts: Array<{
+    type: string
+    value: string
+    source: string
+    verified: boolean
+    permissionStatus: string
+  }>
+}
+
 function compactText(value: unknown, max = 500): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : ''
 }
@@ -24,6 +41,17 @@ function compactText(value: unknown, max = 500): string {
 function textArray(value: unknown, max = 50): string[] {
   if (!Array.isArray(value)) return []
   return Array.from(new Set(value.map(item => compactText(item, 300)).filter(Boolean))).slice(0, max)
+}
+
+function safePublicUrl(value: unknown): string | undefined {
+  const raw = compactText(value, 1200)
+  if (!raw) return undefined
+  try {
+    const parsed = new URL(raw)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function validIntake(value: unknown): RoleIntake | null {
@@ -212,6 +240,37 @@ function roleCandidateContext(candidate: CandidateInput): RoleCandidate {
   }
 }
 
+function publicIdentityForCandidate(snapshot: CandidateDbSnapshot, candidateId: string): PublicIdentity {
+  const linkedProfiles = snapshot.sourceProfiles.filter(profile => profile.candidateId === candidateId)
+  const profileIds = new Set(linkedProfiles.map(profile => profile.id))
+  const profiles = linkedProfiles.map(profile => ({
+    source: String(profile.source || 'public_source'),
+    sourceProfileId: String(profile.sourceProfileId || ''),
+    displayName: String(profile.displayName || profile.sourceProfileId || profile.source || 'Public profile'),
+    profileUrl: safePublicUrl(profile.profileUrl),
+    headline: profile.headline ? String(profile.headline) : undefined,
+  })).filter(profile => profile.sourceProfileId || profile.profileUrl).slice(0, 12)
+
+  // Only expose contact signals attached to one of the candidate's linked source
+  // profiles. Recruiter-owned/manual contact data is intentionally not surfaced
+  // here as if it came from public-source discovery.
+  const contacts = snapshot.contactSignals
+    .filter(signal => Boolean(signal.sourceProfileId && profileIds.has(signal.sourceProfileId)))
+    .filter(signal => ['public_email', 'website', 'profile_url'].includes(String(signal.type)))
+    .filter(signal => String(signal.permissionStatus || 'unknown') !== 'blocked')
+    .map(signal => ({
+      type: String(signal.type),
+      value: String(signal.value || '').trim(),
+      source: String(signal.source || 'public_source'),
+      verified: Boolean(signal.verified),
+      permissionStatus: String(signal.permissionStatus || 'unknown'),
+    }))
+    .filter(signal => signal.value)
+
+  const uniqueContacts = Array.from(new Map(contacts.map(signal => [`${signal.type}:${signal.value.toLowerCase()}`, signal])).values()).slice(0, 12)
+  return { profiles, contacts: uniqueContacts }
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -264,6 +323,7 @@ export async function POST(req: NextRequest) {
         tally,
         mustHaveTally,
         claimCount: claims.length,
+        publicIdentity: publicIdentityForCandidate(snapshot, candidateId),
         requirements: requirements.map(requirement => ({
           requirementId: requirement.requirementId,
           requirementText: requirement.requirementText,

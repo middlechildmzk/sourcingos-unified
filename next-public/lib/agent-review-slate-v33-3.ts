@@ -1,5 +1,6 @@
 import { compareSourceProfiles } from './candidate-graph'
 import type { AgenticConnectorKey } from './agentic-search-v30'
+import { requirementToRetrievalCapability } from './explicit-role-requirements-v33-6'
 import type { RoleCandidate, RoleIntake } from './role-workspace'
 import type { SourceResult } from './source-types'
 
@@ -35,6 +36,9 @@ export type ReviewSlateEvidenceCheck = {
   discovery: ReviewSlateDiscovery
   admitted: boolean
   matchedSignals: string[]
+  matchedMustHaves: string[]
+  matchedTitleSignals: string[]
+  unverifiedRequirements: string[]
   locationState: 'compatible' | 'unknown' | 'outside_search_area' | 'not_constrained'
   explanation: string
 }
@@ -44,6 +48,8 @@ const SIGNAL_STOP_WORDS = new Set([
   'administrator', 'admin', 'engineer', 'engineering', 'developer', 'senior', 'junior',
   'required', 'preferred', 'recent', 'hands', 'ownership', 'role', 'area',
 ])
+
+const NON_OBSERVABLE_REQUIREMENTS = new Set(['relevant', 'professional', 'overall', 'work', 'industry', 'total'])
 
 function normalizedWords(value: string): string[] {
   return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, ' ').split(/\s+/).filter(word => word.length > 2 && !SIGNAL_STOP_WORDS.has(word))
@@ -56,6 +62,26 @@ function observableRoleSignals(intake: RoleIntake): string[] {
   return Array.from(new Set(words)).slice(0, 30)
 }
 
+function requirementProofAliases(requirement: string): string[] {
+  const capability = requirementToRetrievalCapability(requirement).toLowerCase().trim()
+  if (!capability || NON_OBSERVABLE_REQUIREMENTS.has(capability)) return []
+  if (/\brhel\b|red\s+hat\s+enterprise\s+linux/.test(capability)) return ['rhel', 'red hat enterprise linux', 'red hat']
+  if (/^red\s+hat$/.test(capability)) return ['red hat', 'rhel']
+  if (/^linux$/.test(capability)) return ['linux', 'rhel', 'red hat enterprise linux', 'red hat']
+  if (/^unix$/.test(capability)) return ['unix']
+  return [capability]
+}
+
+function observedDiscoveryText(discovery: ReviewSlateDiscovery): string {
+  return [
+    discovery.headline,
+    discovery.organization,
+    ...(discovery.sourceResult?.skills || []),
+    ...discovery.evidence.flatMap(item => [item.label, item.value]),
+    ...(discovery.sourceResult?.evidence || []).flatMap(item => [item.label, item.detail]),
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
 function locationState(intake: RoleIntake, discovery: ReviewSlateDiscovery): ReviewSlateEvidenceCheck['locationState'] {
   const requested = intake.location?.trim()
   if (!requested || requested === 'Not specified') return 'not_constrained'
@@ -63,6 +89,11 @@ function locationState(intake: RoleIntake, discovery: ReviewSlateDiscovery): Rev
   if (!observed) return 'unknown'
   const requestedText = requested.toLowerCase()
   const observedText = observed.toLowerCase()
+  if (/annapolis\s+junction|fort\s+meade/.test(requestedText)) {
+    return /annapolis\s+junction|fort\s+meade|laurel|jessup|columbia|hanover|odenton|severn|savage/.test(observedText)
+      ? 'compatible'
+      : 'outside_search_area'
+  }
   if (/washington\s*(?:dc|d\.c\.)|district of columbia|\bdmv\b/i.test(requestedText)) {
     return /washington\s*(?:dc|d\.c\.)|district of columbia|\bdmv\b|northern virginia|\bnova\b|arlington|alexandria|fairfax|reston|herndon|mclean|maryland|bethesda|rockville|silver spring|fort meade|annapolis junction/i.test(observedText)
       ? 'compatible'
@@ -72,10 +103,17 @@ function locationState(intake: RoleIntake, discovery: ReviewSlateDiscovery): Rev
   return requestedWords.some(word => observedText.includes(word)) ? 'compatible' : 'outside_search_area'
 }
 
+function requirementLabel(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
 /**
- * Builds a small first review batch from observed source facts only. Records
- * outside the floor remain visible in the discovery pass for recruiter review;
- * they are not rejected and no candidate-fit conclusion is created.
+ * Builds a small first review batch from observed source facts only. When a role
+ * has recruiter-stated must-haves that are observable on public sources, every
+ * such must-have needs observed support before a discovery enters the first
+ * review batch. Requirements that cannot be proven from public evidence (for
+ * example a generic years threshold or clearance) remain explicitly unverified.
+ * Held records stay inspectable discoveries; they are not rejected.
  */
 export function evidenceBearingFirstReviewBatch(
   discoveries: ReviewSlateDiscovery[],
@@ -83,29 +121,59 @@ export function evidenceBearingFirstReviewBatch(
   limit = 12,
 ): { batch: ReviewSlateDiscovery[]; checks: ReviewSlateEvidenceCheck[] } {
   const roleSignals = observableRoleSignals(intake)
+  const gateableMustHaves = intake.mustHaves
+    .map(requirement => ({ requirement: requirementLabel(requirement), aliases: requirementProofAliases(requirement) }))
+    .filter(item => item.requirement && item.aliases.length)
+  const nonObservableMustHaves = intake.mustHaves
+    .map(requirementLabel)
+    .filter(requirement => requirement && !requirementProofAliases(requirement).length)
+
   const checks = saveEligibleReviewSlateDiscoveries(discoveries).map(discovery => {
-    const observed = [
-      discovery.headline,
-      discovery.organization,
-      ...(discovery.sourceResult?.skills || []),
-      ...discovery.evidence.flatMap(item => [item.label, item.value]),
-    ].filter(Boolean).join(' ').toLowerCase()
-    const matchedSignals = roleSignals.filter(signal => observed.includes(signal)).slice(0, 6)
+    const observed = observedDiscoveryText(discovery)
+    const matchedTitleSignals = roleSignals.filter(signal => observed.includes(signal)).slice(0, 6)
+    const matchedMustHaves = gateableMustHaves
+      .filter(item => item.aliases.some(alias => observed.includes(alias)))
+      .map(item => item.requirement)
+    const missingMustHaves = gateableMustHaves
+      .filter(item => !matchedMustHaves.includes(item.requirement))
+      .map(item => item.requirement)
+    const matchedSignals = Array.from(new Set([...matchedMustHaves, ...matchedTitleSignals])).slice(0, 8)
     const geography = locationState(intake, discovery)
-    const admitted = matchedSignals.length > 0 && geography !== 'outside_search_area'
-    const explanation = !matchedSignals.length
-      ? 'Held outside the first batch: no observed role-relevant skill or work evidence.'
-      : geography === 'outside_search_area'
-        ? 'Held outside the first batch: the observed location is outside the requested search area.'
-        : geography === 'unknown'
-          ? `First-batch evidence: ${matchedSignals.join(', ')}. Location remains unknown and needs recruiter verification.`
-          : `First-batch evidence: ${matchedSignals.join(', ')}${geography === 'compatible' ? '; observed location is compatible.' : '.'}`
-    return { discovery, admitted, matchedSignals, locationState: geography, explanation }
+    const explicitMustHaveFloor = gateableMustHaves.length > 0
+      ? missingMustHaves.length === 0
+      : matchedTitleSignals.length > 0
+    const admitted = explicitMustHaveFloor && geography !== 'outside_search_area'
+    const unverifiedRequirements = [
+      ...nonObservableMustHaves,
+      ...(intake.clearance && intake.clearance !== 'Not specified' ? [`Clearance: ${intake.clearance}`] : []),
+    ]
+
+    const explanation = missingMustHaves.length
+      ? `Held outside the first batch: no observed role-relevant evidence yet for mandatory ${missingMustHaves.join(', ')}.`
+      : !matchedSignals.length
+        ? 'Held outside the first batch: no observed role-relevant skill or work evidence.'
+        : geography === 'outside_search_area'
+          ? 'Held outside the first batch: the observed location is outside the requested search area.'
+          : geography === 'unknown'
+            ? `First-batch evidence: ${matchedSignals.join(', ')}. Location remains unknown and needs recruiter verification.${unverifiedRequirements.length ? ` Still unverified: ${unverifiedRequirements.join(', ')}.` : ''}`
+            : `First-batch evidence: ${matchedSignals.join(', ')}${geography === 'compatible' ? '; observed location is compatible.' : '.'}${unverifiedRequirements.length ? ` Still unverified: ${unverifiedRequirements.join(', ')}.` : ''}`
+    return {
+      discovery,
+      admitted,
+      matchedSignals,
+      matchedMustHaves,
+      matchedTitleSignals,
+      unverifiedRequirements,
+      locationState: geography,
+      explanation,
+    }
   })
 
   const ordered = checks.filter(check => check.admitted).sort((left, right) => {
     const geography = Number(right.locationState === 'compatible') - Number(left.locationState === 'compatible')
     if (geography) return geography
+    const mustHaves = right.matchedMustHaves.length - left.matchedMustHaves.length
+    if (mustHaves) return mustHaves
     const signals = right.matchedSignals.length - left.matchedSignals.length
     if (signals) return signals
     return right.discovery.profileQuality - left.discovery.profileQuality
@@ -151,6 +219,16 @@ export function previewDeterministicIdentityReviews(discoveries: ReviewSlateDisc
   return previews
 }
 
+function displayNameForCandidate(discovery: ReviewSlateDiscovery): string {
+  const name = discovery.displayName.trim()
+  if (name && name.toLowerCase() !== discovery.sourceId.trim().toLowerCase()) return name
+  if (discovery.sourceKey === 'github') return `GitHub @${discovery.sourceId}`
+  if (discovery.sourceKey === 'stackoverflow') return `Stack Overflow user ${discovery.sourceId}`
+  if (discovery.sourceKey === 'devto') return `DEV @${discovery.sourceId}`
+  if (discovery.sourceKey === 'huggingface') return `Hugging Face @${discovery.sourceId}`
+  return name || `${discovery.sourceKey} ${discovery.sourceId}`
+}
+
 export function buildRoleReviewSlateCandidates(
   saved: SavedSlateDiscovery[],
   existingCandidateIds: Iterable<string>,
@@ -167,7 +245,7 @@ export function buildRoleReviewSlateCandidates(
     candidates.push({
       id: idFactory(),
       candidateId: item.candidateId,
-      name: result.displayName,
+      name: displayNameForCandidate(result),
       headline: result.headline || '',
       company: result.organization || '',
       location: result.location || '',
