@@ -152,7 +152,8 @@ begin
   -- additional profiles into the canonical person automatically.
   update public.source_profiles
      set status = 'confirmed',
-         candidate_id = v_review.candidate_id
+         candidate_id = v_review.candidate_id,
+         updated_at = now()
    where owner_id = p_owner_id
      and id = any(v_profile_ids);
   get diagnostics v_source_profiles_moved = row_count;
