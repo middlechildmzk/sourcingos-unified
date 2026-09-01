@@ -1,4 +1,5 @@
 import { parseJobDescription } from './jd-parser'
+import { mergeExplicitExperienceRequirements } from './explicit-role-requirements-v33-6'
 import type { RoleIntake } from './role-workspace'
 
 export type RoleBriefInterpretation = {
@@ -123,9 +124,12 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   // requested attributes. Treat them as proposed must-haves unless the recruiter
   // explicitly marks part of the sentence as preferred; the next UI step still
   // requires recruiter confirmation before the role is committed.
-  const mustHaves = natural && !explicitPreferenceLanguage
+  const parsedMustHaves = natural && !explicitPreferenceLanguage
     ? uniq([...parsed.mustHaveSkills, ...parsed.preferredSkills], 16)
     : uniq(parsed.mustHaveSkills, 16)
+  // Explicit quantified recruiter language such as "5+ years of Linux" must
+  // survive taxonomy/model misses. This is role-intake truth, not candidate truth.
+  const mustHaves = mergeExplicitExperienceRequirements(parsedMustHaves, rawText, 16)
   const niceToHaves = natural && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
 
   const intake: RoleIntake = {
