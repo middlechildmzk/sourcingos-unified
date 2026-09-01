@@ -33,7 +33,13 @@ function normalized(value: string): string {
 
 function stopCapability(value: string): boolean {
   const candidate = normalized(value)
-  return !candidate || /^(?:experience|work|professional|relevant|overall|industry|total)$/.test(candidate)
+  // "5+ years of experience using TypeScript" is a generic experience floor
+  // followed by context, not a claim of exactly five years of TypeScript. Let
+  // the generic Role Brief parser preserve the years threshold while the named
+  // technologies remain separate must-haves.
+  return !candidate
+    || /^(?:experience|work|professional|relevant|overall|industry|total)$/.test(candidate)
+    || /^experience\s+(?:using|with|in|on)\b/.test(candidate)
 }
 
 /** Extract only quantified experience explicitly stated by the recruiter. */
