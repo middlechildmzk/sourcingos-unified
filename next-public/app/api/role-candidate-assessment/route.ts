@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { getCandidateDb, type CandidateDbSnapshot } from '@/lib/candidate-db-v18'
 import { fuseCandidateIdentityV34 } from '@/lib/candidate-identity-fusion-v34'
+import { resolveCandidate360FieldsV35 } from '@/lib/candidate-field-resolution-v35'
 import { buildEvidenceLedger } from '@/lib/evidence-ledger'
 import { buildRequirementAssessments, requirementAssessmentTally } from '@/lib/requirement-assessment-v32'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
@@ -25,6 +26,10 @@ function compactText(value: unknown, max = 500): string {
 function textArray(value: unknown, max = 50): string[] {
   if (!Array.isArray(value)) return []
   return Array.from(new Set(value.map(item => compactText(item, 300)).filter(Boolean))).slice(0, max)
+}
+
+function sameText(a: unknown, b: unknown): boolean {
+  return compactText(a, 1000).toLowerCase() === compactText(b, 1000).toLowerCase()
 }
 
 function validIntake(value: unknown): RoleIntake | null {
@@ -247,6 +252,7 @@ export async function POST(req: NextRequest) {
       const mustHaves = requirements.filter(requirement => requirement.tier === 'must_have')
       const mustHaveTally = requirementAssessmentTally(mustHaves)
       const graphCandidate = graphCandidates.get(candidateId)
+      const resolvedProfile = resolveCandidate360FieldsV35(snapshot, ledger, candidateId)
       const state = mustHaveTally.contradicted > 0
         ? 'conflicting'
         : mustHaveTally.needsVerification > 0
@@ -266,6 +272,21 @@ export async function POST(req: NextRequest) {
         mustHaveTally,
         claimCount: claims.length,
         publicIdentity: fuseCandidateIdentityV34(snapshot, candidateId),
+        // V35 shadow projection. Existing scalar fields remain compatibility output;
+        // no Candidate Graph row or canonical scalar is mutated by this resolver.
+        resolvedProfile,
+        profileResolutionShadow: {
+          legacyVsResolved: {
+            nameChanged: Boolean(resolvedProfile.name.value && !sameText(graphCandidate?.canonicalName || candidate.name, resolvedProfile.name.value)),
+            headlineChanged: Boolean(resolvedProfile.headline.value && !sameText(graphCandidate?.headline || candidate.headline, resolvedProfile.headline.value)),
+            companyChanged: Boolean(resolvedProfile.currentCompany.value && !sameText(graphCandidate?.currentCompany || candidate.company, resolvedProfile.currentCompany.value)),
+            titleChanged: Boolean(resolvedProfile.currentTitle.value && !sameText(graphCandidate?.currentTitle || candidate.headline, resolvedProfile.currentTitle.value)),
+            locationChanged: Boolean(resolvedProfile.location.value && !sameText(graphCandidate?.location || candidate.location, resolvedProfile.location.value)),
+          },
+          conflictCount: resolvedProfile.conflictCount,
+          reviewCount: resolvedProfile.reviewCount,
+          shadowOnly: true,
+        },
         requirements: requirements.map(requirement => ({
           requirementId: requirement.requirementId,
           requirementText: requirement.requirementText,
@@ -297,6 +318,7 @@ export async function POST(req: NextRequest) {
         decision: 'This is an evidence review slate, not a fit score, ranking, rejection, or hiring recommendation.',
         unknown: 'Missing evidence remains unknown and never becomes a negative finding.',
         sensitive: 'Clearance, credentials, disqualifiers, and other sensitive requirements remain verification-gated.',
+        resolution: 'V35 resolved profile fields are a read-only shadow projection over attached observations. Conflicts remain visible and no scalar value is silently overwritten.',
       },
     })
   } catch (error) {
