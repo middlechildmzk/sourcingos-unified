@@ -410,7 +410,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
 
         <section className="role-workbench-section-v33-4">
           <div className="role-workbench-section-head-v33-4"><div><b>Search angles</b><span>Plan → search → assess → complete</span></div></div>
-          <div className="role-search-progress-v33-4">{laneProgress.map(lane => <div key={lane.id} className={`state-${lane.state}`}><i /><span><b>{lane.label}</b><small>{lane.state}{lane.attempts ? ` · ${lane.yield} source record${lane.yield === 1 ? '' : 's'}` : ''}</small></span></div>)}</div>
+          <div className="role-search-progress-v33-4">{laneProgress.map(lane => <div key={lane.id} className={`state-${lane.state}`}><i /><span><b>{lane.label}</b><small>{lane.state}{lane.attempts ? ` · ${lane.yield} retained${lane.discoveredBeforeCap ? ` from ${lane.discoveredBeforeCap} discoveries` : ''}` : ''}</small></span></div>)}</div>
           <details className="role-workbench-disclosure-v33-4"><summary>Why SourcingOS searched here</summary><div>{role.searchLanes.map(lane => <p key={lane.id}><b>{lane.label}</b><br /><span>{lane.purpose}</span></p>)}</div></details>
         </section>
 

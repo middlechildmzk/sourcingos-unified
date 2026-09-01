@@ -8,7 +8,6 @@ import {
   sourceTruthSummary,
   type AgenticConnectorKey,
   type AgenticLaneId,
-  type AgenticSearchSurface,
 } from '@/lib/agentic-search-v30'
 import { buildCanonicalAgenticSearchPlan, executableTaskDistinctness } from '@/lib/canonical-agentic-search-v30'
 import {
@@ -19,13 +18,13 @@ import {
   shouldExecuteSearch,
   type SearchAttempt,
 } from '@/lib/search-state-memory-v30'
+import {
+  connectorKeysForSurface,
+  telemetryForSurface,
+  type AgenticOrchestrationResponse,
+} from '@/lib/source-orchestration-v33-8'
 import type { SourceResult } from '@/lib/source-types'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
-
-const RESEARCH_CONNECTORS = new Set<AgenticConnectorKey>(['orcid', 'openalex', 'pubmed', 'crossref'])
-const GITHUB_CONNECTORS = new Set<AgenticConnectorKey>(['github'])
-const STACKOVERFLOW_CONNECTORS = new Set<AgenticConnectorKey>(['stackoverflow'])
-const NPI_CONNECTORS = new Set<AgenticConnectorKey>(['npi'])
 
 type AgenticResult = {
   sourceKey: AgenticConnectorKey
@@ -42,7 +41,7 @@ type AgenticResult = {
   sourceResult?: SourceResult
 }
 
-type RunResponse = {
+type RunResponse = AgenticOrchestrationResponse & {
   ok?: boolean
   error?: string
   sourceStatus?: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }>
@@ -73,14 +72,6 @@ function readAttempts(roleId: string): SearchAttempt[] {
   }
 }
 
-function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnectorKey> {
-  if (surface === 'github') return GITHUB_CONNECTORS
-  if (surface === 'stackoverflow') return STACKOVERFLOW_CONNECTORS
-  if (surface === 'healthcare_registry') return NPI_CONNECTORS
-  if (surface === 'research_publications') return RESEARCH_CONNECTORS
-  return new Set<AgenticConnectorKey>()
-}
-
 export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
   const { roles, mode, updateRole } = useRoleWorkspaces()
   const { onet, military, militaryApproved, militaryDataset } = useRoleIntelligenceV33()
@@ -90,6 +81,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
   const [attempts, setAttempts] = useState<SearchAttempt[]>([])
   const [results, setResults] = useState<AgenticResult[]>([])
   const [sourceStatus, setSourceStatus] = useState<RunResponse['sourceStatus']>({})
+  const [runTelemetry, setRunTelemetry] = useState<Pick<AgenticOrchestrationResponse, 'discoveredBeforeCap' | 'resultCount' | 'sourceDistribution' | 'orchestration'>>({})
   const [status, setStatus] = useState('')
   const [working, setWorking] = useState(false)
   const [novelty, setNovelty] = useState<number | null>(null)
@@ -220,6 +212,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
     setWorking(true)
     setResults([])
     setSourceStatus({})
+    setRunTelemetry({})
     setNovelty(null)
     setStatus(`Researching ${lane.label} across ${connectors.length} executable connector${connectors.length === 1 ? '' : 's'}…`)
 
@@ -246,15 +239,29 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
       setNovelty(resultNoveltyRate(accumulatedResultKeys(attempts), currentKeys))
       setResults(found)
       setSourceStatus(json.sourceStatus || {})
+      setRunTelemetry({
+        discoveredBeforeCap: json.discoveredBeforeCap,
+        resultCount: json.resultCount,
+        sourceDistribution: json.sourceDistribution,
+        orchestration: json.orchestration,
+      })
 
       const completedAt = new Date().toISOString()
       const completed = running.map(attempt => {
-        const connectorSet = connectorsForSurface(attempt.surface)
+        const connectorSet = connectorKeysForSurface(attempt.surface)
         const keys = found.filter(item => connectorSet.has(item.sourceKey)).map(item => `${item.sourceKey}:${item.sourceId}`)
         const statuses = Array.from(connectorSet).map(key => json.sourceStatus?.[key]?.status).filter(Boolean)
         const failed = statuses.length > 0 && statuses.every(value => value === 'failed' || value === 'unavailable')
         const partial = statuses.some(value => value === 'failed' || value === 'unavailable') && !failed
-        return { ...attempt, status: failed ? 'failed' as const : partial ? 'partial' as const : 'completed' as const, resultKeys: keys, completedAt, message: `${keys.length} source identities returned.` }
+        const telemetry = telemetryForSurface(attempt.surface, json)
+        return {
+          ...attempt,
+          status: failed ? 'failed' as const : partial ? 'partial' as const : 'completed' as const,
+          resultKeys: keys,
+          completedAt,
+          telemetry,
+          message: `${telemetry.returnedAfterCap} of ${telemetry.discoveredBeforeCap} source discoveries returned after source-diverse capping.`,
+        }
       })
       saveAttempts([...attempts, ...completed])
       setStatus(json.trust?.message || `Found ${found.length} public-source discoveries for recruiter review.`)
@@ -290,7 +297,7 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
     {!!plan.integrityWarnings.length && <div className="agentic-warning-list">{plan.integrityWarnings.map(warning => <span key={warning}>⚠ {warning}</span>)}</div>}
 
     <div className="agentic-lane-tabs" role="tablist" aria-label="Research hypotheses">
-      {plan.lanes.map(item => <button key={item.id} role="tab" aria-selected={item.id === lane.id} className={item.id === lane.id ? 'active' : ''} onClick={() => { setLaneId(item.id); setResults([]); setSourceStatus({}); setStatus(''); setNovelty(null) }}><b>{item.priority}</b><span>{item.label}</span></button>)}
+      {plan.lanes.map(item => <button key={item.id} role="tab" aria-selected={item.id === lane.id} className={item.id === lane.id ? 'active' : ''} onClick={() => { setLaneId(item.id); setResults([]); setSourceStatus({}); setRunTelemetry({}); setStatus(''); setNovelty(null) }}><b>{item.priority}</b><span>{item.label}</span></button>)}
     </div>
 
     <div className="agentic-plan-grid">
@@ -313,9 +320,14 @@ export function RoleAgenticSearchPanel({ roleId }: { roleId: string }) {
 
     {status && <div className="cta agentic-run-status" role="status">{status}</div>}
     {!!Object.keys(sourceStatus || {}).length && <div className="agentic-source-status-row">{Object.entries(sourceStatus || {}).map(([key, value]) => <span key={key} className={`status-pill ${value.status === 'completed' ? 'success' : value.status === 'failed' ? 'warning' : ''}`}>{key}: {value.status} · {value.discovered}</span>)}</div>}
+    {!!runTelemetry.discoveredBeforeCap && <div className="agentic-results-note">
+      <b>{runTelemetry.resultCount || results.length} retained from {runTelemetry.discoveredBeforeCap} public-source discoveries.</b>{' '}
+      Every requested source ran before the {runTelemetry.orchestration?.globalLimit || 30}-record cap. Source mix:{' '}
+      {Object.entries(runTelemetry.sourceDistribution || {}).map(([source, count]) => `${source} ${count}`).join(' · ') || 'no source contributed a retained record'}.
+    </div>}
 
     {!!results.length && <div className="agentic-results">
-      <div className="agentic-results-head"><div><span className="kicker">Public-source discoveries</span><h3>{results.length} records to inspect</h3></div>{novelty !== null && <span className="status-pill active">{novelty}% novel vs role search memory</span>}</div>
+      <div className="agentic-results-head"><div><span className="kicker">Public-source discoveries</span><h3>{results.length} records to inspect{runTelemetry.discoveredBeforeCap ? ` from ${runTelemetry.discoveredBeforeCap} discoveries` : ''}</h3></div>{novelty !== null && <span className="status-pill active">{novelty}% novel vs role search memory</span>}</div>
       <div className="agentic-result-grid">{results.slice(0, 18).map(result => {
         const key = `${result.sourceKey}:${result.sourceId}`
         const saved = savedCandidates[key]
