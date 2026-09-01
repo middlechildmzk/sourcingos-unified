@@ -124,14 +124,14 @@ function titleKey(value: string): string {
 }
 
 function locationKey(value: string): string {
-  const normalized = basicKey(value)
+  const cityLike = value.split(',')[0] || value
+  return basicKey(cityLike)
     .replace(/^greater\s+/, '')
     .replace(/\bmetropolitan area\b/g, '')
     .replace(/\bmetro area\b/g, '')
     .replace(/\bmetro\b/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-  return normalized.split(',')[0]?.trim() || normalized
 }
 
 function normalizerFor(field: CandidateFieldV35): (value: string) => string {
