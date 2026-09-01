@@ -35,6 +35,53 @@ function compactSummary(intake: RoleIntake): string {
   return parts.join(' · ')
 }
 
+/**
+ * Short recruiter commands are closer to a search contract than a prose JD.
+ * The deterministic parser is intentionally conservative and literal, so every
+ * retrieval-affecting field remains authoritative. The model may ask a useful
+ * clarification, but it must never replace RHEL with TypeScript, Secret with
+ * TS/SCI, Annapolis Junction with no location, or add unrelated adjacent roles.
+ */
+export function shortRecruiterBriefV33_11(rawText: string): boolean {
+  const lines = rawText.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  const compact = rawText.replace(/\s+/g, ' ').trim()
+  return lines.length <= 3 && compact.length > 0 && compact.length <= 800
+}
+
+export function mergeAiRoleBriefV33_11(
+  rawText: string,
+  model: Record<string, unknown>,
+): RoleIntake {
+  const fallback = interpretRoleBrief(rawText).intake
+  const shortBrief = shortRecruiterBriefV33_11(rawText)
+  const modelMustHaves = strings(model.mustHaves, fallback.mustHaves, 16)
+
+  if (shortBrief) return {
+    ...fallback,
+    mustHaves: [...fallback.mustHaves],
+    niceToHaves: [...fallback.niceToHaves],
+    disqualifiers: [...fallback.disqualifiers],
+    targetCompanies: [...fallback.targetCompanies],
+    adjacentBackgrounds: [...fallback.adjacentBackgrounds],
+    rawDescription: rawText,
+  }
+
+  return {
+    title: clean(model.title, fallback.title, 100) || fallback.title,
+    location: clean(model.location, fallback.location, 120) || 'Not specified',
+    workMode: workMode(model.workMode, fallback.workMode),
+    compensation: clean(model.compensation, fallback.compensation, 120) || 'Not specified',
+    clearance: clean(model.clearance, fallback.clearance, 100) || 'Not specified',
+    mustHaves: mergeExplicitExperienceRequirements(modelMustHaves, rawText, 16),
+    niceToHaves: strings(model.niceToHaves, fallback.niceToHaves, 16),
+    disqualifiers: strings(model.disqualifiers, fallback.disqualifiers, 12),
+    targetCompanies: strings(model.targetCompanies, fallback.targetCompanies, 12),
+    adjacentBackgrounds: strings(model.adjacentBackgrounds, fallback.adjacentBackgrounds, 16),
+    hiringManagerNotes: clean(model.hiringManagerNotes, '', 600),
+    rawDescription: rawText,
+  }
+}
+
 export async function parseRoleBriefWithAiV33_4(rawText: string): Promise<ParsedRoleBriefV33_4> {
   const fallback = interpretRoleBrief(rawText)
   const prompt = `You are the intake parser for an evidence-first talent sourcing product. Convert the recruiter's request into a compact structured Role Brief.
@@ -51,11 +98,12 @@ Rules:
 - adjacentBackgrounds may include close title synonyms, but must stay in the same job family. Never expand a technical administrator into education, school, office, or business administration titles.
 - Ask a follow-up question ONLY when an ambiguity would materially change who gets searched. Missing optional information is not a blocker.
 - Maximum 2 follow-up questions.
+- IMPORTANT: the deterministic baseline below contains literal recruiter-stated constraints. Never replace an explicit baseline capability, location, work mode, quantified experience requirement, clearance, or retrieval expansion with a different value. For short recruiter commands the application will use the deterministic Role Brief as the search contract even if your JSON differs. Your output may conservatively enrich long-form JDs, but explicit recruiter text wins.
 
 Recruiter request:
 ${JSON.stringify(rawText)}
 
-Deterministic parser baseline (use as a safety reference, not as authoritative truth):
+Deterministic parser baseline (explicit recruiter-stated values are authoritative):
 ${JSON.stringify(fallback.intake)}
 
 Return exactly this shape:
@@ -85,21 +133,7 @@ Return exactly this shape:
   }
 
   const data = result.data
-  const modelMustHaves = strings(data.mustHaves, fallback.intake.mustHaves, 16)
-  const intake: RoleIntake = {
-    title: clean(data.title, fallback.intake.title, 100) || fallback.intake.title,
-    location: clean(data.location, fallback.intake.location, 120) || 'Not specified',
-    workMode: workMode(data.workMode, fallback.intake.workMode),
-    compensation: clean(data.compensation, fallback.intake.compensation, 120) || 'Not specified',
-    clearance: clean(data.clearance, fallback.intake.clearance, 100) || 'Not specified',
-    mustHaves: mergeExplicitExperienceRequirements(modelMustHaves, rawText, 16),
-    niceToHaves: strings(data.niceToHaves, fallback.intake.niceToHaves, 16),
-    disqualifiers: strings(data.disqualifiers, fallback.intake.disqualifiers, 12),
-    targetCompanies: strings(data.targetCompanies, fallback.intake.targetCompanies, 12),
-    adjacentBackgrounds: strings(data.adjacentBackgrounds, fallback.intake.adjacentBackgrounds, 16),
-    hiringManagerNotes: clean(data.hiringManagerNotes, '', 600),
-    rawDescription: rawText,
-  }
+  const intake = mergeAiRoleBriefV33_11(rawText, data)
 
   const questions = strings(data.questions, [], 2).filter(question => question.endsWith('?'))
   if ((!intake.title || intake.title === 'Untitled role') && !questions.some(question => /title|role/i.test(question))) questions.unshift('What is the primary role title you want me to anchor the search around?')

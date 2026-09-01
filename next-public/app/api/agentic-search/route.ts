@@ -12,6 +12,10 @@ import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
 import { searchStackOverflowTalent } from '@/lib/stackoverflow-talent-source-v33-2'
 import { discoverDevToTalent } from '@/lib/connectors/devto-v33-6'
 import { discoverHuggingFacePeople } from '@/lib/connectors/huggingface-person-v33-7'
+import {
+  discoverInfrastructureStackExchangeTalentV33_11,
+  isInfrastructureStackExchangeQueryV33_11,
+} from '@/lib/connectors/stackexchange-infra-v33-11'
 import { sourceDiverseResults, sourceDistribution } from '@/lib/source-orchestration-v33-8'
 import {
   preferTechnicalV2,
@@ -197,36 +201,58 @@ export async function POST(req: NextRequest) {
           message: activation.message,
         }
       } else if (connector === 'stackoverflow') {
-        const activation = await preferTechnicalV2({
-          source: 'stackoverflow',
-          runV2: () => runStackOverflowV2({
+        const infrastructure = isInfrastructureStackExchangeQueryV33_11(connectorQuery, body.skills)
+        if (infrastructure) {
+          const response = await discoverInfrastructureStackExchangeTalentV33_11({
             query: connectorQuery,
             skills: body.skills,
-            location: body.locations[0],
-            limit: Math.min(body.limit, 20),
-          }),
-          runFallback: async () => {
-            const response = await searchStackOverflowTalent({
+            limit: Math.min(body.limit, 16),
+          })
+          const classified = classifyRealSourceResults(response.results)
+            .filter(result => result.entityKind === 'person')
+          discoveries = classified.map(discoveryFromSourceResult)
+          sourceStatus.stackoverflow = {
+            status: 'completed',
+            discovered: 0,
+            engine: 'native',
+            degraded: Boolean(response.warnings.length),
+            message: [
+              'Infrastructure role routed through the official Stack Exchange API to Server Fault and Unix & Linux instead of ordinary Stack Overflow.',
+              response.warnings.slice(0, 2).join(' '),
+            ].filter(Boolean).join(' ').slice(0, 240),
+          }
+        } else {
+          const activation = await preferTechnicalV2({
+            source: 'stackoverflow',
+            runV2: () => runStackOverflowV2({
               query: connectorQuery,
+              skills: body.skills,
+              location: body.locations[0],
               limit: Math.min(body.limit, 20),
-            })
-            const classified = classifyRealSourceResults(response.results)
-              .filter(result => result.entityKind === 'person')
-            return {
-              results: classified,
-              message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
-            }
-          },
-        })
-        const classified = classifyRealSourceResults(activation.results)
-          .filter(result => result.entityKind === 'person')
-        discoveries = classified.map(discoveryFromSourceResult)
-        sourceStatus.stackoverflow = {
-          status: 'completed',
-          discovered: 0,
-          engine: activation.mode,
-          degraded: activation.degraded,
-          message: activation.message,
+            }),
+            runFallback: async () => {
+              const response = await searchStackOverflowTalent({
+                query: connectorQuery,
+                limit: Math.min(body.limit, 20),
+              })
+              const classified = classifyRealSourceResults(response.results)
+                .filter(result => result.entityKind === 'person')
+              return {
+                results: classified,
+                message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+              }
+            },
+          })
+          const classified = classifyRealSourceResults(activation.results)
+            .filter(result => result.entityKind === 'person')
+          discoveries = classified.map(discoveryFromSourceResult)
+          sourceStatus.stackoverflow = {
+            status: 'completed',
+            discovered: 0,
+            engine: activation.mode,
+            degraded: activation.degraded,
+            message: activation.message,
+          }
         }
       } else if (connector === 'devto') {
         const classified = classifyRealSourceResults(await discoverDevToTalent({
