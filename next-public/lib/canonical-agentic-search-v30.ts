@@ -9,6 +9,7 @@ import {
 } from './agentic-search-v30'
 import { buildDomainPackProfile, type DomainPackMatch } from './domain-packs-v31'
 import { retrievalCapabilityTerms } from './explicit-role-requirements-v33-6'
+import { buildJobFamilyRoutingV34, type JobFamilyRoutingV34 } from './job-family-router-v34'
 import { militaryLaneDrafts, type MilitarySourcingHypothesis } from './military-talent-intelligence-v33'
 import { militaryTalentGate } from './military-role-gating-v33'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from './onet-role-intelligence'
@@ -28,6 +29,7 @@ export type CanonicalRoleIntelligenceContext = {
 
 export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
   domainPacks: DomainPackMatch[]
+  jobFamilyRouting: JobFamilyRoutingV34
   roleIntelligence: {
     onetConfigured: boolean
     onetOccupation?: { code: string; title: string }
@@ -143,11 +145,11 @@ function fingerprint(query: string): string {
 
 /**
  * The canonical planner is the one recruiter-facing search plan. Domain packs
- * filter executable public surfaces, O*NET can enrich adjacent-title language,
- * and verified military crosswalks may add one recruiter-approved guided lane.
- * Neither intelligence source can rewrite must-haves or satisfy candidate-level
- * requirements. Quantified role requirements remain intact for assessment while
- * the retrieval copy uses the underlying capability terms.
+ * provide broad domain intelligence while V34 job-family routing chooses which
+ * public evidence communities actually execute for a specialized role. O*NET
+ * can enrich adjacent-title language, and verified military crosswalks may add
+ * one recruiter-approved guided lane. None of these layers may rewrite role
+ * truth or satisfy candidate-level requirements.
  */
 export function buildCanonicalAgenticSearchPlan(
   intake: RoleIntake,
@@ -157,13 +159,28 @@ export function buildCanonicalAgenticSearchPlan(
   const enrichedIntake = enrichRoleIntakeWithOnet(intake, context.onet)
   const searchIntake = retrievalIntake(enrichedIntake)
   const domainProfile = buildDomainPackProfile(enrichedIntake)
+  const jobFamilyRouting = buildJobFamilyRoutingV34(enrichedIntake)
+  const familyPreferred = new Set(jobFamilyRouting.preferredPublicSurfaces)
+  const specializedFamily = jobFamilyRouting.primaryFamily !== 'general'
   const base = buildAgenticSearchPlan(searchIntake, state)
-  const providerQuery = domainProfile.activeIds.has('healthcare') ? providerRegistryQuery(enrichedIntake) : ''
+  const providerQuery = jobFamilyRouting.primaryFamily === 'healthcare_clinical'
+    ? providerRegistryQuery(enrichedIntake)
+    : domainProfile.activeIds.has('healthcare')
+      ? providerRegistryQuery(enrichedIntake)
+      : ''
+
   const lanes = base.lanes.map(lane => {
     const publicQuery = publicQueryForAgenticLane(searchIntake, lane.id)
     const tasks = lane.tasks
       .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
-      .filter(task => !DOMAIN_EXECUTABLE_SURFACES.has(task.surface) || domainProfile.executablePublicSurfaces.has(task.surface))
+      .filter(task => {
+        if (!DOMAIN_EXECUTABLE_SURFACES.has(task.surface)) return true
+        // Specialized job-family routing is the execution authority. Broad
+        // domain packs remain explanatory context but cannot re-enable a noisy
+        // source (for example DEV for an RHEL administrator).
+        if (specializedFamily) return familyPreferred.has(task.surface)
+        return domainProfile.executablePublicSurfaces.has(task.surface)
+      })
 
     if (lane.id === 'exact_title' && providerQuery) {
       const npiTask: AgenticSourceTask = {
@@ -208,6 +225,7 @@ export function buildCanonicalAgenticSearchPlan(
     distinctQueryCount,
     integrityWarnings,
     domainPacks: domainProfile.matches,
+    jobFamilyRouting,
     roleIntelligence: {
       onetConfigured: Boolean(context.onet?.configured && (!context.onet?.matchedOccupation || onetCompatible)),
       ...(context.onet?.matchedOccupation && onetCompatible ? { onetOccupation: context.onet.matchedOccupation } : {}),
