@@ -47,14 +47,16 @@ describe('V34 Golden Role cross-domain recruiter truth suite', () => {
 
   it('keeps the permanent suite meaningfully cross-domain rather than collapsing back to technical-only tests', () => {
     const families = new Set(GOLDEN_ROLE_CASES_V34.map(golden => golden.expectedFamily))
+    const familyList = Array.from(families)
     expect(GOLDEN_ROLE_CASES_V34.length).toBeGreaterThanOrEqual(16)
     expect(families.size).toBeGreaterThanOrEqual(9)
-    expect(families).toEqual(expect.arrayContaining([
+    expect(familyList).toEqual(expect.arrayContaining([
       'infrastructure',
       'software',
       'cloud_devops',
       'cybersecurity',
       'ai_ml',
+      'data',
       'healthcare_clinical',
       'research_science',
       'federal_govcon',
