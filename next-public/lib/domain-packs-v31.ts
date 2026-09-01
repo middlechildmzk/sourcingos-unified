@@ -1,7 +1,7 @@
 import type { AgenticSearchSurface } from './agentic-search-v30'
 import type { RoleIntake } from './role-workspace'
 
-export type DomainPackId = 'general' | 'technical' | 'healthcare' | 'research' | 'federal' | 'finance' | 'aviation'
+export type DomainPackId = 'general' | 'technical' | 'ai' | 'healthcare' | 'research' | 'federal' | 'finance' | 'aviation'
 
 export type DomainPack = {
   id: DomainPackId
@@ -78,6 +78,18 @@ const PACKS: DomainPack[] = [
       /\bsoftware\b/, /\bcloud\b/, /\bplatform\b/, /\bdevops\b/, /\bsre\b/, /\bdata engineer/, /\bsecurity\b/, /\bcyber/, /\bkubernetes\b/, /\bterraform\b/, /\bpython\b/, /\bjava\b/, /\btypescript\b/, /\bmachine learning\b/, /\bartificial intelligence\b/,
       /\blinux\b/, /\brhel\b/, /\bred hat\b/, /\bunix\b/, /\bsysadmin\b/, /\bsystem administration\b/, /\bsystems administration\b/, /\badmin(?:istrator)?\b/
     ], [/\b(engineer|developer|architect|system administrator|systems administrator|linux administrator|rhel administrator|red hat administrator|sysadmin)\b/]),
+  },
+  {
+    id: 'ai',
+    label: 'AI / ML',
+    description: 'Machine-learning, LLM, NLP, computer-vision, generative-AI, and model-building roles.',
+    executablePublicSurfaces: ['huggingface'],
+    evidenceHints: ['public Hugging Face models', 'public datasets', 'public Spaces', 'artifact tags and tasks', 'public AI/ML project ownership'],
+    heuristics: ['Search public AI artifacts by capability, then resolve artifact owners to public user profiles.', 'Treat models, datasets, and Spaces as observed project evidence rather than proof of employment or seniority.'],
+    guardrails: ['Only a resolved public Hugging Face user may become a candidate; organization owners remain non-person records.', 'Search terms never become candidate skills; only tags observed on the resolved user’s public artifacts may do so.'],
+    detect: intake => confidenceFromSignals(roleText(intake), [
+      /\bmachine learning\b/, /\bartificial intelligence\b/, /\bgenerative ai\b/, /\bgenai\b/, /\bllm\b/, /\blarge language model/, /\bnlp\b/, /\bnatural language processing\b/, /\bcomputer vision\b/, /\bpytorch\b/, /\btensorflow\b/, /\bjax\b/, /\btransformers?\b/, /\bdiffusion\b/, /\brag\b/, /\bembeddings?\b/, /\bfine[- ]?tun/
+    ], [/\b(machine learning engineer|ml engineer|ai engineer|research scientist|applied scientist|llm engineer|nlp engineer|computer vision engineer)\b/]),
   },
   {
     id: 'healthcare',

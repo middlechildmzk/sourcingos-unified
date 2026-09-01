@@ -21,7 +21,6 @@ const PUBLICATION_SOURCES = new Set<SourceName>([
 const ARTIFACT_SOURCES = new Set<SourceName>([
   'npm',
   'pypi',
-  'huggingface',
   'dockerhub',
   'crates',
   'rubygems',
@@ -149,6 +148,12 @@ function observedSkills(result: SourceResult): string[] {
   }
 
   if (result.source === 'huggingface') {
+    // V33.7 person records persist only tags observed on the resolved user's
+    // public models, datasets, or Spaces. Legacy artifact records continue to
+    // use their own artifact tags and remain classified as artifacts.
+    if (root.resolver === 'huggingface_public_user_overview_v33_7') {
+      return unique(stringList(root.observedTags))
+    }
     return unique(stringList(root.tags))
   }
 
@@ -267,6 +272,18 @@ export function resolveStoredEntityKind(input: {
     // DEV can represent users and organizations. Only a resolved public user
     // payload from the V33.6 connector is candidate-eligible.
     return profileType === 'user' && Boolean(username) ? 'person' : 'unknown'
+  }
+
+  if (source === 'huggingface') {
+    const root = record(input.raw)
+    const profile = record(root.profile)
+    const resolver = text(root.resolver)
+    const profileType = text(profile.type).toLowerCase()
+    const username = text(profile.user)
+    // Legacy Hugging Face search rows represented models/artifacts. Only the
+    // V33.7 owner->public-user resolver can turn this source into a person.
+    if (resolver === 'huggingface_public_user_overview_v33_7' && profileType === 'user' && username) return 'person'
+    return 'artifact'
   }
 
   return 'unknown'

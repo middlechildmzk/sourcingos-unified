@@ -2,7 +2,7 @@ import type { CalibrationState } from './calibration-intelligence'
 import { activeInsights } from './calibration-intelligence'
 import type { RoleIntake } from './role-workspace'
 
-export type AgenticConnectorKey = 'github' | 'stackoverflow' | 'devto' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
+export type AgenticConnectorKey = 'github' | 'stackoverflow' | 'devto' | 'huggingface' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
 
 export type AgenticLaneId =
   | 'exact_title'
@@ -19,6 +19,7 @@ export type AgenticSearchSurface =
   | 'github'
   | 'stackoverflow'
   | 'devto'
+  | 'huggingface'
   | 'research_publications'
   | 'healthcare_registry'
   | 'linkedin_recruiter'
@@ -56,6 +57,7 @@ export type AgenticSearchPlan = {
 }
 
 const TECHNICAL = /engineer|developer|architect|devops|devsecops|cloud|security|cyber|data|software|platform|infrastructure|sre|machine learning|\bai\b|\blinux\b|\brhel\b|red\s+hat|\bunix\b|\bsysadmin\b|systems?\s+administrator|systems?\s+admin|network\s+administrator|database\s+administrator/i
+const AI_TECHNICAL = /machine learning|artificial intelligence|generative ai|\bgenai\b|\bllm\b|large language model|\bnlp\b|natural language processing|computer vision|pytorch|tensorflow|\bjax\b|transformers?|diffusion|\brag\b|embeddings?|fine[- ]?tun/i
 const RESEARCH = /research|scientist|clinical|medical|health|physician|nurse|biotech|pharma|publication|academic/i
 const PUBLIC_SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 
@@ -126,8 +128,10 @@ function publicSafeQuery(intake: RoleIntake): string {
 }
 
 function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): AgenticSourceTask[] {
-  const technical = TECHNICAL.test(`${intake.title} ${intake.mustHaves.join(' ')} ${intake.niceToHaves.join(' ')}`)
-  const research = RESEARCH.test(`${intake.title} ${intake.mustHaves.join(' ')} ${intake.niceToHaves.join(' ')}`)
+  const roleText = `${intake.title} ${intake.mustHaves.join(' ')} ${intake.niceToHaves.join(' ')}`
+  const technical = TECHNICAL.test(roleText)
+  const aiTechnical = AI_TECHNICAL.test(roleText)
+  const research = RESEARCH.test(roleText)
   const publicQuery = publicSafeQuery(intake)
   const tasks: AgenticSourceTask[] = [
     {
@@ -211,8 +215,19 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
       truth: 'Runs the public Forem/DEV API. Search terms select articles, but candidate skills come only from tags observed on articles the person actually authored; public profile identity anchors remain reviewable evidence.',
     })
   }
+  if (aiTechnical) {
+    const insertionIndex = technical ? 4 : 1
+    tasks.splice(insertionIndex, 0, {
+      surface: 'huggingface',
+      label: 'Hugging Face public builders',
+      mode: 'executable',
+      query: publicQuery,
+      connectorKeys: ['huggingface'],
+      truth: 'Searches public Hugging Face models, datasets, and Spaces, then resolves artifact owners through the public user overview endpoint. Only resolved users become candidate records; organization owners are excluded and only observed artifact tags become skills.',
+    })
+  }
   if (research || lane === 'evidence_first') {
-    const insertionIndex = technical ? 4 : lane === 'evidence_first' ? 3 : 1
+    const insertionIndex = technical ? (aiTechnical ? 5 : 4) : aiTechnical ? 2 : lane === 'evidence_first' ? 3 : 1
     tasks.splice(insertionIndex, 0, {
       surface: 'research_publications',
       label: 'Public research graph',
