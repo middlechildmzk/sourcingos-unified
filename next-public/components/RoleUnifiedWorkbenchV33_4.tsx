@@ -34,6 +34,10 @@ type Requirement = {
   contradictions: Array<{ id: string; source: string; detail: string; sourceUrl?: string }>
   recruiterContext: string[]
 }
+type PublicIdentity = {
+  profiles: Array<{ source: string; sourceProfileId: string; displayName: string; profileUrl?: string; headline?: string }>
+  contacts: Array<{ type: string; value: string; source: string; verified: boolean; permissionStatus: string }>
+}
 type CandidateAssessment = {
   candidateId: string
   canonicalName: string
@@ -42,6 +46,7 @@ type CandidateAssessment = {
   tally: { supported: number; contradicted: number; needsVerification: number; unknown: number; total: number }
   mustHaveTally: { supported: number; contradicted: number; needsVerification: number; unknown: number; total: number }
   claimCount: number
+  publicIdentity?: PublicIdentity
   requirements: Requirement[]
 }
 type AssessmentResponse = {
@@ -124,6 +129,27 @@ function safeSearchAttempts(roleId: string): SearchAttempt[] {
 function candidateInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
   return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2) || '—').toUpperCase()
+}
+
+function sourceLabel(source: string): string {
+  const normalized = source.toLowerCase()
+  if (normalized === 'github') return 'GitHub'
+  if (normalized === 'stackoverflow') return 'Stack Overflow'
+  if (normalized === 'devto') return 'DEV'
+  if (normalized === 'huggingface') return 'Hugging Face'
+  if (normalized === 'linkedin') return 'LinkedIn'
+  return source.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function publicContactHref(type: string, value: string): string | undefined {
+  if (type === 'public_email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? `mailto:${value}` : undefined
+  if (type !== 'website' && type !== 'profile_url') return undefined
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function eventTargetIsEditable(target: EventTarget | null): boolean {
@@ -372,6 +398,10 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   const selectedActivity = selectedCandidate ? role.activity.filter(item => item.message.toLowerCase().includes(selectedCandidate.name.toLowerCase())).slice(0, 8) : []
   const approvedAngles = role.searchLanes.filter(lane => lane.status === 'approved').length
   const briefIsDraft = brief.status === 'draft'
+  const selectedSupportedMustHaves = selectedAssessment?.requirements.filter(requirement => requirement.tier === 'must_have' && requirement.state === 'supported') || []
+  const selectedVerificationNeeds = selectedAssessment?.requirements.filter(requirement => requirement.state === 'unknown' || requirement.state === 'needs_verification') || []
+  const selectedPublicProfiles = selectedAssessment?.publicIdentity?.profiles || []
+  const selectedPublicContacts = selectedAssessment?.publicIdentity?.contacts || []
 
   return <section className="role-workbench-v33-4" aria-label="Unified Role Workbench">
     <link rel="stylesheet" href="/role-review-speed-v33-4.css" />
@@ -404,6 +434,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
         <section className="role-workbench-section-v33-4">
           <div className="role-workbench-section-head-v33-4"><div><b>Role Brief v{brief.version}</b><span>{brief.status === 'draft' ? 'Draft does not affect the active search.' : 'Recruiter approved'}</span></div><div className="role-workbench-inline-actions-v33-4"><button onClick={startBriefEdit}>Edit</button>{briefIsDraft && <button className="primary" onClick={approveBrief}>Approve</button>}</div></div>
           <div className="role-brief-chip-group-v33-4"><small>Must have</small><div>{brief.intake.mustHaves.map(item => <span key={item}>{item}</span>)}</div></div>
+          <div className="role-brief-chip-group-v33-4"><small>Search constraints</small><div>{brief.intake.location !== 'Not specified' && <span>Location: {brief.intake.location}</span>}{brief.intake.workMode !== 'unknown' && <span>Work mode: {brief.intake.workMode}</span>}{brief.intake.clearance !== 'Not specified' && <span>Clearance: {brief.intake.clearance}</span>}</div>{brief.intake.clearance !== 'Not specified' && <p>Clearance is a verification-gated role constraint. Public technical sources receive capability-only queries; authorized recruiter surfaces can use the clearance search context.</p>}</div>
           {!!brief.intake.niceToHaves.length && <div className="role-brief-chip-group-v33-4 preferred"><small>Preferred</small><div>{brief.intake.niceToHaves.map(item => <span key={item}>{item}</span>)}</div></div>}
           {!!brief.intake.disqualifiers.length && <div className="role-brief-chip-group-v33-4 disqualifier"><small>Recruiter-defined conflicts</small><div>{brief.intake.disqualifiers.map(item => <span key={item}>{item}</span>)}</div><p>Surfaced for review; never used for silent rejection.</p></div>}
         </section>
@@ -492,7 +523,16 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
           {rejectionCandidateId === selectedCandidate.id && <div className="role-rejection-reason-v33-4"><b>Why No?</b><p>Choose the recruiting reason first. Unknown or unverifiable evidence is not automatically a rejection reason.</p><div className="role-rejection-chips-v33-4" role="group" aria-label="Recruiter rejection reason">{NEGATIVE_REVIEW_REASONS.map(reason => <button type="button" key={reason.id} className={rejectionReasonCode === reason.id ? 'selected' : ''} aria-pressed={rejectionReasonCode === reason.id} onClick={() => setRejectionReasonCode(reason.id)}>{reason.label}</button>)}</div><label className="role-rejection-detail-label-v33-4">Optional detail{rejectionReasonCode === 'other' ? ' (required for Other)' : ''}<textarea className="textarea" value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} placeholder="Add context that would help future calibration…" /></label><div><button onClick={() => { setRejectionCandidateId(''); setRejectionReasonCode(''); setRejectionReason('') }}>Cancel</button><button className="primary" onClick={confirmNo}>Record No</button></div></div>}
 
           <section className="role-candidate-summary-v33-4">
-            <div><span>Decision</span><b>{decisionLabel(selectedCandidate)}</b></div><div><span>Evidence</span><b>{selectedAssessment?.claimCount ?? 0} claims</b></div><div><span>Contact</span><b>{selectedCandidate.contactStatus.replace('_', ' ')}</b></div>
+            <div><span>Decision</span><b>{decisionLabel(selectedCandidate)}</b></div><div><span>Evidence</span><b>{selectedAssessment?.claimCount ?? 0} claims</b></div><div><span>Contact</span><b>{selectedPublicContacts.length ? `${selectedPublicContacts.length} public signal${selectedPublicContacts.length === 1 ? '' : 's'}` : selectedCandidate.contactStatus.replace('_', ' ')}</b></div>
+          </section>
+
+          <section className="role-candidate-requirements-v33-4">
+            <div className="role-workbench-section-head-v33-4"><div><b>Why this person is here</b><span>Observed admission evidence, not search-term inference</span></div></div>
+            {selectedAssessment ? <>
+              {selectedSupportedMustHaves.length ? <div className="role-inline-citations-v33-4">{selectedSupportedMustHaves.map((requirement, index) => <div key={requirement.requirementId}><span className="role-citation-marker-v33-4">✓</span><span><b>{requirement.requirementText}</b><small>{requirement.evidence[0]?.spanText || requirement.evidence[0]?.detail || requirement.rationale}</small><em>{requirement.evidence[0]?.source || 'Candidate Graph evidence'}</em></span>{requirement.evidence[0]?.sourceUrl && <a href={requirement.evidence[0].sourceUrl} target="_blank" rel="noreferrer noopener" aria-label={`Open admission evidence ${index + 1}`}>↗</a>}</div>)}</div> : <div className="role-unknown-evidence-v33-4">No must-have has qualifying Candidate Graph evidence yet. This record should be treated as a discovery requiring review, not as a proven match.</div>}
+              {!!selectedVerificationNeeds.length && <div className="role-recruiter-context-v33-4"><b>Still unverified</b><span>{selectedVerificationNeeds.map(requirement => requirement.requirementText).join(' · ')}</span></div>}
+              {selectedCandidate.location && <div className="role-recruiter-context-v33-4"><b>Observed location</b><span>{selectedCandidate.location} · requested search area: {brief.intake.location}</span></div>}
+            </> : <div className="role-unknown-evidence-v33-4">Evidence assessment is still loading. Search criteria are never copied into candidate facts.</div>}
           </section>
 
           <section className="role-candidate-requirements-v33-4">
@@ -508,7 +548,16 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
             {!selectedAssessment && <div className="role-candidate-no-assessment-v33-4"><b>{selectedCandidate.candidateId ? assessmentLoading ? 'Assessing Candidate Graph evidence…' : 'No evidence assessment available.' : 'This role record is not linked to a canonical Candidate Graph identity yet.'}</b><span>Candidate facts are never backfilled from search criteria.</span></div>}
           </section>
 
-          <section className="role-candidate-links-v33-4"><div className="role-workbench-section-head-v33-4"><div><b>Sources + record</b><span>Open provenance, not a synthesized mystery score</span></div></div><div>{selectedCandidate.sourceUrl && <a href={selectedCandidate.sourceUrl} target="_blank" rel="noreferrer noopener">Original source ↗</a>}{selectedCandidate.candidateId && <Link href={`/app/candidate/${encodeURIComponent(selectedCandidate.candidateId)}`}>Full Candidate Graph →</Link>}</div></section>
+          <section className="role-candidate-links-v33-4">
+            <div className="role-workbench-section-head-v33-4"><div><b>Public profiles + contact signals</b><span>Observed provenance only; no guessed LinkedIn or contact data</span></div></div>
+            {!!selectedPublicProfiles.length && <div className="role-inline-citations-v33-4">{selectedPublicProfiles.map(profile => <div key={`${profile.source}:${profile.sourceProfileId}`}><span className="role-citation-marker-v33-4">↗</span><span><b>{sourceLabel(profile.source)}</b><small>{profile.displayName}{profile.headline ? ` · ${profile.headline}` : ''}</small><em>{profile.sourceProfileId}</em></span>{profile.profileUrl && <a href={profile.profileUrl} target="_blank" rel="noreferrer noopener" aria-label={`Open ${sourceLabel(profile.source)} profile`}>Open</a>}</div>)}</div>}
+            {!!selectedPublicContacts.length && <div className="role-inline-citations-v33-4">{selectedPublicContacts.map(contact => {
+              const href = publicContactHref(contact.type, contact.value)
+              return <div key={`${contact.type}:${contact.value}`}><span className="role-citation-marker-v33-4">•</span><span><b>{contact.type === 'public_email' ? 'Public email' : contact.type === 'website' ? 'Website' : 'Profile link'} · {sourceLabel(contact.source)}</b><small>{contact.value}</small><em>{contact.verified ? 'verified signal' : 'public signal · not independently verified'}</em></span>{href && <a href={href} target={contact.type === 'public_email' ? undefined : '_blank'} rel={contact.type === 'public_email' ? undefined : 'noreferrer noopener'}>Open</a>}</div>
+            })}</div>}
+            {!selectedPublicProfiles.length && !selectedPublicContacts.length && <div className="role-unknown-evidence-v33-4">No additional public profile or contact signal is linked to this Candidate Graph identity yet. SourcingOS will not invent a LinkedIn URL, email, or cross-source identity.</div>}
+            <div>{selectedCandidate.sourceUrl && <a href={selectedCandidate.sourceUrl} target="_blank" rel="noreferrer noopener">Original source ↗</a>}{selectedCandidate.candidateId && <Link href={`/app/candidate/${encodeURIComponent(selectedCandidate.candidateId)}`}>Full Candidate Graph →</Link>}</div>
+          </section>
 
           <section className="role-candidate-activity-v33-4"><div className="role-workbench-section-head-v33-4"><div><b>Activity</b><span>Actor + timestamp trail</span></div></div>{selectedActivity.length ? selectedActivity.map(item => <div key={item.id}><i /><span><b>Recruiter</b><small>{item.message}</small><em>{formatDate(item.createdAt)}</em></span></div>) : <p>No candidate-specific activity recorded yet.</p>}</section>
         </> : <div className="role-candidate-empty-drawer-v33-4"><span>◈</span><b>Select a candidate</b><p>Candidate 360, requirement evidence, provenance, and fast review controls stay in this pane.</p></div>}
