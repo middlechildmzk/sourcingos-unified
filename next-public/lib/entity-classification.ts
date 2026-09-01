@@ -143,7 +143,9 @@ function observedSkills(result: SourceResult): string[] {
   }
 
   if (result.source === 'devto') {
-    return unique(stringList(root.tag_list))
+    // V33.6 writes only tags observed on articles authored by this public DEV
+    // user. Retrieval terms are intentionally absent from observedTags.
+    return unique(stringList(root.observedTags))
   }
 
   if (result.source === 'huggingface') {
@@ -257,9 +259,15 @@ export function resolveStoredEntityKind(input: {
     return 'unknown'
   }
 
-  // DEV accounts can represent individuals or organizations. Do not infer
-  // personhood from display-name shape alone.
-  if (source === 'devto') return 'unknown'
+  if (source === 'devto') {
+    const root = record(input.raw)
+    const profile = record(root.profile)
+    const profileType = String(profile.type_of ?? '').toLowerCase()
+    const username = text(profile.username)
+    // DEV can represent users and organizations. Only a resolved public user
+    // payload from the V33.6 connector is candidate-eligible.
+    return profileType === 'user' && Boolean(username) ? 'person' : 'unknown'
+  }
 
   return 'unknown'
 }

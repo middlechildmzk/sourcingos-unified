@@ -1,6 +1,7 @@
 import 'server-only'
 import { callModelJson } from './provider'
 import { interpretRoleBrief } from '@/lib/role-brief-v33'
+import { mergeExplicitExperienceRequirements } from '@/lib/explicit-role-requirements-v33-6'
 import type { RoleIntake } from '@/lib/role-workspace'
 
 export type ParsedRoleBriefV33_4 = {
@@ -42,11 +43,12 @@ Rules:
 - Return JSON only.
 - Extract only what the recruiter actually stated or what is a conservative normalization of their wording.
 - Do not invent requirements, employers, years, compensation, geography, clearance, citizenship, or disqualifiers.
+- Preserve explicit quantified experience requirements. Example: "5+ years of Linux" must remain a must-have such as "5+ years Linux experience"; never drop the number or capability.
 - Do not turn preference language into a must-have.
 - Security clearance/citizenship are role requirements only; never claim candidate verification.
 - Keep mustHaves concise capability phrases, ideally 2-6.
 - Keep niceToHaves separate.
-- adjacentBackgrounds may include close title synonyms, but must not become requirements.
+- adjacentBackgrounds may include close title synonyms, but must stay in the same job family. Never expand a technical administrator into education, school, office, or business administration titles.
 - Ask a follow-up question ONLY when an ambiguity would materially change who gets searched. Missing optional information is not a blocker.
 - Maximum 2 follow-up questions.
 
@@ -83,13 +85,14 @@ Return exactly this shape:
   }
 
   const data = result.data
+  const modelMustHaves = strings(data.mustHaves, fallback.intake.mustHaves, 16)
   const intake: RoleIntake = {
     title: clean(data.title, fallback.intake.title, 100) || fallback.intake.title,
     location: clean(data.location, fallback.intake.location, 120) || 'Not specified',
     workMode: workMode(data.workMode, fallback.intake.workMode),
     compensation: clean(data.compensation, fallback.intake.compensation, 120) || 'Not specified',
     clearance: clean(data.clearance, fallback.intake.clearance, 100) || 'Not specified',
-    mustHaves: strings(data.mustHaves, fallback.intake.mustHaves, 16),
+    mustHaves: mergeExplicitExperienceRequirements(modelMustHaves, rawText, 16),
     niceToHaves: strings(data.niceToHaves, fallback.intake.niceToHaves, 16),
     disqualifiers: strings(data.disqualifiers, fallback.intake.disqualifiers, 12),
     targetCompanies: strings(data.targetCompanies, fallback.intake.targetCompanies, 12),

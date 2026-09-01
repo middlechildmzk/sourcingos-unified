@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { retrievalCapabilityTerms } from '../explicit-role-requirements-v33-6'
 import type { SourceResult } from '../source-types'
 import {
   discoveryIntent,
@@ -74,13 +75,15 @@ export function technicalActivationBudget(
 }
 
 /**
- * Search Brain / recruiter language becomes retrieval intent only. It cannot be
- * assigned to SourceResult evidence or skills by this adapter.
+ * Search Brain / recruiter language becomes retrieval intent only. Quantified
+ * requirements stay in Role Brief truth while the connector receives the
+ * underlying capability (e.g. 5+ years Linux experience -> Linux). Neither form
+ * can be assigned to SourceResult evidence by this adapter.
  */
 export function technicalDiscoveryIntent(input: TechnicalV2Input): DiscoveryIntent {
   return discoveryIntent({
     hypothesis: input.query,
-    capabilityTerms: input.skills || [],
+    capabilityTerms: retrievalCapabilityTerms(input.skills || []),
     location: input.location,
     limit: input.limit,
     runId: input.runId,

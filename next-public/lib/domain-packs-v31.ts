@@ -70,10 +70,10 @@ const PACKS: DomainPack[] = [
     id: 'technical',
     label: 'Technical',
     description: 'Software, cloud, data, infrastructure, security, AI, engineering, and systems administration roles.',
-    executablePublicSurfaces: ['github', 'stackoverflow'],
-    evidenceHints: ['public code or repositories', 'technical artifacts', 'observed Stack Overflow answer expertise', 'technology usage evidence'],
-    heuristics: ['Prefer capability combinations over title-only matching.', 'Treat public code and Q&A expertise as evidence of public work, not proof of employment or overall fit.'],
-    guardrails: ['Do not infer seniority, employment status, or identity solely from a repository or Q&A account.', 'Search terms do not become candidate skills without person-level source evidence.'],
+    executablePublicSurfaces: ['github', 'stackoverflow', 'devto'],
+    evidenceHints: ['public code or repositories', 'observed Stack Overflow answer expertise', 'public technical writing with observed article tags', 'technology usage evidence'],
+    heuristics: ['Prefer capability combinations over title-only matching.', 'Treat public code, Q&A expertise, and authored technical writing as public-work evidence, not proof of employment or overall fit.'],
+    guardrails: ['Do not infer seniority, employment status, or identity solely from a repository, Q&A account, or article.', 'Search terms do not become candidate skills without person-level source evidence.'],
     detect: intake => confidenceFromSignals(roleText(intake), [
       /\bsoftware\b/, /\bcloud\b/, /\bplatform\b/, /\bdevops\b/, /\bsre\b/, /\bdata engineer/, /\bsecurity\b/, /\bcyber/, /\bkubernetes\b/, /\bterraform\b/, /\bpython\b/, /\bjava\b/, /\btypescript\b/, /\bmachine learning\b/, /\bartificial intelligence\b/,
       /\blinux\b/, /\brhel\b/, /\bred hat\b/, /\bunix\b/, /\bsysadmin\b/, /\bsystem administration\b/, /\bsystems administration\b/, /\badmin(?:istrator)?\b/

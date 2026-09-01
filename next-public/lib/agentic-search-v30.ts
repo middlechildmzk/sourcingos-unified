@@ -2,7 +2,7 @@ import type { CalibrationState } from './calibration-intelligence'
 import { activeInsights } from './calibration-intelligence'
 import type { RoleIntake } from './role-workspace'
 
-export type AgenticConnectorKey = 'github' | 'stackoverflow' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
+export type AgenticConnectorKey = 'github' | 'stackoverflow' | 'devto' | 'orcid' | 'openalex' | 'pubmed' | 'crossref' | 'npi'
 
 export type AgenticLaneId =
   | 'exact_title'
@@ -18,6 +18,7 @@ export type AgenticSearchSurface =
   | 'candidate_database'
   | 'github'
   | 'stackoverflow'
+  | 'devto'
   | 'research_publications'
   | 'healthcare_registry'
   | 'linkedin_recruiter'
@@ -54,7 +55,7 @@ export type AgenticSearchPlan = {
   approvedLearningCount: number
 }
 
-const TECHNICAL = /engineer|developer|architect|devops|devsecops|cloud|security|cyber|data|software|platform|infrastructure|sre|machine learning|\bai\b/i
+const TECHNICAL = /engineer|developer|architect|devops|devsecops|cloud|security|cyber|data|software|platform|infrastructure|sre|machine learning|\bai\b|\blinux\b|\brhel\b|red\s+hat|\bunix\b|\bsysadmin\b|systems?\s+administrator|systems?\s+admin|network\s+administrator|database\s+administrator/i
 const RESEARCH = /research|scientist|clinical|medical|health|physician|nurse|biotech|pharma|publication|academic/i
 const PUBLIC_SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 
@@ -188,7 +189,7 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
         mode: 'executable',
         query: publicQuery,
         connectorKeys: ['github'],
-        truth: 'Runs the official GitHub API through the dependable repository/contributor discovery path. Skills come only from observed public repository languages/topics; identity linking still requires review.',
+        truth: 'Runs the official GitHub API through the evidence-first contributor discovery path. Skills come only from observed public repository languages/topics; identity linking still requires review.',
       },
       {
         surface: 'stackoverflow',
@@ -200,8 +201,19 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
       },
     )
   }
+  if (technical) {
+    tasks.splice(3, 0, {
+      surface: 'devto',
+      label: 'DEV Community technical authors',
+      mode: 'executable',
+      query: publicQuery,
+      connectorKeys: ['devto'],
+      truth: 'Runs the public Forem/DEV API. Search terms select articles, but candidate skills come only from tags observed on articles the person actually authored; public profile identity anchors remain reviewable evidence.',
+    })
+  }
   if (research || lane === 'evidence_first') {
-    tasks.splice(technical || lane === 'evidence_first' ? 3 : 1, 0, {
+    const insertionIndex = technical ? 4 : lane === 'evidence_first' ? 3 : 1
+    tasks.splice(insertionIndex, 0, {
       surface: 'research_publications',
       label: 'Public research graph',
       mode: 'executable',
