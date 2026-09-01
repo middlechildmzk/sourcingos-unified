@@ -56,7 +56,7 @@ function normalizeLocationValue(city: string, region = ''): string {
     .replace(/\s+(?:area|metro(?:\s+area)?|region)$/i, '')
     .trim()
   if (!base || /^(the|a|an|this|that|production|cloud|security|engineering|experience)$/i.test(base)) return ''
-  const titled = titleCaseFirst(base)
+  const titled = base.replace(/\b[a-z]/g, letter => letter.toUpperCase())
   return region ? `${titled}, ${region.toUpperCase()}` : titled
 }
 
