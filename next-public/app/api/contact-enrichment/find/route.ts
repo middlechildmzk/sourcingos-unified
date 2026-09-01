@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     persistenceMode = 'preview'
   }
 
-  // ── 6. Return UI-safe result (no key, no raw payload) ───────────────────────
+  // ── 6. Return UI-safe result (no key, no raw provider payload) ──────────────
   return NextResponse.json({
     ok: true,
     provider: result.provider,
@@ -124,6 +124,11 @@ export async function POST(req: NextRequest) {
       fieldsUsed: result.log.fieldsUsed,
       resultCount: result.log.resultCount,
       warnings: result.log.warnings,
+      // Safe provider provenance only: record id, numeric identity likelihood,
+      // and names of matched request fields. Never raw matched values/payloads.
+      providerRecordId: result.log.providerRecordId,
+      providerMatchLikelihood: result.log.providerMatchLikelihood,
+      providerMatchedFields: result.log.providerMatchedFields,
       persistenceMode,
     },
   })
