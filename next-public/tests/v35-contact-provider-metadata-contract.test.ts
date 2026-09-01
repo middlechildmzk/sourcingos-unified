@@ -17,13 +17,17 @@ describe('V35 provider metadata and trust contract', () => {
     expect(source).toContain("deliverability: 'unknown'")
   })
 
-  it('keeps identity readiness before provider orchestration and exposes only normalized match metadata', () => {
+  it('keeps identity readiness before provider execution and exposes only normalized match metadata', () => {
     const route = readFileSync(
       fileURLToPath(new URL('../app/api/contact-enrichment/find/route.ts', import.meta.url)),
       'utf8',
     )
 
-    expect(route.indexOf('assessEnrichmentIdentityV34(request)')).toBeLessThan(route.indexOf('runContactEnrichmentOrchestratorV35'))
+    const gateCall = route.indexOf('assessEnrichmentIdentityV34(request)')
+    const orchestratorCall = route.indexOf('const orchestration = await runContactEnrichmentOrchestratorV35')
+    expect(gateCall).toBeGreaterThan(-1)
+    expect(orchestratorCall).toBeGreaterThan(-1)
+    expect(gateCall).toBeLessThan(orchestratorCall)
     expect(route).toContain('providerMatch: result.match')
     expect(route).toContain('ownership, deliverability, and permission are separate')
     expect(route).not.toMatch(/NEXT_PUBLIC_.*PDL/i)
