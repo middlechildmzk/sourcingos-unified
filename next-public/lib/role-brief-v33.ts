@@ -51,13 +51,31 @@ function terseRoleTitle(rawText: string): string {
   return titleCaseFirst(value)
 }
 
+function normalizeLocationValue(city: string, region = ''): string {
+  const base = clean(city, 80)
+    .replace(/\s+(?:area|metro(?:\s+area)?|region)$/i, '')
+    .trim()
+  if (!base || /^(the|a|an|this|that|production|cloud|security|engineering|experience)$/i.test(base)) return ''
+  const titled = titleCaseFirst(base)
+  return region ? `${titled}, ${region.toUpperCase()}` : titled
+}
+
 function naturalLanguageLocation(rawText: string): string {
   const compact = clean(rawText, 700)
-  const match = compact.match(/\b(?:in|near|around|based\s+in)\s+([a-z][a-z .'-]{1,60}?)(?=\s+(?:with|who|that|from|and|but|where)\b|[,.;]|$)/i)
-  if (!match?.[1]) return ''
-  const value = clean(match[1], 80)
-  if (/^(the|a|an|this|that|production|cloud|security|engineering)$/i.test(value)) return ''
-  return titleCaseFirst(value)
+  // Prefer explicit proximity phrases before generic "in" so recruiter language
+  // such as "5+ years of experience in or near Annapolis Junction, MD" cannot
+  // collapse into the literal string "or near Annapolis Junction".
+  const patterns = [
+    /\b(?:in\s+or\s+near|near|around|based\s+in)\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where)\b|[.;]|$)/i,
+    /\bin\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where)\b|[.;]|$)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = compact.match(pattern)
+    if (!match?.[1]) continue
+    const value = normalizeLocationValue(match[1], match[2] || '')
+    if (value) return value
+  }
+  return ''
 }
 
 function labeledValue(rawText: string, labels: string[], max = 100): string {
@@ -76,6 +94,33 @@ function labeledValues(rawText: string, labels: string[]): string[] {
   const value = labeledValue(rawText, labels, 500)
   if (!value) return []
   return uniq(value.split(/,|;|\||\bor\b/i).map(item => item.trim()), 12)
+}
+
+function literalTechnicalMustHaves(rawText: string): string[] {
+  const values: string[] = []
+  if (/\b(?:rhel|red\s+hat\s+enterprise\s+linux)\b/i.test(rawText)) values.push('RHEL')
+  else if (/\bred\s+hat\b/i.test(rawText)) values.push('Red Hat')
+  if (/\blinux\b/i.test(rawText) && !/\bred\s+hat\s+enterprise\s+linux\b/i.test(rawText)) values.push('Linux')
+  if (/\bunix\b/i.test(rawText)) values.push('Unix')
+  return uniq(values, 8)
+}
+
+function genericExperienceRequirement(rawText: string): string {
+  const match = rawText.match(/\b(\d{1,2})\s*(\+)?\s*(?:years?|yrs?)\s+of\s+(?:relevant\s+|professional\s+|overall\s+)?experience\b/i)
+  if (!match?.[1]) return ''
+  const years = Number(match[1])
+  if (!Number.isInteger(years) || years < 1 || years > 50) return ''
+  return `${years}${match[2] ? '+' : ''} years relevant experience`
+}
+
+function explicitClearance(rawText: string): string {
+  const higher = /\bor\s+(?:higher|above|greater)\b/i.test(rawText)
+  let level = ''
+  if (/\b(?:ts\s*\/\s*sci|top\s+secret\s*\/\s*sci)\b/i.test(rawText)) level = 'TS/SCI'
+  else if (/\btop\s+secret(?:\s+security)?\s+clearance\b|\bactive\s+top\s+secret\b/i.test(rawText)) level = 'Top Secret'
+  else if (/\bsecret(?:\s+security)?\s+clearance\b|\bactive\s+secret\b|\bdod\s+secret\b/i.test(rawText)) level = 'Secret'
+  else if (/\bpublic\s+trust\b/i.test(rawText)) level = 'Public Trust'
+  return level ? `${level}${higher ? ' or higher' : ''}` : ''
 }
 
 function workMode(rawText: string): RoleIntake['workMode'] {
@@ -126,25 +171,31 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   // without a conversational prefix. Keep that valid shorthand from falling
   // through to "Untitled role" and forcing a meaningless edit/retry loop.
   const directTitle = terseRoleTitle(rawText)
+  const commandStyle = natural || Boolean(directTitle)
   const naturalLocation = naturalLanguageLocation(rawText)
   const explicitLocation = labeledLocation(rawText)
-  const location = (natural ? naturalLocation || explicitLocation || parsed.location : explicitLocation || parsed.location || naturalLocation) || 'Not specified'
-  const clearance = parsed.clearance[0] || labeledValue(rawText, ['clearance', 'security clearance'], 100) || 'Not specified'
+  const location = (natural ? naturalLocation || explicitLocation || parsed.location : explicitLocation || naturalLocation || parsed.location) || 'Not specified'
+  const clearance = explicitClearance(rawText) || parsed.clearance[0] || labeledValue(rawText, ['clearance', 'security clearance'], 100) || 'Not specified'
   const targetCompanies = labeledValues(rawText, ['target companies', 'target company', 'donor companies', 'companies'])
   const disqualifiers = labeledValues(rawText, ['disqualifiers', 'exclude', 'avoid'])
   const explicitAdjacent = labeledValues(rawText, ['adjacent backgrounds', 'adjacent titles', 'adjacent roles'])
   const explicitPreferenceLanguage = /\b(?:ideally|preferably|nice[ -]to[ -]have|bonus|optional)\b/i.test(rawText)
-  // In a short natural-language command, recognized technologies are literal
-  // requested attributes. Treat them as proposed must-haves unless the recruiter
-  // explicitly marks part of the sentence as preferred; the next UI step still
-  // requires recruiter confirmation before the role is committed.
-  const parsedMustHaves = natural && !explicitPreferenceLanguage
-    ? uniq([...parsed.mustHaveSkills, ...parsed.preferredSkills], 16)
+  // Short recruiter commands often contain literal technologies that are absent
+  // from the shared taxonomy. Preserve those literal requested capabilities as
+  // proposed must-haves rather than silently dropping them before search.
+  const commandTechnical = commandStyle && !explicitPreferenceLanguage ? literalTechnicalMustHaves(rawText) : []
+  const parsedMustHaves = commandStyle && !explicitPreferenceLanguage
+    ? uniq([...parsed.mustHaveSkills, ...parsed.preferredSkills, ...commandTechnical], 16)
     : uniq(parsed.mustHaveSkills, 16)
   // Explicit quantified recruiter language such as "5+ years of Linux" must
-  // survive taxonomy/model misses. This is role-intake truth, not candidate truth.
-  const mustHaves = mergeExplicitExperienceRequirements(parsedMustHaves, rawText, 16)
-  const niceToHaves = natural && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
+  // survive taxonomy/model misses. A generic "5+ years of experience" remains a
+  // separate role requirement; it is not falsely converted into 5+ years of RHEL.
+  let mustHaves = mergeExplicitExperienceRequirements(parsedMustHaves, rawText, 16)
+  const genericExperience = genericExperienceRequirement(rawText)
+  if (genericExperience && !mustHaves.some(item => /^\d{1,2}\+?\s+years\b/i.test(item))) {
+    mustHaves = uniq([genericExperience, ...mustHaves], 16)
+  }
+  const niceToHaves = commandStyle && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
 
   const intake: RoleIntake = {
     title: naturalTitle || directTitle || clean(parsed.roleTitle, 100) || 'Untitled role',
