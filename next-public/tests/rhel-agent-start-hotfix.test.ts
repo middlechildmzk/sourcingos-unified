@@ -1,0 +1,48 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { buildCanonicalAgenticSearchPlan } from '@/lib/canonical-agentic-search-v30'
+import { buildDomainPackProfile } from '@/lib/domain-packs-v31'
+import type { RoleIntake } from '@/lib/role-workspace'
+
+const here = dirname(fileURLToPath(import.meta.url))
+
+function intake(title: string): RoleIntake {
+  return {
+    title,
+    location: 'Washington DC',
+    workMode: 'unknown',
+    compensation: 'Not specified',
+    clearance: 'Secret',
+    mustHaves: [],
+    niceToHaves: [],
+    disqualifiers: [],
+    targetCompanies: [],
+    adjacentBackgrounds: [],
+    hiringManagerNotes: '',
+    rawDescription: `${title} in Washington DC with Secret clearance`,
+  }
+}
+
+describe('RHEL agent-start hotfix', () => {
+  it.each(['RHEL admin', 'Linux administrator', 'Systems administrator', 'sysadmin'])('classifies %s as technical and keeps executable technical sources', title => {
+    const role = intake(title)
+    const profile = buildDomainPackProfile(role)
+    expect(profile.activeIds.has('technical')).toBe(true)
+    expect(profile.executablePublicSurfaces.has('github')).toBe(true)
+    expect(profile.executablePublicSurfaces.has('stackoverflow')).toBe(true)
+
+    const plan = buildCanonicalAgenticSearchPlan(role)
+    const connectors = plan.lanes.flatMap(lane => lane.tasks.flatMap(task => task.connectorKeys || []))
+    expect(connectors).toContain('github')
+    expect(connectors).toContain('stackoverflow')
+  })
+
+  it('does not leave auto-start silently spinning when no executable source or no eligible slate exists', () => {
+    const source = readFileSync(join(here, '../components/RoleAutoStartV33_4.tsx'), 'utf8')
+    expect(source).toContain('This search has no executable public source yet.')
+    expect(source).toContain('Search completed, but this pass returned no eligible public-source records')
+    expect(source).toContain('The initial sourcing pass timed out')
+  })
+})

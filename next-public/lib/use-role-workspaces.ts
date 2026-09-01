@@ -148,13 +148,18 @@ export function useRoleWorkspaces() {
   }, [scheduleSync])
 
   const addRole = useCallback((workspace: RoleWorkspace) => {
+    const prepared = reconcileRoleWorkspaceCalibration(workspace)
     const nextVersions = { ...versions.current }
-    delete nextVersions[workspace.id]
+    delete nextVersions[prepared.id]
     versions.current = nextVersions
     writeRoleVersions(nextVersions)
-    const next = [workspace, ...readRoleWorkspaces().filter(role => role.id !== workspace.id)]
-    commit(next, [workspace.id])
-  }, [commit])
+    const next = [prepared, ...readRoleWorkspaces().filter(role => role.id !== prepared.id)]
+    // New-role creation is immediately followed by route navigation. Persist the
+    // creation request now rather than scheduling it on the edit debounce, whose
+    // timer is intentionally cleared when this hook unmounts.
+    commit(next)
+    void syncWorkspace(prepared)
+  }, [commit, syncWorkspace])
 
   const updateRole = useCallback((roleId: string, updater: (workspace: RoleWorkspace) => RoleWorkspace) => {
     const current = readRoleWorkspaces()

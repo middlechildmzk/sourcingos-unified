@@ -69,14 +69,15 @@ const PACKS: DomainPack[] = [
   {
     id: 'technical',
     label: 'Technical',
-    description: 'Software, cloud, data, infrastructure, security, AI, and engineering roles.',
+    description: 'Software, cloud, data, infrastructure, security, AI, engineering, and systems administration roles.',
     executablePublicSurfaces: ['github', 'stackoverflow'],
     evidenceHints: ['public code or repositories', 'technical artifacts', 'observed Stack Overflow answer expertise', 'technology usage evidence'],
     heuristics: ['Prefer capability combinations over title-only matching.', 'Treat public code and Q&A expertise as evidence of public work, not proof of employment or overall fit.'],
     guardrails: ['Do not infer seniority, employment status, or identity solely from a repository or Q&A account.', 'Search terms do not become candidate skills without person-level source evidence.'],
     detect: intake => confidenceFromSignals(roleText(intake), [
-      /\bsoftware\b/, /\bcloud\b/, /\bplatform\b/, /\bdevops\b/, /\bsre\b/, /\bdata engineer/, /\bsecurity\b/, /\bcyber/, /\bkubernetes\b/, /\bterraform\b/, /\bpython\b/, /\bjava\b/, /\btypescript\b/, /\bmachine learning\b/, /\bartificial intelligence\b/
-    ], [/\b(engineer|developer|architect)\b/]),
+      /\bsoftware\b/, /\bcloud\b/, /\bplatform\b/, /\bdevops\b/, /\bsre\b/, /\bdata engineer/, /\bsecurity\b/, /\bcyber/, /\bkubernetes\b/, /\bterraform\b/, /\bpython\b/, /\bjava\b/, /\btypescript\b/, /\bmachine learning\b/, /\bartificial intelligence\b/,
+      /\blinux\b/, /\brhel\b/, /\bred hat\b/, /\bunix\b/, /\bsysadmin\b/, /\bsystem administration\b/, /\bsystems administration\b/, /\badmin(?:istrator)?\b/
+    ], [/\b(engineer|developer|architect|system administrator|systems administrator|linux administrator|rhel administrator|red hat administrator|sysadmin)\b/]),
   },
   {
     id: 'healthcare',

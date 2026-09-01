@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
+import { RoleIntelligenceProviderV33 } from '@/components/RoleIntelligenceProviderV33'
 import { RoleOrganizationSignals } from '@/components/RoleOrganizationSignals'
 import { RoleSearchActions } from '@/components/RoleSearchActions'
 
@@ -16,8 +17,10 @@ export default async function AgenticRolePage({ params }: { params: Promise<{ id
       <Link className="btn secondary" href={`/app/roles/${encodeURIComponent(id)}`}>Open full role workspace</Link>
       <Link className="btn secondary" href={`/app/roles/${encodeURIComponent(id)}?tab=candidates`}>Review slate</Link>
     </div>
-    <RoleAgenticSearchPanel roleId={id} />
-    <RoleOrganizationSignals roleId={id} />
-    <RoleSearchActions roleId={id} />
+    <RoleIntelligenceProviderV33 roleId={id}>
+      <RoleAgenticSearchPanel roleId={id} />
+      <RoleOrganizationSignals roleId={id} />
+      <RoleSearchActions roleId={id} />
+    </RoleIntelligenceProviderV33>
   </main>
 }
