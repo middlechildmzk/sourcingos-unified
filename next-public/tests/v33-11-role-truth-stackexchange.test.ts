@@ -22,7 +22,7 @@ describe('V33.11 recruiter truth boundary', () => {
       niceToHaves: ['React'],
       disqualifiers: [],
       targetCompanies: [],
-      adjacentBackgrounds: ['Linux systems administrator'],
+      adjacentBackgrounds: ['TypeScript engineer'],
       hiringManagerNotes: 'Model enrichment should not become role truth.',
     })
 
@@ -33,6 +33,7 @@ describe('V33.11 recruiter truth boundary', () => {
     expect(intake.mustHaves).toContain('5+ years relevant experience')
     expect(intake.mustHaves).not.toContain('TypeScript')
     expect(intake.niceToHaves).not.toContain('React')
+    expect(intake.adjacentBackgrounds).not.toContain('TypeScript engineer')
   })
 })
 
@@ -50,7 +51,7 @@ describe('V33.11 infrastructure Stack Exchange routing', () => {
       expect.objectContaining({ site: 'serverfault', tag: 'linux', capability: 'Linux' }),
       expect.objectContaining({ site: 'unix', tag: 'linux', capability: 'Linux' }),
     ]))
-    expect(plan.some(item => item.site === 'stackoverflow')).toBe(false)
+    expect(plan.map(item => String(item.site))).not.toContain('stackoverflow')
   })
 
   it('normalizes observed Red Hat community evidence to RHEL without query-only promotion', () => {
