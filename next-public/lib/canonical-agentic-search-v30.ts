@@ -8,13 +8,15 @@ import {
   type AgenticSourceTask,
 } from './agentic-search-v30'
 import { buildDomainPackProfile, type DomainPackMatch } from './domain-packs-v31'
+import { retrievalCapabilityTerms } from './explicit-role-requirements-v33-6'
 import { militaryLaneDrafts, type MilitarySourcingHypothesis } from './military-talent-intelligence-v33'
 import { militaryTalentGate } from './military-role-gating-v33'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from './onet-role-intelligence'
+import { onetOccupationCompatibleWithRole } from './technical-role-normalization-v33-6'
 import type { RoleIntake } from './role-workspace'
 
-const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'research_publications', 'google_xray'])
-const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'research_publications'])
+const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'devto', 'research_publications', 'google_xray'])
+const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'devto', 'research_publications'])
 const SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 const PROVIDER_ROLE = /\b(?:nurse practitioner|registered nurse|physician assistant|pharmacist|physical therapist|occupational therapist|dentist|psychologist|clinical social worker|physician|doctor)\b/i
 
@@ -63,6 +65,14 @@ function publicTerms(values: string[]): string[] {
   return values.map(clean).filter(term => term && !SENSITIVE.test(term))
 }
 
+function retrievalIntake(intake: RoleIntake): RoleIntake {
+  return {
+    ...intake,
+    mustHaves: retrievalCapabilityTerms(intake.mustHaves),
+    niceToHaves: retrievalCapabilityTerms(intake.niceToHaves),
+  }
+}
+
 function providerRegistryQuery(intake: RoleIntake): string {
   const match = clean(intake.title).match(PROVIDER_ROLE)?.[0] || ''
   if (!match) return ''
@@ -72,11 +82,12 @@ function providerRegistryQuery(intake: RoleIntake): string {
 }
 
 export function publicQueryForAgenticLane(intake: RoleIntake, laneId: AgenticLaneId): string {
-  const title = SENSITIVE.test(intake.title) ? clean(intake.title).replace(/\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance)\b/ig, '').trim() : clean(intake.title)
-  const must = publicTerms(intake.mustHaves)
-  const nice = publicTerms(intake.niceToHaves)
-  const adjacent = publicTerms(intake.adjacentBackgrounds)
-  const targets = uniq(intake.targetCompanies, 6)
+  const searchIntake = retrievalIntake(intake)
+  const title = SENSITIVE.test(searchIntake.title) ? clean(searchIntake.title).replace(/\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance)\b/ig, '').trim() : clean(searchIntake.title)
+  const must = publicTerms(searchIntake.mustHaves)
+  const nice = publicTerms(searchIntake.niceToHaves)
+  const adjacent = publicTerms(searchIntake.adjacentBackgrounds)
+  const targets = uniq(searchIntake.targetCompanies, 6)
 
   const fallback = and([title ? quote(title) : '', or(must.slice(0, 5))]) || or([...must, ...nice].slice(0, 6))
   switch (laneId) {
@@ -107,7 +118,7 @@ function militaryLane(intake: RoleIntake, hypothesis: MilitarySourcingHypothesis
 
   const codes = uniq(hypothesis.occupations.map(item => item.code), 4)
   const titles = uniq(hypothesis.occupations.map(item => item.title), 4)
-  const publicMust = publicTerms(intake.mustHaves).slice(0, 3)
+  const publicMust = publicTerms(retrievalCapabilityTerms(intake.mustHaves)).slice(0, 3)
   const publicQuery = and([or([...codes, ...titles], 8), or(publicMust, 3)]) || or([...codes, ...titles], 8)
   const guidedTruth = 'Recruiter-approved occupation-level search context from the O*NET Military Crosswalk. An occupation code is a discovery breadcrumb only; candidate-level evidence is still required.'
 
@@ -135,7 +146,8 @@ function fingerprint(query: string): string {
  * filter executable public surfaces, O*NET can enrich adjacent-title language,
  * and verified military crosswalks may add one recruiter-approved guided lane.
  * Neither intelligence source can rewrite must-haves or satisfy candidate-level
- * requirements.
+ * requirements. Quantified role requirements remain intact for assessment while
+ * the retrieval copy uses the underlying capability terms.
  */
 export function buildCanonicalAgenticSearchPlan(
   intake: RoleIntake,
@@ -143,11 +155,12 @@ export function buildCanonicalAgenticSearchPlan(
   context: CanonicalRoleIntelligenceContext = {},
 ): CanonicalAgenticSearchPlan {
   const enrichedIntake = enrichRoleIntakeWithOnet(intake, context.onet)
+  const searchIntake = retrievalIntake(enrichedIntake)
   const domainProfile = buildDomainPackProfile(enrichedIntake)
-  const base = buildAgenticSearchPlan(enrichedIntake, state)
+  const base = buildAgenticSearchPlan(searchIntake, state)
   const providerQuery = domainProfile.activeIds.has('healthcare') ? providerRegistryQuery(enrichedIntake) : ''
   const lanes = base.lanes.map(lane => {
-    const publicQuery = publicQueryForAgenticLane(enrichedIntake, lane.id)
+    const publicQuery = publicQueryForAgenticLane(searchIntake, lane.id)
     const tasks = lane.tasks
       .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
       .filter(task => !DOMAIN_EXECUTABLE_SURFACES.has(task.surface) || domainProfile.executablePublicSurfaces.has(task.surface))
@@ -184,6 +197,11 @@ export function buildCanonicalAgenticSearchPlan(
     integrityWarnings.push('Military occupation intelligence is provisional, so it is blocked from the canonical Search Plan until authoritative O*NET MOC data is available.')
   }
 
+  const onetCompatible = Boolean(
+    context.onet?.matchedOccupation
+    && onetOccupationCompatibleWithRole(intake, context.onet.matchedOccupation.title),
+  )
+
   return {
     ...base,
     lanes,
@@ -191,8 +209,8 @@ export function buildCanonicalAgenticSearchPlan(
     integrityWarnings,
     domainPacks: domainProfile.matches,
     roleIntelligence: {
-      onetConfigured: Boolean(context.onet?.configured),
-      ...(context.onet?.matchedOccupation ? { onetOccupation: context.onet.matchedOccupation } : {}),
+      onetConfigured: Boolean(context.onet?.configured && (!context.onet?.matchedOccupation || onetCompatible)),
+      ...(context.onet?.matchedOccupation && onetCompatible ? { onetOccupation: context.onet.matchedOccupation } : {}),
       ...(context.onet?.attribution ? { onetAttribution: context.onet.attribution } : {}),
       militaryAvailable,
       militaryApproved: Boolean(context.militaryApproved && militaryAvailable && !militaryProvisional),
