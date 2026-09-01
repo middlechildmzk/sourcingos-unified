@@ -12,6 +12,7 @@ import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
 import { searchStackOverflowTalent } from '@/lib/stackoverflow-talent-source-v33-2'
 import { discoverDevToTalent } from '@/lib/connectors/devto-v33-6'
 import { discoverHuggingFacePeople } from '@/lib/connectors/huggingface-person-v33-7'
+import { sourceDiverseResults, sourceDistribution } from '@/lib/source-orchestration-v33-8'
 import {
   preferTechnicalV2,
   runGitHubV2,
@@ -150,9 +151,11 @@ export async function POST(req: NextRequest) {
 
   const body = parsed.data
   const sourceStatus: Record<string, AgenticSourceStatus> = {}
-  const results: ReturnType<typeof safeDiscovery>[] = []
+  const allResults: ReturnType<typeof safeDiscovery>[] = []
   const seen = new Set<string>()
 
+  // V33.8 deliberately executes every selected connector. The global slate cap
+  // is applied only after all connectors have had a chance to contribute.
   for (const connector of body.connectors) {
     const connectorQuery = body.connectorQueries?.[connector] || body.query
 
@@ -284,11 +287,10 @@ export async function POST(req: NextRequest) {
 
       let added = 0
       for (const discovery of discoveries) {
-        if (results.length >= body.limit) break
         const identity = `${discovery.sourceKey}:${discovery.sourceId}`
         if (seen.has(identity)) continue
         seen.add(identity)
-        results.push(safeDiscovery(discovery))
+        allResults.push(safeDiscovery(discovery))
         added++
       }
       sourceStatus[connector] = {
@@ -304,16 +306,26 @@ export async function POST(req: NextRequest) {
         message: error instanceof Error ? error.message.slice(0, 240) : 'Connector failed.',
       }
     }
-
-    if (results.length >= body.limit) break
   }
+
+  const results = sourceDiverseResults(allResults, body.limit, body.connectors)
+  const distribution = sourceDistribution(results)
 
   return NextResponse.json({
     ok: true,
     execution: 'read_only_preview',
     persisted: false,
     resultCount: results.length,
+    discoveredBeforeCap: allResults.length,
     sourceStatus,
+    sourceDistribution: distribution,
+    orchestration: {
+      strategy: 'source_diverse_round_robin',
+      requestedSources: body.connectors,
+      contributingSources: Object.keys(distribution),
+      globalLimit: body.limit,
+      note: 'Every selected connector gets an execution opportunity before the global result cap is applied. Source diversity is discovery orchestration, not candidate ranking.',
+    },
     results,
     trust: {
       message: 'These are public-source discoveries for recruiter review. Nothing is persisted unless the recruiter explicitly saves a save-eligible person to Candidate Graph.',
