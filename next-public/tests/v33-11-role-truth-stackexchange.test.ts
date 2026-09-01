@@ -5,6 +5,7 @@ import {
   isInfrastructureStackExchangeQueryV33_11,
   planInfrastructureStackExchangeTagsV33_11,
 } from '@/lib/connectors/stackexchange-infra-v33-11'
+import { classifySourceResult } from '@/lib/entity-classification'
 
 const rhelPrompt = 'RHEL admin with 5+ years of experience in or near annapolis junction, MD with a secret security clearance or higher'
 
@@ -54,7 +55,7 @@ describe('V33.11 infrastructure Stack Exchange routing', () => {
     expect(plan.map(item => String(item.site))).not.toContain('stackoverflow')
   })
 
-  it('normalizes observed Red Hat community evidence to RHEL without query-only promotion', () => {
+  it('normalizes observed Red Hat community evidence to RHEL and preserves it through source classification', () => {
     const result = buildInfrastructureStackExchangeResultV33_11({
       site: 'serverfault',
       user: {
@@ -75,5 +76,9 @@ describe('V33.11 infrastructure Stack Exchange routing', () => {
     expect(result?.skills).toEqual(['RHEL'])
     expect(result?.evidence[0].label).toBe('Server Fault · RHEL')
     expect(result?.evidence[0].detail).toMatch(/top answerers.*\[redhat\].*RHEL/i)
+
+    const classified = classifySourceResult(result!)
+    expect(classified.entityKind).toBe('person')
+    expect(classified.skills).toEqual(['RHEL'])
   })
 })
