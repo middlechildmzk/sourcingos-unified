@@ -10,6 +10,12 @@ import { classifyRealSourceResults } from '@/lib/entity-classification'
 import { searchGitHubPeople } from '@/lib/github-person-discovery'
 import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
 import { searchStackOverflowTalent } from '@/lib/stackoverflow-talent-source-v33-2'
+import {
+  preferTechnicalV2,
+  runGitHubV2,
+  runStackOverflowV2,
+  type TechnicalActivationMode,
+} from '@/lib/connectors/technical-v2-activation'
 import type { SourceResult } from '@/lib/source-types'
 
 export const dynamic = 'force-dynamic'
@@ -51,6 +57,14 @@ type AgenticDiscovery = {
   identityConfidence: number
   profileQuality: number
   sourceResult?: SourceResult
+}
+
+type AgenticSourceStatus = {
+  status: 'completed' | 'failed' | 'unavailable'
+  discovered: number
+  message?: string
+  engine?: TechnicalActivationMode | 'native'
+  degraded?: boolean
 }
 
 function safeUrl(value: string | undefined): string | undefined {
@@ -131,7 +145,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = parsed.data
-  const sourceStatus: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }> = {}
+  const sourceStatus: Record<string, AgenticSourceStatus> = {}
   const results: ReturnType<typeof safeDiscovery>[] = []
   const seen = new Set<string>()
 
@@ -142,28 +156,70 @@ export async function POST(req: NextRequest) {
       let discoveries: AgenticDiscovery[] = []
 
       if (connector === 'github') {
-        const response = await searchGitHubPeople({
-          query: connectorQuery,
-          location: body.locations[0] || '',
-          sources: ['github'],
-          limit: Math.min(body.limit, 12),
+        const activation = await preferTechnicalV2({
+          source: 'github',
+          runV2: () => runGitHubV2({
+            query: connectorQuery,
+            skills: body.skills,
+            location: body.locations[0],
+            limit: Math.min(body.limit, 12),
+          }),
+          runFallback: async () => {
+            const response = await searchGitHubPeople({
+              query: connectorQuery,
+              location: body.locations[0] || '',
+              sources: ['github'],
+              limit: Math.min(body.limit, 12),
+            })
+            const classified = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
+              .filter(result => result.entityKind === 'person')
+            return {
+              results: classified,
+              message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+            }
+          },
         })
-        const classified = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
+        const classified = enforceGitHubResultsTruth(classifyRealSourceResults(activation.results))
           .filter(result => result.entityKind === 'person')
         discoveries = classified.map(discoveryFromSourceResult)
-        if (response.warnings.length) {
-          sourceStatus.github = { status: 'completed', discovered: 0, message: response.warnings.join(' ').slice(0, 240) }
+        sourceStatus.github = {
+          status: 'completed',
+          discovered: 0,
+          engine: activation.mode,
+          degraded: activation.degraded,
+          message: activation.message,
         }
       } else if (connector === 'stackoverflow') {
-        const response = await searchStackOverflowTalent({
-          query: connectorQuery,
-          limit: Math.min(body.limit, 20),
+        const activation = await preferTechnicalV2({
+          source: 'stackoverflow',
+          runV2: () => runStackOverflowV2({
+            query: connectorQuery,
+            skills: body.skills,
+            location: body.locations[0],
+            limit: Math.min(body.limit, 20),
+          }),
+          runFallback: async () => {
+            const response = await searchStackOverflowTalent({
+              query: connectorQuery,
+              limit: Math.min(body.limit, 20),
+            })
+            const classified = classifyRealSourceResults(response.results)
+              .filter(result => result.entityKind === 'person')
+            return {
+              results: classified,
+              message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+            }
+          },
         })
-        const classified = classifyRealSourceResults(response.results)
+        const classified = classifyRealSourceResults(activation.results)
           .filter(result => result.entityKind === 'person')
         discoveries = classified.map(discoveryFromSourceResult)
-        if (response.warnings.length) {
-          sourceStatus.stackoverflow = { status: 'completed', discovered: 0, message: response.warnings.join(' ').slice(0, 240) }
+        sourceStatus.stackoverflow = {
+          status: 'completed',
+          discovered: 0,
+          engine: activation.mode,
+          degraded: activation.degraded,
+          message: activation.message,
         }
       } else if (connector === 'npi') {
         discoveries = await discoverNpiByTaxonomy({
@@ -171,10 +227,11 @@ export async function POST(req: NextRequest) {
           locations: body.locations,
           limit: body.limit,
         })
+        sourceStatus.npi = { status: 'completed', discovered: 0, engine: 'native', degraded: false }
       } else {
         const runner = connectorRunners[connector as ConnectorKey]
         if (!runner) {
-          sourceStatus[connector] = { status: 'unavailable', discovered: 0, message: 'Connector adapter is not executable on this deployment.' }
+          sourceStatus[connector] = { status: 'unavailable', discovered: 0, message: 'Connector adapter is not executable on this deployment.', engine: 'native' }
           continue
         }
 
@@ -190,6 +247,7 @@ export async function POST(req: NextRequest) {
         }
         const batch = await runner(input, null)
         discoveries = batch.discoveries.map(discovery => ({ ...discovery, sourceKey: connector })) as AgenticDiscovery[]
+        sourceStatus[connector] = { status: 'completed', discovered: 0, engine: 'native', degraded: false }
       }
 
       let added = 0
@@ -202,12 +260,17 @@ export async function POST(req: NextRequest) {
         added++
       }
       sourceStatus[connector] = {
+        ...sourceStatus[connector],
         status: 'completed',
         discovered: added,
-        message: sourceStatus[connector]?.message,
       }
     } catch (error) {
-      sourceStatus[connector] = { status: 'failed', discovered: 0, message: error instanceof Error ? error.message.slice(0, 240) : 'Connector failed.' }
+      sourceStatus[connector] = {
+        status: 'failed',
+        discovered: 0,
+        degraded: true,
+        message: error instanceof Error ? error.message.slice(0, 240) : 'Connector failed.',
+      }
     }
 
     if (results.length >= body.limit) break
