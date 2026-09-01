@@ -20,7 +20,7 @@ import {
   type NegativeReviewReasonCode,
 } from '@/lib/recruiter-review-reasons-v33-4'
 import { pickSlateEvidenceSnippet } from '@/lib/slate-evidence-v33-4'
-import type { SearchAttempt } from '@/lib/search-state-memory-v30'
+import { searchCoverageSummary, type SearchAttempt } from '@/lib/search-state-memory-v30'
 
 type EvidenceState = 'supported' | 'contradicted' | 'unknown' | 'needs_verification'
 type Requirement = {
@@ -121,6 +121,11 @@ function safeSearchAttempts(roleId: string): SearchAttempt[] {
   return typeof window === 'undefined' ? [] : readAttempts(roleId)
 }
 
+function candidateInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2) || '—').toUpperCase()
+}
+
 function eventTargetIsEditable(target: EventTarget | null): boolean {
   const element = target as HTMLElement | null
   if (!element) return false
@@ -169,6 +174,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   const brief = useMemo(() => initializedRole ? activeRoleBriefVersion(initializedRole) : null, [initializedRole])
   const briefVersions = useMemo(() => initializedRole ? roleBriefVersions(initializedRole) : [], [initializedRole])
   const laneProgress = useMemo(() => initializedRole ? searchLaneProgress(initializedRole, attempts) : [], [attempts, initializedRole])
+  const coverage = useMemo(() => searchCoverageSummary(attempts), [attempts])
   const calibrationAsk = useMemo(() => initializedRole ? calibrationReviewAsk(initializedRole) : null, [initializedRole])
 
   const candidateKey = useMemo(() => role?.candidates.map(candidate => candidate.candidateId).filter(Boolean).sort().join('|') || '', [role?.candidates])
@@ -362,7 +368,6 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
   }
 
   const reviewed = role.candidates.filter(candidate => candidate.fitDecision !== 'unreviewed').length
-  const pendingLearning = role.calibration?.insights.filter(insight => insight.status === 'proposed').length || 0
   const selectedIndex = selectedCandidate ? filteredCandidates.findIndex(candidate => candidate.id === selectedCandidate.id) : -1
   const selectedActivity = selectedCandidate ? role.activity.filter(item => item.message.toLowerCase().includes(selectedCandidate.name.toLowerCase())).slice(0, 8) : []
   const approvedAngles = role.searchLanes.filter(lane => lane.status === 'approved').length
@@ -384,17 +389,17 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
 
     {status && <div className="role-workbench-status-v33-4" role="status">{status}</div>}
 
-    <div className="role-workbench-topline-v33-4">
+    <div className="role-workbench-topline-v33-4" aria-label="Sourcing funnel">
       <span><b>Role Brief v{brief.version}</b><small className={briefIsDraft ? 'draft' : 'approved'}>{brief.status}</small></span>
-      <span><b>{approvedAngles}</b><small>approved search angles</small></span>
-      <span><b>{role.candidates.length}</b><small>candidates in role</small></span>
+      <span><b>{coverage.uniqueResultsSeen || '—'}</b><small>source profiles reviewed</small></span>
+      <span><b>{role.candidates.length}</b><small>first review batch</small></span>
       <span><b>{reviewed}</b><small>recruiter decisions</small></span>
-      <span><b>{pendingLearning}</b><small>learning proposals</small></span>
+      <span><b>{approvedAngles}</b><small>search angles</small></span>
     </div>
 
     <div className="role-workbench-grid-v33-4">
-      <aside className="role-workbench-pane-v33-4 role-workbench-agent-v33-4">
-        <div className="role-workbench-pane-head-v33-4"><div><span className="kicker">Role + agent</span><h2>What SourcingOS is doing</h2></div></div>
+      <details className="role-workbench-pane-v33-4 role-workbench-agent-v33-4">
+        <summary className="role-workbench-pane-head-v33-4"><div><span className="kicker">Search brief + progress</span><h2>What SourcingOS searched and why</h2><p>{brief.intake.mustHaves.length} must-have{brief.intake.mustHaves.length === 1 ? '' : 's'} · {approvedAngles} search angles · {coverage.uniqueResultsSeen} source profiles reviewed</p></div><span className="role-agent-expand-v33-9">View details</span></summary>
 
         <section className="role-workbench-section-v33-4">
           <div className="role-workbench-section-head-v33-4"><div><b>Role Brief v{brief.version}</b><span>{brief.status === 'draft' ? 'Draft does not affect the active search.' : 'Recruiter approved'}</span></div><div className="role-workbench-inline-actions-v33-4"><button onClick={startBriefEdit}>Edit</button>{briefIsDraft && <button className="primary" onClick={approveBrief}>Approve</button>}</div></div>
@@ -432,11 +437,11 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
         </section>
 
         <details className="role-workbench-disclosure-v33-4"><summary>Role Brief version history</summary><div className="role-brief-history-v33-4">{briefVersions.slice().reverse().map(version => <div key={version.id}><b>v{version.version} · {version.status}</b><span>{version.changeSummary.join(' ') || 'No change summary.'}</span><small>{formatDate(version.approvedAt || version.createdAt)}</small></div>)}</div></details>
-      </aside>
+      </details>
 
       <main className="role-workbench-pane-v33-4 role-workbench-slate-v33-4">
         <div className="role-workbench-pane-head-v33-4 role-slate-head-v33-4">
-          <div><span className="kicker">Review slate</span><h2>{filteredCandidates.length} candidate{filteredCandidates.length === 1 ? '' : 's'}</h2></div>
+          <div><span className="kicker">First review batch</span><h2>{filteredCandidates.length} candidate{filteredCandidates.length === 1 ? '' : 's'} ready for judgment</h2><p>{coverage.uniqueResultsSeen ? `${coverage.uniqueResultsSeen} source profiles were reviewed before this batch.` : 'Only evidence-bearing people should enter this batch.'}</p></div>
           <div><input ref={candidateSearchRef} className="input" value={candidateQuery} onChange={event => setCandidateQuery(event.target.value)} placeholder="Filter slate…" aria-label="Filter review slate" /><button title="Keyboard shortcuts" onClick={() => setShowShortcuts(current => !current)}>?</button></div>
         </div>
 
@@ -458,9 +463,9 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
             const snippet = pickSlateEvidenceSnippet(item?.requirements || [])
             const disqualifierFlags = item?.requirements.filter(requirement => requirement.tier === 'disqualifier' && requirement.state !== 'unknown').length || 0
             return <div className="role-candidate-row-shell-v33-4" key={candidate.id}>
-              <button className={`role-candidate-row-v33-4 ${candidate.id === selectedCandidateId ? 'selected' : ''}`} onClick={() => setSelectedCandidateId(candidate.id)}>
-                <span className="role-candidate-identity-v33-4"><b>{candidate.name}</b><small>{[candidate.headline, candidate.company, candidate.location].filter(Boolean).join(' · ') || candidate.source}</small><em>{candidate.source}</em></span>
-                <span className="role-candidate-coverage-v33-4">{must ? <><b>{must.supported}/{must.total} must-haves supported</b><small>{must.needsVerification} verify · {must.unknown} unknown{must.contradicted ? ` · ${must.contradicted} contradicted` : ''}</small>{disqualifierFlags ? <em>{disqualifierFlags} disqualifier review flag{disqualifierFlags === 1 ? '' : 's'}</em> : null}{snippet ? <span className="role-candidate-evidence-snippet-v33-4"><i>{evidenceStateLabel(snippet.state)} · {snippet.requirementText}</i><small title={snippet.detail}>{snippet.detail}</small><em>{snippet.source}</em></span> : <span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span>}</> : <><b>{candidate.candidateId ? assessmentLoading ? 'Assessing evidence…' : 'Evidence pending' : 'No canonical evidence link'}</b><small>Missing evidence is not a negative finding.</small><span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span></>}</span>
+              <button className={`role-candidate-row-v33-4 ${candidate.id === selectedCandidateId ? 'selected' : ''}`} onClick={() => setSelectedCandidateId(candidate.id)} aria-pressed={candidate.id === selectedCandidateId}>
+                <span className="role-candidate-identity-v33-4"><span className="role-candidate-avatar-v33-9">{candidateInitials(candidate.name)}</span><span className="role-candidate-identity-copy-v33-9"><b>{candidate.name}</b><small>{[candidate.headline, candidate.company, candidate.location].filter(Boolean).join(' · ') || 'Public profile details are limited'}</small><em>{candidate.source.replace('_', ' ')} source</em></span></span>
+                <span className="role-candidate-coverage-v33-4">{must ? <><b>{must.supported}/{must.total} must-haves supported</b><span className="role-candidate-coverage-meter-v33-9"><i style={{ width: `${must.total ? Math.round((must.supported / must.total) * 100) : 0}%` }} /></span><small>{must.needsVerification} need verification · {must.unknown} unknown{must.contradicted ? ` · ${must.contradicted} contradicted` : ''}</small>{disqualifierFlags ? <em>{disqualifierFlags} disqualifier review flag{disqualifierFlags === 1 ? '' : 's'}</em> : null}{snippet ? <span className="role-candidate-evidence-snippet-v33-4"><i>{evidenceStateLabel(snippet.state)} · {snippet.requirementText}</i><small title={snippet.detail}>{snippet.detail}</small><em>{snippet.source}</em></span> : <span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span>}</> : <><b>{candidate.candidateId ? assessmentLoading ? 'Assessing evidence…' : 'Evidence pending' : 'No canonical evidence link'}</b><small>Missing evidence is not a negative finding.</small><span className="role-candidate-evidence-empty-v33-4">No source-linked evidence snippet yet.</span></>}</span>
                 <span className={`role-candidate-decision-v33-4 decision-${candidate.fitDecision}`}>{decisionLabel(candidate)}</span>
               </button>
               {snippet?.sourceUrl && <a className="role-candidate-row-source-v33-4" href={snippet.sourceUrl} target="_blank" rel="noreferrer noopener" aria-label={`Open evidence source for ${candidate.name}`}>Open {snippet.source} evidence ↗</a>}
@@ -473,7 +478,7 @@ export function RoleUnifiedWorkbenchV33_4({ roleId }: { roleId: string }) {
       <aside className="role-workbench-pane-v33-4 role-workbench-candidate-v33-4">
         {selectedCandidate ? <>
           <div className="role-workbench-pane-head-v33-4 role-candidate-drawer-head-v33-4">
-            <div><span className="kicker">Candidate 360</span><h2>{selectedCandidate.name}</h2><p>{[selectedCandidate.headline, selectedCandidate.company, selectedCandidate.location].filter(Boolean).join(' · ')}</p></div>
+            <div className="role-candidate-hero-v33-9"><span className="role-candidate-avatar-v33-9 large">{candidateInitials(selectedCandidate.name)}</span><span><span className="kicker">Candidate 360 · selected</span><h2>{selectedCandidate.name}</h2><p>{[selectedCandidate.headline, selectedCandidate.company, selectedCandidate.location].filter(Boolean).join(' · ') || 'Public profile details are limited'}</p></span></div>
             <div className="role-candidate-nav-v33-4"><button disabled={selectedIndex <= 0} onClick={() => moveSelection(-1)}>← J</button><span>{selectedIndex + 1}/{filteredCandidates.length}</span><button disabled={selectedIndex < 0 || selectedIndex >= filteredCandidates.length - 1} onClick={() => moveSelection(1)}>K →</button></div>
           </div>
 

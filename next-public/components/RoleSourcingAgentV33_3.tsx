@@ -20,6 +20,7 @@ import {
 } from '@/lib/source-orchestration-v33-8'
 import {
   buildRoleReviewSlateCandidates,
+  evidenceBearingFirstReviewBatch,
   mergeReviewSlateDiscoveries,
   previewDeterministicIdentityReviews,
   reviewSlateDiscoveryKey,
@@ -47,6 +48,14 @@ type SaveResponse = {
 }
 
 type SourceStatus = { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }
+
+type SearchProgressPhase = 'searching' | 'reviewing' | 'saving' | 'ready' | 'paused'
+
+function emitRoleSearchProgress(roleId: string, phase: SearchProgressPhase, message: string, current = 0, total = 0) {
+  window.dispatchEvent(new CustomEvent('sourcingos:role-search-progress', {
+    detail: { roleId, phase, message, current, total },
+  }))
+}
 
 function memoryKey(roleId: string) {
   return `sourcingos.v30.search-memory.${roleId}`
@@ -118,12 +127,19 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     [executableLanes]
   )
   const saveEligible = useMemo(() => saveEligibleReviewSlateDiscoveries(discoveries), [discoveries])
+  const firstBatch = useMemo(
+    () => role ? evidenceBearingFirstReviewBatch(discoveries, role.intake, 12) : { batch: [], checks: [] },
+    [discoveries, role]
+  )
+  const evidenceCheckByKey = useMemo(
+    () => new Map(firstBatch.checks.map(check => [reviewSlateDiscoveryKey(check.discovery), check])),
+    [firstBatch.checks]
+  )
   const selected = useMemo(() => {
     const keys = new Set(selectedKeys)
     return saveEligible.filter(item => keys.has(reviewSlateDiscoveryKey(item)))
   }, [saveEligible, selectedKeys])
   const identityReviewPreview = useMemo(() => previewDeterministicIdentityReviews(selected), [selected])
-  const previewOnlyCount = discoveries.length - saveEligible.length
 
   if (!role || !plan || mode === 'checking') return null
   const activeRole = role
@@ -163,11 +179,13 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     setPassTelemetry({ discoveredBeforeCap: 0, returnedAfterCap: 0, sourceDistribution: {} })
     setPassProgress({ current: 0, total: executableLanes.length })
     setStatus(`Running ${executableLanes.length} approved sourcing hypoth${executableLanes.length === 1 ? 'esis' : 'eses'} across ${executableSources.size} executable public source${executableSources.size === 1 ? '' : 's'}…`)
+    emitRoleSearchProgress(roleId, 'searching', `Searching ${executableSources.size} public source${executableSources.size === 1 ? '' : 's'} across ${executableLanes.length} approved angles…`, 0, executableLanes.length)
 
     try {
       for (let index = 0; index < executableLanes.length; index += 1) {
         const lane = executableLanes[index]
         setPassProgress({ current: index + 1, total: executableLanes.length })
+        emitRoleSearchProgress(roleId, 'searching', `Searching angle ${index + 1} of ${executableLanes.length}: ${lane.label}`, index + 1, executableLanes.length)
         const executableTasks = lane.tasks.filter(task => task.mode === 'executable' && task.connectorKeys?.length)
         const allowedTasks = executableTasks.filter(task => shouldExecuteSearch(nextAttempts, task.surface, task.query).execute)
         if (!allowedTasks.length) continue
@@ -259,7 +277,8 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
       const merged = mergeReviewSlateDiscoveries(discoveries, foundThisPass)
       setDiscoveries(merged)
       const saved = new Set(savedKeys)
-      const autoSelected = saveEligibleReviewSlateDiscoveries(merged).map(reviewSlateDiscoveryKey).filter(key => !saved.has(key))
+      const batch = evidenceBearingFirstReviewBatch(merged, activeRole.intake, 12)
+      const autoSelected = batch.batch.map(reviewSlateDiscoveryKey).filter(key => !saved.has(key))
       setSelectedKeys(autoSelected)
       const thisPassKeys = foundThisPass.map(reviewSlateDiscoveryKey)
       setNovelty(resultNoveltyRate(priorResultKeys, thisPassKeys))
@@ -269,7 +288,11 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
         sourceDistribution: sourceDistribution(foundThisPass),
       })
       const eligibleCount = saveEligibleReviewSlateDiscoveries(foundThisPass).length
-      setStatus(`Agent pass finished: ${foundThisPass.length} unique source record${foundThisPass.length === 1 ? '' : 's'} retained from ${discoveredBeforeCap} raw public-source discover${discoveredBeforeCap === 1 ? 'y' : 'ies'}, with ${eligibleCount} eligible for an explicit review-slate save. No candidate was shortlisted, rejected, merged across sources, or contacted.`)
+      const firstBatchCount = evidenceBearingFirstReviewBatch(merged, activeRole.intake, 12).batch.length
+      setStatus(`Agent pass finished: ${foundThisPass.length} unique source record${foundThisPass.length === 1 ? '' : 's'} retained from ${discoveredBeforeCap} raw public-source discover${discoveredBeforeCap === 1 ? 'y' : 'ies'}. ${firstBatchCount} evidence-bearing ${firstBatchCount === 1 ? 'person is' : 'people are'} proposed for the first review batch; ${eligibleCount - firstBatchCount} remain in discovery for inspection. No candidate was shortlisted, rejected, merged across sources, or contacted.`)
+      emitRoleSearchProgress(roleId, firstBatchCount ? 'reviewing' : 'paused', firstBatchCount
+        ? `Reviewed ${discoveredBeforeCap} raw discoveries and prepared ${firstBatchCount} evidence-bearing ${firstBatchCount === 1 ? 'person' : 'people'} for your first batch.`
+        : `Reviewed ${discoveredBeforeCap} raw discoveries, but none met the first-batch evidence floor. Refine or broaden the search before saving candidates.`)
     } finally {
       setWorking('')
       setPassProgress({ current: 0, total: 0 })
@@ -281,6 +304,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     setWorking('slate')
     setPassProgress({ current: 0, total: selected.length })
     setStatus(`Creating a recruiter review slate from ${selected.length} explicitly selected source record${selected.length === 1 ? '' : 's'}…`)
+    emitRoleSearchProgress(roleId, 'saving', `Building your first review batch from ${selected.length} evidence-bearing ${selected.length === 1 ? 'person' : 'people'}…`, 0, selected.length)
 
     const saved: SavedSlateDiscovery[] = []
     const successfulKeys: string[] = []
@@ -292,6 +316,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
         const discovery = selected[index]
         const key = reviewSlateDiscoveryKey(discovery)
         setPassProgress({ current: index + 1, total: selected.length })
+        emitRoleSearchProgress(roleId, 'saving', `Building your review batch: ${index + 1} of ${selected.length}`, index + 1, selected.length)
         if (!discovery.sourceResult) { failedKeys.push(key); continue }
         try {
           const response = await fetch('/api/workbench/save-source-profile', {
@@ -346,6 +371,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
         : ' No cross-source identity was silently merged.'
       const failureMessage = failedKeys.length ? ` ${failedKeys.length} record${failedKeys.length === 1 ? '' : 's'} failed to save and remain selected for retry.` : ''
       setStatus(`Review slate ready: ${addedCount} new canonical candidate${addedCount === 1 ? '' : 's'} added as needs-review/unreviewed. ${existingCount} already existed in this role; ${reusedCount} Candidate Graph identit${reusedCount === 1 ? 'y was' : 'ies were'} reused.${proposalMessage}${failureMessage}`)
+      emitRoleSearchProgress(roleId, 'ready', `First review batch ready: ${addedCount} new candidate${addedCount === 1 ? '' : 's'} to review.${failedKeys.length ? ` ${failedKeys.length} could not be saved.` : ''}`)
     } finally {
       setWorking('')
       setPassProgress({ current: 0, total: 0 })
@@ -396,8 +422,8 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
       <div className="agent-review-stage-head">
         <div>
           <span className="kicker">Proposed review slate</span>
-          <h3>{saveEligible.length} save-eligible people · {previewOnlyCount} preview-only records</h3>
-          <p>Select the source records you want persisted. Saving may create cross-source identity-review proposals, but never authorizes a cross-source merge.</p>
+          <h3>{firstBatch.batch.length} in the first review batch · {saveEligible.length} people discovered</h3>
+          <p>The first batch is capped at 12 and requires observed role evidence plus compatible or unknown geography. Held records stay visible here and are never silently rejected.</p>
         </div>
         <div className="agent-review-stage-actions">
           <button className="btn ghost" disabled={Boolean(working)} onClick={selectAllEligible}>Select eligible</button>
@@ -418,6 +444,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
         const eligible = Boolean(discovery.saveEligible && discovery.sourceResult?.entityKind === 'person')
         const selectedNow = selectedKeys.includes(key)
         const saved = savedKeys.includes(key)
+        const evidenceCheck = evidenceCheckByKey.get(key)
         return <article className={`agent-review-card ${selectedNow ? 'selected' : ''} ${saved ? 'saved' : ''}`} key={key}>
           <div className="agent-review-card-top">
             <label className="agent-review-check">
@@ -429,6 +456,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
           <h4>{discovery.displayName}</h4>
           <p>{[discovery.headline, discovery.organization, discovery.location].filter(Boolean).join(' · ') || 'Public-source identity'}</p>
           <div className="agent-review-evidence">{discovery.evidence.slice(0, 2).map((item, index) => <div key={`${key}:${index}`}><b>{item.label}</b><span>{item.value}</span></div>)}</div>
+          {evidenceCheck && <p className={`agent-review-floor ${evidenceCheck.admitted ? 'admitted' : 'held'}`}>{evidenceCheck.explanation}</p>}
           <div className="agent-review-card-foot"><span>{discovery.evidence.length} evidence items</span>{discovery.sourceUrl && <a href={discovery.sourceUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}</div>
         </article>
       })}</div>

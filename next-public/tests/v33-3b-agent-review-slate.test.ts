@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import {
   buildRoleReviewSlateCandidates,
+  evidenceBearingFirstReviewBatch,
   mergeReviewSlateDiscoveries,
   previewDeterministicIdentityReviews,
   reviewSlateDiscoveryKey,
@@ -52,6 +53,34 @@ function discovery(overrides: Partial<ReviewSlateDiscovery> = {}): ReviewSlateDi
 }
 
 describe('V33.3B recruiter-controlled review slate', () => {
+  it('builds a small evidence-bearing first batch without treating held discoveries as rejected', () => {
+    const dcLinux = discovery({
+      location: 'Arlington, Virginia',
+      sourceResult: source({ skills: ['Linux', 'RHEL'], location: 'Arlington, Virginia' }),
+    })
+    const distantLinux = discovery({
+      sourceKey: 'stackoverflow',
+      sourceId: '42',
+      location: 'Dhaka, Bangladesh',
+      sourceResult: source({ id: 'stackoverflow:42', source: 'stackoverflow', sourceProfileId: '42', skills: ['Linux'], location: 'Dhaka, Bangladesh' }),
+    })
+    const unrelated = discovery({
+      sourceKey: 'devto',
+      sourceId: 'writer',
+      sourceResult: source({ id: 'devto:writer', source: 'devto', sourceProfileId: 'writer', skills: ['CSS'] }),
+    })
+    const role = {
+      title: 'RHEL Administrator', location: 'Washington DC area', workMode: 'unknown' as const,
+      compensation: 'Not specified', clearance: 'Secret', mustHaves: ['5+ years Linux experience'],
+      niceToHaves: [], disqualifiers: [], targetCompanies: [], adjacentBackgrounds: [],
+      hiringManagerNotes: '', rawDescription: '',
+    }
+    const result = evidenceBearingFirstReviewBatch([dcLinux, distantLinux, unrelated], role)
+    expect(result.batch).toEqual([dcLinux])
+    expect(result.checks.find(check => check.discovery === distantLinux)?.locationState).toBe('outside_search_area')
+    expect(result.checks.find(check => check.discovery === unrelated)?.explanation).toContain('no observed role-relevant')
+  })
+
   it('dedupes exact source records without pretending cross-source identities are the same person', () => {
     const first = discovery()
     const refreshed = discovery({ headline: 'Platform engineer' })
