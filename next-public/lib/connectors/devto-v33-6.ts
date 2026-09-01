@@ -24,7 +24,7 @@ function safeUrl(value: unknown): string | undefined {
 }
 
 function retrievalTags(req: SourceSearchRequest): string[] {
-  const text = `${req.query} ${(req as SourceSearchRequest & { skills?: string[] }).skills?.join(' ') || ''}`.toLowerCase()
+  const text = req.query.toLowerCase()
   const tags: string[] = []
   const rules: Array<[RegExp, string]> = [
     [/\b(?:rhel|red\s+hat|linux|unix|sysadmin)\b/, 'linux'],
@@ -217,7 +217,12 @@ export async function discoverDevToTalent(req: SourceSearchRequest): Promise<Sou
       ],
       identitySignals,
       refreshedAt: new Date().toISOString(),
-      raw: { profile, articleIds: authored.map(article => article.id).filter(Boolean) },
+      raw: {
+        connectorVersion: 'v33.6-person',
+        profile,
+        observedTags: skills,
+        articleIds: authored.map(article => article.id).filter(Boolean),
+      },
     })
   }
 
