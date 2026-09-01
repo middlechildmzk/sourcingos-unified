@@ -20,11 +20,12 @@ const v26Styles = read('app/app/v26.css')
 const candidateReviewStyles = read('app/app/v26-candidate-review.css')
 
 describe('V25.2 daily driver experience', () => {
-  it('uses a guided role portfolio plus a dedicated role workspace route', () => {
+  it('uses a prompt-first sourcing entry plus a dedicated role workspace route', () => {
     expect(rolesPage).toContain('<RoleWorkspaceClient />')
     expect(rolePortfolio).toContain('href={`/app/roles/${role.id}`}')
-    expect(rolePortfolio).toContain('Role portfolio')
-    expect(rolePortfolio).toContain('<RoleIntakeWizard')
+    expect(rolePortfolio).toContain('RoleIntakeWizardV33_4')
+    expect(rolePortfolio).toContain('useState(true)')
+    expect(rolePortfolio).toContain('router.push(`/app/roles/${role.id}?start=1`)')
     expect(roleWizard).toContain('Guided role setup')
     expect(roleDetailPage).toContain('const { id } = await params')
     expect(roleDetailPage).toContain('<RoleDetailClient roleId={id} initialTab={sp.tab} />')

@@ -1,4 +1,12 @@
-import type { RoleActivity, RoleCandidate, RoleIntake, RoleWorkspace, SearchLane } from './role-workspace'
+import type {
+  RoleActivity,
+  RoleBriefInterpretationNote,
+  RoleBriefVersion,
+  RoleCandidate,
+  RoleIntake,
+  RoleWorkspace,
+  SearchLane,
+} from './role-workspace'
 import { normalizeCalibrationState } from './calibration-intelligence'
 
 export const ROLE_WORKSPACE_STORAGE_KEY = 'sourcingos.v20.role-workspaces'
@@ -25,7 +33,9 @@ const candidateStages = new Set<RoleCandidate['stage']>(['discovered', 'needs_re
 const fitDecisions = new Set<RoleCandidate['fitDecision']>(['unreviewed', 'strong_fit', 'possible_fit', 'not_fit'])
 const contactStatuses = new Set<RoleCandidate['contactStatus']>(['unknown', 'signals_found', 'verified', 'blocked'])
 const evidenceStatuses = new Set<RoleCandidate['evidenceStatus']>(['unreviewed', 'reviewed', 'conflicting', 'stale'])
-const activityTypes = new Set<RoleActivity['type']>(['role_created', 'intake_updated', 'lane_approved', 'candidate_added', 'candidate_reviewed', 'stage_changed', 'note_added'])
+const activityTypes = new Set<RoleActivity['type']>(['role_created', 'intake_updated', 'lane_approved', 'candidate_added', 'candidate_reviewed', 'stage_changed', 'note_added', 'brief_version_created', 'brief_approved'])
+const briefStatuses = new Set<RoleBriefVersion['status']>(['draft', 'approved', 'superseded'])
+const interpretationCategories = new Set<RoleBriefInterpretationNote['category']>(['scope', 'location', 'clearance', 'work_mode', 'trust'])
 
 function record(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
@@ -70,6 +80,39 @@ function normalizeIntake(value: unknown, legacy: Record<string, unknown>): RoleI
     adjacentBackgrounds: textArray(intake.adjacentBackgrounds || intake.adjacent_backgrounds),
     hiringManagerNotes: normalize(intake.hiringManagerNotes || intake.hiring_manager_notes),
     rawDescription: normalize(intake.rawDescription || intake.raw_description || legacy.rawDescription || legacy.raw_description),
+  }
+}
+
+function normalizeInterpretation(value: unknown, index: number): RoleBriefInterpretationNote | null {
+  const note = record(value)
+  if (!note) return null
+  const statement = normalize(note.statement)
+  if (!statement) return null
+  return {
+    id: normalize(note.id) || `interpretation-${index}`,
+    label: normalize(note.label) || 'Interpretation',
+    category: enumValue(note.category, interpretationCategories, 'scope'),
+    statement,
+    verificationGated: note.verificationGated === true || note.verification_gated === true || undefined,
+  }
+}
+
+function normalizeBriefVersion(value: unknown, roleId: string, index: number, fallbackTime: string): RoleBriefVersion | null {
+  const version = record(value)
+  if (!version) return null
+  const parsedVersion = Number(version.version)
+  if (!Number.isInteger(parsedVersion) || parsedVersion < 1) return null
+  const createdAt = validIso(version.createdAt || version.created_at, fallbackTime)
+  const interpretations = Array.isArray(version.interpretations) ? version.interpretations : []
+  return {
+    id: normalize(version.id) || `${roleId}-brief-${parsedVersion || index + 1}`,
+    version: parsedVersion,
+    status: enumValue(version.status, briefStatuses, 'draft'),
+    intake: normalizeIntake(version.intake, {}),
+    interpretations: interpretations.map((item, noteIndex) => normalizeInterpretation(item, noteIndex)).filter((item): item is RoleBriefInterpretationNote => Boolean(item)),
+    changeSummary: textArray(version.changeSummary || version.change_summary, 30),
+    createdAt,
+    approvedAt: normalize(version.approvedAt || version.approved_at) ? validIso(version.approvedAt || version.approved_at, createdAt) : undefined,
   }
 }
 
@@ -140,6 +183,12 @@ export function normalizeRoleWorkspace(value: unknown): RoleWorkspace | null {
   const lanes = Array.isArray(role.searchLanes || role.search_lanes) ? role.searchLanes || role.search_lanes : []
   const candidates = Array.isArray(role.candidates) ? role.candidates : []
   const activity = Array.isArray(role.activity) ? role.activity : []
+  const rawBriefVersions = Array.isArray(role.roleBriefVersions || role.role_brief_versions) ? role.roleBriefVersions || role.role_brief_versions : []
+  const briefVersions = (rawBriefVersions as unknown[])
+    .map((version, index) => normalizeBriefVersion(version, id, index, createdAt))
+    .filter((version): version is RoleBriefVersion => Boolean(version))
+    .sort((a, b) => a.version - b.version)
+  const activeBriefId = normalize(role.activeRoleBriefVersionId || role.active_role_brief_version_id)
   return {
     id,
     status: enumValue(role.status, roleStatuses, 'calibrating'),
@@ -148,6 +197,8 @@ export function normalizeRoleWorkspace(value: unknown): RoleWorkspace | null {
     candidates: candidates.map((candidate, index) => normalizeCandidate(candidate, id, index, createdAt)).filter((candidate): candidate is RoleCandidate => Boolean(candidate)),
     activity: activity.map((event, index) => normalizeActivity(event, id, index, createdAt)).filter((event): event is RoleActivity => Boolean(event)),
     calibration: role.calibration ? normalizeCalibrationState(role.calibration) : undefined,
+    roleBriefVersions: briefVersions.length ? briefVersions : undefined,
+    activeRoleBriefVersionId: activeBriefId && briefVersions.some(version => version.id === activeBriefId) ? activeBriefId : briefVersions[briefVersions.length - 1]?.id,
     createdAt,
     updatedAt,
   }
@@ -260,6 +311,8 @@ export function mergeRoleWorkspaces(local: RoleWorkspace[], remote: RoleWorkspac
       searchLanes: mergeLanes(workspace.searchLanes, server.searchLanes),
       candidates: mergeCandidates(workspace.candidates, server.candidates),
       calibration: mergeCalibration(preferred.calibration, secondary.calibration),
+      roleBriefVersions: preferred.roleBriefVersions?.length ? preferred.roleBriefVersions : secondary.roleBriefVersions,
+      activeRoleBriefVersionId: preferred.activeRoleBriefVersionId || secondary.activeRoleBriefVersionId,
       activity: compactActivity(Array.from(activity.values())),
       createdAt: timestamp(workspace.createdAt) <= timestamp(server.createdAt) ? workspace.createdAt : server.createdAt,
       updatedAt: timestamp(workspace.updatedAt) >= timestamp(server.updatedAt) ? workspace.updatedAt : server.updatedAt,

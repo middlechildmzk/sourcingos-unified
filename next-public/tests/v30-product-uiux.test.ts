@@ -34,9 +34,9 @@ describe('V30 product experience release gate on the canonical V33 role loop', (
 
   it('uses explainable workflow readiness rather than an opaque role health score', () => {
     expect(roles).toContain('function workflowReadiness')
-    expect(roles).toContain('Confirm the role brief')
-    expect(roles).toContain('Approve a sourcing hypothesis')
-    expect(roles).toContain('Build the first slate')
+    expect(roles).toContain('Confirm the search')
+    expect(roles).toContain('Start the sourcing agent')
+    expect(roles).toContain('Review the first slate')
     expect(roles).toContain('Review the first candidates')
     expect(roles).not.toContain('function roleHealth')
     expect(roles).not.toContain('search health')
