@@ -5,6 +5,8 @@
 //   - Reads PDL_API_KEY from process.env (never NEXT_PUBLIC_)
 //   - API key sent via X-Api-Key header, never logged, never returned to client
 //   - Conservative professional-field request only — no protected attributes
+//   - Provider response is minimized with data_include; full person payload is not requested
+//   - Provider identity-match metadata is retained separately from contact verification
 //   - All signals: verified=false, permissionStatus='unknown', provider='people_data_labs'
 //   - Raw provider errors and payloads never reach the client
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,6 +21,17 @@ import {
 
 const PROVIDER = 'people_data_labs' as const
 const PDL_ENDPOINT = 'https://api.peopledatalabs.com/v5/person/enrich'
+
+// PDL returns the full matched person record when data_include is omitted.
+// Request only fields this adapter maps, plus the provider person ID used for provenance.
+const PDL_DATA_INCLUDE = [
+  'id',
+  'emails.address',
+  'phone_numbers',
+  'linkedin_url',
+  'github_url',
+  'job_company_website',
+].join(',')
 
 function emptyResult(message: string, request: ContactEnrichmentRequest, warnings: string[] = []): ContactEnrichmentResult {
   return {
@@ -47,16 +60,19 @@ function buildParams(request: ContactEnrichmentRequest): URLSearchParams {
     if (request.lastName) params.set('last_name', request.lastName)
   }
   if (request.currentCompany) params.set('company', request.currentCompany)
-  // PDL accepts a company domain in the same 'company' param family; prefer explicit domain
+  // PDL accepts a company name/domain/URL in the company match input; prefer explicit domain.
   if (request.companyDomain) params.set('company', request.companyDomain)
   if (request.location) params.set('location', request.location)
-  if (request.title) params.set('title', request.title)
-  // Profile URLs improve match precision
+  // Do not send request.title. PDL Person Enrichment does not document title as a match input.
   const profile = request.linkedinUrl || request.profileUrl || request.githubUrl
   if (profile) params.append('profile', profile)
-  // Conservative match threshold — reduce false matches
+
+  // Conservative match threshold — PDL recommends >= 6 for high-accuracy use cases.
   params.set('min_likelihood', '6')
-  // Only request the fields we map — never sensitive/protected attributes
+  // Retain only names of request inputs PDL says matched; never their raw values in audit metadata.
+  params.set('include_if_matched', 'true')
+  // Data minimization: PDL otherwise returns the full person record.
+  params.set('data_include', PDL_DATA_INCLUDE)
   return params
 }
 
@@ -165,13 +181,22 @@ export async function enrichWithPeopleDataLabs(
       return emptyResult('Contact enrichment service is unavailable right now. Try again later.', request, [`Provider status ${res.status}.`])
     }
 
-    const json = await res.json() as { data?: Record<string, unknown> }
+    const json = await res.json() as {
+      data?: Record<string, unknown>
+      likelihood?: number
+      matched?: string[]
+    }
     const person = json.data
     if (!person) {
       return emptyResult('No contact signal found from People Data Labs.', request)
     }
 
     const signals = mapSignals(person)
+    const providerRecordId = typeof person.id === 'string' ? person.id : undefined
+    const providerMatchLikelihood = Number.isFinite(json.likelihood) ? json.likelihood : undefined
+    const providerMatchedFields = Array.isArray(json.matched)
+      ? json.matched.filter(field => typeof field === 'string').slice(0, 24)
+      : undefined
 
     return {
       provider: PROVIDER,
@@ -186,6 +211,9 @@ export async function enrichWithPeopleDataLabs(
         fieldsUsed: enrichmentFieldsUsed(request),
         resultCount: signals.length,
         warnings: [],
+        providerRecordId,
+        providerMatchLikelihood,
+        providerMatchedFields,
         persistenceMode: 'none',
       },
     }
