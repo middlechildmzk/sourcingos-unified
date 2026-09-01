@@ -6,6 +6,7 @@ import {
   newRunReport,
   type ConnectorRunReport,
   type DiscoveryIntent,
+  type TechnicalDossier,
 } from './contract-v33-3'
 import { discoverGitHubTalent } from './github-v2'
 import { ConnectorRequestLedger } from './request-ledger-v33-3'
@@ -86,8 +87,13 @@ export function technicalDiscoveryIntent(input: TechnicalV2Input): DiscoveryInte
   })
 }
 
-function canonicalizeDossiers(
-  dossiers: Parameters<typeof enforceRetrievalBoundary>[0][],
+/**
+ * Runtime trust gate immediately before the Candidate Graph's canonical
+ * SourceResult shape. Contaminated observations are removed, never silently
+ * promoted from search criteria into candidate facts.
+ */
+export function canonicalizeTechnicalDossiers(
+  dossiers: readonly TechnicalDossier[],
   intent: DiscoveryIntent,
   report: ConnectorRunReport,
 ): SourceResult[] {
@@ -132,7 +138,7 @@ export async function runGitHubV2(input: TechnicalV2Input): Promise<TechnicalV2R
     repoLimit: credentialed ? 20 : 12,
   })
   report.durationMs = Date.now() - started
-  const results = canonicalizeDossiers(outcome.dossiers, intent, report)
+  const results = canonicalizeTechnicalDossiers(outcome.dossiers, intent, report)
   report.evidenceItemsProduced = results.reduce((sum, result) => sum + result.evidence.length, 0)
 
   const credentialNote = credentialed
@@ -158,7 +164,7 @@ export async function runStackOverflowV2(input: TechnicalV2Input): Promise<Techn
     maxPeople: Math.min(input.limit, budget.maxPeople),
   })
   report.durationMs = Date.now() - started
-  const results = canonicalizeDossiers(outcome.dossiers, intent, report)
+  const results = canonicalizeTechnicalDossiers(outcome.dossiers, intent, report)
   report.evidenceItemsProduced = results.reduce((sum, result) => sum + result.evidence.length, 0)
 
   return { results, report, message: reportMessage('Stack Overflow', report) }
