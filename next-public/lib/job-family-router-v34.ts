@@ -46,13 +46,18 @@ const PUBLIC_EVIDENCE_SURFACES: AgenticSearchSurface[] = [
   'healthcare_registry',
 ]
 
-function textFor(intake: RoleIntake): string {
+function explicitTextFor(intake: RoleIntake): string {
   return [
     intake.title,
-    intake.location,
     intake.clearance,
     ...intake.mustHaves,
     ...intake.niceToHaves,
+    intake.rawDescription,
+  ].filter(Boolean).join(' ').toLowerCase()
+}
+
+function expansionTextFor(intake: RoleIntake): string {
+  return [
     ...intake.adjacentBackgrounds,
     ...intake.targetCompanies,
     intake.hiringManagerNotes,
@@ -95,19 +100,19 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\bthreat hunting\b/, /\bpenetration testing\b/, /\bvulnerability management\b/, /\bnessus\b/,
     ],
     preferred: ['github', 'stackoverflow'],
-    deprioritized: ['huggingface', 'research_publications'],
+    deprioritized: ['devto', 'huggingface', 'research_publications'],
   },
   {
     id: 'ai_ml',
     strong: [
-      /\b(?:machine learning engineer|ml engineer|ai engineer|applied scientist|research scientist|nlp engineer|computer vision engineer|llm engineer)\b/,
+      /\b(?:machine learning engineer|ml engineer|ai engineer|nlp engineer|computer vision engineer|llm engineer|mlops engineer)\b/,
     ],
     signals: [
       /\bmachine learning\b/, /\bartificial intelligence\b/, /\bgenerative ai\b/, /\bgenai\b/, /\bllm\b/, /\bnlp\b/, /\bcomputer vision\b/,
       /\bpytorch\b/, /\btensorflow\b/, /\bjax\b/, /\btransformers?\b/, /\brag\b/, /\bembeddings?\b/, /\bfine[- ]?tun/,
     ],
     preferred: ['huggingface', 'github', 'research_publications', 'stackoverflow'],
-    deprioritized: [],
+    deprioritized: ['devto'],
   },
   {
     id: 'data',
@@ -119,7 +124,7 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\bdata warehouse\b/, /\betl\b/, /\belt\b/, /\bbigquery\b/,
     ],
     preferred: ['github', 'stackoverflow', 'devto'],
-    deprioritized: ['huggingface'],
+    deprioritized: ['huggingface', 'research_publications'],
   },
   {
     id: 'software',
@@ -130,7 +135,7 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\bjavascript\b/, /\btypescript\b/, /\breact\b/, /\bnode\b/, /\bjava\b/, /\bc\+\+\b/, /\bc#\b/, /\bgolang\b/, /\brust\b/, /\bswift\b/, /\bkotlin\b/,
     ],
     preferred: ['github', 'stackoverflow', 'devto'],
-    deprioritized: ['research_publications'],
+    deprioritized: ['huggingface', 'research_publications'],
   },
   {
     id: 'healthcare_clinical',
@@ -146,7 +151,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   {
     id: 'research_science',
     strong: [
-      /\b(?:research scientist|researcher|postdoc|principal investigator|scientist|biostatistician)\b/,
+      /\b(?:research scientist|applied scientist|researcher|postdoc|principal investigator|scientist|biostatistician)\b/,
     ],
     signals: [
       /\bresearch\b/, /\bpublication\b/, /\bacademic\b/, /\buniversity\b/, /\blaboratory\b/, /\br&d\b/, /\bscientific\b/,
@@ -175,7 +180,7 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\bfinra\b/, /\bsecurities\b/, /\bseries 7\b/, /\bseries 63\b/, /\bseries 65\b/, /\bbrokerage\b/, /\bwealth management\b/,
     ],
     preferred: [],
-    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface'],
+    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications'],
   },
   {
     id: 'aviation',
@@ -186,7 +191,7 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\baviation\b/, /\baircraft\b/, /\bairline\b/, /\bairman\b/, /\bflight\b/, /\baerospace operations\b/,
     ],
     preferred: [],
-    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface'],
+    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications'],
   },
   {
     id: 'general',
@@ -196,21 +201,41 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
 ]
 
-function scoreDefinition(text: string, definition: FamilyDefinition): JobFamilyMatchV34 {
+function scoreDefinition(intake: RoleIntake, definition: FamilyDefinition): JobFamilyMatchV34 {
+  const explicit = explicitTextFor(intake)
+  const expansion = expansionTextFor(intake)
   const reasons: string[] = []
   let score = 0
+
+  // Recruiter-authored title/requirements outrank generated adjacent-title expansions.
   for (const pattern of definition.strong) {
-    const match = text.match(pattern)?.[0]
+    const match = explicit.match(pattern)?.[0]
     if (!match) continue
     score += 0.62
     reasons.push(match)
   }
   for (const pattern of definition.signals) {
-    const match = text.match(pattern)?.[0]
+    const match = explicit.match(pattern)?.[0]
     if (!match) continue
     score += 0.14
     reasons.push(match)
   }
+  // Expansions can support a family hypothesis but cannot independently create a
+  // high-confidence routing decision or beat an explicit title.
+  for (const pattern of definition.signals) {
+    const match = expansion.match(pattern)?.[0]
+    if (!match) continue
+    score += 0.04
+    reasons.push(`adjacent: ${match}`)
+  }
+
+  // Clearance is a field-level federal/GovCon signal even when the normalized
+  // value is simply "Secret" and therefore lacks the literal word "clearance".
+  if (definition.id === 'federal_govcon' && intake.clearance && intake.clearance !== 'Not specified') {
+    score += 0.38
+    reasons.push('role clearance requirement')
+  }
+
   return {
     id: definition.id,
     score: Math.min(1, Number(score.toFixed(2))),
@@ -228,10 +253,9 @@ function uniq<T>(values: T[]): T[] {
  * which public evidence communities are likely to have signal for this role.
  */
 export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): JobFamilyRoutingV34 {
-  const text = textFor(intake)
   const scored = DEFINITIONS
     .filter(definition => definition.id !== 'general')
-    .map(definition => scoreDefinition(text, definition))
+    .map(definition => scoreDefinition(intake, definition))
     .filter(match => match.score >= threshold)
     .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
 
@@ -252,7 +276,6 @@ export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): 
     rationale.push('No public evidence community is automatically preferred; use recruiter-authorized or authoritative domain surfaces where available.')
   }
 
-  // Keep outputs limited to known public-evidence surfaces even if AgenticSearchSurface expands later.
   return {
     primaryFamily,
     matches,
