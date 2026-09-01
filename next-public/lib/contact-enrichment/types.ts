@@ -105,10 +105,16 @@ export interface ContactEnrichmentResult {
 export interface ContactEnrichmentLog {
   provider: ContactEnrichmentProvider
   attemptedAt: string
-  /** Which request fields were actually sent to the provider. */
+  /** Which SourcingOS request fields were populated. Values are never logged here. */
   fieldsUsed: string[]
   resultCount: number
   warnings: string[]
+  /** Provider's person-record identifier when one is returned. Never a raw payload. */
+  providerRecordId?: string
+  /** Provider-specific identity-match confidence. This is NOT contact verification. */
+  providerMatchLikelihood?: number
+  /** Names of request inputs the provider says matched. Values are intentionally omitted. */
+  providerMatchedFields?: string[]
   /** How any persistence was handled: 'none' in stub/preview, 'supabase' in 2.8. */
   persistenceMode: 'none' | 'supabase' | 'preview'
 }
