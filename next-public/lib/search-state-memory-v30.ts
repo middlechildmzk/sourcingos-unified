@@ -1,4 +1,5 @@
 import type { AgenticLaneId, AgenticSearchSurface } from './agentic-search-v30'
+import type { SearchAttemptTelemetry } from './source-orchestration-v33-8'
 
 export type SearchAttemptStatus = 'running' | 'completed' | 'partial' | 'failed' | 'guided'
 
@@ -14,6 +15,7 @@ export type SearchAttempt = {
   startedAt: string
   completedAt?: string
   message?: string
+  telemetry?: SearchAttemptTelemetry
 }
 
 export function searchFingerprint(surface: AgenticSearchSurface, query: string): string {
@@ -62,5 +64,7 @@ export function searchCoverageSummary(attempts: SearchAttempt[]) {
     surfacesSearched: uniqueSurfaces.size,
     lanesAttempted: uniqueLanes.size,
     uniqueResultsSeen: accumulatedResultKeys(completed).length,
+    discoveredBeforeCap: completed.reduce((sum, item) => sum + (item.telemetry?.discoveredBeforeCap || 0), 0),
+    returnedAfterCap: completed.reduce((sum, item) => sum + (item.telemetry?.returnedAfterCap || 0), 0),
   }
 }

@@ -13,6 +13,7 @@ export type WorkbenchLaneProgress = {
   label: string
   state: WorkbenchLaneState
   yield: number
+  discoveredBeforeCap: number
   attempts: number
   uniqueToLane: number
   latestMessage?: string
@@ -133,6 +134,10 @@ export function searchLaneProgress(role: RoleWorkspace, attempts: SearchAttempt[
     const laneAttempts = attempts.filter(attempt => attempt.roleId === role.id && attempt.laneId === lane.id)
     const latest = [...laneAttempts].sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0]
     const resultKeys = unique(laneAttempts.flatMap(attempt => attempt.resultKeys))
+    const discoveredBeforeCap = laneAttempts.reduce(
+      (sum, attempt) => sum + (attempt.telemetry?.discoveredBeforeCap || 0),
+      0,
+    )
     let state: WorkbenchLaneState = lane.status === 'paused' ? 'paused' : lane.status === 'proposed' ? 'proposed' : 'planned'
     if (latest?.status === 'running') state = 'searching'
     else if (latest?.status === 'failed') state = 'failed'
@@ -143,6 +148,7 @@ export function searchLaneProgress(role: RoleWorkspace, attempts: SearchAttempt[
       label: lane.label,
       state,
       yield: resultKeys.length,
+      discoveredBeforeCap,
       attempts: laneAttempts.length,
       uniqueToLane: resultKeys.length,
       latestMessage: latest?.message,

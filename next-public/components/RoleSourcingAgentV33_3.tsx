@@ -11,7 +11,13 @@ import {
   shouldExecuteSearch,
   type SearchAttempt,
 } from '@/lib/search-state-memory-v30'
-import type { AgenticConnectorKey, AgenticSearchSurface } from '@/lib/agentic-search-v30'
+import type { AgenticConnectorKey } from '@/lib/agentic-search-v30'
+import {
+  connectorKeysForSurface,
+  sourceDistribution,
+  telemetryForSurface,
+  type AgenticOrchestrationResponse,
+} from '@/lib/source-orchestration-v33-8'
 import {
   buildRoleReviewSlateCandidates,
   mergeReviewSlateDiscoveries,
@@ -23,12 +29,7 @@ import {
 } from '@/lib/agent-review-slate-v33-3'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
-const RESEARCH_CONNECTORS = new Set<AgenticConnectorKey>(['orcid', 'openalex', 'pubmed', 'crossref'])
-const GITHUB_CONNECTORS = new Set<AgenticConnectorKey>(['github'])
-const STACKOVERFLOW_CONNECTORS = new Set<AgenticConnectorKey>(['stackoverflow'])
-const NPI_CONNECTORS = new Set<AgenticConnectorKey>(['npi'])
-
-type RunResponse = {
+type RunResponse = AgenticOrchestrationResponse & {
   ok?: boolean
   error?: string
   sourceStatus?: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }>
@@ -58,14 +59,6 @@ function readAttempts(roleId: string): SearchAttempt[] {
   } catch {
     return []
   }
-}
-
-function connectorsForSurface(surface: AgenticSearchSurface): Set<AgenticConnectorKey> {
-  if (surface === 'github') return GITHUB_CONNECTORS
-  if (surface === 'stackoverflow') return STACKOVERFLOW_CONNECTORS
-  if (surface === 'healthcare_registry') return NPI_CONNECTORS
-  if (surface === 'research_publications') return RESEARCH_CONNECTORS
-  return new Set<AgenticConnectorKey>()
 }
 
 function mergeSourceStatus(current: Record<string, SourceStatus>, incoming: RunResponse['sourceStatus']) {
@@ -100,6 +93,11 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
   const [working, setWorking] = useState<'search' | 'slate' | ''>('')
   const [passProgress, setPassProgress] = useState({ current: 0, total: 0 })
   const [novelty, setNovelty] = useState<number | null>(null)
+  const [passTelemetry, setPassTelemetry] = useState({
+    discoveredBeforeCap: 0,
+    returnedAfterCap: 0,
+    sourceDistribution: {} as Record<string, number>,
+  })
 
   useEffect(() => setAttempts(readAttempts(roleId)), [roleId])
 
@@ -156,11 +154,13 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     let nextAttempts = [...attempts]
     let foundThisPass: ReviewSlateDiscovery[] = []
     let aggregateStatus: Record<string, SourceStatus> = {}
+    let discoveredBeforeCap = 0
     let runnableLaneCount = 0
     const priorResultKeys = accumulatedResultKeys(attempts)
     setWorking('search')
     setSourceStatus({})
     setNovelty(null)
+    setPassTelemetry({ discoveredBeforeCap: 0, returnedAfterCap: 0, sourceDistribution: {} })
     setPassProgress({ current: 0, total: executableLanes.length })
     setStatus(`Running ${executableLanes.length} approved sourcing hypoth${executableLanes.length === 1 ? 'esis' : 'eses'} across ${executableSources.size} executable public source${executableSources.size === 1 ? '' : 's'}…`)
 
@@ -214,21 +214,24 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
           const laneResults = json.results || []
           foundThisPass = mergeReviewSlateDiscoveries(foundThisPass, laneResults)
           aggregateStatus = mergeSourceStatus(aggregateStatus, json.sourceStatus)
+          discoveredBeforeCap += json.discoveredBeforeCap || 0
           setSourceStatus(aggregateStatus)
 
           const completedAt = new Date().toISOString()
           const completed = running.map(attempt => {
-            const connectorSet = connectorsForSurface(attempt.surface)
+            const connectorSet = connectorKeysForSurface(attempt.surface)
             const keys = laneResults.filter(item => connectorSet.has(item.sourceKey)).map(reviewSlateDiscoveryKey)
             const statuses = Array.from(connectorSet).map(key => json.sourceStatus?.[key]?.status).filter(Boolean)
             const failed = statuses.length > 0 && statuses.every(value => value === 'failed' || value === 'unavailable')
             const partial = statuses.some(value => value === 'failed' || value === 'unavailable') && !failed
+            const telemetry = telemetryForSurface(attempt.surface, json)
             return {
               ...attempt,
               status: failed ? 'failed' as const : partial ? 'partial' as const : 'completed' as const,
               resultKeys: keys,
               completedAt,
-              message: `${keys.length} source identities returned for ${lane.label}.`,
+              telemetry,
+              message: `${telemetry.returnedAfterCap} of ${telemetry.discoveredBeforeCap} source discoveries returned for ${lane.label} after source-diverse capping.`,
             }
           })
           const runningIds = new Set(running.map(item => item.id))
@@ -260,8 +263,13 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
       setSelectedKeys(autoSelected)
       const thisPassKeys = foundThisPass.map(reviewSlateDiscoveryKey)
       setNovelty(resultNoveltyRate(priorResultKeys, thisPassKeys))
+      setPassTelemetry({
+        discoveredBeforeCap,
+        returnedAfterCap: foundThisPass.length,
+        sourceDistribution: sourceDistribution(foundThisPass),
+      })
       const eligibleCount = saveEligibleReviewSlateDiscoveries(foundThisPass).length
-      setStatus(`Agent pass finished: ${foundThisPass.length} unique source record${foundThisPass.length === 1 ? '' : 's'} found, ${eligibleCount} eligible for an explicit review-slate save. No candidate was shortlisted, rejected, merged across sources, or contacted.`)
+      setStatus(`Agent pass finished: ${foundThisPass.length} unique source record${foundThisPass.length === 1 ? '' : 's'} retained from ${discoveredBeforeCap} raw public-source discover${discoveredBeforeCap === 1 ? 'y' : 'ies'}, with ${eligibleCount} eligible for an explicit review-slate save. No candidate was shortlisted, rejected, merged across sources, or contacted.`)
     } finally {
       setWorking('')
       setPassProgress({ current: 0, total: 0 })
@@ -351,6 +359,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     setSavedKeys([])
     setSourceStatus({})
     setNovelty(null)
+    setPassTelemetry({ discoveredBeforeCap: 0, returnedAfterCap: 0, sourceDistribution: {} })
     setStatus('Cleared this unsaved discovery pass. Role candidates and Candidate Graph records were not changed.')
   }
 
@@ -372,12 +381,16 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     <div className="agent-review-metrics">
       <span><b>{approvedLanes.length}</b><small>approved hypotheses</small></span>
       <span><b>{executableSources.size}</b><small>executable sources</small></span>
-      <span><b>{discoveries.length}</b><small>unique source records</small></span>
-      <span><b>{selected.length}</b><small>selected for review slate</small></span>
+      <span><b>{passTelemetry.discoveredBeforeCap || '—'}</b><small>latest raw discoveries</small></span>
+      <span><b>{discoveries.length}</b><small>unique review records</small></span>
     </div>
 
     {status && <div className="cta agent-review-status" role="status">{status}</div>}
     {!!Object.keys(sourceStatus).length && <div className="agent-review-source-status">{Object.entries(sourceStatus).map(([key, value]) => <span className={`status-pill ${value.status === 'completed' ? 'success' : value.status === 'failed' ? 'warning' : ''}`} key={key}>{key} · {value.status} · {value.discovered}</span>)}</div>}
+    {!!passTelemetry.discoveredBeforeCap && <div className="agent-review-source-status" aria-label="Latest source orchestration summary">
+      <span className="status-pill active">{passTelemetry.returnedAfterCap} retained from {passTelemetry.discoveredBeforeCap}</span>
+      {Object.entries(passTelemetry.sourceDistribution).map(([source, count]) => <span className="status-pill" key={source}>{source} · {count} retained</span>)}
+    </div>}
 
     {!!discoveries.length && <div className="agent-review-stage">
       <div className="agent-review-stage-head">
