@@ -90,8 +90,9 @@ export function mergeExplicitExperienceRequirements(existing: string[], rawText:
 /**
  * Requirement truth and retrieval intent are different objects. Keep the
  * recruiter-approved threshold ("5+ years Linux experience") for assessment,
- * but search the capability itself ("Linux") because public technical sources
- * rarely encode a precise years-of-experience phrase.
+ * but search the capability itself ("linux") because public technical sources
+ * rarely encode a precise years-of-experience phrase. Retrieval capabilities
+ * are normalized to lowercase so tag APIs and query fingerprints stay stable.
  */
 export function requirementToRetrievalCapability(value: string): string {
   const original = value.trim()
@@ -100,7 +101,7 @@ export function requirementToRetrievalCapability(value: string): string {
     .replace(/^\s*(?:at\s+least\s+|minimum\s+of\s+)?\d{1,2}\s*(?:\+|\s+or\s+more)?\s*(?:years?|yrs?)\s+(?:of\s+)?/i, '')
     .replace(/\s+(?:experience|expertise|background)\s*$/i, '')
     .trim()
-  return cleanCapability(withoutThreshold || original)
+  return normalized(cleanCapability(withoutThreshold || original))
 }
 
 export function retrievalCapabilityTerms(values: readonly string[], max = 16): string[] {
