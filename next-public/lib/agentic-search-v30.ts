@@ -199,18 +199,21 @@ function sourceTasks(query: string, intake: RoleIntake, lane: AgenticLaneId): Ag
         connectorKeys: ['stackoverflow'],
         truth: 'Runs the official Stack Exchange API against role-relevant tags. A tag becomes candidate evidence only when the person is returned as a public top answerer for that tag; query terms alone never become skills.',
       },
-      {
-        surface: 'devto',
-        label: 'DEV Community technical authors',
-        mode: 'executable',
-        query: publicQuery,
-        connectorKeys: ['devto'],
-        truth: 'Runs the public Forem/DEV API. Search terms select articles, but candidate skills come only from tags observed on articles the person actually authored; public profile identity anchors remain reviewable evidence.',
-      },
     )
   }
+  if (technical) {
+    tasks.splice(3, 0, {
+      surface: 'devto',
+      label: 'DEV Community technical authors',
+      mode: 'executable',
+      query: publicQuery,
+      connectorKeys: ['devto'],
+      truth: 'Runs the public Forem/DEV API. Search terms select articles, but candidate skills come only from tags observed on articles the person actually authored; public profile identity anchors remain reviewable evidence.',
+    })
+  }
   if (research || lane === 'evidence_first') {
-    tasks.splice(technical || lane === 'evidence_first' ? 4 : 1, 0, {
+    const insertionIndex = technical ? 4 : lane === 'evidence_first' ? 3 : 1
+    tasks.splice(insertionIndex, 0, {
       surface: 'research_publications',
       label: 'Public research graph',
       mode: 'executable',
