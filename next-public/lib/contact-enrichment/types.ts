@@ -1,20 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // lib/contact-enrichment/types.ts — Contact enrichment provider type contracts.
 //
-// FOUNDATION ONLY (Sprint 2.7 prep). No live provider calls in this sprint.
-//
-// COMPLIANCE INVARIANTS (enforced at the type level):
-//   - Every ContactSignal defaults to verified: false
+// COMPLIANCE INVARIANTS:
+//   - Every raw ContactSignal defaults to verified: false
 //   - Every ContactSignal defaults to permissionStatus: 'unknown'
 //   - Provider name is always logged on each signal
-//   - Nothing here implies permission to contact anyone
+//   - Contact validity never implies permission to contact
 //   - No protected-trait fields exist in any type
-//
-// Future Sprint 2.8 will add:
-//   - lib/contact-enrichment/providers/people-data-labs.ts (live adapter)
-//   - app/api/contact-enrichment/find/route.ts (server-side, auth-gated)
-//   - server-only PDL_API_KEY
-//   - persistence into candidate_contacts (verified=false, permission unknown)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ContactSignalType =
@@ -27,10 +19,26 @@ export type ContactSignalType =
 
 export type ContactConfidence = 'low' | 'medium' | 'high'
 
+export type ContactOwnershipConfidence =
+  | 'deterministic'
+  | 'strong'
+  | 'moderate'
+  | 'weak'
+  | 'unknown'
+
+export type ContactDeliverabilityStatus =
+  | 'verified'
+  | 'valid'
+  | 'accept_all'
+  | 'risky'
+  | 'unknown'
+  | 'invalid'
+  | 'disconnected'
+
 export type PermissionStatus =
-  | 'unknown'                    // default — no permission established
-  | 'do_not_contact'             // explicitly flagged do-not-contact
-  | 'user_verified_permission'   // recruiter has confirmed permission to contact
+  | 'unknown'
+  | 'do_not_contact'
+  | 'user_verified_permission'
 
 /** Identifier for a contact enrichment provider. */
 export type ContactEnrichmentProvider =
@@ -69,18 +77,38 @@ export interface ContactEnrichmentRequest {
 }
 
 /**
+ * Safe provider-level identity-match metadata. This intentionally preserves only
+ * the information SourcingOS needs for identity provenance; full raw provider
+ * payloads are not part of the normalized contract.
+ */
+export interface ProviderMatchMetadata {
+  matchState: 'exact_anchor' | 'strong' | 'possible' | 'no_match' | 'conflict' | 'unknown'
+  providerPersonId?: string
+  providerScore?: number
+  providerScoreScale?: string
+  matchedOn: string[]
+}
+
+/**
  * A single discovered contact signal.
  * GUARDRAIL: verified defaults to false, permissionStatus to 'unknown'.
+ * Ownership, deliverability, and permission are separate dimensions.
  */
 export interface ContactSignal {
   type: ContactSignalType
   value: string
   sourceProvider: ContactEnrichmentProvider
   confidence: ContactConfidence
-  /** ALWAYS false unless a provider explicitly verifies — never implies permission. */
+  /** Legacy compatibility flag. Raw lookup helpers still default this to false. */
   verified: boolean
   /** ALWAYS 'unknown' until a recruiter establishes permission. */
   permissionStatus: PermissionStatus
+  /** Whether this channel appears to belong to the resolved person. */
+  ownershipConfidence?: ContactOwnershipConfidence
+  /** Technical channel validity/deliverability. Never implies permission. */
+  deliverability?: ContactDeliverabilityStatus
+  /** Provider-native status retained in normalized form when useful. */
+  providerStatusRaw?: string
   discoveredAt: string
   /** Optional provider-specific reference (never the full raw payload). */
   rawSource?: string
@@ -97,6 +125,8 @@ export interface ContactEnrichmentResult {
   /** UI-safe status message. */
   message: string
   signals: ContactSignal[]
+  /** Safe identity-match metadata when the provider exposes it. */
+  match?: ProviderMatchMetadata
   /** Audit metadata — safe to log and surface. */
   log: ContactEnrichmentLog
 }
@@ -109,7 +139,7 @@ export interface ContactEnrichmentLog {
   fieldsUsed: string[]
   resultCount: number
   warnings: string[]
-  /** How any persistence was handled: 'none' in stub/preview, 'supabase' in 2.8. */
+  /** How any persistence was handled. */
   persistenceMode: 'none' | 'supabase' | 'preview'
 }
 
@@ -121,6 +151,9 @@ export function makeContactSignal(params: {
   value: string
   sourceProvider: ContactEnrichmentProvider
   confidence?: ContactConfidence
+  ownershipConfidence?: ContactOwnershipConfidence
+  deliverability?: ContactDeliverabilityStatus
+  providerStatusRaw?: string
   rawSource?: string
   notes?: string
 }): ContactSignal {
@@ -129,8 +162,11 @@ export function makeContactSignal(params: {
     value: params.value,
     sourceProvider: params.sourceProvider,
     confidence: params.confidence ?? 'low',
-    verified: false,                  // INVARIANT — never true from a raw lookup
-    permissionStatus: 'unknown',      // INVARIANT — never implies permission
+    verified: false,
+    permissionStatus: 'unknown',
+    ownershipConfidence: params.ownershipConfidence,
+    deliverability: params.deliverability,
+    providerStatusRaw: params.providerStatusRaw,
     discoveredAt: new Date().toISOString(),
     rawSource: params.rawSource,
     notes: params.notes,
@@ -142,7 +178,6 @@ export function hasSufficientEnrichmentInputs(req: ContactEnrichmentRequest): bo
   const hasName = Boolean(req.fullName || (req.firstName && req.lastName))
   const hasCompanyOrDomain = Boolean(req.currentCompany || req.companyDomain)
   const hasProfileUrl = Boolean(req.profileUrl || req.linkedinUrl || req.githubUrl)
-  // Need a name plus at least one disambiguator, OR a strong profile URL
   return (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl
 }
 
