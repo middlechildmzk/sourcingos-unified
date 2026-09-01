@@ -5,6 +5,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { enrichWithPeopleDataLabs } from '@/lib/contact-enrichment/providers/people-data-labs'
 import { getProviderStatus } from '@/lib/contact-enrichment/provider-status'
+import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
 import { ContactEnrichmentRequest, ContactSignal } from '@/lib/contact-enrichment/types'
 
 export const dynamic = 'force-dynamic'
@@ -54,10 +55,24 @@ export async function POST(req: NextRequest) {
     sourceContext: str(body.sourceContext),
   }
 
-  // ── 4. Call provider server-side ────────────────────────────────────────────
+  // ── 4. Identity-readiness gate before spending a provider lookup ───────────
+  const identity = assessEnrichmentIdentityV34(request)
+  if (!identity.attemptProvider) {
+    return NextResponse.json({
+      ok: false,
+      code: 'identity_insufficient',
+      error: identity.message,
+      identityStrength: identity.strength,
+      anchors: identity.anchors,
+      missing: identity.missing,
+      nextStep: 'Resolve a real name or a deterministic GitHub/LinkedIn identity anchor before contact enrichment.',
+    }, { status: 422 })
+  }
+
+  // ── 5. Call provider server-side ────────────────────────────────────────────
   const result = await enrichWithPeopleDataLabs(request)
 
-  // ── 5. Persist to candidate_contacts (dedupe) if candidateId present ────────
+  // ── 6. Persist to candidate_contacts (dedupe) if candidateId present ────────
   let persistenceMode: 'supabase' | 'preview' | 'not_persisted' = 'not_persisted'
   let persistedCount = 0
 
@@ -65,7 +80,6 @@ export async function POST(req: NextRequest) {
     const sb = createServerSupabaseClient()
     if (sb) {
       try {
-        // Fetch existing contacts for dedupe by (type, value, source)
         const { data: existing } = await sb
           .from('candidate_contacts')
           .select('type, value, source')
@@ -86,10 +100,10 @@ export async function POST(req: NextRequest) {
             source_profile_id: request.sourceProfileId || null,
             type: s.type,
             value: s.value,
-            source: s.sourceProvider,          // 'people_data_labs'
+            source: s.sourceProvider,
             confidence: s.confidence,
-            verified: false,                    // DB also enforces this via CHECK
-            permission_status: 'unknown',       // never imply permission
+            verified: false,
+            permission_status: 'unknown',
           }))
 
         if (rows.length > 0) {
@@ -99,7 +113,7 @@ export async function POST(req: NextRequest) {
             persistenceMode = 'supabase'
           }
         } else {
-          persistenceMode = 'supabase' // ran, but all were duplicates
+          persistenceMode = 'supabase'
         }
       } catch {
         persistenceMode = 'not_persisted'
@@ -109,12 +123,14 @@ export async function POST(req: NextRequest) {
     persistenceMode = 'preview'
   }
 
-  // ── 6. Return UI-safe result (no key, no raw payload) ───────────────────────
+  // ── 7. Return UI-safe result (no key, no raw payload) ───────────────────────
   return NextResponse.json({
     ok: true,
     provider: result.provider,
     message: result.message,
-    signals: result.signals,        // already normalized + compliant
+    signals: result.signals,
+    identityStrength: identity.strength,
+    identityAnchors: identity.anchors,
     persistenceMode,
     persistedCount,
     warning: 'Contact signals are unverified and do not imply permission to contact.',
