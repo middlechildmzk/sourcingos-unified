@@ -174,7 +174,7 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   const commandStyle = natural || Boolean(directTitle)
   const naturalLocation = naturalLanguageLocation(rawText)
   const explicitLocation = labeledLocation(rawText)
-  const location = (natural ? naturalLocation || explicitLocation || parsed.location : explicitLocation || naturalLocation || parsed.location) || 'Not specified'
+  const location = (commandStyle ? naturalLocation || explicitLocation || parsed.location : explicitLocation || parsed.location || naturalLocation) || 'Not specified'
   const clearance = explicitClearance(rawText) || parsed.clearance[0] || labeledValue(rawText, ['clearance', 'security clearance'], 100) || 'Not specified'
   const targetCompanies = labeledValues(rawText, ['target companies', 'target company', 'donor companies', 'companies'])
   const disqualifiers = labeledValues(rawText, ['disqualifiers', 'exclude', 'avoid'])
