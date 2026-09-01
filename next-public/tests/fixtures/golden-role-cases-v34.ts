@@ -79,7 +79,7 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     id: 'data-data-scientist-python',
     prompt: 'Data scientist with Python and TensorFlow in San Francisco, CA',
     expectedTitleText: 'data scientist',
-    expectedFamily: 'ai_ml',
+    expectedFamily: 'data',
     expectedMustHaves: ['Python', 'TensorFlow'],
     expectedLocationText: 'San Francisco',
     forbiddenRoleTokens: ['RHEL', 'Epic'],
