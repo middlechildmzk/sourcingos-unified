@@ -149,7 +149,7 @@ export function evidenceBearingFirstReviewBatch(
     ]
 
     const explanation = missingMustHaves.length
-      ? `Held outside the first batch: no observed evidence yet for mandatory ${missingMustHaves.join(', ')}.`
+      ? `Held outside the first batch: no observed role-relevant evidence yet for mandatory ${missingMustHaves.join(', ')}.`
       : !matchedSignals.length
         ? 'Held outside the first batch: no observed role-relevant skill or work evidence.'
         : geography === 'outside_search_area'
