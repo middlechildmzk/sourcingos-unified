@@ -19,12 +19,23 @@ export function RoleAutoStartV33_4({ roleId }: { roleId: string }) {
     let ticks = 0
     setMessage('Starting the sourcing agent…')
 
+    function finishWithMessage(nextMessage: string) {
+      url.searchParams.delete('start')
+      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+      setMessage(nextMessage)
+    }
+
     const interval = window.setInterval(() => {
       ticks += 1
       const shell = document.querySelector('.role-sourcing-execution-v33-4') as HTMLDetailsElement | null
 
       if (phase === 'search') {
         const button = shell?.querySelector('.agent-review-command-actions button.btn') as HTMLButtonElement | null
+        if (button?.disabled && /approve an executable hypothesis/i.test(button.textContent || '')) {
+          window.clearInterval(interval)
+          finishWithMessage('This search has no executable public source yet. Nothing was silently treated as a zero-result search. Edit the role or open execution details to inspect the source plan.')
+          return
+        }
         if (button && !button.disabled && /run sourcing agent/i.test(button.textContent || '')) {
           button.click()
           phase = 'slate'
@@ -38,18 +49,25 @@ export function RoleAutoStartV33_4({ roleId }: { roleId: string }) {
           setMessage('Building your unreviewed review slate…')
           url.searchParams.delete('start')
           window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+        } else {
+          // When the search button becomes runnable again, the pass has completed.
+          // If the slate button is still disabled, there were no eligible records
+          // to persist. Surface that truth instead of leaving a permanent spinner.
+          const runAgain = shell?.querySelector('.agent-review-command-actions button.btn') as HTMLButtonElement | null
+          if (ticks >= 15 && runAgain && !runAgain.disabled && /run sourcing agent/i.test(runAgain.textContent || '') && create?.disabled) {
+            window.clearInterval(interval)
+            finishWithMessage('Search completed, but this pass returned no eligible public-source records for a review slate. Open execution details to inspect source status or refine the request.')
+            return
+          }
         }
       }
 
-      // Do not loop forever if a source returns no eligible records or is slow.
-      // The detailed agent remains available on demand while the primary
-      // workbench shows live lane progress and candidate state.
+      // Hard safety timeout. This should be a visible paused state, never an
+      // indefinite loading indicator.
       if (phase === 'done' || ticks >= 450) {
         window.clearInterval(interval)
         if (ticks >= 450) {
-          url.searchParams.delete('start')
-          window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-          setMessage('Initial pass completed or paused without an automatic candidate decision. Open execution details only if you need to inspect it.')
+          finishWithMessage('The initial sourcing pass timed out before a review slate was ready. Open execution details to inspect the source status and retry.')
         } else {
           window.setTimeout(() => setMessage(''), 3500)
         }
