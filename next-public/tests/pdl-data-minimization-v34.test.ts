@@ -11,6 +11,10 @@ const typesSource = fs.readFileSync(
   path.join(root, 'lib/contact-enrichment/types.ts'),
   'utf8',
 )
+const routeSource = fs.readFileSync(
+  path.join(root, 'app/api/contact-enrichment/find/route.ts'),
+  'utf8',
+)
 
 describe('V34 PDL privacy/data-minimization hardening', () => {
   it('requests only the fields the adapter maps instead of the full PDL person record', () => {
@@ -36,6 +40,14 @@ describe('V34 PDL privacy/data-minimization hardening', () => {
     expect(typesSource).toContain('providerMatchLikelihood?: number')
     expect(typesSource).toContain('This is NOT contact verification')
     expect(providerSource).toContain("verified=false")
+  })
+
+  it('returns only safe provider provenance through the route, not a raw provider payload', () => {
+    expect(routeSource).toContain('providerRecordId: result.log.providerRecordId')
+    expect(routeSource).toContain('providerMatchLikelihood: result.log.providerMatchLikelihood')
+    expect(routeSource).toContain('providerMatchedFields: result.log.providerMatchedFields')
+    expect(routeSource).toContain('Never raw matched values/payloads')
+    expect(routeSource).not.toMatch(/rawProvider|providerPayload|rawPayload/)
   })
 
   it('does not send job title as an undocumented Person Enrichment match parameter', () => {
