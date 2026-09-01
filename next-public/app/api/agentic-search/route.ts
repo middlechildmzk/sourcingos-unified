@@ -10,6 +10,7 @@ import { classifyRealSourceResults } from '@/lib/entity-classification'
 import { searchGitHubPeople } from '@/lib/github-person-discovery'
 import { enforceGitHubResultsTruth } from '@/lib/github-result-truth'
 import { searchStackOverflowTalent } from '@/lib/stackoverflow-talent-source-v33-2'
+import { discoverDevToTalent } from '@/lib/connectors/devto-v33-6'
 import {
   preferTechnicalV2,
   runGitHubV2,
@@ -20,12 +21,13 @@ import type { SourceResult } from '@/lib/source-types'
 
 export const dynamic = 'force-dynamic'
 
-const EXECUTABLE_CONNECTORS = ['github', 'stackoverflow', 'orcid', 'openalex', 'pubmed', 'crossref', 'npi'] as const satisfies readonly AgenticConnectorKey[]
+const EXECUTABLE_CONNECTORS = ['github', 'stackoverflow', 'devto', 'orcid', 'openalex', 'pubmed', 'crossref', 'npi'] as const satisfies readonly AgenticConnectorKey[]
 const connectorEnum = z.enum(EXECUTABLE_CONNECTORS)
 const queryValue = z.string().trim().min(2).max(500)
 const connectorQueriesSchema = z.object({
   github: queryValue.optional(),
   stackoverflow: queryValue.optional(),
+  devto: queryValue.optional(),
   orcid: queryValue.optional(),
   openalex: queryValue.optional(),
   pubmed: queryValue.optional(),
@@ -220,6 +222,20 @@ export async function POST(req: NextRequest) {
           engine: activation.mode,
           degraded: activation.degraded,
           message: activation.message,
+        }
+      } else if (connector === 'devto') {
+        const classified = classifyRealSourceResults(await discoverDevToTalent({
+          query: connectorQuery,
+          location: body.locations[0],
+          limit: Math.min(body.limit, 8),
+        })).filter(result => result.entityKind === 'person')
+        discoveries = classified.map(discoveryFromSourceResult)
+        sourceStatus.devto = {
+          status: 'completed',
+          discovered: 0,
+          engine: 'native',
+          degraded: false,
+          message: 'Public DEV/Forem author discovery; candidate skills are observed article tags only.',
         }
       } else if (connector === 'npi') {
         discoveries = await discoverNpiByTaxonomy({
