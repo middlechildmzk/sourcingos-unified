@@ -5,6 +5,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
+import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchDataVertexV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
 import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
@@ -44,18 +45,10 @@ export async function POST(req: NextRequest) {
 
   const configured = executableCandidateSearchProvidersV36_8()
   const requested = new Set(parsed.data.providers || configured.map(item => item.provider))
-  const adapters = configured
-    .filter(item => requested.has(item.provider))
-    .map(item => adapter(item.provider))
-    .filter(Boolean) as CandidateDataSearchAdapterV36_8[]
+  const adapters = configured.filter(item => requested.has(item.provider)).map(item => adapter(item.provider)).filter(Boolean) as CandidateDataSearchAdapterV36_8[]
 
   if (!adapters.length) {
-    return NextResponse.json({
-      ok: false,
-      code: 'candidate_provider_not_configured',
-      error: 'No implemented candidate-search provider is configured for this request.',
-      providerStatus: configured,
-    }, { status: 503 })
+    return NextResponse.json({ ok: false, code: 'candidate_provider_not_configured', error: 'No implemented candidate-search provider is configured for this request.', providerStatus: configured }, { status: 503 })
   }
 
   const result = await runCandidateDataSearchV36_8({
@@ -71,9 +64,12 @@ export async function POST(req: NextRequest) {
     revealContact: false,
   }, adapters, parsed.data.limit)
 
+  const reviewObservations = result.observations.map(signedProviderObservationV36_8).filter(Boolean)
+
   return NextResponse.json({
     ok: true,
     observations: result.observations,
+    reviewObservations,
     telemetry: result.telemetry,
     providerMix: result.providerMix,
     warnings: result.warnings,
@@ -83,6 +79,7 @@ export async function POST(req: NextRequest) {
       contactRevealDuringSearch: false,
       identityMergePerformed: false,
       recruiterDecisionPerformed: false,
+      providerReviewObservationsSignedServerSide: true,
     },
   })
 }
