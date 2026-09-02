@@ -1,5 +1,6 @@
 import { buildJobFamilyRoutingV34 } from '@/lib/job-family-router-v34'
 import type { RoleIntake } from '@/lib/role-workspace'
+import { explicitAlternativeLocationIdsV35 } from './location-v35'
 import { entityByIdV35 } from './registry-v35'
 import { suggestEntitiesV35 } from './suggest-v35'
 import {
@@ -17,6 +18,7 @@ export type RoleEntityIntelligenceV35 = {
   }
   contextModifiers: string[]
   location: ReturnType<typeof approvedLocationIntentV35>
+  explicitLocationAlternatives: string[]
   recognized: EntitySuggestion[]
   suggestedExpansions: EntitySuggestion[]
   approvedExpansionIds: string[]
@@ -63,6 +65,10 @@ export function buildRoleEntityIntelligenceV35(
   ].filter(Boolean).join(' ')
   const suggestions = suggestEntitiesV35({ query, includeRelated: true, maxSuggestions: 24 })
   const location = approvedLocationIntentV35(intake, searchIntelligence)
+  const explicitLocationAlternatives = explicitAlternativeLocationIdsV35(
+    intake.rawDescription || '',
+    location.anchorLocationId,
+  ).map(id => entityByIdV35(id)?.canonicalLabel || '').filter(Boolean)
   const approvedExpansionIds = approvedSearchEntityIdsV35(searchIntelligence)
   const approvedSet = new Set(approvedExpansionIds)
   const seen = new Set<string>()
@@ -86,11 +92,13 @@ export function buildRoleEntityIntelligenceV35(
     },
     contextModifiers: routing.contextModifiers.map(item => item.id),
     location,
+    explicitLocationAlternatives,
     recognized: suggestions.matches,
     suggestedExpansions,
     approvedExpansionIds,
     trust: [
       'Normalized aliases may clarify recruiter intent; related/adjacent suggestions do not become must-haves automatically.',
+      'Recruiter-stated alternate markets are executed as recruiter intent; system-suggested nearby markets still require explicit approval.',
       'Recruiter-approved expansions affect retrieval only. They do not rewrite the approved Role Brief or satisfy candidate requirements.',
       'Nearby and regional geography can broaden discovery only after recruiter approval and never changes a candidate location fact.',
       'Clearance is a recruiter requirement until candidate-level evidence verifies it; clearance/polygraph levels are never broadened through Find Similar.',
