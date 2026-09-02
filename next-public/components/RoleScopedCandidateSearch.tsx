@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { CandidateProviderReadinessV36_9 } from '@/components/CandidateProviderReadinessV36_9'
 import { UniversalPeopleSearchV36_9 } from '@/components/UniversalPeopleSearchV36_9'
 import { WorkbenchClient } from '@/components/WorkbenchClient'
 import {
@@ -144,7 +145,10 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
   if (!roleId) return <>
     <SearchSurfaceSwitcher value={surface} onChange={setSurface} />
     {surface === 'talent_universe'
-      ? <UniversalPeopleSearchV36_9 />
+      ? <>
+        <CandidateProviderReadinessV36_9 />
+        <UniversalPeopleSearchV36_9 />
+      </>
       : <>
         <section className="product-panel" style={{ marginBottom: 16 }} aria-label="Candidate database shortcut">
           <span className="kicker">Your saved talent</span>
@@ -208,7 +212,10 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
 
       <SearchSurfaceSwitcher value={surface} onChange={setSurface} roleScoped />
       {surface === 'talent_universe'
-        ? <UniversalPeopleSearchV36_9 roleId={role.id} />
+        ? <>
+          <CandidateProviderReadinessV36_9 />
+          <UniversalPeopleSearchV36_9 roleId={role.id} />
+        </>
         : <WorkbenchClient key={`${role.id}:${lane?.id || 'role'}`} publicMode={false} initialTab="intake" />}
     </>
   )
