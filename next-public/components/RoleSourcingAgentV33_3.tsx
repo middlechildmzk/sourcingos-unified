@@ -89,10 +89,7 @@ function readAttempts(roleId: string): SearchAttempt[] {
   }
 }
 
-function mergeDiscoveredByLocation(
-  prior: Record<string, number> | undefined,
-  incoming: Record<string, number> | undefined,
-): Record<string, number> | undefined {
+function mergeDiscoveredByLocation(prior: Record<string, number> | undefined, incoming: Record<string, number> | undefined): Record<string, number> | undefined {
   if (!prior && !incoming) return undefined
   const next = { ...(prior || {}) }
   for (const [location, count] of Object.entries(incoming || {})) next[location] = (next[location] || 0) + count
@@ -104,10 +101,7 @@ function mergeSourceStatus(current: Record<string, SourceStatus>, incoming: RunR
   for (const [key, value] of Object.entries(incoming || {})) {
     const prior = next[key]
     const geography = value.geography
-      ? {
-          ...value.geography,
-          discoveredByLocation: mergeDiscoveredByLocation(prior?.geography?.discoveredByLocation, value.geography.discoveredByLocation),
-        }
+      ? { ...value.geography, discoveredByLocation: mergeDiscoveredByLocation(prior?.geography?.discoveredByLocation, value.geography.discoveredByLocation) }
       : prior?.geography
     next[key] = prior
       ? {
@@ -134,6 +128,31 @@ function geographyStatusLabel(status: SourceStatus): string {
 
 function unique(values: string[], max: number): string[] {
   return Array.from(new Set(values.map(value => value.trim()).filter(Boolean))).slice(0, max)
+}
+
+function candidateInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2) || '—').toUpperCase()
+}
+
+function sourceLabel(value: string): string {
+  if (value === 'github') return 'GitHub'
+  if (value === 'stackoverflow') return 'Stack Overflow'
+  if (value === 'devto') return 'DEV'
+  if (value === 'huggingface') return 'Hugging Face'
+  if (value === 'npi') return 'NPI Registry'
+  return value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase())
+}
+
+function contactHref(type: string, value: string): string | undefined {
+  if (type === 'public_email') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? `mailto:${value}` : undefined
+  if (type !== 'website' && type !== 'profile_url') return undefined
+  try {
+    const parsed = new URL(value)
+    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
@@ -166,31 +185,19 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
 
   useEffect(() => setAttempts(readAttempts(roleId)), [roleId])
 
-  const approvedLaneIds = useMemo(
-    () => new Set((role?.searchLanes || []).filter(lane => lane.status === 'approved').map(lane => lane.id)),
-    [role]
-  )
-  const approvedLanes = useMemo(
-    () => plan?.lanes.filter(lane => approvedLaneIds.has(lane.id)) || [],
-    [approvedLaneIds, plan]
-  )
-  const executableLanes = useMemo(
-    () => approvedLanes.filter(lane => lane.tasks.some(task => task.mode === 'executable' && task.connectorKeys?.length)),
-    [approvedLanes]
-  )
-  const executableSources = useMemo(
-    () => new Set(executableLanes.flatMap(lane => lane.tasks.filter(task => task.mode === 'executable').flatMap(task => task.connectorKeys || []))),
-    [executableLanes]
-  )
+  const approvedLaneIds = useMemo(() => new Set((role?.searchLanes || []).filter(lane => lane.status === 'approved').map(lane => lane.id)), [role])
+  const approvedLanes = useMemo(() => plan?.lanes.filter(lane => approvedLaneIds.has(lane.id)) || [], [approvedLaneIds, plan])
+  const executableLanes = useMemo(() => approvedLanes.filter(lane => lane.tasks.some(task => task.mode === 'executable' && task.connectorKeys?.length)), [approvedLanes])
+  const executableSources = useMemo(() => new Set(executableLanes.flatMap(lane => lane.tasks.filter(task => task.mode === 'executable').flatMap(task => task.connectorKeys || []))), [executableLanes])
   const saveEligible = useMemo(() => saveEligibleReviewSlateDiscoveries(discoveries), [discoveries])
+  const approvedLocations = useMemo(() => role ? approvedExecutionLocationsV35(role.intake, role.searchIntelligence) : [], [role])
   const firstBatch = useMemo(
-    () => role ? evidenceBearingFirstReviewBatch(discoveries, role.intake, 12) : { batch: [], checks: [] },
-    [discoveries, role]
+    () => role
+      ? evidenceBearingFirstReviewBatch(discoveries, role.intake, 12, { approvedLocations })
+      : { batch: [], checks: [], summary: { discoveredPeople: 0, reviewReady: 0, promisingVerify: 0, held: 0, admitted: 0, heldByReason: {} } },
+    [discoveries, role, approvedLocations]
   )
-  const evidenceCheckByKey = useMemo(
-    () => new Map(firstBatch.checks.map(check => [reviewSlateDiscoveryKey(check.discovery), check])),
-    [firstBatch.checks]
-  )
+  const evidenceCheckByKey = useMemo(() => new Map(firstBatch.checks.map(check => [reviewSlateDiscoveryKey(check.discovery), check])), [firstBatch.checks])
   const selected = useMemo(() => {
     const keys = new Set(selectedKeys)
     return saveEligible.filter(item => keys.has(reviewSlateDiscoveryKey(item)))
@@ -211,9 +218,9 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     setSelectedKeys(current => current.includes(key) ? current.filter(item => item !== key) : [...current, key])
   }
 
-  function selectAllEligible() {
+  function selectAllReviewable() {
     const saved = new Set(savedKeys)
-    setSelectedKeys(saveEligible.map(reviewSlateDiscoveryKey).filter(key => !saved.has(key)))
+    setSelectedKeys(firstBatch.batch.map(reviewSlateDiscoveryKey).filter(key => !saved.has(key)))
   }
 
   async function runApprovedAgentPass() {
@@ -249,20 +256,11 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
 
         const connectors = Array.from(new Set(allowedTasks.flatMap(task => task.connectorKeys || [])))
         const connectorQueries: Partial<Record<AgenticConnectorKey, string>> = {}
-        for (const task of allowedTasks) {
-          for (const connector of task.connectorKeys || []) connectorQueries[connector] = task.query
-        }
+        for (const task of allowedTasks) for (const connector of task.connectorKeys || []) connectorQueries[connector] = task.query
         const startedAt = new Date().toISOString()
         const running: SearchAttempt[] = allowedTasks.map(task => ({
-          id: crypto.randomUUID(),
-          roleId,
-          laneId: lane.id,
-          surface: task.surface,
-          query: task.query,
-          fingerprint: searchFingerprint(task.surface, task.query),
-          status: 'running',
-          resultKeys: [],
-          startedAt,
+          id: crypto.randomUUID(), roleId, laneId: lane.id, surface: task.surface, query: task.query,
+          fingerprint: searchFingerprint(task.surface, task.query), status: 'running', resultKeys: [], startedAt,
         }))
         nextAttempts = [...nextAttempts, ...running].slice(-100)
         persistAttempts(nextAttempts)
@@ -337,22 +335,18 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
       const merged = mergeReviewSlateDiscoveries(discoveries, foundThisPass)
       setDiscoveries(merged)
       const saved = new Set(savedKeys)
-      const batch = evidenceBearingFirstReviewBatch(merged, activeRole.intake, 12)
+      const currentApprovedLocations = approvedExecutionLocationsV35(activeRole.intake, activeRole.searchIntelligence)
+      const batch = evidenceBearingFirstReviewBatch(merged, activeRole.intake, 12, { approvedLocations: currentApprovedLocations })
       const autoSelected = batch.batch.map(reviewSlateDiscoveryKey).filter(key => !saved.has(key))
       setSelectedKeys(autoSelected)
       const thisPassKeys = foundThisPass.map(reviewSlateDiscoveryKey)
       setNovelty(resultNoveltyRate(priorResultKeys, thisPassKeys))
-      setPassTelemetry({
-        discoveredBeforeCap,
-        returnedAfterCap: foundThisPass.length,
-        sourceDistribution: sourceDistribution(foundThisPass),
-      })
-      const eligibleCount = saveEligibleReviewSlateDiscoveries(foundThisPass).length
-      const firstBatchCount = evidenceBearingFirstReviewBatch(merged, activeRole.intake, 12).batch.length
-      setStatus(`Agent pass finished: ${foundThisPass.length} unique source record${foundThisPass.length === 1 ? '' : 's'} retained from ${discoveredBeforeCap} raw public-source discover${discoveredBeforeCap === 1 ? 'y' : 'ies'}. ${firstBatchCount} evidence-bearing ${firstBatchCount === 1 ? 'person is' : 'people are'} proposed for the first review batch; ${eligibleCount - firstBatchCount} remain in discovery for inspection. No candidate was shortlisted, rejected, merged across sources, or contacted.`)
-      emitRoleSearchProgress(roleId, firstBatchCount ? 'reviewing' : 'paused', firstBatchCount
-        ? `Reviewed ${discoveredBeforeCap} raw discoveries and prepared ${firstBatchCount} evidence-bearing ${firstBatchCount === 1 ? 'person' : 'people'} for your first batch.`
-        : `Reviewed ${discoveredBeforeCap} raw discoveries, but none met the first-batch evidence floor. Refine or broaden the search before saving candidates.`)
+      setPassTelemetry({ discoveredBeforeCap, returnedAfterCap: foundThisPass.length, sourceDistribution: sourceDistribution(foundThisPass) })
+      const s = batch.summary
+      setStatus(`Agent pass finished: ${foundThisPass.length} unique source records retained from ${discoveredBeforeCap} raw public-source discoveries. ${s.discoveredPeople} people reached admission review: ${s.reviewReady} Review Ready, ${s.promisingVerify} Promising — Verify, ${s.held} Held for inspection. ${batch.batch.length} are proposed in the capped first review batch. Unknown evidence is not rejection; no candidate was shortlisted, rejected, merged across sources, or contacted.`)
+      emitRoleSearchProgress(roleId, batch.batch.length ? 'reviewing' : 'paused', batch.batch.length
+        ? `Prepared ${batch.batch.length} people for recruiter review: ${s.reviewReady} Review Ready and ${s.promisingVerify} Promising — Verify across the full approved geography.`
+        : `No person had role-relevant public evidence after ${discoveredBeforeCap} raw discoveries. Held records remain inspectable; the system did not reject them.`)
     } finally {
       setWorking('')
       setPassProgress({ current: 0, total: 0 })
@@ -364,7 +358,7 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     setWorking('slate')
     setPassProgress({ current: 0, total: selected.length })
     setStatus(`Creating a recruiter review slate from ${selected.length} explicitly selected source record${selected.length === 1 ? '' : 's'}…`)
-    emitRoleSearchProgress(roleId, 'saving', `Building your first review batch from ${selected.length} evidence-bearing ${selected.length === 1 ? 'person' : 'people'}…`, 0, selected.length)
+    emitRoleSearchProgress(roleId, 'saving', `Building your first review batch from ${selected.length} recruiter-selected ${selected.length === 1 ? 'person' : 'people'}…`, 0, selected.length)
 
     const saved: SavedSlateDiscovery[] = []
     const successfulKeys: string[] = []
@@ -452,9 +446,9 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
   return <section className="agent-review-slate-v33" aria-label="Sourcing agent review slate builder">
     <div className="agent-review-command">
       <div>
-        <span className="kicker">V33.3 sourcing agent</span>
-        <h2>Run the approved search plan. Build one review slate.</h2>
-        <p>SourcingOS executes the public sources attached to recruiter-approved hypotheses, accumulates unique source records, and waits for one explicit action before persisting a review slate.</p>
+        <span className="kicker">V36.7 sourcing agent</span>
+        <h2>Run the approved search plan. Review people before filtering them away.</h2>
+        <p>SourcingOS separates discovery from admission: role-relevant people with incomplete public evidence remain visible as Promising — Verify instead of disappearing.</p>
       </div>
       <div className="agent-review-command-actions">
         <button className="btn" disabled={Boolean(working) || !executableLanes.length} onClick={() => void runApprovedAgentPass()}>
@@ -467,11 +461,18 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     <div className="agent-review-metrics">
       <span><b>{approvedLanes.length}</b><small>approved hypotheses</small></span>
       <span><b>{executableSources.size}</b><small>executable sources</small></span>
-      <span><b>{passTelemetry.discoveredBeforeCap || '—'}</b><small>latest raw discoveries</small></span>
-      <span><b>{discoveries.length}</b><small>unique review records</small></span>
+      <span><b>{passTelemetry.discoveredBeforeCap || '—'}</b><small>raw discoveries</small></span>
+      <span><b>{firstBatch.summary.discoveredPeople || '—'}</b><small>people assessed</small></span>
+      <span><b>{firstBatch.summary.reviewReady}</b><small>Review Ready</small></span>
+      <span><b>{firstBatch.summary.promisingVerify}</b><small>Promising · Verify</small></span>
+      <span><b>{firstBatch.summary.held}</b><small>Held · inspectable</small></span>
     </div>
 
     {status && <div className="cta agent-review-status" role="status">{status}</div>}
+    {!!approvedLocations.length && <div className="agent-review-source-status" aria-label="Recruiter-approved geography">
+      <span className="status-pill active">Approved geography</span>
+      {approvedLocations.map(location => <span className="status-pill" key={location}>{location}</span>)}
+    </div>}
     {!!Object.keys(sourceStatus).length && <div className="agent-review-source-status">{Object.entries(sourceStatus).map(([key, value]) => <span
       className={`status-pill ${value.status === 'completed' ? 'success' : value.status === 'failed' ? 'warning' : ''}`}
       key={key}
@@ -485,16 +486,21 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     {!!discoveries.length && <div className="agent-review-stage">
       <div className="agent-review-stage-head">
         <div>
-          <span className="kicker">Proposed review slate</span>
-          <h3>{firstBatch.batch.length} in the first review batch · {saveEligible.length} people discovered</h3>
-          <p>The first batch is capped at 12 and requires observed role evidence plus compatible or unknown geography. Held records stay visible here and are never silently rejected.</p>
+          <span className="kicker">Recruiter admission funnel</span>
+          <h3>{firstBatch.batch.length} in the capped first batch · {firstBatch.summary.reviewReady} Ready · {firstBatch.summary.promisingVerify} Verify · {firstBatch.summary.held} Held</h3>
+          <p>Unknown evidence is not a rejection. Review Ready and Promising — Verify can enter the first batch; Held records remain visible and can still be manually included by the recruiter.</p>
         </div>
         <div className="agent-review-stage-actions">
-          <button className="btn ghost" disabled={Boolean(working)} onClick={selectAllEligible}>Select eligible</button>
+          <button className="btn ghost" disabled={Boolean(working)} onClick={selectAllReviewable}>Select reviewable</button>
           <button className="btn ghost" disabled={Boolean(working)} onClick={() => setSelectedKeys([])}>Clear selection</button>
           <button className="btn ghost" disabled={Boolean(working)} onClick={clearPass}>Clear pass</button>
         </div>
       </div>
+
+      {!!Object.keys(firstBatch.summary.heldByReason).length && <details className="advanced-disclosure">
+        <summary>Why {firstBatch.summary.held} record{firstBatch.summary.held === 1 ? ' is' : 's are'} held</summary>
+        <div className="agent-review-source-status">{Object.entries(firstBatch.summary.heldByReason).map(([reason, count]) => <span className="status-pill" key={reason}>{count} · {reason}</span>)}</div>
+      </details>}
 
       <div className="agent-review-preflight">
         <span><b>{selected.length}</b><small>explicitly selected</small></span>
@@ -503,25 +509,68 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
         <span><b>{savedKeys.length}</b><small>already saved this pass</small></span>
       </div>
 
-      <div className="agent-review-grid">{discoveries.slice(0, 40).map(discovery => {
+      <div className="agent-review-grid">{discoveries.slice(0, 50).map(discovery => {
         const key = reviewSlateDiscoveryKey(discovery)
-        const eligible = Boolean(discovery.saveEligible && discovery.sourceResult?.entityKind === 'person')
+        const personEligible = Boolean(discovery.saveEligible && discovery.sourceResult?.entityKind === 'person')
         const selectedNow = selectedKeys.includes(key)
         const saved = savedKeys.includes(key)
         const evidenceCheck = evidenceCheckByKey.get(key)
+        const result = discovery.sourceResult
+        const observedLocation = discovery.location || result?.location || ''
+        const profileUrl = result?.profileUrl || discovery.sourceUrl
+        const contacts = (result?.contactSignals || []).filter(signal => ['public_email', 'website', 'profile_url'].includes(signal.type)).slice(0, 3)
+        const reviewLabel = evidenceCheck?.reviewState === 'review_ready'
+          ? 'Review Ready'
+          : evidenceCheck?.reviewState === 'promising_verify'
+            ? 'Promising · Verify'
+            : evidenceCheck?.reviewState === 'held'
+              ? 'Held · inspect'
+              : 'Discovery'
         return <article className={`agent-review-card ${selectedNow ? 'selected' : ''} ${saved ? 'saved' : ''}`} key={key}>
           <div className="agent-review-card-top">
             <label className="agent-review-check">
-              <input type="checkbox" checked={selectedNow || saved} disabled={!eligible || saved || Boolean(working)} onChange={() => toggleSelection(key)} />
-              <span>{saved ? 'Saved' : eligible ? 'Include' : 'Preview only'}</span>
+              <input type="checkbox" checked={selectedNow || saved} disabled={!personEligible || saved || Boolean(working)} onChange={() => toggleSelection(key)} />
+              <span>{saved ? 'Saved' : !personEligible ? 'Preview only' : evidenceCheck?.reviewState === 'held' ? 'Include anyway' : 'Include'}</span>
             </label>
-            <span className="status-pill">{discovery.sourceKey}</span>
+            <span className={`status-pill ${evidenceCheck?.reviewState === 'review_ready' ? 'success' : evidenceCheck?.reviewState === 'promising_verify' ? 'active' : ''}`}>{reviewLabel}</span>
           </div>
-          <h4>{discovery.displayName}</h4>
-          <p>{[discovery.headline, discovery.organization, discovery.location].filter(Boolean).join(' · ') || 'Public-source identity'}</p>
-          <div className="agent-review-evidence">{discovery.evidence.slice(0, 2).map((item, index) => <div key={`${key}:${index}`}><b>{item.label}</b><span>{item.value}</span></div>)}</div>
-          {evidenceCheck && <p className={`agent-review-floor ${evidenceCheck.admitted ? 'admitted' : 'held'}`}>{evidenceCheck.explanation}</p>}
-          <div className="agent-review-card-foot"><span>{discovery.evidence.length} evidence items</span>{discovery.sourceUrl && <a href={discovery.sourceUrl} target="_blank" rel="noreferrer noopener">Source ↗</a>}</div>
+
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '8px 0' }}>
+            {result?.avatarUrl
+              ? <img src={result.avatarUrl} alt="" referrerPolicy="no-referrer" style={{ width: 46, height: 46, borderRadius: '50%', objectFit: 'cover', flex: '0 0 auto' }} />
+              : <span className="role-candidate-avatar-v33-9">{candidateInitials(discovery.displayName)}</span>}
+            <div style={{ minWidth: 0 }}>
+              <h4 style={{ margin: 0 }}>{discovery.displayName}</h4>
+              <p style={{ margin: '2px 0 0' }}>{[discovery.headline, discovery.organization].filter(Boolean).join(' · ') || 'Public-source identity'}</p>
+            </div>
+          </div>
+
+          <div className="agent-review-source-status" style={{ marginBottom: 8 }}>
+            <span className="status-pill">{sourceLabel(discovery.sourceKey)}</span>
+            <span className={`status-pill ${observedLocation ? 'success' : ''}`}>{observedLocation ? `📍 ${observedLocation}` : '📍 Location not observed'}</span>
+            <span className="status-pill">{contacts.length ? `${contacts.length} public contact signal${contacts.length === 1 ? '' : 's'}` : 'Contact not observed'}</span>
+          </div>
+
+          {!!result?.skills?.length && <div className="agent-review-source-status" aria-label="Observed skills">
+            {result.skills.slice(0, 6).map(skill => <span className="status-pill" key={`${key}:skill:${skill}`}>{skill}</span>)}
+          </div>}
+
+          <div className="agent-review-evidence">{discovery.evidence.slice(0, 3).map((item, index) => <div key={`${key}:${index}`}><b>{item.label}</b><span>{item.value}</span></div>)}</div>
+          {evidenceCheck && <p className={`agent-review-floor ${evidenceCheck.reviewState === 'held' ? 'held' : 'admitted'}`}>{evidenceCheck.explanation}</p>}
+
+          {!!contacts.length && <div className="agent-review-source-status" aria-label="Public contact signals">
+            {contacts.map((contact, index) => {
+              const href = contactHref(contact.type, contact.value)
+              return href
+                ? <a className="status-pill" key={`${key}:contact:${index}`} href={href} target={contact.type === 'public_email' ? undefined : '_blank'} rel={contact.type === 'public_email' ? undefined : 'noreferrer noopener'}>{contact.type === 'public_email' ? 'Email' : contact.type === 'website' ? 'Website' : 'Profile'} ↗</a>
+                : <span className="status-pill" key={`${key}:contact:${index}`}>{contact.type.replace('_', ' ')}</span>
+            })}
+          </div>}
+
+          <div className="agent-review-card-foot">
+            <span>{discovery.evidence.length} evidence items · {Math.round(discovery.identityConfidence * 100)}% source identity confidence</span>
+            {profileUrl && <a href={profileUrl} target="_blank" rel="noreferrer noopener">Open {sourceLabel(discovery.sourceKey)} profile ↗</a>}
+          </div>
         </article>
       })}</div>
 
@@ -538,6 +587,6 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
       {!!savedKeys.length && <div className="agent-review-next"><Link className="btn secondary" href={`/app/roles/${encodeURIComponent(roleId)}?tab=candidates`}>Review role candidates →</Link><span>Evidence review remains separate from recruiter fit decisions. Nothing here auto-shortlists or rejects a person.</span></div>}
     </div>}
 
-    <div className="agent-review-trust">Autonomous research · recruiter-controlled persistence · source criteria never become candidate evidence · no auto-reject · no auto-shortlist · no auto-contact · no silent cross-source merge.</div>
+    <div className="agent-review-trust">Autonomous research · recruiter-controlled persistence · unknown ≠ negative · source criteria never become candidate evidence · no auto-reject · no auto-shortlist · no auto-contact · no silent cross-source merge.</div>
   </section>
 }
