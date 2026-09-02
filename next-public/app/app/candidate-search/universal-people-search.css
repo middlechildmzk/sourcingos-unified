@@ -1,5 +1,6 @@
 /* V36.9 route-scoped responsive polish for Universal People Search.
-   Kept local to Candidate Search so legacy workbench surfaces are unaffected. */
+   Kept local to Candidate Search so legacy workbench surfaces are unaffected.
+   Final preview marker keeps the complete page + responsive tree together. */
 
 section[aria-label='Universal people search'] input {
   font: inherit;
