@@ -52,6 +52,8 @@ describe('V36.8 provider expansion', () => {
     expect(providerRoadmapEntryV36_8('company_enrich')).toMatchObject({ state: 'next', uses: expect.arrayContaining(['candidate_search']) })
     expect(providerRoadmapEntryV36_8('crustdata')).toMatchObject({ state: 'next', uses: expect.arrayContaining(['candidate_search', 'public_web_locator']) })
     expect(providerRoadmapEntryV36_8('perplexity_people')).toMatchObject({ state: 'next', uses: ['public_web_locator'] })
+    expect(providerRoadmapEntryV36_8('openai_web')).toMatchObject({ state: 'research', uses: ['public_web_locator'] })
+    expect(providerRoadmapEntryV36_8('anthropic_web')).toMatchObject({ state: 'research', uses: ['public_web_locator'] })
     expect(providerRoadmapEntryV36_8('pipl')).toMatchObject({ state: 'research', uses: ['identity_corroboration'] })
     expect(providerRoadmapEntryV36_8('osint_industries')).toMatchObject({ state: 'research', uses: ['identity_corroboration'] })
   })
