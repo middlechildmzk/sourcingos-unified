@@ -158,7 +158,7 @@ describe('V35 Candidate 360 field resolution shadow projection', () => {
       id: 'contact-1',
       candidateId: 'candidate-1',
       type: 'email',
-      value: 'jane@acme.com',
+      value: 'jane@example.com',
       source: 'manual',
       confidence: 'high',
       verified: false,
@@ -177,7 +177,7 @@ describe('V35 Candidate 360 field resolution shadow projection', () => {
         id: 'contact-1',
         candidateId: 'candidate-1',
         type: 'email',
-        value: 'Jane@Acme.com',
+        value: 'Jane@Example.com',
         source: 'uploaded_resume',
         confidence: 'high',
         verified: false,
@@ -188,7 +188,7 @@ describe('V35 Candidate 360 field resolution shadow projection', () => {
         id: 'contact-2',
         candidateId: 'candidate-1',
         type: 'email',
-        value: 'jane@acme.com',
+        value: 'jane@example.com',
         source: 'github',
         confidence: 'medium',
         verified: false,
@@ -198,7 +198,7 @@ describe('V35 Candidate 360 field resolution shadow projection', () => {
     )
 
     const result = resolve(snapshot)
-    expect(result.primaryWorkEmail?.value).toBe('jane@acme.com')
+    expect(result.primaryWorkEmail?.value).toBe('jane@example.com')
     expect(result.primaryWorkEmail?.sourceCount).toBe(2)
     expect(result.primaryWorkEmail?.permissionStatus).toBe('candidate_provided')
   })
@@ -209,7 +209,7 @@ describe('V35 Candidate 360 field resolution shadow projection', () => {
       id: 'contact-old',
       candidateId: 'candidate-1',
       type: 'email',
-      value: 'jane@oldco.com',
+      value: 'jane@company.com',
       source: 'uploaded_resume',
       confidence: 'high',
       verified: false,
