@@ -34,10 +34,27 @@ import {
 } from '@/lib/agent-review-slate-v33-3'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
+type SourceGeographyStatusV35 = {
+  mode: 'bounded_fanout' | 'array_native' | 'source_agnostic' | 'none'
+  requestedLocations: string[]
+  executedLocations: string[]
+  omittedLocations: string[]
+  perLocationLimit: number
+  explanation: string
+  discoveredByLocation?: Record<string, number>
+}
+
+type SourceStatus = {
+  status: 'completed' | 'failed' | 'unavailable'
+  discovered: number
+  message?: string
+  geography?: SourceGeographyStatusV35
+}
+
 type RunResponse = AgenticOrchestrationResponse & {
   ok?: boolean
   error?: string
-  sourceStatus?: Record<string, { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }>
+  sourceStatus?: Record<string, SourceStatus>
   results?: ReviewSlateDiscovery[]
   trust?: { message?: string }
 }
@@ -50,8 +67,6 @@ type SaveResponse = {
   candidateUrl?: string
   identityProposals?: { created?: Array<unknown> }
 }
-
-type SourceStatus = { status: 'completed' | 'failed' | 'unavailable'; discovered: number; message?: string }
 
 type SearchProgressPhase = 'searching' | 'reviewing' | 'saving' | 'ready' | 'paused'
 
@@ -74,19 +89,47 @@ function readAttempts(roleId: string): SearchAttempt[] {
   }
 }
 
+function mergeDiscoveredByLocation(
+  prior: Record<string, number> | undefined,
+  incoming: Record<string, number> | undefined,
+): Record<string, number> | undefined {
+  if (!prior && !incoming) return undefined
+  const next = { ...(prior || {}) }
+  for (const [location, count] of Object.entries(incoming || {})) next[location] = (next[location] || 0) + count
+  return next
+}
+
 function mergeSourceStatus(current: Record<string, SourceStatus>, incoming: RunResponse['sourceStatus']) {
   const next = { ...current }
   for (const [key, value] of Object.entries(incoming || {})) {
     const prior = next[key]
+    const geography = value.geography
+      ? {
+          ...value.geography,
+          discoveredByLocation: mergeDiscoveredByLocation(prior?.geography?.discoveredByLocation, value.geography.discoveredByLocation),
+        }
+      : prior?.geography
     next[key] = prior
       ? {
           status: prior.status === 'completed' || value.status === 'completed' ? 'completed' : value.status,
           discovered: prior.discovered + value.discovered,
           message: value.message || prior.message,
+          ...(geography ? { geography } : {}),
         }
       : value
   }
   return next
+}
+
+function geographyStatusLabel(status: SourceStatus): string {
+  const geography = status.geography
+  if (!geography || geography.mode === 'none') return ''
+  if (geography.mode === 'source_agnostic') return ' · geography downstream'
+  const executed = geography.executedLocations.length
+  const marketLabel = `${executed} market${executed === 1 ? '' : 's'}`
+  if (geography.mode === 'array_native') return ` · ${marketLabel}`
+  const deferred = geography.omittedLocations.length
+  return ` · ${marketLabel}${deferred ? ` · ${deferred} deferred` : ''}`
 }
 
 function unique(values: string[], max: number): string[] {
@@ -429,7 +472,11 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
     </div>
 
     {status && <div className="cta agent-review-status" role="status">{status}</div>}
-    {!!Object.keys(sourceStatus).length && <div className="agent-review-source-status">{Object.entries(sourceStatus).map(([key, value]) => <span className={`status-pill ${value.status === 'completed' ? 'success' : value.status === 'failed' ? 'warning' : ''}`} key={key}>{key} · {value.status} · {value.discovered}</span>)}</div>}
+    {!!Object.keys(sourceStatus).length && <div className="agent-review-source-status">{Object.entries(sourceStatus).map(([key, value]) => <span
+      className={`status-pill ${value.status === 'completed' ? 'success' : value.status === 'failed' ? 'warning' : ''}`}
+      key={key}
+      title={value.message || value.geography?.explanation}
+    >{key} · {value.status} · {value.discovered}{geographyStatusLabel(value)}</span>)}</div>}
     {!!passTelemetry.discoveredBeforeCap && <div className="agent-review-source-status" aria-label="Latest source orchestration summary">
       <span className="status-pill active">{passTelemetry.returnedAfterCap} retained from {passTelemetry.discoveredBeforeCap}</span>
       {Object.entries(passTelemetry.sourceDistribution).map(([source, count]) => <span className="status-pill" key={source}>{source} · {count} retained</span>)}
