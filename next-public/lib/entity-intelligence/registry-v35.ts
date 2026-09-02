@@ -147,8 +147,6 @@ function relationship(
 
 function allEntities(): IntelligenceEntity[] {
   const byId = new Map<string, IntelligenceEntity>()
-  // V36.3 reviewed entities intentionally come after legacy/curated content so
-  // stable ids can narrow unsafe mixed aliases without breaking downstream APIs.
   for (const entity of [...LEGACY_ENTITIES, ...CURATED_ENTITIES, ...RECRUITING_KNOWLEDGE_ENTITIES_V36_3, ...LOCATION_ENTITIES_V35]) byId.set(entity.id, entity)
   return Array.from(byId.values())
 }
@@ -195,6 +193,7 @@ function curatedRelationships(entities: IntelligenceEntity[]): EntityRelationshi
     [id('SELinux'), id('Red Hat Enterprise Linux'), 'RELATED_TECHNOLOGY'],
     [id('Ansible'), id('Red Hat Enterprise Linux'), 'RELATED_TECHNOLOGY'],
     [id('Red Hat Satellite'), id('Red Hat Enterprise Linux'), 'RELATED_TECHNOLOGY'],
+    [id('Kubernetes'), id('Terraform'), 'RELATED_TECHNOLOGY', 'Kubernetes and Terraform are frequently paired infrastructure technologies; neither is evidence of the other.'],
   ]
   const out = pairs.flatMap(([from, to, type, note]) => from && to ? [relationship(from, to, type, CURATED, 'directed', note)] : [])
 
@@ -273,6 +272,24 @@ export function matchEntitiesV35(text: string, allowedKinds?: EntityKind[]): Ent
     })
   }
 
+  // Bare TS is intentionally unresolved. Preserve the two plausible meanings as
+  // inactive/confusable suggestions for recruiter review, but never normalize.
+  const hasBareTs = /(^|\s)ts($|\s)/i.test(text.trim()) && !/\bts\s*\/?\s*sci\b/i.test(text)
+  if (hasBareTs) {
+    for (const label of ['TypeScript', 'Top Secret']) {
+      const entity = ENTITY_REGISTRY_V35.entities.find(item => item.canonicalLabel === label)
+      if (!entity || (allowedKinds?.length && !allowedKinds.includes(entity.kind)) || suggestions.some(item => item.entity.id === entity.id)) continue
+      suggestions.push({
+        entity,
+        matchedText: 'ts',
+        matchType: 'confusable',
+        explanation: `Bare TS is ambiguous; ${label} is a possible interpretation and requires context before activation.`,
+        rank: 0.9,
+        activation: 'suggested_inactive',
+      })
+    }
+  }
+
   return suggestions.sort((a, b) => a.rank - b.rank || b.matchedText.length - a.matchedText.length)
 }
 
@@ -283,13 +300,15 @@ export function suggestRelatedEntitiesV35(entityId: string): EntitySuggestion[] 
       const entity = entityByIdV35(relationship.toEntityId)
       if (!entity) return []
       const matchType: EntityMatchType = relationship.type === 'COMMON_MARKET_VARIANT' ? 'market_variant' : 'adjacent'
+      const baseRank = relationship.type === 'NEAR' ? 1 : relationship.type === 'CREDENTIAL_FOR' ? 1.2 : 1.5
+      const legacyPenalty = relationship.provenance.some(item => item.reviewState === 'reviewed') ? 0 : 0.8
       return [{
         entity,
         matchedText: entity.canonicalLabel,
         matchType,
         relationship,
         explanation: relationship.note || `${relationship.type.replaceAll('_', ' ').toLowerCase()} ${entity.canonicalLabel}`,
-        rank: relationship.type === 'NEAR' ? 1 : relationship.type === 'CREDENTIAL_FOR' ? 1.2 : 1.5,
+        rank: baseRank + legacyPenalty,
         activation: 'suggested_inactive' as const,
       }]
     })
