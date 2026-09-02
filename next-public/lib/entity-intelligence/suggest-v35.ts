@@ -42,14 +42,19 @@ function incomingRelationshipSuggestions(entityId: string): EntitySuggestion[] {
 }
 
 export function suggestEntitiesV35(request: EntitySuggestionRequestV35): EntitySuggestionResponseV35 {
-  const matches = matchEntitiesV35(request.query, request.allowedKinds)
+  const rawMatches = matchEntitiesV35(request.query, request.allowedKinds)
+  const matches = rawMatches.filter(item => item.activation !== 'suggested_inactive')
+  const legacyVariants = rawMatches.filter(item => item.activation === 'suggested_inactive')
   const max = Math.max(1, Math.min(request.maxSuggestions ?? 20, 50))
   const related = request.includeRelated === false
-    ? []
-    : matches.flatMap(match => [
-        ...suggestRelatedEntitiesV35(match.entity.id),
-        ...incomingRelationshipSuggestions(match.entity.id),
-      ])
+    ? legacyVariants
+    : [
+        ...legacyVariants,
+        ...matches.flatMap(match => [
+          ...suggestRelatedEntitiesV35(match.entity.id),
+          ...incomingRelationshipSuggestions(match.entity.id),
+        ]),
+      ]
 
   const seen = new Set<string>()
   const dedupedRelated = related.filter(item => {
@@ -67,6 +72,7 @@ export function suggestEntitiesV35(request: EntitySuggestionRequestV35): EntityS
   const notes = [
     'Suggestions are recruiter search intelligence, not candidate facts.',
     'Adjacent and related entities may expand discovery but never satisfy a must-have without candidate evidence.',
+    'Legacy broad aliases are inactive search variants until reviewed into a typed equivalence or adjacency relationship.',
     'Credentials are typed as credential signals; they never prove current hands-on experience by themselves.',
   ]
   if (locationIntent?.suggestedExpansionIds.length) {
