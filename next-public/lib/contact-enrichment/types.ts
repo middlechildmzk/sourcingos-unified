@@ -43,6 +43,11 @@ export type PermissionStatus =
 /** Identifier for a contact enrichment provider. */
 export type ContactEnrichmentProvider =
   | 'people_data_labs'
+  | 'data_vertex'
+  | 'pearch'
+  | 'coresignal'
+  | 'contactout'
+  | 'openweb_ninja'
   | 'hunter'
   | 'apollo'
   | 'none'
@@ -62,6 +67,9 @@ export interface ProviderStatus {
 export interface ContactEnrichmentRequest {
   candidateId?: string
   sourceProfileId?: string
+  /** Provider-native person id only when its provider is known. */
+  providerPersonId?: string
+  providerName?: ContactEnrichmentProvider
   firstName?: string
   lastName?: string
   fullName?: string
@@ -178,7 +186,8 @@ export function hasSufficientEnrichmentInputs(req: ContactEnrichmentRequest): bo
   const hasName = Boolean(req.fullName || (req.firstName && req.lastName))
   const hasCompanyOrDomain = Boolean(req.currentCompany || req.companyDomain)
   const hasProfileUrl = Boolean(req.profileUrl || req.linkedinUrl || req.githubUrl)
-  return (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl
+  const hasProviderAnchor = Boolean(req.providerPersonId && req.providerName)
+  return hasProviderAnchor || (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl
 }
 
 /** Which request fields are populated — for audit logging (no values, just keys). */
