@@ -48,6 +48,15 @@ function splitList(value?: string, max = 30): string[] {
     .slice(0, max)
 }
 
+/** City/state strings commonly contain commas, so locations use newline/semicolon as separators. */
+function splitLocations(value?: string, max = 20): string[] {
+  return Array.from(new Set(String(value || '')
+    .split(/[\n;]/)
+    .map(item => clean(item))
+    .filter(Boolean)))
+    .slice(0, max)
+}
+
 export function normalizeUniversalPeopleIdentifierV36_9(value: string): string {
   const cleaned = clean(value)
   if (/^(?:www\.)?(?:linkedin\.com|github\.com)\//i.test(cleaned)) return `https://${cleaned}`
@@ -65,6 +74,13 @@ function exactHttpUrl(value: string): URL | null {
   }
 }
 
+const PROFESSIONAL_ROLE_HINTS = new Set([
+  'administrator', 'admin', 'engineer', 'developer', 'architect', 'manager', 'director', 'recruiter', 'sourcer',
+  'analyst', 'specialist', 'technician', 'consultant', 'scientist', 'researcher', 'designer', 'product', 'sales',
+  'nurse', 'physician', 'doctor', 'attorney', 'accountant', 'security', 'linux', 'rhel', 'devops', 'devsecops',
+  'software', 'hardware', 'systems', 'system', 'network', 'data', 'cloud', 'cyber', 'cybersecurity', 'clearance',
+])
+
 export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeopleSearchIntentV36_9 {
   const query = clean(value)
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(query)) return 'email_lookup'
@@ -81,7 +97,12 @@ export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeop
   }
 
   const tokens = query.split(/\s+/).filter(Boolean)
-  const nameLike = tokens.length >= 2 && tokens.length <= 4 && tokens.every(token => /^[\p{L}][\p{L}'’.\-]*$/u.test(token))
+  const normalizedTokens = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+  const hasRoleHint = normalizedTokens.some(token => PROFESSIONAL_ROLE_HINTS.has(token))
+  const nameLike = !hasRoleHint
+    && tokens.length >= 2
+    && tokens.length <= 4
+    && tokens.every(token => /^[\p{L}][\p{L}'’.\-]*$/u.test(token))
   if (nameLike) return 'person_lookup'
   return 'professional_search'
 }
@@ -121,7 +142,7 @@ export function buildUniversalPeopleProviderRequestV36_9(
   const company = clean(draft.company)
   const titles = splitList(draft.title, 20)
   const skills = splitList(draft.skills, 40)
-  const locations = splitList(draft.location, 20)
+  const locations = splitLocations(draft.location, 20)
   const context = [query, company ? `company ${company}` : ''].filter(Boolean).join(' · ').slice(0, 3000)
   const requirements = [
     ...titles.map(text => ({ text: `Current or relevant title: ${text}`, mustHave: false })),
