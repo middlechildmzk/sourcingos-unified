@@ -42,6 +42,9 @@ describe('V34 Golden Role cross-domain recruiter truth suite', () => {
 
       const routing = buildJobFamilyRoutingV34(intake)
       expect(routing.primaryFamily).toBe(golden.expectedFamily)
+      for (const modifier of golden.expectedContextModifiers || []) {
+        expect(routing.contextModifiers.map(item => item.id), `${golden.id} lost context modifier ${modifier}`).toContain(modifier)
+      }
     })
   }
 
@@ -49,7 +52,7 @@ describe('V34 Golden Role cross-domain recruiter truth suite', () => {
     const families = new Set(GOLDEN_ROLE_CASES_V34.map(golden => golden.expectedFamily))
     const familyList = Array.from(families)
     expect(GOLDEN_ROLE_CASES_V34.length).toBeGreaterThanOrEqual(16)
-    expect(families.size).toBeGreaterThanOrEqual(9)
+    expect(families.size).toBeGreaterThanOrEqual(12)
     expect(familyList).toEqual(expect.arrayContaining([
       'infrastructure',
       'software',
@@ -59,10 +62,10 @@ describe('V34 Golden Role cross-domain recruiter truth suite', () => {
       'data',
       'healthcare_clinical',
       'research_science',
-      'federal_govcon',
+      'program_management',
+      'product_management',
       'finance_regulated',
       'aviation',
-      'general',
     ]))
   })
 })
