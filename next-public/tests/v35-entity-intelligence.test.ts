@@ -33,7 +33,26 @@ describe('V35 shared entity intelligence', () => {
     expect(related?.activation).toBe('suggested_inactive')
   })
 
-  it('marks legacy expansion edges as reviewable discovery hypotheses rather than authoritative equivalence', () => {
+  it('does not silently normalize broad legacy title aliases', () => {
+    const result = suggestEntitiesV35({ query: 'SRE', includeRelated: true })
+    expect(result.matches.some(item => item.entity.canonicalLabel === 'Site Reliability Engineer')).toBe(true)
+    expect(result.matches.some(item => item.entity.canonicalLabel === 'DevSecOps Engineer')).toBe(false)
+    const legacyVariant = result.related.find(item => item.entity.canonicalLabel === 'DevSecOps Engineer')
+    expect(legacyVariant?.matchType).toBe('market_variant')
+    expect(legacyVariant?.activation).toBe('suggested_inactive')
+  })
+
+  it('does not silently choose between TypeScript and Top Secret for bare TS', () => {
+    const result = suggestEntitiesV35({ query: 'TS', includeRelated: true })
+    expect(result.matches.some(item => ['TypeScript', 'Top Secret'].includes(item.entity.canonicalLabel))).toBe(false)
+    expect(result.related.map(item => item.entity.canonicalLabel)).toEqual(expect.arrayContaining(['TypeScript', 'Top Secret']))
+  })
+
+  it('marks legacy alias dictionaries and expansion edges as reviewable discovery intelligence', () => {
+    const legacyEntities = ENTITY_REGISTRY_V35.entities.filter(entity => entity.provenance.some(p => p.source === 'legacy_search_taxonomy'))
+    expect(legacyEntities.length).toBeGreaterThan(0)
+    expect(legacyEntities.every(entity => entity.provenance.some(p => p.reviewState === 'needs_review'))).toBe(true)
+
     const legacyEdges = ENTITY_REGISTRY_V35.relationships.filter(edge => edge.provenance.some(p => p.source === 'legacy_search_expansions'))
     expect(legacyEdges.length).toBeGreaterThan(0)
     expect(legacyEdges.every(edge => edge.provenance.some(p => p.reviewState === 'needs_review'))).toBe(true)
