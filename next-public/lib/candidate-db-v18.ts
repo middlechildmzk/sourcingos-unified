@@ -24,6 +24,7 @@ export type CandidateSourceName =
   | 'coresignal'
   | 'data_vertex'
   | 'contactout'
+  | 'signalhire'
   | 'openweb_ninja'
   | 'public_resume'
   | 'uploaded_resume'
