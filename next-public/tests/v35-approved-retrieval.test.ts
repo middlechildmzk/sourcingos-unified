@@ -56,8 +56,8 @@ describe('V35.3 recruiter-approved retrieval expansion', () => {
   })
 
   it('never injects sensitive clearance concepts into public queries through search approvals', () => {
-    let state = approvedState()
-    state = setApprovedSearchEntityV35(state, 'entity:clearance:ts-sci', true, new Date('2026-09-02T00:04:00Z'))
+    const state = setApprovedSearchEntityV35(approvedState(), 'entity:clearance:ts-sci', true, new Date('2026-09-02T00:04:00Z'))
+    if (!state) throw new Error('Expected sensitive search approval state')
     const plan = buildCanonicalAgenticSearchPlan(intake(), undefined, { searchIntelligence: state })
     const publicQueries = plan.lanes.flatMap(lane => lane.tasks)
       .filter(task => ['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications', 'google_xray'].includes(task.surface))
