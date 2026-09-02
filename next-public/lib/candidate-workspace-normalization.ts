@@ -1,4 +1,24 @@
 import type { EntityKind } from '@/lib/source-types'
+import type {
+  CandidateRediscoveryStateV36,
+  CandidateRoleHistoryV36,
+  EmploymentCurrentStateV36,
+  EmploymentEvidenceClassV36,
+  EmploymentObservationV36,
+} from '@/lib/candidate-universe-v36'
+
+export type CandidateWorkspaceUniverse = {
+  knownToSourcingOS: true
+  sourceProfileCount: number
+  evidenceItemCount: number
+  firstSeenAt?: string
+  lastSeenAt?: string
+  roleCount: number
+  roleHistory: CandidateRoleHistoryV36[]
+  rediscoveryState: CandidateRediscoveryStateV36
+  employmentObservations: EmploymentObservationV36[]
+  trustBoundary: string
+}
 
 export type CandidateWorkspaceCandidate = {
   id: string
@@ -16,6 +36,7 @@ export type CandidateWorkspaceCandidate = {
   openToWorkSignalIds: string[]
   mergeStatus: string
   updatedAt?: string
+  universe?: CandidateWorkspaceUniverse
 }
 
 export type CandidateWorkspaceMatchReview = {
@@ -62,6 +83,7 @@ export type CandidateWorkspaceSnapshot = {
   counts: CandidateWorkspaceCounts
   page: { limit: number; offset: number; hasMore: boolean }
   search: string
+  activeRoleId?: string
 }
 
 export const EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT: CandidateWorkspaceSnapshot = {
@@ -143,6 +165,71 @@ function identifiedRows(value: unknown): Record<string, unknown>[] {
     .filter(item => Boolean(item.id))
 }
 
+function rediscoveryState(value: unknown): CandidateRediscoveryStateV36 {
+  return value === 'already_in_role' || value === 'rediscovered_from_other_role'
+    ? value
+    : 'known_to_sourcingos'
+}
+
+function employmentEvidenceClass(value: unknown): EmploymentEvidenceClassV36 {
+  return value === 'github_org_participation'
+    || value === 'email_domain_affiliation'
+    || value === 'provider_assertion'
+    ? value
+    : 'profile_statement'
+}
+
+function employmentCurrentState(value: unknown): EmploymentCurrentStateV36 {
+  return value === 'current' || value === 'historical' ? value : 'unknown'
+}
+
+function normalizeRoleHistory(value: unknown): CandidateRoleHistoryV36[] {
+  return objectRows(value).slice(0, 100).map(row => ({
+    roleId: text(row.roleId ?? row.role_id, '', 200),
+    stage: optionalText(row.stage, 100),
+    fitDecision: optionalText(row.fitDecision ?? row.fit_decision, 100),
+    fitReasons: textArray(row.fitReasons ?? row.fit_reasons, 50, 500),
+    concerns: textArray(row.concerns, 50, 500),
+    firstSeenAt: optionalText(row.firstSeenAt ?? row.first_seen_at, 100),
+    lastSeenAt: optionalText(row.lastSeenAt ?? row.last_seen_at, 100),
+  })).filter(row => Boolean(row.roleId))
+}
+
+function normalizeEmploymentObservations(value: unknown): EmploymentObservationV36[] {
+  return objectRows(value).slice(0, 200).map((row, index) => ({
+    observationId: text(row.observationId ?? row.observation_id, `employment-${index}`, 300),
+    candidateId: text(row.candidateId ?? row.candidate_id, '', 200),
+    sourceProfileId: optionalText(row.sourceProfileId ?? row.source_profile_id, 200),
+    companyName: text(row.companyName ?? row.company_name, '', 500),
+    title: optionalText(row.title, 500),
+    evidenceClass: employmentEvidenceClass(row.evidenceClass ?? row.evidence_class),
+    currentState: employmentCurrentState(row.currentState ?? row.current_state),
+    source: text(row.source, 'unknown', 100),
+    sourceUrl: optionalText(row.sourceUrl ?? row.source_url, 2000),
+    observedAt: optionalText(row.observedAt ?? row.observed_at, 100),
+    retrievedAt: optionalText(row.retrievedAt ?? row.retrieved_at, 100),
+    conflictGroup: optionalText(row.conflictGroup ?? row.conflict_group, 300),
+    explanation: text(row.explanation, '', 2000),
+  })).filter(row => Boolean(row.candidateId && row.companyName))
+}
+
+function normalizeUniverse(value: unknown): CandidateWorkspaceUniverse | undefined {
+  const universe = record(value)
+  if (!universe || universe.knownToSourcingOS !== true) return undefined
+  return {
+    knownToSourcingOS: true,
+    sourceProfileCount: count(universe.sourceProfileCount ?? universe.source_profile_count),
+    evidenceItemCount: count(universe.evidenceItemCount ?? universe.evidence_item_count),
+    firstSeenAt: optionalText(universe.firstSeenAt ?? universe.first_seen_at, 100),
+    lastSeenAt: optionalText(universe.lastSeenAt ?? universe.last_seen_at, 100),
+    roleCount: count(universe.roleCount ?? universe.role_count),
+    roleHistory: normalizeRoleHistory(universe.roleHistory ?? universe.role_history),
+    rediscoveryState: rediscoveryState(universe.rediscoveryState ?? universe.rediscovery_state),
+    employmentObservations: normalizeEmploymentObservations(universe.employmentObservations ?? universe.employment_observations),
+    trustBoundary: text(universe.trustBoundary ?? universe.trust_boundary, '', 2000),
+  }
+}
+
 function normalizeCandidate(value: unknown, index: number): CandidateWorkspaceCandidate | null {
   const candidate = record(value)
   if (!candidate) return null
@@ -164,6 +251,7 @@ function normalizeCandidate(value: unknown, index: number): CandidateWorkspaceCa
     openToWorkSignalIds: textArray(candidate.openToWorkSignalIds ?? candidate.open_to_work_signal_ids, 500, 200),
     mergeStatus: text(candidate.mergeStatus ?? candidate.merge_status, 'pending', 80),
     updatedAt: optionalText(candidate.updatedAt ?? candidate.updated_at, 100),
+    universe: normalizeUniverse(candidate.universe),
   }
 }
 
@@ -244,5 +332,6 @@ export function normalizeCandidateWorkspaceSnapshot(value: unknown): CandidateWo
       hasMore: rawPage.hasMore === true,
     },
     search: text(snapshot.search, '', 200),
+    activeRoleId: optionalText(snapshot.activeRoleId ?? snapshot.active_role_id, 100),
   }
 }
