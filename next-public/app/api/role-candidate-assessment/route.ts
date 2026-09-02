@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
       mode: isSupabaseConfigured() ? 'supabase' : 'preview',
       candidates: assessments,
       trust: {
-        decision: 'This is an evidence review slate and explanation packet, not a fit score, ranking, rejection, or hiring recommendation.',
+        decision: 'This is an evidence review slate, not a fit score, ranking, rejection, or hiring recommendation.',
         unknown: 'Missing evidence remains unknown and never becomes a negative finding.',
         sensitive: 'Clearance, credentials, disqualifiers, and other sensitive requirements remain verification-gated.',
         discovery: 'Recruiter-approved search expansions may explain why a person surfaced but cannot satisfy a requirement by themselves.',
