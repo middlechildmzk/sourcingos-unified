@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ROLE_CANDIDATE_SAVED_EVENT } from '@/lib/role-candidate-link'
 import type { SourceResult } from '@/lib/source-types'
 import {
+  buildUniversalExactIdentityRequestV36_9,
   buildUniversalPeopleProviderRequestV36_9,
   classifyUniversalPeopleSearchV36_9,
   exactLinkedInAnchorV36_9,
@@ -95,11 +96,25 @@ type ContactSignal = {
   deliverability?: string
 }
 
+type ResolvedPerson = {
+  providerPersonId?: string
+  displayName: string
+  currentTitle?: string
+  currentEmployer?: string
+  location?: string
+  skills: string[]
+  profileUrls: ProviderProfileUrl[]
+}
+
 type ContactResponse = {
   ok?: boolean
   error?: string
+  provider?: string
   message?: string
   signals?: ContactSignal[]
+  person?: ResolvedPerson
+  reviewObservation?: ReviewObservation
+  providerMatch?: { matchState?: string; providerPersonId?: string; matchedOn?: string[] }
   orchestration?: { stopReason?: string; attempts?: Array<{ provider: string; status: string; resultCount: number }> }
   warning?: string
 }
@@ -125,6 +140,7 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
   const [status, setStatus] = useState('')
   const [providerStatuses, setProviderStatuses] = useState<ProviderStatus[]>([])
   const [response, setResponse] = useState<SearchResponse | null>(null)
+  const [exactLookup, setExactLookup] = useState<ContactResponse | null>(null)
   const [savingKey, setSavingKey] = useState('')
   const [saved, setSaved] = useState<Record<string, { candidateId: string; candidateUrl: string; reused: boolean }>>({})
   const [contactWorkingKey, setContactWorkingKey] = useState('')
@@ -163,22 +179,61 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
 
     setWorking(true)
     setResponse(null)
-    setStatus(`Searching ${configuredCount || 'configured'} professional-data provider${configuredCount === 1 ? '' : 's'}…`)
+    setExactLookup(null)
+    setStatus(`Searching ${configuredCount || 'configured'} professional-data provider${configuredCount === 1 ? '' : 's'}${buildUniversalExactIdentityRequestV36_9(trimmed) ? ' plus exact identity resolution' : ''}…`)
     try {
-      const request = buildUniversalPeopleProviderRequestV36_9({ query: trimmed, title, company, location, skills, limit: 30 })
-      const res = await fetch('/api/candidate-data/search', {
+      const providerRequest = buildUniversalPeopleProviderRequestV36_9({ query: trimmed, title, company, location, skills, limit: 30 })
+      const exactRequest = buildUniversalExactIdentityRequestV36_9(trimmed)
+
+      const providerPromise = fetch('/api/candidate-data/search', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(request),
-      })
-      const json = await res.json() as SearchResponse
-      if (!res.ok || !json.ok) throw new Error(json.error || 'People search failed.')
-      setResponse(json)
-      const retained = json.returnedAfterCap ?? json.reviewObservations?.length ?? 0
-      const discovered = json.discoveredBeforeCap ?? retained
-      setStatus(retained
-        ? `Found ${retained} reviewable provider observation${retained === 1 ? '' : 's'} from ${discovered} discoveries.`
-        : 'The configured providers returned no reviewable people for this search. Add stronger identity or professional filters and try again.')
+        body: JSON.stringify(providerRequest),
+      }).then(async res => ({ res, json: await res.json() as SearchResponse }))
+
+      const exactPromise = exactRequest
+        ? fetch('/api/contact-enrichment/find', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(exactRequest),
+        }).then(async res => ({ res, json: await res.json() as ContactResponse }))
+        : Promise.resolve(undefined)
+
+      const [providerOutcome, exactOutcome] = await Promise.allSettled([providerPromise, exactPromise])
+      let providerSuccess = false
+      let exactSuccess = false
+      let providerError = ''
+      let exactError = ''
+
+      if (providerOutcome.status === 'fulfilled') {
+        const providerResult = providerOutcome.value
+        if (providerResult.res.ok && providerResult.json.ok) {
+          setResponse(providerResult.json)
+          providerSuccess = true
+        } else providerError = providerResult.json.error || 'Professional provider search failed.'
+      } else providerError = providerOutcome.reason instanceof Error ? providerOutcome.reason.message : 'Professional provider search failed.'
+
+      if (exactOutcome.status === 'fulfilled' && exactOutcome.value) {
+        const exactResult = exactOutcome.value
+        if (exactResult.res.ok && exactResult.json.ok) {
+          setExactLookup(exactResult.json)
+          exactSuccess = Boolean(exactResult.json.person || exactResult.json.signals?.length)
+        } else exactError = exactResult.json.error || 'Exact identity lookup failed.'
+      } else if (exactOutcome.status === 'rejected') exactError = exactOutcome.reason instanceof Error ? exactOutcome.reason.message : 'Exact identity lookup failed.'
+
+      if (!providerSuccess && !exactSuccess) throw new Error([providerError, exactError].filter(Boolean).join(' ') || 'People search failed.')
+
+      const providerJson = providerOutcome.status === 'fulfilled' && providerOutcome.value.res.ok ? providerOutcome.value.json : undefined
+      const retained = providerJson?.returnedAfterCap ?? providerJson?.reviewObservations?.length ?? 0
+      const discovered = providerJson?.discoveredBeforeCap ?? retained
+      const exactName = exactOutcome.status === 'fulfilled' && exactOutcome.value?.json.person?.displayName
+      const parts = [
+        exactName ? `Exact identifier resolved to ${exactName}.` : exactSuccess ? 'Exact identifier returned professional identity/contact signals.' : '',
+        providerSuccess ? `${retained} provider observation${retained === 1 ? '' : 's'} retained from ${discovered} discoveries.` : '',
+        providerError && exactSuccess ? `Provider fan-out note: ${providerError}` : '',
+        exactError && providerSuccess ? `Exact-lookup note: ${exactError}` : '',
+      ].filter(Boolean)
+      setStatus(parts.join(' '))
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'People search failed.')
     } finally {
@@ -253,6 +308,10 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
     }
   }
 
+  const exactReview = exactLookup?.reviewObservation
+  const exactKey = exactReview ? `${exactReview.observation.provider}:${exactReview.observation.providerPersonId}` : ''
+  const exactSaved = exactKey ? saved[exactKey] : undefined
+
   return <section className="product-panel" aria-label="Universal people search" style={{ marginBottom: 18 }}>
     <div className="product-panel-head" style={{ alignItems: 'flex-start' }}>
       <div>
@@ -285,7 +344,7 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
 
     <div className="button-row" style={{ marginTop: 10 }}>
       <button className="btn ghost" onClick={() => setShowFilters(value => !value)}>{showFilters ? 'Hide filters' : 'Add filters'}</button>
-      <span className="muted" style={{ fontSize: 12 }}>More anchors narrow the same search; they do not create a separate workflow.</span>
+      <span className="muted" style={{ fontSize: 12 }}>More anchors narrow the same search; exact email/phone/profile identifiers also trigger an identity-resolution lane.</span>
     </div>
 
     {showFilters && <div className="grid two" style={{ marginTop: 14 }}>
@@ -300,6 +359,25 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
     </div>}
 
     {status && <div className="cta" role="status" style={{ marginTop: 14, marginBottom: 0 }}>{status}</div>}
+
+    {exactLookup?.person && <div className="agentic-results" style={{ marginTop: 18 }}>
+      <div className="agentic-results-head"><div><span className="kicker">Exact identity resolution</span><h3>{exactLookup.person.displayName}</h3></div><span className="status-pill active">{exactLookup.provider ? displayProvider(exactLookup.provider) : 'provider'} · {exactLookup.providerMatch?.matchState || 'provider match'}</span></div>
+      <article className="agentic-result-card" style={{ maxWidth: 760 }}>
+        <h4>{exactLookup.person.displayName}</h4>
+        <p>{[exactLookup.person.currentTitle, exactLookup.person.currentEmployer, exactLookup.person.location].filter(Boolean).join(' · ') || 'Resolved professional identity'}</p>
+        {!!exactLookup.person.skills.length && <div className="chips" style={{ margin: '10px 0' }}>{exactLookup.person.skills.slice(0, 10).map(skill => <span className="tag" key={skill}>{skill}</span>)}</div>}
+        {!!exactLookup.person.profileUrls.length && <div className="button-row" style={{ marginTop: 10 }}>{exactLookup.person.profileUrls.slice(0, 6).map(profile => <a className="btn ghost" key={`${profile.kind}:${profile.url}`} href={profile.url} target="_blank" rel="noreferrer noopener">{profile.kind} ↗</a>)}</div>}
+        {!!exactLookup.signals?.length && <div className="cta" style={{ marginTop: 10, marginBottom: 0 }}><strong>{exactLookup.message || 'Identity resolved.'}</strong>{exactLookup.signals.slice(0, 8).map(signal => <div key={`${signal.type}:${signal.value}`} style={{ fontSize: 13, marginTop: 4 }}><b>{signal.type}</b> · {signal.value} · {signal.sourceProvider} · {signal.confidence} confidence</div>)}</div>}
+        <div className="button-row" style={{ marginTop: 12 }}>
+          {exactSaved
+            ? <Link className="btn secondary" href={exactSaved.candidateUrl}>Open Candidate 360</Link>
+            : exactReview
+              ? <button className="btn secondary" disabled={Boolean(savingKey)} onClick={() => void saveReview(exactReview)}>{savingKey === exactKey ? 'Saving…' : roleId ? 'Save + add to role' : 'Save Candidate 360'}</button>
+              : <span className="muted" style={{ fontSize: 12 }}>Identity resolved, but this provider did not return a signable professional-person observation.</span>}
+        </div>
+        <small className="muted">Exact identifier lookup resolves a provider observation; it does not establish outreach permission or authorize a cross-provider merge.</small>
+      </article>
+    </div>}
 
     {response && <div style={{ marginTop: 18 }}>
       <div className="agentic-run-metrics" style={{ marginBottom: 14 }}>
@@ -373,7 +451,7 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
     </div>}
 
     <div className="agentic-results-note" style={{ marginTop: 16 }}>
-      Universal People Search runs licensed professional-data retrieval without treating a provider row as a resolved person or a provider score as fit. Exact cross-provider identity still requires deterministic anchors/recruiter review. Contact lookup is explicit and separate from search.
+      Universal People Search runs licensed professional-data retrieval without treating a provider row as a resolved person or a provider score as fit. Exact identifier lookup is a separate identity-resolution lane. Cross-provider identity still requires deterministic anchors/recruiter review. Contact lookup is explicit and separate from search.
     </div>
   </section>
 }
