@@ -18,19 +18,24 @@ export type EntitySuggestionResponseV35 = {
   version: 'v35.2'
 }
 
-function incomingCredentialSuggestions(entityId: string): EntitySuggestion[] {
+function incomingRelationshipSuggestions(entityId: string): EntitySuggestion[] {
   return ENTITY_REGISTRY_V35.relationships
-    .filter(relationship => relationship.type === 'CREDENTIAL_FOR' && relationship.toEntityId === entityId)
+    .filter(relationship =>
+      relationship.toEntityId === entityId
+      && (relationship.type === 'CREDENTIAL_FOR' || relationship.type === 'RELATED_TECHNOLOGY'))
     .flatMap(relationship => {
       const entity = entityByIdV35(relationship.fromEntityId)
       if (!entity) return []
+      const credential = relationship.type === 'CREDENTIAL_FOR'
       return [{
         entity,
         matchedText: entity.canonicalLabel,
         matchType: 'adjacent' as const,
         relationship,
-        explanation: relationship.note || `${entity.canonicalLabel} is a credential signal related to the search concept.`,
-        rank: 1.1,
+        explanation: relationship.note || (credential
+          ? `${entity.canonicalLabel} is a credential signal related to the search concept.`
+          : `${entity.canonicalLabel} is a related technology that may broaden discovery.`),
+        rank: credential ? 1.1 : 1.3,
         activation: 'suggested_inactive' as const,
       }]
     })
@@ -43,7 +48,7 @@ export function suggestEntitiesV35(request: EntitySuggestionRequestV35): EntityS
     ? []
     : matches.flatMap(match => [
         ...suggestRelatedEntitiesV35(match.entity.id),
-        ...incomingCredentialSuggestions(match.entity.id),
+        ...incomingRelationshipSuggestions(match.entity.id),
       ])
 
   const seen = new Set<string>()
