@@ -22,6 +22,8 @@ export type SourceName =
   | 'data_vertex'
   | 'contactout'
   | 'signalhire'
+  | 'linkup'
+  | 'exa'
   | 'openweb_ninja'
 
 /** The real-world subject represented by a source result. */
@@ -113,7 +115,7 @@ export const allSourceNames: SourceName[] = [
   'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
   'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
   'resume_xray', 'pearch', 'people_data_labs', 'coresignal', 'data_vertex',
-  'contactout', 'signalhire', 'openweb_ninja',
+  'contactout', 'signalhire', 'linkup', 'exa', 'openweb_ninja',
 ]
 
 export const sourceLabels: Record<SourceName, string> = {
@@ -140,6 +142,8 @@ export const sourceLabels: Record<SourceName, string> = {
   data_vertex: 'DataVertex',
   contactout: 'ContactOut',
   signalhire: 'SignalHire',
+  linkup: 'LinkUpAPI',
+  exa: 'Exa People',
   openweb_ninja: 'OpenWeb Ninja',
 }
 
@@ -148,7 +152,7 @@ export const sourceGroups: Record<string, SourceName[]> = {
   research: ['openalex', 'orcid', 'semantic_scholar', 'arxiv', 'pubmed'],
   ai: ['github', 'openalex', 'semantic_scholar', 'arxiv', 'huggingface', 'pypi', 'kaggle'],
   healthcare: ['npi', 'pubmed', 'openalex'],
-  people_data: ['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire'],
+  people_data: ['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire', 'linkup', 'exa'],
   public_web_enrichment: ['openweb_ninja'],
   open_resume: ['resume_xray'],
   default: ['github', 'stackoverflow', 'openalex', 'npi'],
