@@ -120,13 +120,23 @@ describe('V33.3B recruiter-controlled review slate', () => {
 
   it('previews only deterministic cross-source identity anchors and never merges them', () => {
     const github = discovery({
-      sourceResult: source({ identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'github' }] }),
+      sourceResult: source({
+        contactSignals: [{ type: 'public_email', value: 'alex@example.com', sourceUrl: 'https://github.com/alex', observedAt: '2026-08-31T12:00:00.000Z' }],
+      }),
     })
     const stack = discovery({
       sourceKey: 'stackoverflow',
       sourceId: '99',
       displayName: 'Alex Kim',
-      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', profileUrl: 'https://stackoverflow.com/users/99/alex-kim', identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'stackoverflow' }], raw: { observedTags: [] } }),
+      sourceResult: source({
+        id: 'stackoverflow:99',
+        source: 'stackoverflow',
+        sourceProfileId: '99',
+        displayName: 'Alex Kim',
+        profileUrl: 'https://stackoverflow.com/users/99/alex-kim',
+        contactSignals: [{ type: 'public_email', value: 'alex@example.com', sourceUrl: 'https://stackoverflow.com/users/99/alex-kim', observedAt: '2026-08-31T12:00:00.000Z' }],
+        raw: { observedTags: [] },
+      }),
     })
     expect(previewDeterministicIdentityReviews([github, stack])).toHaveLength(1)
   })
