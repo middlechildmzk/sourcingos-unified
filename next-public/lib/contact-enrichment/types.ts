@@ -47,6 +47,9 @@ export type ContactEnrichmentProvider =
   | 'pearch'
   | 'coresignal'
   | 'contactout'
+  | 'signalhire'
+  | 'anymail_finder'
+  | 'tomba'
   | 'openweb_ninja'
   | 'hunter'
   | 'apollo'
@@ -80,6 +83,8 @@ export interface ContactEnrichmentRequest {
   profileUrl?: string
   linkedinUrl?: string
   githubUrl?: string
+  /** Existing email when the requested purpose is verification/enrichment. */
+  email?: string
   /** Free-form context describing where the lead came from (for logging). */
   sourceContext?: string
 }
@@ -187,7 +192,7 @@ export function hasSufficientEnrichmentInputs(req: ContactEnrichmentRequest): bo
   const hasCompanyOrDomain = Boolean(req.currentCompany || req.companyDomain)
   const hasProfileUrl = Boolean(req.profileUrl || req.linkedinUrl || req.githubUrl)
   const hasProviderAnchor = Boolean(req.providerPersonId && req.providerName)
-  return hasProviderAnchor || (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl
+  return hasProviderAnchor || (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl || Boolean(req.email)
 }
 
 /** Which request fields are populated — for audit logging (no values, just keys). */
