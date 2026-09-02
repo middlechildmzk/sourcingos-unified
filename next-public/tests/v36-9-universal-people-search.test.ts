@@ -36,7 +36,7 @@ describe('V36.9 universal people search', () => {
     })
   })
 
-  it('keeps structured filters explicit while adding bounded company context', () => {
+  it('keeps explicit structured filters authoritative while adding bounded company context', () => {
     const request = buildUniversalPeopleProviderRequestV36_9({
       query: 'Jane Doe',
       title: 'Linux Administrator',
@@ -52,10 +52,35 @@ describe('V36.9 universal people search', () => {
     expect(request.skills).toEqual(['RHEL', 'Ansible', 'Linux'])
     expect(request.requirements).toEqual([
       { text: 'Current or relevant title: Linux Administrator', mustHave: false },
+      { text: 'Current or relevant employer: Acme Federal', mustHave: false },
       { text: 'RHEL', mustHave: true },
       { text: 'Ansible', mustHave: true },
       { text: 'Linux', mustHave: true },
     ])
+  })
+
+  it('structures the flagship natural-language sourcing query for providers that require fields', () => {
+    const request = buildUniversalPeopleProviderRequestV36_9({
+      query: 'Find me a RHEL admin with 5+ years of experience in or near Annapolis Junction, MD with Secret clearance or higher',
+      limit: 30,
+    })
+
+    expect(request.titles).toEqual(['RHEL admin'])
+    expect(request.locations).toEqual(['Annapolis Junction, MD'])
+    expect(request.skills).toContain('RHEL')
+    expect(request.requirements).toEqual(expect.arrayContaining([
+      { text: 'Current or relevant title: RHEL admin', mustHave: false },
+      { text: 'RHEL', mustHave: true },
+      { text: '5+ years relevant experience', mustHave: true },
+      { text: 'Secret clearance or higher', mustHave: true },
+    ]))
+  })
+
+  it('does not reinterpret a person name as structured role criteria', () => {
+    const request = buildUniversalPeopleProviderRequestV36_9({ query: 'Jane Doe', limit: 10 })
+    expect(request.titles).toBeUndefined()
+    expect(request.skills).toBeUndefined()
+    expect(request.locations).toBeUndefined()
   })
 
   it('normalizes only exact LinkedIn profile URLs as a deterministic display-overlap anchor', () => {
