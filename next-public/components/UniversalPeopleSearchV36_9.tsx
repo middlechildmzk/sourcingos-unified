@@ -280,7 +280,7 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
         />
         {!!query.trim() && <span className="status-pill active" style={{ position: 'absolute', right: 9, top: 9 }}>{universalPeopleIntentLabelV36_9(intent)}</span>}
       </div>
-      <button className="btn" disabled={working} onClick={() => void runSearch()}>{working ? 'Searching…' : 'Search all sources'}</button>
+      <button className="btn" disabled={working} onClick={() => void runSearch()}>{working ? 'Searching…' : 'Search professional sources'}</button>
     </div>
 
     <div className="button-row" style={{ marginTop: 10 }}>
@@ -296,7 +296,7 @@ export function UniversalPeopleSearchV36_9({ roleId }: { roleId?: string }) {
     </div>}
 
     {!!providerStatuses.length && <div className="chips" style={{ marginTop: 14 }}>
-      {providerStatuses.filter(item => item.capabilities ? true : true).map(item => <span className={`tag ${item.executable ? '' : 'muted'}`} key={item.provider} title={item.message}>{item.label} · {item.executable ? 'ready' : item.state.replace('_', ' ')}</span>)}
+      {providerStatuses.map(item => <span className={`tag ${item.executable ? '' : 'muted'}`} key={item.provider} title={item.message}>{item.label} · {item.executable ? 'ready' : item.state.replace('_', ' ')}</span>)}
     </div>}
 
     {status && <div className="cta" role="status" style={{ marginTop: 14, marginBottom: 0 }}>{status}</div>}
