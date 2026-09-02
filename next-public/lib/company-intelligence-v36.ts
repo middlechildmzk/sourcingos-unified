@@ -1,6 +1,7 @@
 import type {
   EntityProvenance,
   EntityRelationship,
+  EntityRelationshipType,
   EntityReviewState,
   IntelligenceEntity,
 } from '@/lib/entity-intelligence/types-v35'
@@ -89,6 +90,17 @@ export type CompanyShadowProjectionV36 = {
   version: 'v36.1-shadow'
 }
 
+export type CompanyRelationshipTypeV36 = Extract<
+  EntityRelationshipType,
+  | 'FORMER_NAME_OF'
+  | 'PARENT_OF'
+  | 'SUBSIDIARY_OF'
+  | 'BUSINESS_UNIT_OF'
+  | 'OPERATES_IN'
+  | 'OBSERVED_TITLE'
+  | 'OBSERVED_TECHNOLOGY'
+>
+
 type UsaspendingRecipientLike = Record<string, unknown>
 
 export type NormalizedUsaspendingRecipientV36 = {
@@ -103,6 +115,21 @@ export type NormalizedUsaspendingRecipientV36 = {
   parentUnknownReason?: CompanyParentUnknownReasonV36
   adapterNote: string
 }
+
+const DETERMINISTIC_IDENTIFIER_KINDS_V36 = new Set<CompanyIdentifierKindV36>([
+  'uei',
+  'cage',
+  'lei',
+  'cik',
+  'npi2',
+])
+
+const SINGULAR_CONFLICT_IDENTIFIER_KINDS_V36 = new Set<CompanyIdentifierKindV36>([
+  'uei',
+  'lei',
+  'cik',
+  'npi2',
+])
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
@@ -144,14 +171,24 @@ function stableIdPart(value: string): string {
     .slice(0, 90) || 'unknown'
 }
 
-function provenance(source: EntityProvenance['source'], sourceRef: string | undefined, note: string): EntityProvenance[] {
+function provenance(
+  source: EntityProvenance['source'],
+  sourceRef: string | undefined,
+  note: string,
+  reviewState: EntityReviewState = 'reviewed',
+): EntityProvenance[] {
   return [{
     source,
     sourceRef,
     version: 'v36.1-shadow',
-    reviewState: 'reviewed',
+    reviewState,
     note,
   }]
+}
+
+function reviewedDeterministicIdentifier(identifier: CompanyIdentifierV36): boolean {
+  return identifier.reviewState === 'reviewed'
+    && DETERMINISTIC_IDENTIFIER_KINDS_V36.has(identifier.kind)
 }
 
 export function companyIdentifierV36(
@@ -166,25 +203,65 @@ export function companyIdentifierV36(
   return { kind, value: normalized, source, sourceRef, reviewState }
 }
 
-function companyEntityFromIdentity(input: {
+export function buildCompanyEntityV36(input: {
   canonicalLabel: string
-  identifiers: CompanyIdentifierV36[]
+  identifiers?: CompanyIdentifierV36[]
+  aliases?: string[]
   source: EntityProvenance['source']
   sourceRef?: string
-  note: string
+  reviewState?: EntityReviewState
+  note?: string
 }): IntelligenceEntity {
-  const preferred = input.identifiers.find(identifier => ['uei', 'lei', 'cik', 'npi2', 'cage'].includes(identifier.kind))
-  const identityPart = preferred ? `${preferred.kind}-${stableIdPart(preferred.value)}` : stableIdPart(input.canonicalLabel)
+  const identifiers = input.identifiers || []
+  const preferred = identifiers.find(reviewedDeterministicIdentifier)
+  const identityPart = preferred
+    ? `${preferred.kind}-${stableIdPart(preferred.value)}`
+    : stableIdPart(input.canonicalLabel)
+  const reviewState = input.reviewState || 'reviewed'
+
   return {
     id: `company:${identityPart}`,
     kind: 'company',
-    canonicalLabel: input.canonicalLabel,
-    aliases: [],
-    provenance: provenance(input.source, input.sourceRef, input.note),
+    canonicalLabel: input.canonicalLabel.trim() || 'Unresolved company',
+    aliases: Array.from(new Set((input.aliases || []).map(alias => alias.trim()).filter(Boolean))),
+    provenance: provenance(
+      input.source,
+      input.sourceRef,
+      input.note || 'Company shadow entity. Durable persistence remains gated on the ledger/replay-safety prerequisite.',
+      reviewState,
+    ),
     metadata: {
-      identifiers: input.identifiers.map(identifier => ({ kind: identifier.kind, value: identifier.value })),
-      resolutionPolicy: 'identifier_anchored_proposal_only',
+      identifiers: identifiers.map(identifier => ({
+        kind: identifier.kind,
+        value: identifier.value,
+        reviewState: identifier.reviewState,
+      })),
+      resolutionPolicy: 'reviewed_legal_identifier_anchor_proposal_only',
     },
+  }
+}
+
+export function companyRelationshipV36(input: {
+  fromEntityId: string
+  toEntityId: string
+  type: CompanyRelationshipTypeV36
+  source: EntityProvenance['source']
+  sourceRef?: string
+  reviewState?: EntityReviewState
+  confidence?: EntityRelationship['confidence']
+  note: string
+  direction?: EntityRelationship['direction']
+}): EntityRelationship {
+  const reviewState = input.reviewState || 'needs_review'
+  return {
+    id: `company-rel:${stableIdPart(input.fromEntityId)}:${stableIdPart(input.toEntityId)}:${input.type.toLowerCase()}`,
+    fromEntityId: input.fromEntityId,
+    toEntityId: input.toEntityId,
+    type: input.type,
+    direction: input.direction || 'directed',
+    confidence: input.confidence,
+    provenance: provenance(input.source, input.sourceRef, input.note, reviewState),
+    note: input.note,
   }
 }
 
@@ -204,24 +281,26 @@ function collectRecipientIdentifiers(
     companyIdentifierV36('uei', firstText(raw.recipient_uei, raw.uei, raw.unique_entity_id), 'usaspending', sourceRef),
     companyIdentifierV36('cage', firstText(raw.cage, raw.cage_code), 'usaspending', sourceRef),
   ].filter((item): item is CompanyIdentifierV36 => Boolean(item))
-  return Array.from(new Map(identifiers.map(identifier => [`${identifier.kind}:${identifier.value}`, identifier])).values())
+
+  return Array.from(
+    new Map(identifiers.map(identifier => [`${identifier.kind}:${identifier.value}`, identifier])).values(),
+  )
 }
 
 /**
  * Normalize a USAspending recipient-style record without making a live API claim.
- *
- * This adapter intentionally accepts a loose record shape because the exact live
- * endpoint/schema remains on the external-verification queue. The fields used here
- * are the researched recipient contract. Any production fetcher must pin a schema
- * version and primary-source fixture before wiring network I/O.
+ * The exact network endpoint/schema must be primary-source verified before a
+ * production fetcher is wired. This function is intentionally fixture-friendly.
  */
 export function normalizeUsaspendingRecipientV36(input: UsaspendingRecipientLike): NormalizedUsaspendingRecipientV36 {
   const raw = record(input) || {}
   const recipientId = firstText(raw.recipient_id, raw.id)
-  const sourceRef = recipientId ? `usaspending:recipient:${recipientId}` : 'usaspending:recipient:unversioned-fixture'
+  const sourceRef = recipientId
+    ? `usaspending:recipient:${recipientId}`
+    : 'usaspending:recipient:unversioned-fixture'
   const canonicalLabel = firstText(raw.recipient_name, raw.name, raw.legal_business_name) || 'Unresolved recipient'
   const identifiers = collectRecipientIdentifiers(raw, sourceRef)
-  const entity = companyEntityFromIdentity({
+  const entity = buildCompanyEntityV36({
     canonicalLabel,
     identifiers,
     source: 'usaspending',
@@ -239,27 +318,30 @@ export function normalizeUsaspendingRecipientV36(input: UsaspendingRecipientLike
     const parentIdentifiers = [
       companyIdentifierV36('uei', parentUei, 'usaspending', parentSourceRef),
     ].filter((item): item is CompanyIdentifierV36 => Boolean(item))
-    const parentEntity = companyEntityFromIdentity({
+
+    const parentEntity = buildCompanyEntityV36({
       canonicalLabel: parentName || 'Parent recipient',
       identifiers: parentIdentifiers,
       source: 'usaspending',
       sourceRef: parentSourceRef,
       note: 'Parent recipient observation from USAspending-compatible hierarchy fields.',
     })
+
     parent = {
       entity: parentEntity,
       identifiers: parentIdentifiers,
-      relationship: {
-        id: `company-rel:${stableIdPart(parentEntity.id)}:${stableIdPart(entity.id)}:subsidiary`,
+      relationship: companyRelationshipV36({
         fromEntityId: entity.id,
         toEntityId: parentEntity.id,
         type: 'SUBSIDIARY_OF',
-        direction: 'directed',
+        source: 'usaspending',
+        sourceRef,
+        reviewState: parentUei ? 'reviewed' : 'needs_review',
         confidence: parentUei ? 'deterministic' : 'moderate',
-        provenance: provenance('usaspending', sourceRef, parentUei
-          ? 'Recipient hierarchy carries a parent UEI anchor.'
-          : 'Parent name is present without a deterministic parent identifier; treat as reviewable hierarchy.'),
-      },
+        note: parentUei
+          ? 'Recipient hierarchy carries a reviewed parent UEI anchor.'
+          : 'Parent name is present without a deterministic parent identifier; hierarchy remains reviewable.',
+      }),
     }
   }
 
@@ -277,40 +359,40 @@ export function resolveCompanyIdentityV36(
   left: { canonicalLabel: string; identifiers: CompanyIdentifierV36[] },
   right: { canonicalLabel: string; identifiers: CompanyIdentifierV36[] },
 ): CompanyIdentityResolutionV36 {
-  const leftByKind = new Map(left.identifiers.map(identifier => [identifier.kind, identifier.value]))
-  const rightByKind = new Map(right.identifiers.map(identifier => [identifier.kind, identifier.value]))
-  const shared: CompanyIdentifierV36[] = []
-  const conflicts: Array<{ kind: CompanyIdentifierKindV36; left: string; right: string }> = []
+  const leftReviewed = left.identifiers.filter(reviewedDeterministicIdentifier)
+  const rightReviewed = right.identifiers.filter(reviewedDeterministicIdentifier)
+  const rightKeys = new Set(rightReviewed.map(identifier => `${identifier.kind}:${identifier.value}`))
+  const shared = leftReviewed.filter(identifier => rightKeys.has(`${identifier.kind}:${identifier.value}`))
 
-  for (const [kind, leftValue] of leftByKind.entries()) {
-    const rightValue = rightByKind.get(kind)
-    if (!rightValue) continue
-    if (leftValue === rightValue) {
-      const anchor = left.identifiers.find(identifier => identifier.kind === kind && identifier.value === leftValue)
-      if (anchor) shared.push(anchor)
-    } else {
-      conflicts.push({ kind, left: leftValue, right: rightValue })
-    }
+  const conflicts: Array<{ kind: CompanyIdentifierKindV36; left: string; right: string }> = []
+  for (const kind of SINGULAR_CONFLICT_IDENTIFIER_KINDS_V36) {
+    const leftValues = Array.from(new Set(leftReviewed.filter(identifier => identifier.kind === kind).map(identifier => identifier.value)))
+    const rightValues = Array.from(new Set(rightReviewed.filter(identifier => identifier.kind === kind).map(identifier => identifier.value)))
+    if (!leftValues.length || !rightValues.length) continue
+    const overlap = leftValues.some(value => rightValues.includes(value))
+    if (!overlap) conflicts.push({ kind, left: leftValues[0], right: rightValues[0] })
   }
 
   if (conflicts.length) {
     return {
       disposition: 'identifier_conflict',
       conflicts,
-      explanation: 'A deterministic company identifier conflicts. Name similarity cannot override the conflict.',
+      explanation: 'A reviewed singular legal identifier conflicts. Name or domain similarity cannot override the conflict.',
     }
   }
+
   if (shared.length) {
     return {
       disposition: 'deterministic_match',
       anchors: shared,
-      explanation: 'At least one reviewed deterministic company identifier matches exactly.',
+      explanation: 'At least one reviewed deterministic legal/company identifier matches exactly.',
     }
   }
+
   return {
     disposition: 'proposal_only',
     nameSimilarityAllowedForRanking: true,
-    explanation: 'No deterministic identifier match exists. Company-name similarity may rank a proposal but cannot merge entities.',
+    explanation: 'No reviewed deterministic legal identifier match exists. Company-name or domain similarity may rank a proposal but cannot merge entities.',
   }
 }
 
@@ -332,10 +414,21 @@ export function companyTechnologyObservationV36(input: {
   }
 }
 
+export function companyAwardObservationV36(input: Omit<CompanyAwardObservationV36, 'explanation'>): CompanyAwardObservationV36 {
+  return {
+    ...input,
+    explanation: 'Company award/contract context is a company-level discovery signal only. It never establishes candidate clearance, citizenship, skill, location, or qualification.',
+  }
+}
+
 function employmentCountsForCompany(
   companyLabel: string,
   employmentObservations: EmploymentObservationV36[],
-): { knownCandidateCount: number; employmentObservationCount: number; observedTitles: Array<{ title: string; knownCandidateCount: number }> } {
+): {
+  knownCandidateCount: number
+  employmentObservationCount: number
+  observedTitles: Array<{ title: string; knownCandidateCount: number }>
+} {
   const normalizedCompany = companyLabel.trim().toLowerCase()
   const eligible = employmentObservations.filter(observation =>
     observation.companyName.trim().toLowerCase() === normalizedCompany
@@ -343,6 +436,7 @@ function employmentCountsForCompany(
 
   const candidateIds = new Set(eligible.map(observation => observation.candidateId))
   const titleCandidates = new Map<string, Set<string>>()
+
   for (const observation of eligible) {
     if (!observation.title) continue
     const set = titleCandidates.get(observation.title) || new Set<string>()
@@ -368,9 +462,14 @@ export function buildCompanyShadowProjectionV36(input: {
   technologyObservations?: CompanyTechnologyObservationV36[]
   awardObservations?: CompanyAwardObservationV36[]
 }): CompanyShadowProjectionV36 {
-  const employment = employmentCountsForCompany(input.entity.canonicalLabel, input.employmentObservations || [])
-  const technologyObservations = (input.technologyObservations || []).filter(observation => observation.companyEntityId === input.entity.id)
-  const awardObservations = (input.awardObservations || []).filter(observation => observation.companyEntityId === input.entity.id)
+  const employment = employmentCountsForCompany(
+    input.entity.canonicalLabel,
+    input.employmentObservations || [],
+  )
+  const technologyObservations = (input.technologyObservations || [])
+    .filter(observation => observation.companyEntityId === input.entity.id)
+  const awardObservations = (input.awardObservations || [])
+    .filter(observation => observation.companyEntityId === input.entity.id)
 
   return {
     entity: input.entity,
@@ -390,6 +489,7 @@ export function buildCompanyShadowProjectionV36(input: {
       'Target-company membership can explain discovery but never satisfies a candidate requirement.',
       'Company prestige, size, funding, customers, or brand never affect candidate ranking.',
       'Known-talent counts describe SourcingOS observations only; they are not labor-market estimates.',
+      'GitHub organization participation and company-email affiliation are not employment evidence.',
     ],
     version: 'v36.1-shadow',
   }
