@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCandidateDb } from '@/lib/candidate-db-v18'
 import { buildCandidate360, scoreContactSignal, scoreOpenToWorkSignal, staleStatus } from '@/lib/candidate-intelligence-v18'
+import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 
@@ -16,7 +17,8 @@ function buildDossierFromSupabase(
   contacts: Record<string, unknown>[],
   openToWorkSignals: Record<string, unknown>[],
   matchReviews: Record<string, unknown>[],
-  projectCandidates: Record<string, unknown>[]
+  projectCandidates: Record<string, unknown>[],
+  roleCandidates: Record<string, unknown>[],
 ) {
   const cand = {
     id: candidate.id, canonicalName: candidate.canonical_name,
@@ -88,10 +90,19 @@ function buildDossierFromSupabase(
     verifyNext.push('Confirm project-specific fit assessment before HM presentation.')
   }
 
+  const universe = buildCandidateUniverseProjectionV36({
+    candidateId: String(candidate.id || ''),
+    profiles: sourceProfiles as any[],
+    evidenceItems: evidence as any[],
+    roleCandidates: roleCandidates as any[],
+    candidateCreatedAt: typeof candidate.created_at === 'string' ? candidate.created_at : undefined,
+    candidateUpdatedAt: typeof candidate.updated_at === 'string' ? candidate.updated_at : undefined,
+  })
+
   return {
     candidate: cand, sourceProfiles: profiles, evidence: evidenceItems,
     contacts: contactsWithScore, openToWorkSignals: otwWithScore, matchReviews: reviews,
-    projectCandidates, freshness, verifyNext, mode: 'supabase' as const,
+    projectCandidates, universe, freshness, verifyNext, mode: 'supabase' as const,
   }
 }
 
@@ -115,8 +126,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const ownerId = session.userId!
 
-    // Fetch all related tables in parallel, scoped to owner_id
-    const [candRes, spRes, evRes, ctRes, otwRes, mrRes, pcRes] = await Promise.all([
+    // Fetch all related tables in parallel, scoped to owner_id.
+    const [candRes, spRes, evRes, ctRes, otwRes, mrRes, pcRes, rcRes] = await Promise.all([
       sb.from('candidates').select('*').eq('id', candidateId).eq('owner_id', ownerId).single(),
       sb.from('source_profiles').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
       sb.from('evidence_items').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
@@ -124,6 +135,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       sb.from('open_to_work_signals').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId),
       sb.from('identity_match_reviews').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
       sb.from('project_candidates').select('id,project_id,stage,fit_score,fit_evidence,fit_missing,fit_confidence,added_at,updated_at').eq('candidate_id', candidateId).eq('owner_id', ownerId),
+      sb.from('role_candidates').select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at').eq('candidate_id', candidateId).eq('owner_id', ownerId),
     ])
 
     if (candRes.error || !candRes.data) {
@@ -141,6 +153,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       { section: 'openToWorkSignals', error: otwRes.error },
       { section: 'matchReviews', error: mrRes.error },
       { section: 'projectCandidates', error: pcRes.error },
+      { section: 'roleCandidates', error: rcRes.error },
     ].filter(item => Boolean(item.error)).map(item => item.section)
 
     if (failedSections.length) {
@@ -154,7 +167,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
     const dossier = buildDossierFromSupabase(
       candRes.data, spRes.data || [], evRes.data || [], ctRes.data || [],
-      otwRes.data || [], mrRes.data || [], pcRes.data || []
+      otwRes.data || [], mrRes.data || [], pcRes.data || [], rcRes.data || [],
     )
     return NextResponse.json({ ok: true, dossier })
   }
@@ -167,5 +180,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       ok: false, error: 'Candidate not found (preview mode — data resets on cold start).', mode: 'preview',
     }, { status: 404 })
   }
-  return NextResponse.json({ ok: true, dossier: { ...dossier, mode: 'preview' } })
+
+  const previewCandidate = db.candidates.find(candidate => candidate.id === candidateId)
+  const previewProfiles = db.sourceProfiles.filter(profile => profile.candidateId === candidateId)
+  const previewEvidence = db.evidenceItems.filter(item => item.candidateId === candidateId)
+  const universe = buildCandidateUniverseProjectionV36({
+    candidateId,
+    profiles: previewProfiles.map(profile => ({
+      id: profile.id,
+      candidate_id: profile.candidateId,
+      source: profile.source,
+      source_profile_id: profile.sourceProfileId,
+      profile_url: profile.profileUrl,
+      headline: profile.headline,
+      organization: profile.organization,
+      raw: (() => { try { return profile.rawText ? JSON.parse(profile.rawText) : undefined } catch { return undefined } })(),
+      last_seen_at: profile.lastSeenAt,
+      created_at: profile.createdAt,
+    })),
+    evidenceItems: previewEvidence.map(item => ({ candidate_id: item.candidateId, created_at: item.createdAt })),
+    roleCandidates: [],
+    candidateCreatedAt: previewCandidate?.createdAt,
+    candidateUpdatedAt: previewCandidate?.updatedAt,
+  })
+
+  return NextResponse.json({ ok: true, dossier: { ...dossier, universe, mode: 'preview' } })
 }
