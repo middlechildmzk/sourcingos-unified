@@ -36,7 +36,7 @@ export const LOCATION_ENTITIES_V35: IntelligenceEntity[] = [
   location('loc:town:jessup-md', 'place', 'Jessup, MD', ['jessup md', 'jessup, md'], { placeType: 'town', countryCode: 'US', stateCode: 'MD' }),
   location('loc:city:laurel-md', 'place', 'Laurel, MD', ['laurel md', 'laurel, md'], { placeType: 'city', countryCode: 'US', stateCode: 'MD' }),
   location('loc:city:baltimore-md', 'place', 'Baltimore, MD', ['baltimore', 'baltimore md', 'baltimore, md'], { placeType: 'city', countryCode: 'US', stateCode: 'MD' }),
-  location('loc:city:washington-dc', 'place', 'Washington, DC', ['washington dc', 'washington d.c.', 'washington, dc', 'district of columbia'], { placeType: 'city', countryCode: 'US' }),
+  location('loc:city:washington-dc', 'place', 'Washington, DC', ['washington dc', 'washington d.c.', 'washington, dc', 'district of columbia', 'greater washington dc', 'greater washington'], { placeType: 'city', countryCode: 'US' }),
   location('loc:city:arlington-va', 'place', 'Arlington, VA', ['arlington', 'arlington va', 'arlington, va'], { placeType: 'city', countryCode: 'US', stateCode: 'VA' }),
   location('loc:place:reston-va', 'place', 'Reston, VA', ['reston', 'reston va', 'reston, va'], { placeType: 'town', countryCode: 'US', stateCode: 'VA' }),
   location('loc:city:herndon-va', 'place', 'Herndon, VA', ['herndon', 'herndon va', 'herndon, va'], { placeType: 'town', countryCode: 'US', stateCode: 'VA' }),
@@ -142,11 +142,31 @@ function relatedIds(anchorId: string, allowed: EntityRelationship['type'][]): st
   return Array.from(ids)
 }
 
+/**
+ * Preserve additional markets the recruiter explicitly wrote in the original
+ * request. These are not "Find similar" suggestions and do not require a later
+ * approval click because they are recruiter intent already. The helper is
+ * intentionally narrow: it only activates a location found after an explicit
+ * "or" geography phrase.
+ */
+export function explicitAlternativeLocationIdsV35(rawText: string, anchorId?: string): string[] {
+  const ids = new Set<string>()
+  const compact = rawText.replace(/\s+/g, ' ').trim()
+  const pattern = /\bor\s+(?:the\s+)?(?:greater\s+)?([a-z][a-z .,'-]{1,60}?)(?=\s+(?:with|who|that|from|and|but|where)\b|[.;()]|$)/gi
+  for (const match of compact.matchAll(pattern)) {
+    const segment = match[0] || match[1] || ''
+    const candidate = matchLocationEntitiesV35(segment)
+      .find(entity => entity.id !== anchorId && ['place', 'metro', 'region', 'state', 'country', 'postal_area'].includes(entity.kind))
+    if (candidate) ids.add(candidate.id)
+  }
+  return Array.from(ids)
+}
+
 export function resolveLocationIntentV35(rawText: string, legacyLocation = ''): LocationIntentV35 {
   const source = [legacyLocation, rawText].filter(Boolean).join(' ')
   const lower = normalized(source)
   const radius = lower.match(/(?:within|inside)\s+(\d{1,3})\s*(?:mile|miles|mi)\s+(?:of|from)/)
-  const nearby = /\b(?:in or near|near|nearby|commuting distance|commute distance)\b/.test(lower)
+  const nearby = /\b(?:in or near|near|nearby|local(?:ly)? to|commuting distance|commute distance)\b/.test(lower)
   const remote = /\b(?:remote|fully remote|remote us|work from home|wfh)\b/.test(lower)
   const hybrid = /\bhybrid\b/.test(lower)
 
