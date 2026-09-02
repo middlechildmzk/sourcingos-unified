@@ -26,6 +26,16 @@ export type UniversalPeopleProviderRequestV36_9 = {
   highFreshness: boolean
 }
 
+export type UniversalExactIdentityRequestV36_9 = {
+  purpose: 'identity_enrichment'
+  email?: string
+  phone?: string
+  linkedinUrl?: string
+  githubUrl?: string
+  profileUrl?: string
+  sourceContext: 'universal_people_search_v36_9'
+}
+
 function clean(value?: string): string {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
@@ -38,10 +48,17 @@ function splitList(value?: string, max = 30): string[] {
     .slice(0, max)
 }
 
+export function normalizeUniversalPeopleIdentifierV36_9(value: string): string {
+  const cleaned = clean(value)
+  if (/^(?:www\.)?(?:linkedin\.com|github\.com)\//i.test(cleaned)) return `https://${cleaned}`
+  return cleaned
+}
+
 function exactHttpUrl(value: string): URL | null {
-  if (!/^https?:\/\//i.test(value)) return null
+  const normalized = normalizeUniversalPeopleIdentifierV36_9(value)
+  if (!/^https?:\/\//i.test(normalized)) return null
   try {
-    const parsed = new URL(value)
+    const parsed = new URL(normalized)
     return ['http:', 'https:'].includes(parsed.protocol) ? parsed : null
   } catch {
     return null
@@ -77,6 +94,18 @@ export function universalPeopleIntentLabelV36_9(intent: UniversalPeopleSearchInt
   if (intent === 'profile_lookup') return 'Profile URL lookup'
   if (intent === 'person_lookup') return 'Person lookup'
   return 'Professional people search'
+}
+
+export function buildUniversalExactIdentityRequestV36_9(value: string): UniversalExactIdentityRequestV36_9 | undefined {
+  const query = normalizeUniversalPeopleIdentifierV36_9(value)
+  const intent = classifyUniversalPeopleSearchV36_9(query)
+  const base = { purpose: 'identity_enrichment' as const, sourceContext: 'universal_people_search_v36_9' as const }
+  if (intent === 'email_lookup') return { ...base, email: query }
+  if (intent === 'phone_lookup') return { ...base, phone: query }
+  if (intent === 'linkedin_lookup') return { ...base, linkedinUrl: query, profileUrl: query }
+  if (intent === 'github_lookup') return { ...base, githubUrl: query, profileUrl: query }
+  if (intent === 'profile_lookup') return { ...base, profileUrl: query }
+  return undefined
 }
 
 /**
