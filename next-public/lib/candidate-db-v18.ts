@@ -19,6 +19,12 @@ export type CandidateSourceName =
   | 'crates'
   | 'rubygems'
   | 'resume_xray'
+  | 'pearch'
+  | 'people_data_labs'
+  | 'coresignal'
+  | 'data_vertex'
+  | 'contactout'
+  | 'openweb_ninja'
   | 'public_resume'
   | 'uploaded_resume'
   | 'csv_import'
@@ -143,9 +149,6 @@ export type CandidateDbSnapshot = {
 
 export function nowIso() { return new Date().toISOString() }
 export function uid(_prefix: string): string {
-  // crypto.randomUUID() is globally available in Node 18+ / Next.js 14.
-  // All V19 Supabase tables use `id uuid primary key` — non-UUID strings like
-  // "sp_1748455200_abc" fail with: invalid input syntax for type uuid.
   return crypto.randomUUID()
 }
 
@@ -254,8 +257,6 @@ export function evidenceFromText(text: string, source: CandidateSourceName, sour
       createdAt,
     }
     const spanned = withStoredSpan(item, text, sourceProfileId, [skill])
-    // If a heuristic skill was only found inside another word, do not persist it
-    // as source evidence. Legacy skill extraction can still feed non-evidence UI.
     if (!sourceProfileId || spanned.spanText) items.push(spanned)
   })
 
