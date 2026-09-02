@@ -8,6 +8,7 @@ import { buildSignalHireSearchBodyV36_8 } from '@/lib/candidate-data/providers/s
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { buildDataVertexLookupBodyV36_8, canUseDataVertexLookupV36_8 } from '@/lib/contact-enrichment/providers/data-vertex-v36-8'
 import type { CandidateDataSearchAdapterV36_8 } from '@/lib/candidate-data/types-v36-8'
+import type { CandidateSourceName } from '@/lib/candidate-db-v18'
 
 const request = {
   query: 'RHEL administrator with 5+ years Linux near Annapolis Junction, MD with Secret or higher',
@@ -23,6 +24,11 @@ const request = {
 }
 
 describe('V36.8 Candidate Data Fabric', () => {
+  it('keeps LinkUp and Exa in the Candidate Graph source namespace', () => {
+    const providerSources: CandidateSourceName[] = ['linkup', 'exa']
+    expect(providerSources).toEqual(['linkup', 'exa'])
+  })
+
   it('uses Pearch official structured requirement keys with contact reveal off', () => {
     const body = buildPearchSearchBodyV36_8(request)
     expect(body).toMatchObject({ type: 'fast', insights: false, profile_scoring: true, reveal_emails: false, reveal_phones: false, high_freshness: false, custom_filters_mode: 'exact' })
