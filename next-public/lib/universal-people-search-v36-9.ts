@@ -161,6 +161,23 @@ function inferQueryRequirements(query: string): Array<{ text: string; mustHave: 
   return requirements
 }
 
+function regexpEscape(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Inferred NL skills are search-expansion terms unless the recruiter made the
+ * hard requirement explicit or the skill is part of the inferred role phrase.
+ * This prevents “AWS or Azure” from being converted into two independent hard
+ * must-haves while still letting structured-provider filters search both terms.
+ */
+function inferredSkillMustHave(query: string, skill: string, inferredTitle?: string): boolean {
+  const skillPattern = regexpEscape(skill).replace(/\\ /g, '\\s+')
+  if (inferredTitle && new RegExp(`(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i').test(inferredTitle)) return true
+  const hardCue = new RegExp(`\\b(?:must\\s+have|required|requires?|requiring|mandatory)\\b[^,.;]{0,80}(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i')
+  return hardCue.test(query)
+}
+
 export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeopleSearchIntentV36_9 {
   const query = clean(value)
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(query)) return 'email_lookup'
@@ -229,6 +246,7 @@ export function buildUniversalPeopleProviderRequestV36_9(
   const inferredTitle = professionalIntent && !explicitTitles.length ? inferProfessionalTitle(query) : undefined
   const inferredLocation = professionalIntent && !explicitLocations.length ? inferProfessionalLocation(query) : undefined
   const inferredSkills = professionalIntent ? inferExplicitSkills(query) : []
+  const inferredOnlySkills = inferredSkills.filter(skill => !explicitSkills.some(explicit => explicit.toLowerCase() === skill.toLowerCase()))
 
   const titles = Array.from(new Set([...explicitTitles, ...(inferredTitle ? [inferredTitle] : [])])).slice(0, 20)
   const skills = Array.from(new Set([...explicitSkills, ...inferredSkills])).slice(0, 40)
@@ -237,7 +255,8 @@ export function buildUniversalPeopleProviderRequestV36_9(
   const requirements = [
     ...titles.map(text => ({ text: `Current or relevant title: ${text}`, mustHave: false })),
     ...(company ? [{ text: `Current or relevant employer: ${company}`, mustHave: false }] : []),
-    ...skills.map(text => ({ text, mustHave: true })),
+    ...explicitSkills.map(text => ({ text, mustHave: true })),
+    ...inferredOnlySkills.map(text => ({ text, mustHave: inferredSkillMustHave(query, text, inferredTitle) })),
     ...(professionalIntent ? inferQueryRequirements(query) : []),
   ].slice(0, 30)
 
