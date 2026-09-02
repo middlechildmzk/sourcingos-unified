@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { UniversalPeopleSearchV36_9 } from '@/components/UniversalPeopleSearchV36_9'
 import { WorkbenchClient } from '@/components/WorkbenchClient'
 import {
   ROLE_CANDIDATE_SAVED_EVENT,
@@ -89,7 +90,10 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
     return () => window.removeEventListener(ROLE_CANDIDATE_SAVED_EVENT, handleSaved)
   }, [roleId, updateRole])
 
-  if (!roleId) return <WorkbenchClient publicMode={false} />
+  if (!roleId) return <>
+    <UniversalPeopleSearchV36_9 />
+    <WorkbenchClient publicMode={false} />
+  </>
 
   if (mode === 'checking' || !prepared) {
     return <div className="product-panel"><p className="muted">Preparing the role-scoped search…</p></div>
@@ -141,6 +145,7 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
         </div>
       )}
 
+      <UniversalPeopleSearchV36_9 roleId={role.id} />
       <WorkbenchClient key={`${role.id}:${lane?.id || 'role'}`} publicMode={false} initialTab="intake" />
     </>
   )
