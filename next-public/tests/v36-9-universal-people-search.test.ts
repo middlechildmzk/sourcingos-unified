@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildUniversalExactIdentityRequestV36_9,
   buildUniversalPeopleProviderRequestV36_9,
   classifyUniversalPeopleSearchV36_9,
   exactLinkedInAnchorV36_9,
@@ -10,9 +11,29 @@ describe('V36.9 universal people search', () => {
     expect(classifyUniversalPeopleSearchV36_9('jane.doe@example.com')).toBe('email_lookup')
     expect(classifyUniversalPeopleSearchV36_9('+1 (612) 555-0199')).toBe('phone_lookup')
     expect(classifyUniversalPeopleSearchV36_9('https://www.linkedin.com/in/jane-doe/')).toBe('linkedin_lookup')
+    expect(classifyUniversalPeopleSearchV36_9('linkedin.com/in/jane-doe/')).toBe('linkedin_lookup')
     expect(classifyUniversalPeopleSearchV36_9('https://github.com/janedoe')).toBe('github_lookup')
     expect(classifyUniversalPeopleSearchV36_9('Jane Doe')).toBe('person_lookup')
     expect(classifyUniversalPeopleSearchV36_9('RHEL administrator Minneapolis')).toBe('professional_search')
+  })
+
+  it('routes exact identifiers to explicit identity enrichment without pretending it is a broad people query', () => {
+    expect(buildUniversalExactIdentityRequestV36_9('jane.doe@example.com')).toEqual({
+      purpose: 'identity_enrichment',
+      email: 'jane.doe@example.com',
+      sourceContext: 'universal_people_search_v36_9',
+    })
+    expect(buildUniversalExactIdentityRequestV36_9('+1 (612) 555-0199')).toEqual({
+      purpose: 'identity_enrichment',
+      phone: '+1 (612) 555-0199',
+      sourceContext: 'universal_people_search_v36_9',
+    })
+    expect(buildUniversalExactIdentityRequestV36_9('linkedin.com/in/jane-doe')).toEqual({
+      purpose: 'identity_enrichment',
+      linkedinUrl: 'https://linkedin.com/in/jane-doe',
+      profileUrl: 'https://linkedin.com/in/jane-doe',
+      sourceContext: 'universal_people_search_v36_9',
+    })
   })
 
   it('keeps structured filters explicit while adding bounded company context', () => {
