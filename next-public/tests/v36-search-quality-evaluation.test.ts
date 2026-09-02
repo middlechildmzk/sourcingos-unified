@@ -153,23 +153,39 @@ describe('V36 search quality evaluation harness', () => {
   })
 
   it('blocks top-10 precision regressions beyond the release budget', () => {
-    const baseline = run({ id: 'baseline' })
+    const qrels = {
+      r1: 3 as const,
+      r2: 3 as const,
+      r3: 2 as const,
+      r4: 2 as const,
+      r5: 1 as const,
+      n1: 0 as const,
+      n2: 0 as const,
+      n3: 0 as const,
+      n4: 0 as const,
+      n5: 0 as const,
+      n6: 0 as const,
+      n7: 0 as const,
+      n8: 0 as const,
+      n9: 0 as const,
+      n10: 0 as const,
+    }
+    const baseline = run({
+      id: 'baseline',
+      qrels,
+      results: ['r1', 'r2', 'r3', 'r4', 'r5', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'n10']
+        .map(candidateId => ({ candidateId })),
+    })
     const candidate = run({
       id: 'candidate',
-      qrels: {
-        c1: 3,
-        c2: 0,
-        c3: 0,
-        c4: 0,
-        c5: 0,
-        c6: 3,
-        c7: 2,
-        c8: 2,
-        c9: 1,
-        c10: 0,
-      },
+      qrels,
+      results: ['r1', 'n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8', 'n9', 'r2', 'r3', 'r4', 'r5', 'n10']
+        .map(candidateId => ({ candidateId })),
     })
     const decision = evaluateSearchQualityReleaseV36(baseline, candidate)
+    expect(decision.baseline.retrievalAndRanking.precisionAtK[10]).toBe(0.5)
+    expect(decision.candidate.retrievalAndRanking.precisionAtK[10]).toBe(0.1)
+    expect(decision.candidate.retrievalAndRanking.recallAtK[100]).toBe(1)
     expect(decision.pass).toBe(false)
     expect(decision.failures.map(failure => failure.gate)).toContain('precision_at_10_regression')
   })
