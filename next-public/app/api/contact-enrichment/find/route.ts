@@ -4,15 +4,16 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { enrichWithPeopleDataLabs } from '@/lib/contact-enrichment/providers/people-data-labs'
-import { getProviderStatus } from '@/lib/contact-enrichment/provider-status'
+import { canUseDataVertexLookupV36_8, enrichWithDataVertexV36_8 } from '@/lib/contact-enrichment/providers/data-vertex-v36-8'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
-import { runContactEnrichmentOrchestratorV35 } from '@/lib/contact-enrichment/orchestrator-v35'
-import { ContactEnrichmentRequest, ContactSignal } from '@/lib/contact-enrichment/types'
+import { runContactEnrichmentOrchestratorV35, type ContactProviderAdapterV35 } from '@/lib/contact-enrichment/orchestrator-v35'
+import { ContactEnrichmentRequest, ContactSignal, type ContactEnrichmentProvider } from '@/lib/contact-enrichment/types'
 
 export const dynamic = 'force-dynamic'
 
+const PROVIDERS = new Set<ContactEnrichmentProvider>(['people_data_labs', 'data_vertex', 'pearch', 'coresignal', 'contactout', 'openweb_ninja', 'hunter', 'apollo', 'none'])
+
 export async function POST(req: NextRequest) {
-  // ── 1. Auth gate — FAIL CLOSED. Enrichment is a paid, per-lookup provider. ──
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const rlMinute = await rateLimit(req, 'enrichment', gate.userId)
@@ -21,16 +22,6 @@ export async function POST(req: NextRequest) {
   if (!rlDaily.ok) return rlDaily.response
   const ownerId: string | null = gate.preview ? null : gate.userId
 
-  // ── 2. Provider configured? ────────────────────────────────────────────────
-  const status = getProviderStatus()
-  if (!status.providerConfigured) {
-    return NextResponse.json(
-      { ok: false, code: 'provider_not_configured', error: 'Contact enrichment provider not configured yet.' },
-      { status: 503 },
-    )
-  }
-
-  // ── 3. Build request from body ──────────────────────────────────────────────
   let body: Record<string, unknown>
   try {
     body = await req.json()
@@ -39,10 +30,14 @@ export async function POST(req: NextRequest) {
   }
 
   const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
+  const providerRaw = str(body.providerName)
+  const providerName = providerRaw && PROVIDERS.has(providerRaw as ContactEnrichmentProvider) ? providerRaw as ContactEnrichmentProvider : undefined
 
   const request: ContactEnrichmentRequest = {
     candidateId: str(body.candidateId),
     sourceProfileId: str(body.sourceProfileId),
+    providerPersonId: str(body.providerPersonId),
+    providerName,
     fullName: str(body.fullName),
     firstName: str(body.firstName),
     lastName: str(body.lastName),
@@ -56,7 +51,6 @@ export async function POST(req: NextRequest) {
     sourceContext: str(body.sourceContext),
   }
 
-  // ── 4. Identity-readiness gate before spending a provider lookup ───────────
   const identity = assessEnrichmentIdentityV34(request)
   if (!identity.attemptProvider) {
     return NextResponse.json({
@@ -66,29 +60,54 @@ export async function POST(req: NextRequest) {
       identityStrength: identity.strength,
       anchors: identity.anchors,
       missing: identity.missing,
-      nextStep: 'Resolve a real name or a deterministic GitHub/LinkedIn identity anchor before contact enrichment.',
+      nextStep: 'Resolve a real name, deterministic profile URL, or same-provider person id before contact enrichment.',
     }, { status: 422 })
   }
 
-  // ── 5. Provider-neutral V35 orchestration seam ─────────────────────────────
-  // The first live lane intentionally contains PDL only, preserving V34 provider
-  // behavior while removing the route's long-term dependency on one provider.
+  const pdlConfigured = Boolean(process.env.PDL_API_KEY)
+  const dataVertexConfigured = Boolean(process.env.DATAVERTEX_API_KEY)
+  const adapters: ContactProviderAdapterV35[] = []
+
+  const dataVertexAdapter: ContactProviderAdapterV35 = {
+    id: 'data_vertex',
+    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
+    estimatedCredits: 10,
+    enrich: () => enrichWithDataVertexV36_8(request, 'identity_enrichment'),
+  }
+  const pdlAdapter: ContactProviderAdapterV35 = {
+    id: 'people_data_labs',
+    purposes: ['identity_enrichment'],
+    estimatedCredits: 1,
+    enrich: () => enrichWithPeopleDataLabs(request),
+  }
+
+  // Same-provider deterministic lookup gets first priority. Otherwise PDL can
+  // resolve a grounded professional identity before a URL-keyed DataVertex pass.
+  if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
+  if (pdlConfigured) adapters.push(pdlAdapter)
+  if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+
+  if (!adapters.length) {
+    return NextResponse.json({
+      ok: false,
+      code: 'provider_not_configured',
+      error: 'No configured contact provider can use the available identity anchors.',
+      providers: {
+        peopleDataLabs: pdlConfigured ? 'configured' : 'missing_key',
+        dataVertex: dataVertexConfigured ? (canUseDataVertexLookupV36_8(request) ? 'configured' : 'needs_linkedin_or_provider_id') : 'missing_key',
+      },
+    }, { status: 503 })
+  }
+
   const orchestration = await runContactEnrichmentOrchestratorV35({
     request,
     purpose: 'identity_enrichment',
-    adapters: [{
-      id: 'people_data_labs',
-      purposes: ['identity_enrichment'],
-      estimatedCredits: 1,
-      enrich: () => enrichWithPeopleDataLabs(request),
-    }],
-    maxPaidAttempts: 1,
+    adapters,
+    maxPaidAttempts: Math.min(2, adapters.length),
+    maxEstimatedCredits: 11,
   })
   const result = orchestration.result
 
-  // ── 6. Persist legacy-compatible contact rows if candidateId present ────────
-  // Rich V35 match/deliverability metadata is returned in shadow mode but is not
-  // persisted until the replay-safe Evidence Ledger write path is approved.
   let persistenceMode: 'supabase' | 'preview' | 'not_persisted' = 'not_persisted'
   let persistedCount = 0
 
@@ -103,9 +122,7 @@ export async function POST(req: NextRequest) {
           .eq('owner_id', ownerId)
 
         const existingKeys = new Set(
-          (existing || []).map((c: { type: string; value: string; source: string }) =>
-            `${c.type}:${c.value.toLowerCase()}:${c.source}`,
-          ),
+          (existing || []).map((c: { type: string; value: string; source: string }) => `${c.type}:${c.value.toLowerCase()}:${c.source}`),
         )
 
         const rows = result.signals
@@ -128,9 +145,7 @@ export async function POST(req: NextRequest) {
             persistedCount = rows.length
             persistenceMode = 'supabase'
           }
-        } else {
-          persistenceMode = 'supabase'
-        }
+        } else persistenceMode = 'supabase'
       } catch {
         persistenceMode = 'not_persisted'
       }
@@ -139,7 +154,6 @@ export async function POST(req: NextRequest) {
     persistenceMode = 'preview'
   }
 
-  // ── 7. Return UI-safe result (no key, no raw payload) ───────────────────────
   return NextResponse.json({
     ok: true,
     provider: result.provider,
