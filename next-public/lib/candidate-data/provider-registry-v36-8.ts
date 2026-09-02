@@ -10,6 +10,8 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
   const dv = configured(process.env.DATAVERTEX_API_KEY)
   const co = configured(process.env.CONTACTOUT_API_KEY)
   const sh = configured(process.env.SIGNALHIRE_API_KEY)
+  const lu = configured(process.env.LINKUP_API_KEY)
+  const exa = configured(process.env.EXA_API_KEY)
   const own = configured(process.env.OPENWEBNINJA_API_KEY)
 
   return [
@@ -42,6 +44,16 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
       provider: 'signalhire', label: 'SignalHire', state: sh ? 'configured' : 'missing_key', executable: sh,
       capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment', 'freshness_refresh'],
       message: sh ? 'SignalHire Search API adapter is wired and configured.' : 'SignalHire Search adapter is wired; SIGNALHIRE_API_KEY is not configured.',
+    },
+    {
+      provider: 'linkup', label: 'LinkUpAPI', state: lu ? 'configured' : 'missing_key', executable: lu,
+      capabilities: ['candidate_search'],
+      message: lu ? 'LinkUp People Search adapter is wired and configured; discovery contact fields are intentionally ignored.' : 'LinkUp People Search adapter is wired; LINKUP_API_KEY is not configured.',
+    },
+    {
+      provider: 'exa', label: 'Exa People', state: exa ? 'configured' : 'missing_key', executable: exa,
+      capabilities: ['candidate_search', 'public_web_corroboration'],
+      message: exa ? 'Exa People typed-entity search is wired and configured.' : 'Exa People Search adapter is wired; EXA_API_KEY is not configured.',
     },
     {
       provider: 'openweb_ninja', label: 'OpenWeb Ninja', state: own ? 'configured' : 'missing_key', executable: false,
