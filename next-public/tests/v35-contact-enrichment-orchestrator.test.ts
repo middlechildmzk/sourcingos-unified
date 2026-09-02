@@ -4,7 +4,7 @@ import type { ContactEnrichmentRequest, ContactEnrichmentResult } from '@/lib/co
 
 const request: ContactEnrichmentRequest = {
   fullName: 'Jane Smith',
-  companyDomain: 'acme.com',
+  companyDomain: 'example.com',
 }
 
 function result(provider: 'people_data_labs' | 'hunter' | 'apollo', values: string[] = []): ContactEnrichmentResult {
@@ -52,8 +52,8 @@ describe('V35 contact enrichment orchestrator', () => {
       request,
       purpose: 'identity_enrichment',
       adapters: [
-        adapter('people_data_labs', ['jane@acme.com']),
-        adapter('apollo', ['other@acme.com']),
+        adapter('people_data_labs', ['jane@example.com']),
+        adapter('apollo', ['other@example.com']),
       ],
       maxPaidAttempts: 2,
     })
@@ -61,7 +61,7 @@ describe('V35 contact enrichment orchestrator', () => {
     expect(run.stopReason).toBe('goal_met')
     expect(run.attempts).toHaveLength(1)
     expect(run.result.provider).toBe('people_data_labs')
-    expect(run.result.signals[0].value).toBe('jane@acme.com')
+    expect(run.result.signals[0].value).toBe('jane@example.com')
   })
 
   it('falls through to the next provider after a configured no-result', async () => {
@@ -70,7 +70,7 @@ describe('V35 contact enrichment orchestrator', () => {
       purpose: 'identity_enrichment',
       adapters: [
         adapter('people_data_labs', []),
-        adapter('apollo', ['jane@acme.com']),
+        adapter('apollo', ['jane@example.com']),
       ],
       maxPaidAttempts: 2,
     })
@@ -85,15 +85,15 @@ describe('V35 contact enrichment orchestrator', () => {
       request,
       purpose: 'work_email_finder',
       adapters: [
-        adapter('people_data_labs', ['pdl@acme.com'], ['identity_enrichment']),
-        adapter('hunter', ['jane@acme.com'], ['work_email_finder']),
+        adapter('people_data_labs', ['pdl@example.com'], ['identity_enrichment']),
+        adapter('hunter', ['jane@example.com'], ['work_email_finder']),
       ],
       maxPaidAttempts: 2,
     })
 
     expect(run.attempts).toHaveLength(1)
     expect(run.attempts[0].provider).toBe('hunter')
-    expect(run.result.signals[0].value).toBe('jane@acme.com')
+    expect(run.result.signals[0].value).toBe('jane@example.com')
   })
 
   it('honors a bounded paid-attempt budget', async () => {
@@ -102,7 +102,7 @@ describe('V35 contact enrichment orchestrator', () => {
       purpose: 'identity_enrichment',
       adapters: [
         adapter('people_data_labs', []),
-        adapter('apollo', ['jane@acme.com']),
+        adapter('apollo', ['jane@example.com']),
       ],
       maxPaidAttempts: 1,
     })
@@ -116,7 +116,7 @@ describe('V35 contact enrichment orchestrator', () => {
     const run = await runContactEnrichmentOrchestratorV35({
       request,
       purpose: 'identity_enrichment',
-      adapters: [adapter('people_data_labs', ['jane@acme.com'], ['identity_enrichment'], 2)],
+      adapters: [adapter('people_data_labs', ['jane@example.com'], ['identity_enrichment'], 2)],
       maxPaidAttempts: 2,
       maxEstimatedCredits: 1,
     })
