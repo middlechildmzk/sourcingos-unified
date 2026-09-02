@@ -1,5 +1,6 @@
 import { RoleScopedCandidateSearch } from '@/components/RoleScopedCandidateSearch'
 import Link from 'next/link'
+import './universal-people-search.css'
 
 export const metadata = {
   title: 'People & Candidate Search — SourcingOS Workbench',
