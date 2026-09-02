@@ -4,6 +4,7 @@ export type CandidateDataProviderV36_8 =
   | 'coresignal'
   | 'data_vertex'
   | 'contactout'
+  | 'signalhire'
   | 'openweb_ninja'
 
 export type CandidateDataCapabilityV36_8 =
