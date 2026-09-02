@@ -12,6 +12,8 @@ function signingKey(provider: CandidateDataProviderV36_8): string | undefined {
   if (provider === 'people_data_labs') return process.env.PDL_API_KEY
   if (provider === 'coresignal') return process.env.CORESIGNAL_API_KEY
   if (provider === 'signalhire') return process.env.SIGNALHIRE_API_KEY
+  if (provider === 'linkup') return process.env.LINKUP_API_KEY
+  if (provider === 'exa') return process.env.EXA_API_KEY
   if (provider === 'openweb_ninja') return process.env.OPENWEBNINJA_API_KEY
   return undefined
 }
@@ -107,7 +109,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
       providerScoreScale: observation.providerScoreScale,
       providerExplanation: observation.providerExplanation,
       contactAvailability: observation.contactAvailability,
-      observationNote: 'Commercial provider observation; recruiter verification remains required for qualification claims.',
+      observationNote: 'Commercial/provider-index observation; recruiter verification remains required for qualification claims.',
     },
   }
 }
