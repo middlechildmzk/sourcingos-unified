@@ -81,6 +81,86 @@ const PROFESSIONAL_ROLE_HINTS = new Set([
   'software', 'hardware', 'systems', 'system', 'network', 'data', 'cloud', 'cyber', 'cybersecurity', 'clearance',
 ])
 
+const EXPLICIT_SKILL_PATTERNS: Array<[string, RegExp]> = [
+  ['RHEL', /\bRHEL\b/i],
+  ['Red Hat Enterprise Linux', /\bRed Hat Enterprise Linux\b/i],
+  ['Red Hat', /\bRed Hat\b/i],
+  ['Linux', /\bLinux\b/i],
+  ['SELinux', /\bSELinux\b/i],
+  ['Ansible', /\bAnsible\b/i],
+  ['Satellite', /\b(?:Red Hat )?Satellite\b/i],
+  ['Kubernetes', /\bKubernetes\b/i],
+  ['Docker', /\bDocker\b/i],
+  ['Terraform', /\bTerraform\b/i],
+  ['AWS', /\bAWS\b/i],
+  ['Azure', /\bAzure\b/i],
+  ['GCP', /\bGCP\b/i],
+  ['Python', /\bPython\b/i],
+  ['Java', /\bJava\b/i],
+  ['JavaScript', /\bJavaScript\b/i],
+  ['TypeScript', /\bTypeScript\b/i],
+  ['React', /\bReact\b/i],
+  ['Node.js', /\bNode(?:\.js|JS)\b/i],
+  ['SQL', /\bSQL\b/i],
+  ['Splunk', /\bSplunk\b/i],
+  ['VMware', /\bVMware\b/i],
+  ['Active Directory', /\bActive Directory\b/i],
+]
+
+function stripSearchLeadIn(value: string): string {
+  return clean(value)
+    .replace(/^(?:please\s+)?(?:find(?:\s+me)?|show(?:\s+me)?|source|search\s+for|look\s+for|looking\s+for|i\s+need|need)\s+/i, '')
+    .replace(/^(?:an?|the)\s+/i, '')
+}
+
+function inferProfessionalTitle(query: string): string | undefined {
+  if (classifyUniversalPeopleSearchV36_9(query) !== 'professional_search') return undefined
+  const cleaned = stripSearchLeadIn(query)
+  if (!cleaned) return undefined
+
+  const boundary = cleaned.search(/\b(?:with|who|that|in\s+or\s+near|near|around|located|based|at)\b/i)
+  let candidate = boundary > 0 ? clean(cleaned.slice(0, boundary)) : cleaned
+
+  if (boundary < 0) {
+    const tokens = cleaned.split(/\s+/)
+    const normalized = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
+    let lastRoleHint = -1
+    normalized.forEach((token, index) => { if (PROFESSIONAL_ROLE_HINTS.has(token)) lastRoleHint = index })
+    if (lastRoleHint >= 0 && lastRoleHint < tokens.length - 1) candidate = tokens.slice(0, lastRoleHint + 1).join(' ')
+  }
+
+  candidate = candidate.replace(/^(?:an?|the)\s+/i, '').replace(/[,:;]+$/, '').trim()
+  if (!candidate || candidate.length > 100) return undefined
+  const hasRoleHint = candidate.split(/\s+/).some(token => PROFESSIONAL_ROLE_HINTS.has(token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')))
+  return hasRoleHint ? candidate : undefined
+}
+
+function inferProfessionalLocation(query: string): string | undefined {
+  const explicit = clean(query).match(/\b(?:in\s+or\s+near|in\s+or\s+around|located\s+in|based\s+in|near|around|in)\s+([A-Za-z][A-Za-z .’'\-]{1,60},\s*[A-Z]{2})\b/i)
+  return explicit?.[1] ? clean(explicit[1]) : undefined
+}
+
+function inferExplicitSkills(query: string): string[] {
+  const found: string[] = []
+  for (const [label, pattern] of EXPLICIT_SKILL_PATTERNS) {
+    if (pattern.test(query) && !found.includes(label)) found.push(label)
+  }
+  return found.slice(0, 20)
+}
+
+function inferQueryRequirements(query: string): Array<{ text: string; mustHave: boolean }> {
+  const requirements: Array<{ text: string; mustHave: boolean }> = []
+  const years = clean(query).match(/\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b[^,.;]{0,30}/i)
+  if (years) {
+    const plus = /\d{1,2}\s*\+/.test(years[0]) ? '+' : ''
+    requirements.push({ text: `${years[1]}${plus} years relevant experience`, mustHave: true })
+  }
+
+  const clearance = clean(query).match(/\b(?:TS\s*\/\s*SCI|TS\s+SCI|Top Secret|Secret|Confidential|Public Trust)(?:\s+(?:security\s+)?clearance)?(?:\s+or\s+higher)?\b/i)
+  if (clearance) requirements.push({ text: clean(clearance[0]), mustHave: true })
+  return requirements
+}
+
 export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeopleSearchIntentV36_9 {
   const query = clean(value)
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(query)) return 'email_lookup'
@@ -130,23 +210,35 @@ export function buildUniversalExactIdentityRequestV36_9(value: string): Universa
 }
 
 /**
- * The universal box is a control surface, not provider query syntax. Structured
- * filters stay explicit. Company is currently included as bounded natural-language
- * context because the V36.8 provider contract does not yet expose a universal
- * company field across every adapter.
+ * The universal box is a control surface, not provider query syntax. Explicit
+ * filters remain authoritative. For professional free text we deterministically
+ * extract only narrow search structure (role phrase, explicit city/state,
+ * explicitly named skills, years, clearance) so structured-only providers can
+ * participate without receiving arbitrary recruiter prose as provider syntax.
  */
 export function buildUniversalPeopleProviderRequestV36_9(
   draft: UniversalPeopleSearchDraftV36_9,
 ): UniversalPeopleProviderRequestV36_9 {
   const query = clean(draft.query)
   const company = clean(draft.company)
-  const titles = splitList(draft.title, 20)
-  const skills = splitList(draft.skills, 40)
-  const locations = splitLocations(draft.location, 20)
+  const explicitTitles = splitList(draft.title, 20)
+  const explicitSkills = splitList(draft.skills, 40)
+  const explicitLocations = splitLocations(draft.location, 20)
+  const professionalIntent = classifyUniversalPeopleSearchV36_9(query) === 'professional_search'
+
+  const inferredTitle = professionalIntent && !explicitTitles.length ? inferProfessionalTitle(query) : undefined
+  const inferredLocation = professionalIntent && !explicitLocations.length ? inferProfessionalLocation(query) : undefined
+  const inferredSkills = professionalIntent ? inferExplicitSkills(query) : []
+
+  const titles = Array.from(new Set([...explicitTitles, ...(inferredTitle ? [inferredTitle] : [])])).slice(0, 20)
+  const skills = Array.from(new Set([...explicitSkills, ...inferredSkills])).slice(0, 40)
+  const locations = Array.from(new Set([...explicitLocations, ...(inferredLocation ? [inferredLocation] : [])])).slice(0, 20)
   const context = [query, company ? `company ${company}` : ''].filter(Boolean).join(' · ').slice(0, 3000)
   const requirements = [
     ...titles.map(text => ({ text: `Current or relevant title: ${text}`, mustHave: false })),
+    ...(company ? [{ text: `Current or relevant employer: ${company}`, mustHave: false }] : []),
     ...skills.map(text => ({ text, mustHave: true })),
+    ...(professionalIntent ? inferQueryRequirements(query) : []),
   ].slice(0, 30)
 
   return {
