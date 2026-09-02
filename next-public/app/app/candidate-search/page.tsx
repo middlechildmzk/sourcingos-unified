@@ -2,9 +2,9 @@ import { RoleScopedCandidateSearch } from '@/components/RoleScopedCandidateSearc
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Candidate Search — SourcingOS Workbench',
+  title: 'People & Candidate Search — SourcingOS Workbench',
   description:
-    'Role intake, active role context, search strategy, open-web discovery, and Candidate 360 in one recruiter-controlled workbench.',
+    'Universal people search, role-scoped sourcing, provider discovery, public-web evidence, contact resolution, and Candidate 360 in one recruiter-controlled workbench.',
   robots: { index: false, follow: false },
 }
 
@@ -18,25 +18,32 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
   return (
     <main className="wrap">
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
-      <h1>Candidate Search</h1>
+      <h1>People & Candidate Search</h1>
       <p className="lead">
-        Role intake → search strategy → open-web discovery → Candidate 360 → role review queue. One recruiter-controlled workflow. Powered by Candidate Graph under the hood.
+        Find a specific person or source a market. Search configured professional-data providers, continue into role-aware public research, resolve identity, inspect evidence, find contact data on demand, and save one Candidate 360 — without jumping between a stack of separate recruiting tools.
       </p>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
         <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
+          Provider retrieval ≠ qualification ·
           No auto-merge at any confidence level ·
-          Contact signals are unverified by default ·
+          Contact ownership ≠ outreach permission ·
           Open-to-work is a signal, not a verified claim ·
-          Public clearance mentions are unverified breadcrumbs
+          Public clearance mentions remain unverified breadcrumbs
         </span>
       </div>
 
       <RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />
 
       <div className="card" style={{ marginTop: '32px' }}>
-        <span className="kicker">Also in the connected workflow</span>
+        <span className="kicker">Connected workflow</span>
         <div className="grid two" style={{ marginTop: '12px' }}>
+          <Link href="/app/agentic-sourcing" style={{ color: 'inherit' }}>
+            <strong>Agentic Sourcing</strong>
+            <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
+              Start from a role and let Role Brain build distinct research hypotheses, source tasks, search memory, and recruiter-controlled continuation.
+            </p>
+          </Link>
           <Link href="/app/roles" style={{ color: 'inherit' }}>
             <strong>Role Workspaces</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
@@ -49,10 +56,10 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
               Import resumes and CSV, normalize candidates, review identity matches, confirm merges, and add records to a role.
             </p>
           </Link>
-          <Link href="/sources" style={{ color: 'inherit' }}>
-            <strong>Source Connector Search</strong>
+          <Link href="/app/candidate-graph" style={{ color: 'inherit' }}>
+            <strong>Candidate Graph</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
-              Full multi-source search with identity match scoring and candidate graph save.
+              Inspect canonical people, source observations, evidence, contact signals, and unresolved cross-source identity proposals.
             </p>
           </Link>
         </div>
