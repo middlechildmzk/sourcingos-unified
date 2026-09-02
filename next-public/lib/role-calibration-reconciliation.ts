@@ -1,5 +1,10 @@
 import type { RoleWorkspace } from './role-workspace'
 import { reconcileCalibrationState, type CalibrationState } from './calibration-intelligence'
+import {
+  deriveRoleSearchIntelligenceFromActivityV35,
+  isSearchIntelligenceActivityV35,
+} from './entity-intelligence/search-approval-events-v35'
+import type { RoleSearchIntelligenceStateV35 } from './entity-intelligence/search-approval-v35'
 
 function semanticCalibration(state: CalibrationState | undefined): string {
   if (!state) return JSON.stringify({ insights: [], events: [] })
@@ -28,15 +33,41 @@ function semanticCalibration(state: CalibrationState | undefined): string {
   })
 }
 
+function semanticSearchIntelligence(state: RoleSearchIntelligenceStateV35 | undefined): string {
+  if (!state) return 'none'
+  return JSON.stringify({
+    version: state.version,
+    registryVersion: state.registryVersion,
+    approvedEntityIds: [...state.approvedEntityIds].sort(),
+    approvedLocationExpansionIds: [...state.approvedLocationExpansionIds].sort(),
+  })
+}
+
 // Keep calibration derivation in the workspace state transition instead of relying
 // on the Calibration tab mounting. Reviewer decisions remain authoritative because
 // reconcileCalibrationState preserves reviewed insight state and only refreshes the
 // evidence linked to those decisions.
+//
+// V35.3 also replays recruiter-approved retrieval expansion events here. Search
+// intelligence is a separate truth layer: it affects retrieval only and never
+// becomes an intake requirement or candidate evidence.
 export function reconcileRoleWorkspaceCalibration(
   workspace: RoleWorkspace,
   now = new Date().toISOString()
 ): RoleWorkspace {
-  const next = reconcileCalibrationState(workspace, workspace.calibration, now)
-  if (semanticCalibration(next) === semanticCalibration(workspace.calibration)) return workspace
-  return { ...workspace, calibration: next, updatedAt: now }
+  const hasSearchEvents = workspace.activity.some(isSearchIntelligenceActivityV35)
+  const replayedSearch = hasSearchEvents
+    ? deriveRoleSearchIntelligenceFromActivityV35(workspace.activity)
+    : workspace.searchIntelligence
+  const searchChanged = semanticSearchIntelligence(replayedSearch) !== semanticSearchIntelligence(workspace.searchIntelligence)
+  const hydratedWorkspace = searchChanged ? { ...workspace, searchIntelligence: replayedSearch } : workspace
+
+  const next = reconcileCalibrationState(hydratedWorkspace, hydratedWorkspace.calibration, now)
+  const calibrationChanged = semanticCalibration(next) !== semanticCalibration(hydratedWorkspace.calibration)
+  if (!calibrationChanged && !searchChanged) return workspace
+
+  return {
+    ...hydratedWorkspace,
+    ...(calibrationChanged ? { calibration: next, updatedAt: now } : {}),
+  }
 }
