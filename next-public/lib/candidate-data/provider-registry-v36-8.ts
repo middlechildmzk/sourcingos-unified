@@ -18,9 +18,9 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
       message: pe ? 'Pearch candidate-search adapter is wired and configured.' : 'Pearch adapter is wired; PEARCH_API_KEY is not configured.',
     },
     {
-      provider: 'people_data_labs', label: 'People Data Labs', state: pdl ? 'configured' : 'missing_key', executable: false,
+      provider: 'people_data_labs', label: 'People Data Labs', state: pdl ? 'configured' : 'missing_key', executable: pdl,
       capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment'],
-      message: pdl ? 'PDL enrichment is configured; Person Search adapter is not wired into the candidate gateway yet.' : 'PDL enrichment exists; PDL_API_KEY is not configured and Person Search is not wired yet.',
+      message: pdl ? 'PDL Person Search and identity enrichment are wired and configured.' : 'PDL Person Search and enrichment are wired; PDL_API_KEY is not configured.',
     },
     {
       provider: 'coresignal', label: 'Coresignal', state: cs ? 'configured' : 'missing_key', executable: false,
