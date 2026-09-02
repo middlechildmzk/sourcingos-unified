@@ -16,6 +16,12 @@ export type SourceName =
   | 'crates'
   | 'rubygems'
   | 'resume_xray'
+  | 'pearch'
+  | 'people_data_labs'
+  | 'coresignal'
+  | 'data_vertex'
+  | 'contactout'
+  | 'openweb_ninja'
 
 /** The real-world subject represented by a source result. */
 export type EntityKind =
@@ -105,7 +111,8 @@ export const allSourceNames: SourceName[] = [
   'github', 'stackoverflow', 'openalex', 'npi', 'orcid',
   'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
   'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
-  'resume_xray'
+  'resume_xray', 'pearch', 'people_data_labs', 'coresignal', 'data_vertex',
+  'contactout', 'openweb_ninja',
 ]
 
 export const sourceLabels: Record<SourceName, string> = {
@@ -125,7 +132,13 @@ export const sourceLabels: Record<SourceName, string> = {
   dockerhub: 'Docker Hub',
   crates: 'crates.io',
   rubygems: 'RubyGems',
-  resume_xray: 'Public Resume X-Ray'
+  resume_xray: 'Public Resume X-Ray',
+  pearch: 'Pearch',
+  people_data_labs: 'People Data Labs',
+  coresignal: 'Coresignal',
+  data_vertex: 'DataVertex',
+  contactout: 'ContactOut',
+  openweb_ninja: 'OpenWeb Ninja',
 }
 
 export const sourceGroups: Record<string, SourceName[]> = {
@@ -133,6 +146,8 @@ export const sourceGroups: Record<string, SourceName[]> = {
   research: ['openalex', 'orcid', 'semantic_scholar', 'arxiv', 'pubmed'],
   ai: ['github', 'openalex', 'semantic_scholar', 'arxiv', 'huggingface', 'pypi', 'kaggle'],
   healthcare: ['npi', 'pubmed', 'openalex'],
+  people_data: ['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout'],
+  public_web_enrichment: ['openweb_ninja'],
   open_resume: ['resume_xray'],
-  default: ['github', 'stackoverflow', 'openalex', 'npi']
+  default: ['github', 'stackoverflow', 'openalex', 'npi'],
 }
