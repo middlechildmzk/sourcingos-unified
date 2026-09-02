@@ -53,6 +53,11 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
     }))
   }
 
+  const locationLabel = [
+    location.anchorLabel || role.intake.location || 'Not resolved',
+    ...intelligence.explicitLocationAlternatives,
+  ].filter(Boolean).join(' + ')
+
   return (
     <section className="role-entity-intel-v35" aria-label="Role entity intelligence">
       <div className="role-entity-intel-v35__header">
@@ -77,8 +82,8 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
         </article>
         <article>
           <span className="role-entity-intel-v35__label">Location</span>
-          <strong>{location.anchorLabel || role.intake.location || 'Not resolved'}</strong>
-          <small>{label(location.mode)}{location.radiusMiles ? ` · ${location.radiusMiles} miles` : ''}</small>
+          <strong>{locationLabel}</strong>
+          <small>{label(location.mode)}{location.radiusMiles ? ` · ${location.radiusMiles} miles` : ''}{intelligence.explicitLocationAlternatives.length ? ' · recruiter-stated alternate market' : ''}</small>
         </article>
       </div>
 
