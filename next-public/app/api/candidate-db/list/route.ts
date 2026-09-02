@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { getCandidateDb } from '@/lib/candidate-db-v18'
 import { getCandidateWorkspace } from '@/lib/candidate-workspace-v25'
+import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 import { isSupabaseConfigured } from '@/lib/supabase/server'
 import { resolveStoredEntityKind } from '@/lib/entity-classification'
 
@@ -11,6 +12,10 @@ export const dynamic = 'force-dynamic'
 function parseRawText(value?: string) {
   if (!value) return undefined
   try { return JSON.parse(value) as unknown } catch { return undefined }
+}
+
+function safeRoleId(value = '') {
+  return value.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100)
 }
 
 export async function GET(req: NextRequest) {
@@ -22,6 +27,7 @@ export async function GET(req: NextRequest) {
   const requestedLimit = Math.max(1, Math.min(200, Number(req.nextUrl.searchParams.get('limit')) || 100))
   const offset = Math.max(0, Number(req.nextUrl.searchParams.get('offset')) || 0)
   const search = String(req.nextUrl.searchParams.get('q') || '').trim().slice(0, 100)
+  const roleId = safeRoleId(String(req.nextUrl.searchParams.get('roleId') || ''))
 
   if (gate.preview || !isSupabaseConfigured()) {
     const db = getCandidateDb()
@@ -42,15 +48,37 @@ export async function GET(req: NextRequest) {
 
     const classifiedCandidates = candidates.map(candidate => {
       const profiles = sourceProfilesByCandidate.get(candidate.id) || []
+      const evidenceItems = db.evidenceItems.filter(item => item.candidateId === candidate.id)
       const kinds = profiles.map(profile => resolveStoredEntityKind({
         source: profile.source,
         raw: parseRawText(profile.rawText),
+      }))
+      const universeProfiles = profiles.map(profile => ({
+        id: profile.id,
+        candidate_id: profile.candidateId,
+        source: profile.source,
+        source_profile_id: profile.sourceProfileId,
+        profile_url: profile.profileUrl,
+        headline: profile.headline,
+        organization: profile.organization,
+        raw: parseRawText(profile.rawText),
+        last_seen_at: profile.lastSeenAt,
+        created_at: profile.createdAt,
       }))
       return {
         ...candidate,
         // Preview resume/CSV imports are explicit candidate imports. Search-saved
         // preview records are already limited to people by the save endpoint.
         entityKind: kinds.includes('person') || kinds.length === 0 ? 'person' : kinds[0],
+        universe: buildCandidateUniverseProjectionV36({
+          candidateId: candidate.id,
+          profiles: universeProfiles,
+          evidenceItems: evidenceItems.map(item => ({ candidate_id: item.candidateId, created_at: item.createdAt })),
+          roleCandidates: [],
+          activeRoleId: roleId || undefined,
+          candidateCreatedAt: candidate.createdAt,
+          candidateUpdatedAt: candidate.updatedAt,
+        }),
       }
     })
 
@@ -83,12 +111,18 @@ export async function GET(req: NextRequest) {
       },
       page: { limit: requestedLimit, offset, hasMore: offset + candidates.length < filtered.length },
       search,
+      activeRoleId: roleId || null,
       _note: 'Preview mode: data resets between restarts and is not durable.',
     })
   }
 
   try {
-    return NextResponse.json(await getCandidateWorkspace(gate.userId, { limit: requestedLimit, offset, search }))
+    return NextResponse.json(await getCandidateWorkspace(gate.userId, {
+      limit: requestedLimit,
+      offset,
+      search,
+      roleId: roleId || undefined,
+    }))
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Could not load Candidate workspace.' }, { status: 500 })
   }
