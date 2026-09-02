@@ -96,9 +96,9 @@ export const candidateProviderRoadmapV36_8: CandidateProviderRoadmapEntryV36_8[]
   {
     id: 'openweb_ninja',
     label: 'OpenWeb Ninja',
-    state: 'next',
+    state: 'wired',
     uses: ['public_web_locator', 'contact_enrichment'],
-    rationale: 'Use for real-time public-web corroboration and source URLs rather than as a primary professional candidate index.',
+    rationale: 'Provider is already registered in the SourcingOS data/contact fabric. The remaining work is the executable person-grounded public-web corroboration adapter; domain-generic contacts must never be assigned to a candidate without identity evidence.',
   },
   {
     id: 'enformion_go',
