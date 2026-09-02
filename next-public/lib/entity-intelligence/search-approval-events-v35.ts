@@ -15,6 +15,10 @@ function activityId(action: SearchEventAction, entityId: string, now: Date): str
   return `${EVENT_PREFIX}|1|${action}|${encoded}|${now.getTime()}`.slice(0, 120)
 }
 
+export function isSearchIntelligenceActivityV35(activity: RoleActivity): boolean {
+  return activity.type === 'search_intelligence_updated' && activity.id.startsWith(`${EVENT_PREFIX}|1|`)
+}
+
 export function searchIntelligenceActivityEventV35(
   entityId: string,
   entityLabel: string,
@@ -39,7 +43,7 @@ export function clearSearchIntelligenceActivityEventV35(now = new Date()): RoleA
 }
 
 function parseSearchEvent(activity: RoleActivity): ParsedSearchEvent | undefined {
-  if (activity.type !== 'search_intelligence_updated' || !activity.id.startsWith(`${EVENT_PREFIX}|1|`)) return undefined
+  if (!isSearchIntelligenceActivityV35(activity)) return undefined
   const [prefix, version, action, encoded] = activity.id.split('|')
   if (prefix !== EVENT_PREFIX || version !== '1' || !['a', 'r', 'c'].includes(action)) return undefined
   let entityId = ''
