@@ -84,6 +84,10 @@ function requirementProofAliases(requirement: string): string[] {
   return [capability]
 }
 
+function quantifiedExperienceRequirement(requirement: string): boolean {
+  return /^\s*(?:at\s+least\s+|minimum\s+of\s+)?\d{1,2}\s*(?:\+|\s+or\s+more)?\s*(?:years?|yrs?)\b/i.test(requirement)
+}
+
 function observedDiscoveryText(discovery: ReviewSlateDiscovery): string {
   return [
     discovery.headline,
@@ -122,9 +126,10 @@ function requirementLabel(value: string): string {
 /**
  * Builds a small first review batch from observed source facts only. When a role
  * has recruiter-stated must-haves that are observable on public sources, every
- * such must-have needs observed support before a discovery enters the first
- * review batch. Requirements that cannot be proven from public evidence (for
- * example a generic years threshold or clearance) remain explicitly unverified.
+ * such capability needs observed support before a discovery enters the first
+ * review batch. Quantified tenure is split into two truths: public evidence can
+ * support the named capability for discovery/admission, while the years floor
+ * remains explicitly verification-gated. Clearance behaves the same way.
  * Held records stay inspectable discoveries; they are not rejected.
  */
 export function evidenceBearingFirstReviewBatch(
@@ -134,7 +139,11 @@ export function evidenceBearingFirstReviewBatch(
 ): { batch: ReviewSlateDiscovery[]; checks: ReviewSlateEvidenceCheck[] } {
   const roleSignals = observableRoleSignals(intake)
   const gateableMustHaves = intake.mustHaves
-    .map(requirement => ({ requirement: requirementLabel(requirement), aliases: requirementProofAliases(requirement) }))
+    .map(requirement => ({
+      requirement: requirementLabel(requirement),
+      aliases: requirementProofAliases(requirement),
+      verificationGated: quantifiedExperienceRequirement(requirement),
+    }))
     .filter(item => item.requirement && item.aliases.length)
   const nonObservableMustHaves = intake.mustHaves
     .map(requirementLabel)
@@ -143,13 +152,18 @@ export function evidenceBearingFirstReviewBatch(
   const checks = saveEligibleReviewSlateDiscoveries(discoveries).map(discovery => {
     const observed = observedDiscoveryText(discovery)
     const matchedTitleSignals = roleSignals.filter(signal => observed.includes(signal)).slice(0, 6)
-    const matchedMustHaves = gateableMustHaves
+    const matchedGateable = gateableMustHaves
       .filter(item => item.aliases.some(alias => observed.includes(alias)))
+    const matchedMustHaves = matchedGateable
+      .filter(item => !item.verificationGated)
       .map(item => item.requirement)
+    const matchedCapabilitySignals = matchedGateable
+      .filter(item => item.verificationGated)
+      .map(item => `${requirementToRetrievalCapability(item.requirement)} capability evidence`)
     const missingMustHaves = gateableMustHaves
-      .filter(item => !matchedMustHaves.includes(item.requirement))
+      .filter(item => !matchedGateable.includes(item))
       .map(item => item.requirement)
-    const matchedSignals = Array.from(new Set([...matchedMustHaves, ...matchedTitleSignals])).slice(0, 8)
+    const matchedSignals = Array.from(new Set([...matchedMustHaves, ...matchedCapabilitySignals, ...matchedTitleSignals])).slice(0, 8)
     const geography = locationState(intake, discovery)
     const explicitMustHaveFloor = gateableMustHaves.length > 0
       ? missingMustHaves.length === 0
@@ -157,6 +171,7 @@ export function evidenceBearingFirstReviewBatch(
     const admitted = explicitMustHaveFloor && geography !== 'outside_search_area'
     const unverifiedRequirements = [
       ...nonObservableMustHaves,
+      ...matchedGateable.filter(item => item.verificationGated).map(item => item.requirement),
       ...(intake.clearance && intake.clearance !== 'Not specified' ? [`Clearance: ${intake.clearance}`] : []),
     ]
 
@@ -275,6 +290,5 @@ export function buildRoleReviewSlateCandidates(
     })
     emitted.add(item.candidateId)
   }
-
   return candidates
 }
