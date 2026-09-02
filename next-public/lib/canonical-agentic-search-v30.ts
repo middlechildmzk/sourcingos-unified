@@ -13,11 +13,15 @@ import { buildJobFamilyRoutingV34, type JobFamilyRoutingV34 } from './job-family
 import { militaryLaneDrafts, type MilitarySourcingHypothesis } from './military-talent-intelligence-v33'
 import { militaryTalentGate } from './military-role-gating-v33'
 import { enrichRoleIntakeWithOnet, type OnetRoleIntelligence } from './onet-role-intelligence'
+import {
+  resolveExecutableSurfaces,
+  surfaceMayExecute,
+  type ExecutableSurfaceResolution,
+} from './rig/executable-surface-resolution-v35'
 import { onetOccupationCompatibleWithRole } from './technical-role-normalization-v33-6'
 import type { RoleIntake } from './role-workspace'
 
 const PUBLIC_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications', 'google_xray'])
-const DOMAIN_EXECUTABLE_SURFACES = new Set<AgenticSearchSurface>(['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications'])
 const SENSITIVE = /\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance|citizenship|citizen)\b/i
 const PROVIDER_ROLE = /\b(?:nurse practitioner|registered nurse|physician assistant|pharmacist|physical therapist|occupational therapist|dentist|psychologist|clinical social worker|physician|doctor)\b/i
 
@@ -30,6 +34,7 @@ export type CanonicalRoleIntelligenceContext = {
 export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
   domainPacks: DomainPackMatch[]
   jobFamilyRouting: JobFamilyRoutingV34
+  surfaceRouting: ExecutableSurfaceResolution
   roleIntelligence: {
     onetConfigured: boolean
     onetOccupation?: { code: string; title: string }
@@ -143,14 +148,6 @@ function fingerprint(query: string): string {
   return query.toLowerCase().replace(/[()"']/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-/**
- * The canonical planner is the one recruiter-facing search plan. Domain packs
- * provide broad domain intelligence while V34 job-family routing chooses which
- * public evidence communities actually execute for a specialized role. O*NET
- * can enrich adjacent-title language, and verified military crosswalks may add
- * one recruiter-approved guided lane. None of these layers may rewrite role
- * truth or satisfy candidate-level requirements.
- */
 export function buildCanonicalAgenticSearchPlan(
   intake: RoleIntake,
   state?: CalibrationState,
@@ -160,9 +157,12 @@ export function buildCanonicalAgenticSearchPlan(
   const searchIntake = retrievalIntake(enrichedIntake)
   const domainProfile = buildDomainPackProfile(enrichedIntake)
   const jobFamilyRouting = buildJobFamilyRoutingV34(enrichedIntake)
-  const familyPreferred = new Set(jobFamilyRouting.preferredPublicSurfaces)
-  const specializedFamily = jobFamilyRouting.primaryFamily !== 'general'
   const base = buildAgenticSearchPlan(searchIntake, state)
+  const surfaceRouting = resolveExecutableSurfaces({
+    jobFamilyRouting,
+    domainProfile,
+    surfaces: base.lanes.flatMap(lane => lane.tasks.map(task => task.surface)),
+  })
   const providerQuery = jobFamilyRouting.primaryFamily === 'healthcare_clinical'
     ? providerRegistryQuery(enrichedIntake)
     : domainProfile.activeIds.has('healthcare')
@@ -173,14 +173,7 @@ export function buildCanonicalAgenticSearchPlan(
     const publicQuery = publicQueryForAgenticLane(searchIntake, lane.id)
     const tasks = lane.tasks
       .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
-      .filter(task => {
-        if (!DOMAIN_EXECUTABLE_SURFACES.has(task.surface)) return true
-        // Specialized job-family routing is the execution authority. Broad
-        // domain packs remain explanatory context but cannot re-enable a noisy
-        // source (for example DEV for an RHEL administrator).
-        if (specializedFamily) return familyPreferred.has(task.surface)
-        return domainProfile.executablePublicSurfaces.has(task.surface)
-      })
+      .filter(task => surfaceMayExecute(surfaceRouting, task.surface))
 
     if (lane.id === 'exact_title' && providerQuery) {
       const npiTask: AgenticSourceTask = {
@@ -213,6 +206,9 @@ export function buildCanonicalAgenticSearchPlan(
   if (context.militaryApproved && militaryProvisional) {
     integrityWarnings.push('Military occupation intelligence is provisional, so it is blocked from the canonical Search Plan until authoritative O*NET MOC data is available.')
   }
+  if (surfaceRouting.declinedSurfaces.length) {
+    integrityWarnings.push('Public-source routing declined for one or more surfaces because occupational/source intelligence is incomplete. This is unknown, not a negative source judgment.')
+  }
 
   const onetCompatible = Boolean(
     context.onet?.matchedOccupation
@@ -226,6 +222,7 @@ export function buildCanonicalAgenticSearchPlan(
     integrityWarnings,
     domainPacks: domainProfile.matches,
     jobFamilyRouting,
+    surfaceRouting,
     roleIntelligence: {
       onetConfigured: Boolean(context.onet?.configured && (!context.onet?.matchedOccupation || onetCompatible)),
       ...(context.onet?.matchedOccupation && onetCompatible ? { onetOccupation: context.onet.matchedOccupation } : {}),
