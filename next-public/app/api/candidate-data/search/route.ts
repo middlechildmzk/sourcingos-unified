@@ -7,6 +7,7 @@ import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/pr
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchDataVertexV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
+import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8 } from '@/lib/candidate-data/types-v36-8'
 
 export const dynamic = 'force-dynamic'
@@ -15,7 +16,9 @@ const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_v
 const bodySchema = z.object({
   query: z.string().trim().min(2).max(3000),
   requirements: z.array(z.object({ text: z.string().trim().min(1).max(300), mustHave: z.boolean() })).max(30).optional(),
-  locations: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+  titles: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+  skills: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+  locations: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   limit: z.number().int().min(1).max(50).default(20),
   offset: z.number().int().min(0).max(100000).default(0),
   providerPersonBlacklist: z.array(z.string().trim().min(1).max(200)).max(1000).optional(),
@@ -26,6 +29,7 @@ const bodySchema = z.object({
 function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapterV36_8 | undefined {
   if (provider === 'pearch') return { provider, search: searchPearchV36_8 }
   if (provider === 'data_vertex') return { provider, search: searchDataVertexV36_8 }
+  if (provider === 'contactout') return { provider, search: searchContactOutV36_8 }
   return undefined
 }
 
@@ -49,7 +53,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: false,
       code: 'candidate_provider_not_configured',
-      error: 'No executable candidate-search provider is configured for this request.',
+      error: 'No implemented candidate-search provider is configured for this request.',
       providerStatus: configured,
     }, { status: 503 })
   }
@@ -57,6 +61,8 @@ export async function POST(req: NextRequest) {
   const result = await runCandidateDataSearchV36_8({
     query: parsed.data.query,
     requirements: parsed.data.requirements,
+    titles: parsed.data.titles,
+    skills: parsed.data.skills,
     locations: parsed.data.locations,
     limit: parsed.data.limit,
     offset: parsed.data.offset,
