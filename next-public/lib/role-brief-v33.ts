@@ -64,10 +64,12 @@ function naturalLanguageLocation(rawText: string): string {
   const compact = clean(rawText, 700)
   // Prefer explicit proximity phrases before generic "in" so recruiter language
   // such as "5+ years of experience in or near Annapolis Junction, MD" cannot
-  // collapse into the literal string "or near Annapolis Junction".
+  // collapse into the literal string "or near Annapolis Junction". "Local to"
+  // is also recruiter proximity language and must stop before an explicit
+  // alternative market such as "or greater Washington DC".
   const patterns = [
-    /\b(?:in\s+or\s+near|near|around|based\s+in)\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where)\b|[.;]|$)/i,
-    /\bin\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where)\b|[.;]|$)/i,
+    /\b(?:in\s+or\s+near|near|around|based\s+in|local(?:ly)?\s+to)\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where|or)\b|[.;]|$)/i,
+    /\bin\s+([a-z][a-z .'-]{1,60}?)(?:\s*,\s*([a-z]{2}))?(?=\s+(?:with|who|that|from|and|but|where|or)\b|[.;]|$)/i,
   ]
   for (const pattern of patterns) {
     const match = compact.match(pattern)
@@ -113,14 +115,32 @@ function genericExperienceRequirement(rawText: string): string {
   return `${years}${match[2] ? '+' : ''} years relevant experience`
 }
 
+function normalizeClearanceLevel(value: string): string {
+  const normalized = value.toLowerCase().replace(/\s+/g, ' ').trim()
+  if (/^(?:ts\s*\/\s*sci|top secret\s*\/\s*sci)$/.test(normalized)) return 'TS/SCI'
+  if (/^top secret$/.test(normalized)) return 'Top Secret'
+  if (/^secret$/.test(normalized)) return 'Secret'
+  if (/^public trust$/.test(normalized)) return 'Public Trust'
+  return ''
+}
+
 function explicitClearance(rawText: string): string {
-  const higher = /\bor\s+(?:higher|above|greater)\b/i.test(rawText)
+  // When the recruiter states a floor (for example "Secret clearance or higher")
+  // preserve that floor even if a stronger example appears later in parentheses
+  // such as "(TS/SCI)". A parenthetical example must never silently tighten the
+  // candidate pool.
+  const floor = rawText.match(/\b(public\s+trust|secret|top\s+secret|ts\s*\/\s*sci|top\s+secret\s*\/\s*sci)(?:\s+(?:security\s+)?clearance)?\s+or\s+(?:higher|above|greater)\b/i)
+  if (floor?.[1]) {
+    const level = normalizeClearanceLevel(floor[1])
+    if (level) return `${level} or higher`
+  }
+
   let level = ''
   if (/\b(?:ts\s*\/\s*sci|top\s+secret\s*\/\s*sci)\b/i.test(rawText)) level = 'TS/SCI'
   else if (/\btop\s+secret(?:\s+security)?\s+clearance\b|\bactive\s+top\s+secret\b/i.test(rawText)) level = 'Top Secret'
   else if (/\bsecret(?:\s+security)?\s+clearance\b|\bactive\s+secret\b|\bdod\s+secret\b/i.test(rawText)) level = 'Secret'
   else if (/\bpublic\s+trust\b/i.test(rawText)) level = 'Public Trust'
-  return level ? `${level}${higher ? ' or higher' : ''}` : ''
+  return level
 }
 
 function workMode(rawText: string): RoleIntake['workMode'] {
