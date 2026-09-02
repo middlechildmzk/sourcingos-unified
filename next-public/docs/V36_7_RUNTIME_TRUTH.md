@@ -1,0 +1,1 @@
+Runtime truth for V36.7: related expansions affect next retrieval only; admission uses observed source evidence and full approved geography; candidate facts are never backfilled from search criteria.
