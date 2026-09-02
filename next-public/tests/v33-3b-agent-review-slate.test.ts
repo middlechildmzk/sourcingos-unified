@@ -126,7 +126,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
       sourceKey: 'stackoverflow',
       sourceId: '99',
       displayName: 'Alex Kim',
-      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'stackoverflow' }], raw: { observedTags: [] } }),
+      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', profileUrl: 'https://stackoverflow.com/users/99/alex-kim', identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'stackoverflow' }], raw: { observedTags: [] } }),
     })
     expect(previewDeterministicIdentityReviews([github, stack])).toHaveLength(1)
   })
@@ -139,7 +139,16 @@ describe('V33.3B recruiter-controlled review slate', () => {
       sourceKey: 'stackoverflow',
       sourceId: '99',
       displayName: 'Alex Kim',
-      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', location: 'Boston', raw: { observedTags: [] } }),
+      sourceResult: source({
+        id: 'stackoverflow:99',
+        source: 'stackoverflow',
+        sourceProfileId: '99',
+        displayName: 'Alex Kim',
+        location: 'Boston',
+        profileUrl: 'https://stackoverflow.com/users/99/alex-kim',
+        identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'stackoverflow' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'stackoverflow' }],
+        raw: { observedTags: [] },
+      }),
     })
     expect(previewDeterministicIdentityReviews([github, stack])).toEqual([])
   })
