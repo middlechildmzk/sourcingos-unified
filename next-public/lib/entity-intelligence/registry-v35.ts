@@ -1,6 +1,10 @@
 import { ALL_TAXONOMY, type TaxonomyEntry } from '@/data/search-taxonomy'
 import { EXPANSIONS } from '@/data/search-expansions'
 import { LOCATION_ENTITIES_V35, LOCATION_RELATIONSHIPS_V35 } from './location-v35'
+import {
+  RECRUITING_KNOWLEDGE_ENTITIES_V36_3,
+  RECRUITING_KNOWLEDGE_RELATIONSHIPS_V36_3,
+} from './knowledge-v36-3'
 import type {
   EntityKind,
   EntityMatchType,
@@ -143,7 +147,9 @@ function relationship(
 
 function allEntities(): IntelligenceEntity[] {
   const byId = new Map<string, IntelligenceEntity>()
-  for (const entity of [...LEGACY_ENTITIES, ...CURATED_ENTITIES, ...LOCATION_ENTITIES_V35]) byId.set(entity.id, entity)
+  // V36.3 reviewed entities intentionally come after legacy/curated content so
+  // stable ids can narrow unsafe mixed aliases without breaking downstream APIs.
+  for (const entity of [...LEGACY_ENTITIES, ...CURATED_ENTITIES, ...RECRUITING_KNOWLEDGE_ENTITIES_V36_3, ...LOCATION_ENTITIES_V35]) byId.set(entity.id, entity)
   return Array.from(byId.values())
 }
 
@@ -206,6 +212,7 @@ function curatedRelationships(entities: IntelligenceEntity[]): EntityRelationshi
 const ENTITIES = allEntities()
 const RELATIONSHIPS = [
   ...LOCATION_RELATIONSHIPS_V35,
+  ...RECRUITING_KNOWLEDGE_RELATIONSHIPS_V36_3,
   ...expansionRelationships(ENTITIES),
   ...curatedRelationships(ENTITIES),
 ]
