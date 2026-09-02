@@ -111,6 +111,11 @@ export async function POST(req: NextRequest) {
   let persistenceMode: 'supabase' | 'preview' | 'not_persisted' = 'not_persisted'
   let persistedCount = 0
 
+  // Rich V35 match/deliverability metadata is returned in shadow mode until a
+  // replay-safe ledger write path exists. Only the longstanding normalized
+  // contact fields are persisted here; provider match/ownership/deliverability
+  // metadata remains response-only so a partial retry cannot create conflicting
+  // identity state.
   if (result.signals.length > 0 && request.candidateId && isSupabaseConfigured() && ownerId) {
     const sb = createServerSupabaseClient()
     if (sb) {
