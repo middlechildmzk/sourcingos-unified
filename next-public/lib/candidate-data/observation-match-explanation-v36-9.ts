@@ -4,8 +4,20 @@ function clean(value?: string): string {
   return String(value || '').toLowerCase().replace(/[^a-z0-9+#./\- ]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function canonicalToken(value: string): string {
+  const token = value.toLowerCase()
+  if (token === 'administrator' || token === 'administration' || token === 'admin') return 'admin'
+  if (token === 'engineering' || token === 'engineer') return 'engineer'
+  if (token === 'development' || token === 'developer' || token === 'dev') return 'developer'
+  if (token === 'recruiting' || token === 'recruiter') return 'recruiter'
+  if (token === 'sourcing' || token === 'sourcer') return 'sourcer'
+  if (token === 'analysis' || token === 'analyst') return 'analyst'
+  if (token === 'systems' || token === 'system') return 'system'
+  return token
+}
+
 function comparableTokens(value?: string): string[] {
-  return clean(value).split(' ').filter(token => token.length >= 2)
+  return clean(value).split(' ').filter(token => token.length >= 2).map(canonicalToken)
 }
 
 function looseContains(haystack: string, needle: string): boolean {
