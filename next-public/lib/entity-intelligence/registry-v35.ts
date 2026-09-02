@@ -16,7 +16,8 @@ const LEGACY: EntityProvenance = {
   source: 'legacy_search_taxonomy',
   sourceRef: 'data/search-taxonomy.ts',
   version: 'v35.2',
-  reviewState: 'reviewed',
+  reviewState: 'needs_review',
+  note: 'Legacy aliases mix equivalence and broad search expansion. Canonical terms remain usable; non-canonical aliases are suggestions until reviewed into typed edges.',
 }
 
 const LEGACY_EXPANSION: EntityProvenance = {
@@ -52,7 +53,7 @@ function fromLegacy(entry: TaxonomyEntry): IntelligenceEntity {
     canonicalLabel: entry.canonical,
     aliases: Array.from(new Set([entry.canonical.toLowerCase(), ...entry.aliases.map(alias => alias.toLowerCase())])),
     provenance: [LEGACY],
-    metadata: { legacyType: entry.type, legacyColor: entry.color },
+    metadata: { legacyType: entry.type, legacyColor: entry.color, legacyAliasSemantics: 'mixed_search_dictionary' },
   }
 }
 
@@ -224,6 +225,11 @@ export function relationshipsFromV35(id: string, types?: EntityRelationshipType[
     relationship.fromEntityId === id && (!types || types.includes(relationship.type)))
 }
 
+function isUnreviewedLegacyAlias(entity: IntelligenceEntity, matched: string): boolean {
+  if (matched === entity.canonicalLabel.toLowerCase()) return false
+  return entity.provenance.some(item => item.source === 'legacy_search_taxonomy' && item.reviewState !== 'reviewed')
+}
+
 export function matchEntitiesV35(text: string, allowedKinds?: EntityKind[]): EntitySuggestion[] {
   const lower = ` ${text.toLowerCase().replace(/[(),]/g, ' ')} `
   const suggestions: EntitySuggestion[] = []
@@ -238,16 +244,25 @@ export function matchEntitiesV35(text: string, allowedKinds?: EntityKind[]): Ent
     const canonical = entity.canonicalLabel.toLowerCase()
     const compactMatched = matched.replace(/[^a-z0-9]/g, '')
     const compactCanonical = canonical.replace(/[^a-z0-9]/g, '')
-    let matchType: EntityMatchType = matched === canonical || compactMatched === compactCanonical ? 'exact' : 'alias'
-    if (matched.length <= 6 && entity.canonicalLabel.length > matched.length && /^[a-z0-9/+.-]+$/i.test(matched)) matchType = 'acronym'
+    const uncertainLegacyAlias = isUnreviewedLegacyAlias(entity, matched)
+    let matchType: EntityMatchType = uncertainLegacyAlias
+      ? 'market_variant'
+      : matched === canonical || compactMatched === compactCanonical
+        ? 'exact'
+        : 'alias'
+    if (!uncertainLegacyAlias && matched.length <= 6 && entity.canonicalLabel.length > matched.length && /^[a-z0-9/+.-]+$/i.test(matched)) matchType = 'acronym'
 
     suggestions.push({
       entity,
       matchedText: matched,
       matchType,
-      explanation: matchType === 'exact' ? `Exact ${entity.kind} match.` : `${matched} normalizes to ${entity.canonicalLabel}.`,
-      rank: matchType === 'exact' ? 0 : matchType === 'acronym' ? 0.2 : 0.4,
-      activation: matchType === 'exact' ? 'original' : 'normalized',
+      explanation: uncertainLegacyAlias
+        ? `${matched} is a legacy search variant for ${entity.canonicalLabel}; it is not treated as equivalence until reviewed.`
+        : matchType === 'exact'
+          ? `Exact ${entity.kind} match.`
+          : `${matched} normalizes to ${entity.canonicalLabel}.`,
+      rank: uncertainLegacyAlias ? 1.1 : matchType === 'exact' ? 0 : matchType === 'acronym' ? 0.2 : 0.4,
+      activation: uncertainLegacyAlias ? 'suggested_inactive' : matchType === 'exact' ? 'original' : 'normalized',
     })
   }
 
