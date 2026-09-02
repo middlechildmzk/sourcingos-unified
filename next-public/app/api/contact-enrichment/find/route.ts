@@ -12,6 +12,8 @@ import { canUseHunterV36_8, enrichWithHunterV36_8 } from '@/lib/contact-enrichme
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
 import { runContactEnrichmentOrchestratorV35, type ContactProviderAdapterV35, type EnrichmentPurposeV35 } from '@/lib/contact-enrichment/orchestrator-v35'
 import { ContactEnrichmentRequest, ContactSignal, type ContactEnrichmentProvider } from '@/lib/contact-enrichment/types'
+import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
+import type { CandidateDataProviderV36_8, CandidateProviderObservationV36_8 } from '@/lib/candidate-data/types-v36-8'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,9 +22,36 @@ const PROVIDERS = new Set<ContactEnrichmentProvider>([
   'anymail_finder', 'tomba', 'openweb_ninja', 'hunter', 'apollo', 'none',
 ])
 const PURPOSES = new Set<EnrichmentPurposeV35>(['identity_enrichment', 'work_email_finder', 'email_verification', 'phone_enrichment'])
+const SIGNABLE_IDENTITY_PROVIDERS = new Set<CandidateDataProviderV36_8>(['people_data_labs', 'data_vertex', 'signalhire'])
 
 function validEmail(value?: string): boolean {
   return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+}
+
+function signedResolvedPerson(
+  provider: ContactEnrichmentProvider,
+  result: Awaited<ReturnType<typeof runContactEnrichmentOrchestratorV35>>['result'],
+) {
+  const person = result.person
+  const providerPersonId = result.match?.providerPersonId || person?.providerPersonId
+  if (!person || !providerPersonId || !SIGNABLE_IDENTITY_PROVIDERS.has(provider as CandidateDataProviderV36_8)) return undefined
+  const emailAvailable = result.signals.some(signal => signal.type === 'email')
+  const phoneAvailable = result.signals.some(signal => signal.type === 'phone')
+  const observation: CandidateProviderObservationV36_8 = {
+    provider: provider as CandidateDataProviderV36_8,
+    providerPersonId,
+    displayName: person.displayName,
+    headline: person.currentTitle,
+    currentTitle: person.currentTitle,
+    currentEmployer: person.currentEmployer,
+    location: person.location,
+    skills: person.skills,
+    profileUrls: person.profileUrls,
+    contactAvailability: { email: emailAvailable, phone: phoneAvailable },
+    providerExplanation: `Resolved from an explicit identity-enrichment lookup using ${result.match?.matchedOn.join(', ') || 'provider-supported professional identity anchors'}. This remains a provider observation pending recruiter review.`,
+    observedAt: new Date().toISOString(),
+  }
+  return signedProviderObservationV36_8(observation)
 }
 
 export async function POST(req: NextRequest) {
@@ -63,6 +92,7 @@ export async function POST(req: NextRequest) {
     githubUrl: str(body.githubUrl),
     linkedinUrl: str(body.linkedinUrl),
     email: str(body.email),
+    phone: str(body.phone),
     sourceContext: str(body.sourceContext),
   }
 
@@ -76,7 +106,7 @@ export async function POST(req: NextRequest) {
       identityStrength: identity.strength,
       anchors: identity.anchors,
       missing: identity.missing,
-      nextStep: 'Resolve a real name, deterministic profile URL, or same-provider person id before contact enrichment.',
+      nextStep: 'Resolve a real name, deterministic profile URL, same-provider person id, or exact provider-supported email/phone identifier before contact enrichment.',
     }, { status: 422 })
   }
 
@@ -130,7 +160,9 @@ export async function POST(req: NextRequest) {
   if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
 
   if (purpose === 'identity_enrichment') {
-    if (pdlConfigured) adapters.push(pdlAdapter)
+    const exactIdentifierOnly = Boolean(request.email || request.phone) && !request.fullName && !request.firstName && !request.lastName && !request.profileUrl && !request.linkedinUrl && !request.githubUrl && !request.providerPersonId
+    // PDL enrichment is only called when we have fields its adapter actually sends.
+    if (pdlConfigured && !exactIdentifierOnly) adapters.push(pdlAdapter)
     if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
     if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
   } else if (purpose === 'work_email_finder') {
@@ -158,7 +190,7 @@ export async function POST(req: NextRequest) {
       providers: {
         peopleDataLabs: pdlConfigured ? 'configured' : 'missing_key',
         dataVertex: dataVertexConfigured ? (canUseDataVertexLookupV36_8(request) ? 'configured' : 'needs_linkedin_or_provider_id') : 'missing_key',
-        signalHire: signalHireConfigured ? (canUseSignalHireLookupV36_8(request) ? 'configured' : 'needs_signalhire_id_or_linkedin') : 'missing_key',
+        signalHire: signalHireConfigured ? (canUseSignalHireLookupV36_8(request) ? 'configured' : 'needs_signalhire_id_linkedin_email_or_phone') : 'missing_key',
         anyMailFinder: anyMailConfigured ? (canUseAnyMailFinderV36_8(request) ? 'configured' : 'needs_linkedin_or_name_company') : 'missing_key',
         tomba: tombaConfigured ? (canUseTombaV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
         hunter: hunterConfigured ? (canUseHunterV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
@@ -226,12 +258,18 @@ export async function POST(req: NextRequest) {
     persistenceMode = 'preview'
   }
 
+  const reviewObservation = purpose === 'identity_enrichment'
+    ? signedResolvedPerson(result.provider, result)
+    : undefined
+
   return NextResponse.json({
     ok: true,
     provider: result.provider,
     purpose,
     message: result.message,
     signals: result.signals,
+    person: result.person,
+    reviewObservation,
     providerMatch: result.match,
     identityStrength: verificationOnly ? 'email_verification_input' : identity.strength,
     identityAnchors: verificationOnly ? ['email supplied for explicit verification'] : identity.anchors,
