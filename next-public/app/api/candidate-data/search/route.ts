@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     reviewObservations,
     telemetry: result.telemetry,
     providerMix: result.providerMix,
+    retainedProviderMix: result.retainedProviderMix,
+    discoveredBeforeCap: result.discoveredBeforeCap,
+    returnedAfterCap: result.returnedAfterCap,
+    contributingProviders: result.contributingProviders,
     warnings: result.warnings,
     trust: {
       providerObservationsAreCandidateFacts: false,
@@ -86,6 +90,7 @@ export async function POST(req: NextRequest) {
       identityMergePerformed: false,
       recruiterDecisionPerformed: false,
       providerReviewObservationsSignedServerSide: true,
+      providerDatabaseCountsAreNotUniquePeopleCounts: true,
     },
   })
 }
