@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildPearchSearchBodyV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
+import { buildPeopleDataLabsSearchBodyV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
 import { buildDataVertexSearchBodyV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
 import { buildContactOutSearchBodyV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
@@ -29,6 +30,31 @@ describe('V36.8 Candidate Data Fabric', () => {
       { search_requirement: 'Secret clearance or higher — verification required', must_have: true },
     ])
     expect(body).not.toHaveProperty('query')
+  })
+
+  it('builds PDL Elasticsearch only from structured Role Brain fields', () => {
+    const body = buildPeopleDataLabsSearchBodyV36_8(request)
+    expect(body).toMatchObject({ size: 20, from: 0, dataset: 'resume', titlecase: true })
+    expect(body.query).toEqual({
+      bool: {
+        must: [
+          { bool: { should: [
+            { match_phrase: { job_title: 'rhel administrator' } },
+            { match_phrase: { job_title: 'linux administrator' } },
+          ], minimum_should_match: 1 } },
+          { bool: { should: [
+            { match_phrase: { skills: 'rhel' } },
+            { match_phrase: { skills: 'red hat enterprise linux' } },
+            { match_phrase: { skills: 'linux' } },
+          ], minimum_should_match: 1 } },
+          { bool: { should: [
+            { match_phrase: { location_name: 'annapolis junction, md' } },
+            { match_phrase: { location_name: 'washington, dc' } },
+          ], minimum_should_match: 1 } },
+        ],
+      },
+    })
+    expect(JSON.stringify(body)).not.toContain(request.query)
   })
 
   it('does not allow DataVertex to silently expand recruiter titles', () => {
