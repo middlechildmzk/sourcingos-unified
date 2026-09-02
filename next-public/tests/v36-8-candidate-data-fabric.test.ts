@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { buildPearchSearchBodyV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { buildPeopleDataLabsSearchBodyV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
+import { buildCoresignalSearchBodyV36_8 } from '@/lib/candidate-data/providers/coresignal-v36-8'
 import { buildDataVertexSearchBodyV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
 import { buildContactOutSearchBodyV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
+import { buildSignalHireSearchBodyV36_8 } from '@/lib/candidate-data/providers/signalhire-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { buildDataVertexLookupBodyV36_8, canUseDataVertexLookupV36_8 } from '@/lib/contact-enrichment/providers/data-vertex-v36-8'
 import type { CandidateDataSearchAdapterV36_8 } from '@/lib/candidate-data/types-v36-8'
@@ -57,6 +59,16 @@ describe('V36.8 Candidate Data Fabric', () => {
     expect(JSON.stringify(body)).not.toContain(request.query)
   })
 
+  it('uses Coresignal /fast as an employee lane with a controlled Role Brain prompt', () => {
+    const body = buildCoresignalSearchBodyV36_8(request)
+    expect(body).toMatchObject({ return_data: true, threshold: 0.97, entity: 'employee' })
+    expect(body.prompt).toContain('RHEL Administrator')
+    expect(body.prompt).toContain('Red Hat Enterprise Linux')
+    expect(body.prompt).toContain('Annapolis Junction, MD')
+    expect(body.prompt).toContain('Secret clearance or higher')
+    expect(body.prompt).not.toBe(request.query)
+  })
+
   it('does not allow DataVertex to silently expand recruiter titles', () => {
     const body = buildDataVertexSearchBodyV36_8(request)
     expect(body.include_similar_titles).toBe(false)
@@ -77,6 +89,18 @@ describe('V36.8 Candidate Data Fabric', () => {
       location: ['Annapolis Junction, MD', 'Washington, DC'],
     })
     expect(body).not.toHaveProperty('keyword')
+  })
+
+  it('uses SignalHire contact-free search filters and extracts the explicit experience floor', () => {
+    const body = buildSignalHireSearchBodyV36_8(request)
+    expect(body).toEqual({
+      size: 20,
+      currentTitle: '"RHEL Administrator" OR "Linux Administrator"',
+      keywords: '"RHEL" OR "Red Hat Enterprise Linux" OR "Linux"',
+      location: ['Annapolis Junction, MD', 'Washington, DC'],
+      yearsOfCurrentPastExperienceFrom: 5,
+    })
+    expect(body).not.toHaveProperty('revealContacts')
   })
 
   it('interleaves providers before the global result cap', async () => {
