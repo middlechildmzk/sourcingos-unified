@@ -4,7 +4,7 @@
 // SERVER-ONLY. Never import in a client component.
 //   - Reads PDL_API_KEY from process.env (never NEXT_PUBLIC_)
 //   - API key sent via X-Api-Key header, never logged, never returned to client
-//   - Conservative professional-field request only — no protected attributes
+//   - Explicit data allowlist: request only professional/contact fields we use
 //   - Ownership, deliverability, and outreach permission remain separate
 //   - Raw provider errors and full payloads never reach the client
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +21,31 @@ import {
 
 const PROVIDER = 'people_data_labs' as const
 const PDL_ENDPOINT = 'https://api.peopledatalabs.com/v5/person/enrich'
+
+/**
+ * Data minimization is part of the provider contract, not a UI concern.
+ * Do not broaden this list without an explicit product need + regression update.
+ */
+export const PDL_DATA_INCLUDE_V35 = [
+  'id',
+  'likelihood',
+  'full_name',
+  'job_title',
+  'job_company_name',
+  'job_company_website',
+  'location_name',
+  'linkedin_url',
+  'github_url',
+  'website',
+  'work_email',
+  'recommended_personal_email',
+  'emails.address',
+  'emails.type',
+  'emails.first_seen',
+  'emails.last_seen',
+  'phone_numbers',
+  'profiles.url',
+] as const
 
 function emptyResult(message: string, request: ContactEnrichmentRequest, warnings: string[] = []): ContactEnrichmentResult {
   return {
@@ -41,7 +66,7 @@ function emptyResult(message: string, request: ContactEnrichmentRequest, warning
 }
 
 /** Build conservative PDL query params. Professional identity fields only. */
-function buildParams(request: ContactEnrichmentRequest): URLSearchParams {
+export function buildPeopleDataLabsParamsV35(request: ContactEnrichmentRequest): URLSearchParams {
   const params = new URLSearchParams()
   if (request.fullName) {
     params.set('name', request.fullName)
@@ -52,13 +77,16 @@ function buildParams(request: ContactEnrichmentRequest): URLSearchParams {
   if (request.currentCompany) params.set('company', request.currentCompany)
   if (request.companyDomain) params.set('company', request.companyDomain)
   if (request.location) params.set('location', request.location)
-  if (request.title) params.set('title', request.title)
+
+  // Title is deliberately NOT sent as a provider match input. A title can rank
+  // an already-grounded identity proposal, but it is too weak to establish the
+  // person's identity and can amplify same-name false positives.
   const profile = request.linkedinUrl || request.profileUrl || request.githubUrl
   if (profile) params.append('profile', profile)
+
   params.set('min_likelihood', '6')
-  // Ask PDL which supplied field categories participated in the match. We retain
-  // field names only, not a full raw payload or unnecessary matched values.
   params.set('include_if_matched', 'true')
+  params.set('data_include', PDL_DATA_INCLUDE_V35.join(','))
   return params
 }
 
@@ -222,7 +250,7 @@ export async function enrichWithPeopleDataLabs(
     }
   }
 
-  const params = buildParams(request)
+  const params = buildPeopleDataLabsParamsV35(request)
 
   try {
     const res = await fetch(`${PDL_ENDPOINT}?${params.toString()}`, {
