@@ -5,6 +5,8 @@ export type CandidateDataProviderV36_8 =
   | 'data_vertex'
   | 'contactout'
   | 'signalhire'
+  | 'linkup'
+  | 'exa'
   | 'openweb_ninja'
 
 export type CandidateDataCapabilityV36_8 =
