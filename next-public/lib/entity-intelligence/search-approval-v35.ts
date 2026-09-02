@@ -1,6 +1,6 @@
 import type { RoleIntake } from '@/lib/role-workspace'
 import { entityByIdV35 } from './registry-v35'
-import { resolveLocationIntentV35 } from './location-v35'
+import { explicitAlternativeLocationIdsV35, resolveLocationIntentV35 } from './location-v35'
 import type { EntityKind, LocationIntentMode } from './types-v35'
 
 const LOCATION_KINDS = new Set<EntityKind>(['place', 'metro', 'region', 'postal_area', 'country', 'state', 'county', 'location'])
@@ -145,11 +145,18 @@ export function approvedExecutionLocationsV35(
   intake: RoleIntake,
   state?: RoleSearchIntelligenceStateV35,
 ): string[] {
-  const intent = resolveLocationIntentV35(intake.rawDescription || intake.location, intake.location)
+  const rawLocationText = intake.rawDescription || intake.location
+  const intent = resolveLocationIntentV35(rawLocationText, intake.location)
   const context = approvedRetrievalContextV35(state)
   const anchor = intent.anchorLabel
     || (intake.location && intake.location !== 'Not specified' ? intake.location : '')
-  return unique([anchor, ...context.locationTerms], 20)
+  // Explicit alternatives from the original recruiter sentence are already
+  // approved intent. They are different from system-suggested nearby markets,
+  // which still require an explicit recruiter click before execution.
+  const explicitAlternatives = explicitAlternativeLocationIdsV35(rawLocationText, intent.anchorLocationId)
+    .map(id => entityByIdV35(id)?.canonicalLabel || '')
+    .filter(Boolean)
+  return unique([anchor, ...explicitAlternatives, ...context.locationTerms], 20)
 }
 
 export function approvedLocationIntentV35(
