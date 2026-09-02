@@ -107,6 +107,13 @@ function literalTechnicalMustHaves(rawText: string): string[] {
   return uniq(values, 8)
 }
 
+function stripClearanceAliasContamination(rawText: string, values: string[]): string[] {
+  const clearanceTs = /\b(?:ts\s*\/\s*sci|ts\s+sci|top\s+secret\s*\/\s*sci|ts\s+clearance|active\s+ts)\b/i.test(rawText)
+  const explicitTypeScript = /\btypescript\b/i.test(rawText)
+  if (!clearanceTs || explicitTypeScript) return values
+  return values.filter(value => value.trim().toLowerCase() !== 'typescript')
+}
+
 function genericExperienceRequirement(rawText: string): string {
   const match = rawText.match(/\b(\d{1,2})\s*(\+)?\s*(?:years?|yrs?)\s+of\s+(?:relevant\s+|professional\s+|overall\s+)?experience\b/i)
   if (!match?.[1]) return ''
@@ -204,9 +211,10 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   // from the shared taxonomy. Preserve those literal requested capabilities as
   // proposed must-haves rather than silently dropping them before search.
   const commandTechnical = commandStyle && !explicitPreferenceLanguage ? literalTechnicalMustHaves(rawText) : []
-  const parsedMustHaves = commandStyle && !explicitPreferenceLanguage
+  const rawParsedMustHaves = commandStyle && !explicitPreferenceLanguage
     ? uniq([...parsed.mustHaveSkills, ...parsed.preferredSkills, ...commandTechnical], 16)
     : uniq(parsed.mustHaveSkills, 16)
+  const parsedMustHaves = stripClearanceAliasContamination(rawText, rawParsedMustHaves)
   // Explicit quantified recruiter language such as "5+ years of Linux" must
   // survive taxonomy/model misses. A generic "5+ years of experience" remains a
   // separate role requirement; it is not falsely converted into 5+ years of RHEL.
@@ -215,7 +223,9 @@ export function interpretRoleBrief(rawText: string): RoleBriefInterpretation {
   if (genericExperience && !mustHaves.some(item => /^\d{1,2}\+?\s+years\b/i.test(item))) {
     mustHaves = uniq([genericExperience, ...mustHaves], 16)
   }
-  const niceToHaves = commandStyle && !explicitPreferenceLanguage ? [] : uniq(parsed.preferredSkills, 16)
+  const niceToHaves = commandStyle && !explicitPreferenceLanguage
+    ? []
+    : stripClearanceAliasContamination(rawText, uniq(parsed.preferredSkills, 16))
 
   const intake: RoleIntake = {
     title: naturalTitle || directTitle || clean(parsed.roleTitle, 100) || 'Untitled role',
