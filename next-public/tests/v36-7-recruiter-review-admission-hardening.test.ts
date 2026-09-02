@@ -77,11 +77,7 @@ describe('V36.7 three-state first-review admission', () => {
     const candidate = discovery()
     const result = evidenceBearingFirstReviewBatch([candidate], intake, 12, { approvedLocations })
     expect(result.batch).toHaveLength(1)
-    expect(result.checks[0]).toMatchObject({
-      admitted: true,
-      reviewState: 'promising_verify',
-      locationState: 'compatible',
-    })
+    expect(result.checks[0]).toMatchObject({ admitted: true, reviewState: 'promising_verify', locationState: 'compatible' })
     expect(result.checks[0].unverifiedRequirements).toContain('5+ years Linux experience')
     expect(result.checks[0].unverifiedRequirements).toContain('Clearance: Secret or higher')
     expect(result.checks[0].explanation).toContain('Promising — verify')
@@ -120,7 +116,7 @@ describe('V36.7 three-state first-review admission', () => {
     })
     const result = evidenceBearingFirstReviewBatch([unrelated], intake, 12, { approvedLocations })
     expect(result.checks[0].reviewState).toBe('held')
-    expect(result.checks[0].holdReasons).toContain('insufficient role-relevant public evidence')
+    expect(result.checks[0].holdReasons.some(reason => reason.includes('mandatory RHEL'))).toBe(true)
   })
 
   it('reports a recruiter-visible funnel instead of only a binary batch count', () => {
