@@ -85,6 +85,8 @@ export interface ContactEnrichmentRequest {
   githubUrl?: string
   /** Existing email when the requested purpose is verification/enrichment. */
   email?: string
+  /** Exact phone identifier when a provider contract explicitly supports lookup. */
+  phone?: string
   /** Free-form context describing where the lead came from (for logging). */
   sourceContext?: string
 }
@@ -100,6 +102,26 @@ export interface ProviderMatchMetadata {
   providerScore?: number
   providerScoreScale?: string
   matchedOn: string[]
+}
+
+export type ResolvedProfessionalProfileUrl = {
+  kind: 'linkedin' | 'github' | 'stackoverflow' | 'personal' | 'other'
+  url: string
+}
+
+/**
+ * Minimal professional identity returned by an enrichment provider. It exists
+ * only to let exact email/phone/profile lookup resolve back into the same signed
+ * Candidate Graph admission path. Consumer/background attributes are excluded.
+ */
+export interface ResolvedProfessionalPerson {
+  providerPersonId?: string
+  displayName: string
+  currentTitle?: string
+  currentEmployer?: string
+  location?: string
+  skills: string[]
+  profileUrls: ResolvedProfessionalProfileUrl[]
 }
 
 /**
@@ -140,6 +162,8 @@ export interface ContactEnrichmentResult {
   signals: ContactSignal[]
   /** Safe identity-match metadata when the provider exposes it. */
   match?: ProviderMatchMetadata
+  /** Optional professional identity summary for exact identifier resolution. */
+  person?: ResolvedProfessionalPerson
   /** Audit metadata — safe to log and surface. */
   log: ContactEnrichmentLog
 }
@@ -192,7 +216,7 @@ export function hasSufficientEnrichmentInputs(req: ContactEnrichmentRequest): bo
   const hasCompanyOrDomain = Boolean(req.currentCompany || req.companyDomain)
   const hasProfileUrl = Boolean(req.profileUrl || req.linkedinUrl || req.githubUrl)
   const hasProviderAnchor = Boolean(req.providerPersonId && req.providerName)
-  return hasProviderAnchor || (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl || Boolean(req.email)
+  return hasProviderAnchor || (hasName && (hasCompanyOrDomain || hasProfileUrl)) || hasProfileUrl || Boolean(req.email || req.phone)
 }
 
 /** Which request fields are populated — for audit logging (no values, just keys). */
