@@ -22,20 +22,23 @@ function incomingRelationshipSuggestions(entityId: string): EntitySuggestion[] {
   return ENTITY_REGISTRY_V35.relationships
     .filter(relationship =>
       relationship.toEntityId === entityId
-      && (relationship.type === 'CREDENTIAL_FOR' || relationship.type === 'RELATED_TECHNOLOGY'))
+      && ['CREDENTIAL_FOR', 'RELATED_TECHNOLOGY', 'ADJACENT_TO', 'COMMON_MARKET_VARIANT'].includes(relationship.type))
     .flatMap(relationship => {
       const entity = entityByIdV35(relationship.fromEntityId)
       if (!entity) return []
       const credential = relationship.type === 'CREDENTIAL_FOR'
+      const titleVariant = relationship.type === 'ADJACENT_TO' || relationship.type === 'COMMON_MARKET_VARIANT'
       return [{
         entity,
         matchedText: entity.canonicalLabel,
-        matchType: 'adjacent' as const,
+        matchType: titleVariant ? 'market_variant' as const : 'adjacent' as const,
         relationship,
         explanation: relationship.note || (credential
           ? `${entity.canonicalLabel} is a credential signal related to the search concept.`
-          : `${entity.canonicalLabel} is a related technology that may broaden discovery.`),
-        rank: credential ? 1.1 : 1.3,
+          : titleVariant
+            ? `${entity.canonicalLabel} is an inactive adjacent/market-title discovery variant, not an exact equivalent.`
+            : `${entity.canonicalLabel} is a related technology that may broaden discovery.`),
+        rank: credential ? 1.1 : titleVariant ? 1.25 : 1.3,
         activation: 'suggested_inactive' as const,
       }]
     })
