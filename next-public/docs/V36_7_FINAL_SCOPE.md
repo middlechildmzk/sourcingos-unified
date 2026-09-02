@@ -1,0 +1,1 @@
+Frozen V36.7 CI scope: admission states, approved-geography admission, active search expansion UI, recruiter-grade discovery cards, avatar preservation, source capability registry, and deterministic acceptance tests. No production merge/deploy.
