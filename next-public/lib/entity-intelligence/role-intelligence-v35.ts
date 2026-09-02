@@ -39,6 +39,16 @@ function locationSuggestions(ids: string[]): EntitySuggestion[] {
   })
 }
 
+function safeRecruiterExpansion(item: EntitySuggestion): boolean {
+  // Clearance levels, SCI/SAP eligibility, and polygraph requirements are
+  // consequential security constraints. Legacy "related" clearance vocabulary
+  // may be useful research context, but it is not safe Find Similar expansion.
+  // Only recruiter-stated clearance remains in the Role Brief.
+  const source = item.relationship ? entityByIdV35(item.relationship.fromEntityId) : undefined
+  if (source?.kind === 'clearance' || item.entity.kind === 'clearance') return false
+  return true
+}
+
 export function buildRoleEntityIntelligenceV35(
   intake: RoleIntake,
   searchIntelligence?: RoleSearchIntelligenceStateV35,
@@ -57,6 +67,7 @@ export function buildRoleEntityIntelligenceV35(
   const approvedSet = new Set(approvedExpansionIds)
   const seen = new Set<string>()
   const suggestedExpansions = [...locationSuggestions(location.suggestedExpansionIds), ...suggestions.related]
+    .filter(safeRecruiterExpansion)
     .filter(item => {
       if (seen.has(item.entity.id)) return false
       seen.add(item.entity.id)
@@ -82,7 +93,7 @@ export function buildRoleEntityIntelligenceV35(
       'Normalized aliases may clarify recruiter intent; related/adjacent suggestions do not become must-haves automatically.',
       'Recruiter-approved expansions affect retrieval only. They do not rewrite the approved Role Brief or satisfy candidate requirements.',
       'Nearby and regional geography can broaden discovery only after recruiter approval and never changes a candidate location fact.',
-      'Clearance is a recruiter requirement until candidate-level evidence verifies it.',
+      'Clearance is a recruiter requirement until candidate-level evidence verifies it; clearance/polygraph levels are never broadened through Find Similar.',
     ],
     version: 'v35.3',
   }
