@@ -1,17 +1,17 @@
-import type { EntityRelationship, IntelligenceEntity, LocationIntentV35 } from './types-v35'
+import type { EntityProvenance, EntityRelationship, IntelligenceEntity, LocationIntentV35 } from './types-v35'
 
-const CURATED = {
-  source: 'v35_curated' as const,
+const CURATED: EntityProvenance = {
+  source: 'v35_curated',
   sourceRef: 'entity-intelligence/location-v35',
   version: 'v35.2',
-  reviewState: 'reviewed' as const,
+  reviewState: 'reviewed',
 }
 
-const ADJACENCY = {
-  source: 'cleared_market_adjacency' as const,
+const ADJACENCY: EntityProvenance = {
+  source: 'cleared_market_adjacency',
   sourceRef: 'legacy lib/search-assist.ts CLEARED_MARKET_ADJACENCY',
   version: 'v35.2',
-  reviewState: 'reviewed' as const,
+  reviewState: 'reviewed',
 }
 
 function location(
@@ -66,7 +66,7 @@ function edge(
   fromEntityId: string,
   toEntityId: string,
   type: EntityRelationship['type'],
-  provenance = CURATED,
+  provenance: EntityProvenance = CURATED,
   direction: EntityRelationship['direction'] = 'directed',
   note?: string,
 ): EntityRelationship {
