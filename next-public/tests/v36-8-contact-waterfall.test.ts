@@ -31,8 +31,8 @@ describe('V36.8 multi-provider contact waterfall', () => {
   })
 
   it('keeps Tomba and Hunter email verification explicit and finder inputs grounded', () => {
-    expect(canUseTombaV36_8({ email: 'alex@acme.com' }, 'email_verification')).toBe(true)
-    expect(canUseHunterV36_8({ email: 'alex@acme.com' }, 'email_verification')).toBe(true)
+    expect(canUseTombaV36_8({ email: 'alex@example.com' }, 'email_verification')).toBe(true)
+    expect(canUseHunterV36_8({ email: 'alex@example.com' }, 'email_verification')).toBe(true)
     expect(canUseTombaV36_8(grounded, 'work_email_finder')).toBe(true)
     expect(canUseHunterV36_8(grounded, 'work_email_finder')).toBe(true)
     expect(canUseTombaV36_8({ fullName: 'Alex Kim' }, 'work_email_finder')).toBe(false)
