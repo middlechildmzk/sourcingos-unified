@@ -6,6 +6,10 @@ import {
   clearApprovedSearchIntelligenceV35,
   setApprovedSearchEntityV35,
 } from '@/lib/entity-intelligence/search-approval-v35'
+import {
+  clearSearchIntelligenceActivityEventV35,
+  searchIntelligenceActivityEventV35,
+} from '@/lib/entity-intelligence/search-approval-events-v35'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 function label(value: string): string {
@@ -28,18 +32,11 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
 
   function setApproval(entityId: string, entityLabel: string, approved: boolean) {
     const now = new Date()
+    const event = searchIntelligenceActivityEventV35(entityId, entityLabel, approved, now)
     updateRole(roleId, current => ({
       ...current,
       searchIntelligence: setApprovedSearchEntityV35(current.searchIntelligence, entityId, approved, now),
-      activity: [
-        ...current.activity,
-        {
-          id: crypto.randomUUID(),
-          type: 'search_intelligence_updated',
-          message: `${approved ? 'Approved' : 'Removed'} search expansion: ${entityLabel}. This changes retrieval only, not role requirements.`,
-          createdAt: now.toISOString(),
-        },
-      ].slice(-10000),
+      activity: [...current.activity, event].slice(-10000),
       updatedAt: now.toISOString(),
     }))
   }
@@ -47,18 +44,11 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
   function clearApprovals() {
     if (!approvedCount) return
     const now = new Date()
+    const event = clearSearchIntelligenceActivityEventV35(now)
     updateRole(roleId, current => ({
       ...current,
       searchIntelligence: clearApprovedSearchIntelligenceV35(),
-      activity: [
-        ...current.activity,
-        {
-          id: crypto.randomUUID(),
-          type: 'search_intelligence_updated',
-          message: 'Cleared recruiter-approved search expansions. Approved Role Brief criteria were unchanged.',
-          createdAt: now.toISOString(),
-        },
-      ].slice(-10000),
+      activity: [...current.activity, event].slice(-10000),
       updatedAt: now.toISOString(),
     }))
   }
