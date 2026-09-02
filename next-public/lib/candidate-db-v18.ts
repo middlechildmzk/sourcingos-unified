@@ -25,6 +25,8 @@ export type CandidateSourceName =
   | 'data_vertex'
   | 'contactout'
   | 'signalhire'
+  | 'linkup'
+  | 'exa'
   | 'openweb_ninja'
   | 'public_resume'
   | 'uploaded_resume'
