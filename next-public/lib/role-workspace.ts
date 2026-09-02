@@ -93,7 +93,7 @@ export type RoleCandidate = {
 
 export type RoleActivity = {
   id: string
-  type: 'role_created' | 'intake_updated' | 'lane_approved' | 'candidate_added' | 'candidate_reviewed' | 'stage_changed' | 'note_added' | 'brief_version_created' | 'brief_approved'
+  type: 'role_created' | 'intake_updated' | 'lane_approved' | 'candidate_added' | 'candidate_reviewed' | 'stage_changed' | 'note_added' | 'brief_version_created' | 'brief_approved' | 'search_intelligence_updated'
   message: string
   createdAt: string
 }
@@ -106,6 +106,11 @@ export type RoleWorkspace = {
   candidates: RoleCandidate[]
   activity: RoleActivity[]
   calibration?: import('./calibration-intelligence').CalibrationState
+  /**
+   * Recruiter-approved retrieval expansions. This is a separate truth layer from
+   * the approved Role Brief and can never satisfy candidate requirements.
+   */
+  searchIntelligence?: import('./entity-intelligence/search-approval-v35').RoleSearchIntelligenceStateV35
   /** V33.4 additive brief artifact metadata. Older workspaces normalize without it. */
   roleBriefVersions?: RoleBriefVersion[]
   activeRoleBriefVersionId?: string
