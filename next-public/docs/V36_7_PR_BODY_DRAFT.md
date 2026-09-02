@@ -1,0 +1,1 @@
+V36.7 fixes false withholding, visible search expansion activation, recruiter-grade discovery cards, source avatar/contact/location presentation, and source capability truth. Draft only.
