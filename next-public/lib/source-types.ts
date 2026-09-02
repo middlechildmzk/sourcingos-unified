@@ -79,3 +79,77 @@ export type SourceResult = {
   refreshedAt: string
   raw?: unknown
 }
+
+export type ClassifiedSourceResult = SourceResult
+
+export type SourceSearchRequest = {
+  query: string
+  location?: string
+  roleMode?: string
+  sources?: SourceName[]
+  limit?: number
+}
+
+export type SourceSearchResponse = {
+  ok: boolean
+  query: string
+  searchedSources: SourceName[]
+  results: ClassifiedSourceResult[]
+  warnings: string[]
+  generatedAt: string
+}
+
+export type MergeStatus = 'needs_review' | 'linked' | 'rejected'
+
+export type RefreshPolicy = {
+  cadenceHours: number
+  staleAfterHours: number
+  sourceNames: SourceName[]
+  enabled: boolean
+}
+
+export const allSourceNames: SourceName[] = [
+  'github', 'stackoverflow', 'openalex', 'npi', 'orcid',
+  'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
+  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
+  'resume_xray', 'pearch', 'people_data_labs', 'coresignal', 'data_vertex',
+  'contactout', 'signalhire', 'openweb_ninja',
+]
+
+export const sourceLabels: Record<SourceName, string> = {
+  github: 'GitHub',
+  stackoverflow: 'Stack Overflow',
+  openalex: 'OpenAlex',
+  npi: 'NPI Registry',
+  orcid: 'ORCID',
+  semantic_scholar: 'Semantic Scholar',
+  arxiv: 'arXiv',
+  pubmed: 'PubMed',
+  huggingface: 'Hugging Face',
+  npm: 'npm',
+  pypi: 'PyPI',
+  kaggle: 'Kaggle',
+  devto: 'DEV Community',
+  dockerhub: 'Docker Hub',
+  crates: 'crates.io',
+  rubygems: 'RubyGems',
+  resume_xray: 'Public Resume X-Ray',
+  pearch: 'Pearch',
+  people_data_labs: 'People Data Labs',
+  coresignal: 'Coresignal',
+  data_vertex: 'DataVertex',
+  contactout: 'ContactOut',
+  signalhire: 'SignalHire',
+  openweb_ninja: 'OpenWeb Ninja',
+}
+
+export const sourceGroups: Record<string, SourceName[]> = {
+  technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],
+  research: ['openalex', 'orcid', 'semantic_scholar', 'arxiv', 'pubmed'],
+  ai: ['github', 'openalex', 'semantic_scholar', 'arxiv', 'huggingface', 'pypi', 'kaggle'],
+  healthcare: ['npi', 'pubmed', 'openalex'],
+  people_data: ['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire'],
+  public_web_enrichment: ['openweb_ninja'],
+  open_resume: ['resume_xray'],
+  default: ['github', 'stackoverflow', 'openalex', 'npi'],
+}
