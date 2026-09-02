@@ -41,6 +41,7 @@ describe('V34 adaptive public-source execution', () => {
     const surfaces = executablePublicSurfaces(intake)
 
     expect(plan.jobFamilyRouting.primaryFamily).toBe('infrastructure')
+    expect(plan.jobFamilyRouting.contextModifiers.map(item => item.id)).toContain('federal_govcon')
     expect(surfaces).toEqual(new Set<AgenticSearchSurface>(['github', 'stackoverflow']))
   })
 
@@ -79,20 +80,18 @@ describe('V34 adaptive public-source execution', () => {
   })
 
   it('does not execute irrelevant public technical communities for a federal program manager', () => {
-    const plan = buildCanonicalAgenticSearchPlan(role({
+    const intake = role({
       title: 'Federal Program Manager',
       clearance: 'Secret',
       mustHaves: ['program management'],
       rawDescription: 'Federal program manager with Secret clearance',
-    }))
-    const surfaces = executablePublicSurfaces(role({
-      title: 'Federal Program Manager',
-      clearance: 'Secret',
-      mustHaves: ['program management'],
-      rawDescription: 'Federal program manager with Secret clearance',
-    }))
+    })
+    const plan = buildCanonicalAgenticSearchPlan(intake)
+    const surfaces = executablePublicSurfaces(intake)
 
-    expect(plan.jobFamilyRouting.primaryFamily).toBe('federal_govcon')
+    expect(plan.jobFamilyRouting.primaryFamily).toBe('program_management')
+    expect(plan.jobFamilyRouting.contextModifiers.map(item => item.id)).toContain('federal_govcon')
+    expect(plan.surfaceRouting.declinedSurfaces).toEqual([])
     expect(surfaces.size).toBe(0)
   })
 
