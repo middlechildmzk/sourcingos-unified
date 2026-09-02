@@ -2,22 +2,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getSearchAssistSuggestions, groupSuggestions, type Suggestion } from '@/lib/search-assist'
 import { authoritativeTitlePhraseFromComposerV36_4 } from '@/lib/entity-intelligence/onet-title-search-v36-4'
+import { geographyAssistSuggestionsV36_6 } from '@/lib/entity-intelligence/geography-assist-v36-6'
 import { trackClientEvent } from '@/lib/analytics'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SearchAssistDropdown — recruiter typeahead under the candidate search input.
-//
-// V36.4 keeps the reviewed local RIG instant, then adds a debounced server-side
-// O*NET 31.0 title search. The browser receives only the top suggestions, never
-// the full 54k+ authoritative title dataset. O*NET entries remain search-only.
-// ─────────────────────────────────────────────────────────────────────────────
+// SearchAssistDropdown keeps reviewed local RIG suggestions instant, adds
+// standards-backed administrative geography locally, and then enriches titles
+// asynchronously from server-side O*NET 31.0. None of these suggestions are
+// candidate evidence or automatic recruiter requirements.
 
 interface Props {
   query: string
   onAddTerm: (term: string) => void
-  /** Currently selected/active source lane id, if any (filters suggestions). */
   selectedLaneId?: string
-  /** Anchor visibility to input focus from the parent. */
   open: boolean
   onRequestClose?: () => void
 }
@@ -33,13 +29,12 @@ type AuthoritativeApiSuggestion = {
 
 const KIND_COLOR: Record<string, string> = {
   title: 'title', skill: 'skill', tool: 'skill', credential: 'skill', industry: 'industry', clearance: 'clearance',
-  location: 'location', company: 'company', 'source-lane': 'source',
-  exclusion: 'muted', operator: 'muted', related: 'industry',
+  location: 'location', company: 'company', 'source-lane': 'source', exclusion: 'muted', operator: 'muted', related: 'industry',
 }
 
-function mergeSuggestions(local: Suggestion[], authoritative: Suggestion[]): Suggestion[] {
+function mergeSuggestions(...sets: Suggestion[][]): Suggestion[] {
   const seen = new Set<string>()
-  return [...local, ...authoritative]
+  return sets.flat()
     .sort((a, b) => a.rank - b.rank || a.value.localeCompare(b.value))
     .filter(suggestion => {
       const key = `${suggestion.kind}:${suggestion.value.toLowerCase()}`
@@ -55,14 +50,18 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
   const [authoritativeLoading, setAuthoritativeLoading] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
-  const result = useMemo(
-    () => getSearchAssistSuggestions(query, { selectedLaneId }),
-    [query, selectedLaneId]
-  )
-  const authoritativePhrase = useMemo(
-    () => open ? authoritativeTitlePhraseFromComposerV36_4(query) : '',
-    [query, open]
-  )
+  const result = useMemo(() => getSearchAssistSuggestions(query, { selectedLaneId }), [query, selectedLaneId])
+  const geographySuggestions = useMemo<Suggestion[]>(() => {
+    if (!open) return []
+    return geographyAssistSuggestionsV36_6(query, 8).map(item => ({
+      value: item.label,
+      kind: 'location' as const,
+      reason: `${item.source === 'iso_3166' ? 'ISO country' : item.source === 'us_state' ? 'U.S. state' : item.source === 'postal_syntax' ? 'ZIP syntax' : 'geography'} · search-only`,
+      rank: 0.55,
+    }))
+  }, [query, open])
+
+  const authoritativePhrase = useMemo(() => open ? authoritativeTitlePhraseFromComposerV36_4(query) : '', [query, open])
 
   useEffect(() => {
     if (!open || authoritativePhrase.length < 3) {
@@ -105,17 +104,14 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
   }, [authoritativePhrase, open])
 
   const combinedSuggestions = useMemo(
-    () => mergeSuggestions(result.suggestions, authoritative),
-    [result.suggestions, authoritative]
+    () => mergeSuggestions(result.suggestions, geographySuggestions, authoritative),
+    [result.suggestions, geographySuggestions, authoritative]
   )
   const groups = useMemo(() => groupSuggestions(combinedSuggestions), [combinedSuggestions])
   const flat = useMemo(() => groups.flatMap(g => g.items), [groups])
 
-  // Reset highlight when the suggestion set changes.
   useEffect(() => { setActiveIdx(0) }, [query, selectedLaneId])
 
-  // Keyboard navigation while open. Capture phase lets Enter pick a suggestion
-  // before the parent search input treats Enter as “run search”.
   useEffect(() => {
     if (!open || flat.length === 0) return
     function onKey(e: KeyboardEvent) {
@@ -130,7 +126,6 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
 
   function pick(s: Suggestion) {
     if (s.kind === 'source-lane') {
-      // Source lanes are guidance, not query terms — surface but don't inject.
       trackClientEvent('assist_lane_hint', s.value)
       return
     }
@@ -143,18 +138,13 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
 
   return (
     <div className="assist-dropdown" ref={boxRef} role="listbox" aria-label="Search suggestions"
-      style={{
-        position: 'relative', marginTop: 6, border: '1px solid rgba(255,255,255,.12)',
-        borderRadius: 10, background: 'var(--panel, #14141a)', padding: 12, zIndex: 5,
-      }}>
-      {/* Interpretation panel */}
+      style={{ position: 'relative', marginTop: 6, border: '1px solid rgba(255,255,255,.12)', borderRadius: 10, background: 'var(--panel, #14141a)', padding: 12, zIndex: 5 }}>
       {result.recognized.length > 0 && (
         <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid rgba(255,255,255,.08)' }}>
           <span className="kicker">Search interpretation</span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
             {result.recognized.map(r => (
-              <span key={`${r.type}-${r.canonical}`} className={`composer-chip chip-${KIND_COLOR[r.type] || 'muted'}`}
-                style={{ fontSize: 12, padding: '2px 8px' }}>
+              <span key={`${r.type}-${r.canonical}`} className={`composer-chip chip-${KIND_COLOR[r.type] || 'muted'}`} style={{ fontSize: 12, padding: '2px 8px' }}>
                 <span className="chip-type-label">{r.type}</span>&nbsp;{r.canonical}
               </span>
             ))}
@@ -162,7 +152,6 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
         </div>
       )}
 
-      {/* Grouped suggestions */}
       {flat.length > 0 ? (
         groups.map(group => (
           <div key={group.kind} style={{ marginBottom: 8 }}>
@@ -203,20 +192,14 @@ export function SearchAssistDropdown({ query, onAddTerm, selectedLaneId, open, o
       )}
 
       {flat.length > 0 && (
-        <p className="muted" style={{ fontSize: 11, margin: '8px 0 0' }}>
-          Use ↑/↓ to move, Enter to add, Esc to close. Press Enter again in the search box to run the search.
-        </p>
+        <p className="muted" style={{ fontSize: 11, margin: '8px 0 0' }}>Use ↑/↓ to move, Enter to add, Esc to close. Press Enter again in the search box to run the search.</p>
       )}
 
-      {/* Trust notes */}
       {hasContent && (
         <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,.08)' }}>
-          {result.notes.map(n => (
-            <p key={n} className="muted" style={{ fontSize: 11, margin: '2px 0' }}>· {n}</p>
-          ))}
-          {authoritative.length > 0 && (
-            <p className="muted" style={{ fontSize: 11, margin: '2px 0' }}>· O*NET titles are authoritative search vocabulary, not candidate evidence or automatic role requirements.</p>
-          )}
+          {result.notes.map(n => <p key={n} className="muted" style={{ fontSize: 11, margin: '2px 0' }}>· {n}</p>)}
+          {geographySuggestions.length > 0 && <p className="muted" style={{ fontSize: 11, margin: '2px 0' }}>· Geographic suggestions are search anchors, not candidate residence or commute evidence.</p>}
+          {authoritative.length > 0 && <p className="muted" style={{ fontSize: 11, margin: '2px 0' }}>· O*NET titles are authoritative search vocabulary, not candidate evidence or automatic role requirements.</p>}
         </div>
       )}
     </div>
