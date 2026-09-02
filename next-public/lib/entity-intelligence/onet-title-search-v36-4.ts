@@ -30,6 +30,10 @@ const BLOCKED_QUERY_TOKENS = new Set([
   'ts', 'sci', 'tssci', 'secret', 'clearance', 'cleared', 'poly', 'polygraph',
   'citizen', 'citizenship', 'public trust', 'top secret',
 ])
+const COMPOSER_STOPWORDS = new Set([
+  'find', 'show', 'source', 'search', 'candidate', 'candidates', 'person', 'people',
+  'me', 'a', 'an', 'the', 'for', 'who', 'with', 'and', 'or', 'of',
+])
 
 function clean(value: unknown, max = 160): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : ''
@@ -49,6 +53,23 @@ function tokens(value: string): string[] {
 }
 
 /**
+ * Extracts a small trailing phrase from the recruiter's composer text. This is
+ * the only text the client should send to authoritative title typeahead.
+ */
+export function authoritativeTitlePhraseFromComposerV36_4(raw: string): string {
+  const normalizedRaw = clean(raw, 500).toLowerCase()
+  if (!normalizedRaw) return ''
+  const trailing = normalizedRaw.split(/[,;:\n]|\b(?:near|nearby|within|located|location|local to|clearance|cleared)\b/i).at(-1) || ''
+  const parts = trailing
+    .replace(/[^a-z0-9+#./ -]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(token => !COMPOSER_STOPWORDS.has(token))
+    .slice(-4)
+  return sanitizeAuthoritativeTitleQueryV36_4(parts.join(' '))
+}
+
+/**
  * Returns a narrowly scoped title/typeahead query. Clearance, citizenship, and
  * other verification-only terms are never sent to O*NET as title vocabulary.
  */
@@ -56,7 +77,7 @@ export function sanitizeAuthoritativeTitleQueryV36_4(raw: string): string {
   const query = normalized(raw)
   if (query.length < 3 || query.length > 80) return ''
   if (BLOCKED_QUERY_TOKENS.has(query)) return ''
-  if (/\b(?:ts\/sci|top secret|secret clearance|public trust|polygraph|citizenship)\b/i.test(query)) return ''
+  if (/\b(?:ts\/sci|top secret|secret|clearance|cleared|public trust|polygraph|citizenship|citizen)\b/i.test(query)) return ''
   return query
 }
 
