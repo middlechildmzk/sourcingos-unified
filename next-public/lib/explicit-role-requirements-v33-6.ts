@@ -46,10 +46,14 @@ function stopCapability(value: string): boolean {
 export function extractExplicitExperienceRequirements(rawText: string): ExplicitExperienceRequirement[] {
   const compact = rawText.replace(/\s+/g, ' ').trim()
   const found: ExplicitExperienceRequirement[] = []
+  // Geography and work-location phrases are hard boundaries. Without these,
+  // recruiter shorthand such as "5+ years of Linux experience local to
+  // Annapolis Junction" can accidentally turn the location into the skill.
+  const boundary = '(?:and|plus|with|who|that|in|near|around|based|but|local(?:ly)?\\s+to|located|within|onsite|on-site|hybrid|remote)'
   const patterns = [
-    /\b(\d{1,2})\s*(\+)?\s*(?:years?|yrs?)\s+(?:of\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\s+(?:and|plus|with|who|that|in|near|around|based|but)\b|[,;.]|$)/gi,
-    /\b(?:at\s+least|minimum\s+of)\s+(\d{1,2})\s*(?:years?|yrs?)\s+(?:of\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\s+(?:and|plus|with|who|that|in|near|around|based|but)\b|[,;.]|$)/gi,
-    /\b(\d{1,2})\s*(?:years?|yrs?)\s+(?:or\s+more)\s+(?:of\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\s+(?:and|plus|with|who|that|in|near|around|based|but)\b|[,;.]|$)/gi,
+    new RegExp(`\\b(\\d{1,2})\\s*(\\+)?\\s*(?:years?|yrs?)\\s+(?:of\\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\\s+${boundary}\\b|[,;.]|$)`, 'gi'),
+    new RegExp(`\\b(?:at\\s+least|minimum\\s+of)\\s+(\\d{1,2})\\s*(?:years?|yrs?)\\s+(?:of\\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\\s+${boundary}\\b|[,;.]|$)`, 'gi'),
+    new RegExp(`\\b(\\d{1,2})\\s*(?:years?|yrs?)\\s+(?:or\\s+more)\\s+(?:of\\s+)?([a-z][a-z0-9+#./& -]{1,70}?)(?=\\s+${boundary}\\b|[,;.]|$)`, 'gi'),
   ]
 
   for (const [index, pattern] of patterns.entries()) {
