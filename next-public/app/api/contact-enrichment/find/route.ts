@@ -6,6 +6,7 @@ import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase
 import { enrichWithPeopleDataLabs } from '@/lib/contact-enrichment/providers/people-data-labs'
 import { getProviderStatus } from '@/lib/contact-enrichment/provider-status'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
+import { runContactEnrichmentOrchestratorV35 } from '@/lib/contact-enrichment/orchestrator-v35'
 import { ContactEnrichmentRequest, ContactSignal } from '@/lib/contact-enrichment/types'
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (!status.providerConfigured) {
     return NextResponse.json(
       { ok: false, code: 'provider_not_configured', error: 'Contact enrichment provider not configured yet.' },
-      { status: 503 }
+      { status: 503 },
     )
   }
 
@@ -69,10 +70,25 @@ export async function POST(req: NextRequest) {
     }, { status: 422 })
   }
 
-  // ── 5. Call provider server-side ────────────────────────────────────────────
-  const result = await enrichWithPeopleDataLabs(request)
+  // ── 5. Provider-neutral V35 orchestration seam ─────────────────────────────
+  // The first live lane intentionally contains PDL only, preserving V34 provider
+  // behavior while removing the route's long-term dependency on one provider.
+  const orchestration = await runContactEnrichmentOrchestratorV35({
+    request,
+    purpose: 'identity_enrichment',
+    adapters: [{
+      id: 'people_data_labs',
+      purposes: ['identity_enrichment'],
+      estimatedCredits: 1,
+      enrich: () => enrichWithPeopleDataLabs(request),
+    }],
+    maxPaidAttempts: 1,
+  })
+  const result = orchestration.result
 
-  // ── 6. Persist to candidate_contacts (dedupe) if candidateId present ────────
+  // ── 6. Persist legacy-compatible contact rows if candidateId present ────────
+  // Rich V35 match/deliverability metadata is returned in shadow mode but is not
+  // persisted until the replay-safe Evidence Ledger write path is approved.
   let persistenceMode: 'supabase' | 'preview' | 'not_persisted' = 'not_persisted'
   let persistedCount = 0
 
@@ -88,8 +104,8 @@ export async function POST(req: NextRequest) {
 
         const existingKeys = new Set(
           (existing || []).map((c: { type: string; value: string; source: string }) =>
-            `${c.type}:${c.value.toLowerCase()}:${c.source}`
-          )
+            `${c.type}:${c.value.toLowerCase()}:${c.source}`,
+          ),
         )
 
         const rows = result.signals
@@ -129,11 +145,18 @@ export async function POST(req: NextRequest) {
     provider: result.provider,
     message: result.message,
     signals: result.signals,
+    providerMatch: result.match,
     identityStrength: identity.strength,
     identityAnchors: identity.anchors,
+    orchestration: {
+      purpose: orchestration.purpose,
+      stopReason: orchestration.stopReason,
+      maxPaidAttempts: orchestration.maxPaidAttempts,
+      attempts: orchestration.attempts,
+    },
     persistenceMode,
     persistedCount,
-    warning: 'Contact signals are unverified and do not imply permission to contact.',
+    warning: 'Contact ownership, deliverability, and permission are separate. No returned signal implies permission to contact.',
     log: {
       provider: result.log.provider,
       attemptedAt: result.log.attemptedAt,
