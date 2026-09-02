@@ -1,6 +1,7 @@
-import { ALL_TAXONOMY, type EntityType } from '@/data/search-taxonomy'
+import type { EntityType } from '@/data/search-taxonomy'
 import { containsBoundedTerm, spanMatchesSource, type EvidenceSpan } from '@/lib/evidence-span'
 import type { EvidenceClaim } from '@/lib/evidence-ledger'
+import { qualificationConceptsV35 } from '@/lib/entity-intelligence/qualification-v35'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
 
 export type RequirementState = 'supported' | 'contradicted' | 'unknown' | 'needs_verification'
@@ -74,26 +75,13 @@ function stableRequirementId(tier: RequirementTier, requirementText: string, ind
 }
 
 /**
- * Requirement matching intentionally reuses the Search Composer taxonomy rather
- * than maintaining a second synonym dictionary. Search expansions contain
- * adjacent terms as well as aliases, so they are not qualification evidence and
- * are intentionally excluded here.
+ * V35 qualification boundary: candidate requirement assessment uses only reviewed
+ * equivalence aliases from Entity Intelligence. Broad legacy Search Composer
+ * aliases and search expansions remain useful for recall, but cannot become
+ * qualification evidence merely because they share a dictionary entry.
  */
 function requirementConcepts(requirementText: string): Concept[] {
-  const matches = ALL_TAXONOMY.filter(entry =>
-    entry.aliases.some(alias => containsBoundedTerm(requirementText, alias))
-      || containsBoundedTerm(requirementText, entry.canonical),
-  )
-
-  if (!matches.length) {
-    return [{ canonical: requirementText.trim(), aliases: [requirementText.trim()] }]
-  }
-
-  return matches.map(entry => ({
-    canonical: entry.canonical,
-    entityType: entry.type,
-    aliases: unique([entry.canonical, ...entry.aliases]),
-  }))
+  return qualificationConceptsV35(requirementText)
 }
 
 function requirementKind(requirementText: string, concepts: Concept[]): RequirementKind {
