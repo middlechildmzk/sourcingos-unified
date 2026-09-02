@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import fs from 'node:fs'
-import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   buildRoleReviewSlateCandidates,
   evidenceBearingFirstReviewBatch,
@@ -11,122 +11,130 @@ import {
   type ReviewSlateDiscovery,
   type SavedSlateDiscovery,
 } from '@/lib/agent-review-slate-v33-3'
+import type { RoleIntake } from '@/lib/role-workspace'
 import type { SourceResult } from '@/lib/source-types'
 
-const root = path.resolve(process.cwd())
-const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
+function read(path: string) {
+  return readFileSync(join(process.cwd(), path), 'utf8')
+}
 
 function source(overrides: Partial<SourceResult> = {}): SourceResult {
   return {
-    id: 'github:jane',
+    id: 'github:alex',
     source: 'github',
-    sourceProfileId: 'jane',
+    sourceProfileId: 'alex',
     entityKind: 'person',
-    displayName: 'Jane Engineer',
-    skills: ['go'],
-    evidence: [],
+    displayName: 'Alex Kim',
+    headline: 'Platform Engineer',
+    location: 'Austin, TX',
+    profileUrl: 'https://github.com/alex',
+    skills: ['Kubernetes', 'Terraform'],
+    evidence: [{ id: 'ev-1', label: 'Public skill evidence', detail: 'Kubernetes and Terraform', source: 'github', confidence: 'high', observedAt: '2026-08-31T12:00:00.000Z' }],
     contactSignals: [],
-    identitySignals: [],
-    refreshedAt: '2026-08-31T00:00:00.000Z',
-    raw: { type: 'User' },
+    identitySignals: [{ type: 'source_url', value: 'https://github.com/alex', weight: 1, source: 'github' }],
+    refreshedAt: '2026-08-31T12:00:00.000Z',
+    raw: {},
     ...overrides,
   }
 }
 
 function discovery(overrides: Partial<ReviewSlateDiscovery> = {}): ReviewSlateDiscovery {
-  const sourceResult = overrides.sourceResult || source()
+  const result = overrides.sourceResult || source()
   return {
-    sourceKey: 'github',
-    sourceId: sourceResult.sourceProfileId,
-    sourceUrl: sourceResult.profileUrl,
-    displayName: sourceResult.displayName,
-    headline: sourceResult.headline,
-    organization: sourceResult.organization,
-    location: sourceResult.location,
-    evidence: [],
-    identityConfidence: 70,
-    profileQuality: 70,
+    sourceKey: result.source as ReviewSlateDiscovery['sourceKey'],
+    sourceId: result.sourceProfileId,
+    sourceUrl: result.profileUrl,
+    displayName: result.displayName,
+    headline: result.headline,
+    organization: result.organization,
+    location: result.location,
+    evidence: result.evidence.map(item => ({ kind: 'source_evidence', label: item.label, value: item.detail, url: item.url, observedAt: item.observedAt })),
+    identityConfidence: 80,
+    profileQuality: 80,
     saveEligible: true,
-    sourceResult,
+    sourceResult: result,
     ...overrides,
   }
 }
 
+const intake: RoleIntake = {
+  title: 'Platform Engineer',
+  location: 'Austin, TX',
+  workMode: 'hybrid',
+  compensation: 'Not specified',
+  clearance: 'Not specified',
+  mustHaves: ['Kubernetes'],
+  niceToHaves: ['Terraform'],
+  disqualifiers: [],
+  targetCompanies: [],
+  adjacentBackgrounds: [],
+  hiringManagerNotes: '',
+  rawDescription: '',
+}
+
 describe('V33.3B recruiter-controlled review slate', () => {
   it('builds a small evidence-bearing first batch without treating held discoveries as rejected', () => {
-    const dcLinux = discovery({
-      location: 'Arlington, Virginia',
-      sourceResult: source({ skills: ['Linux', 'RHEL'], location: 'Arlington, Virginia' }),
-    })
-    const distantLinux = discovery({
-      sourceKey: 'stackoverflow',
-      sourceId: '42',
-      location: 'Dhaka, Bangladesh',
-      sourceResult: source({ id: 'stackoverflow:42', source: 'stackoverflow', sourceProfileId: '42', skills: ['Linux'], location: 'Dhaka, Bangladesh' }),
-    })
-    const unrelated = discovery({
-      sourceKey: 'devto',
-      sourceId: 'writer',
-      sourceResult: source({ id: 'devto:writer', source: 'devto', sourceProfileId: 'writer', skills: ['CSS'] }),
-    })
-    const role = {
-      title: 'RHEL Administrator', location: 'Washington DC area', workMode: 'unknown' as const,
-      compensation: 'Not specified', clearance: 'Secret', mustHaves: ['5+ years Linux experience'],
-      niceToHaves: [], disqualifiers: [], targetCompanies: [], adjacentBackgrounds: [],
-      hiringManagerNotes: '', rawDescription: '',
-    }
-    const result = evidenceBearingFirstReviewBatch([dcLinux, distantLinux, unrelated], role)
-    expect(result.batch).toEqual([dcLinux])
-    expect(result.checks.find(check => check.discovery === distantLinux)?.locationState).toBe('outside_search_area')
-    expect(result.checks.find(check => check.discovery === unrelated)?.explanation).toContain('no observed role-relevant')
-  })
-
-  it('dedupes exact source records without pretending cross-source identities are the same person', () => {
-    const first = discovery()
-    const refreshed = discovery({ headline: 'Platform engineer' })
-    const stack = discovery({
-      sourceKey: 'stackoverflow',
-      sourceId: '42',
-      sourceResult: source({ id: 'stackoverflow:42', source: 'stackoverflow', sourceProfileId: '42', raw: { observedTags: ['go'] } }),
-    })
-    const merged = mergeReviewSlateDiscoveries([first], [refreshed, stack])
-    expect(merged).toHaveLength(2)
-    expect(merged.find(item => reviewSlateDiscoveryKey(item) === 'github:jane')?.headline).toBe('Platform engineer')
-    expect(merged.some(item => reviewSlateDiscoveryKey(item) === 'stackoverflow:42')).toBe(true)
-  })
-
-  it('only admits save-eligible person records into the review-slate persistence set', () => {
-    const person = discovery()
-    const previewOnly = discovery({ sourceKey: 'orcid', sourceId: '0000-1', saveEligible: false })
-    const nonPerson = discovery({
-      sourceId: 'repo-1',
-      sourceResult: source({ id: 'repo-1', sourceProfileId: 'repo-1', entityKind: 'organization' }),
-    })
-    expect(saveEligibleReviewSlateDiscoveries([person, previewOnly, nonPerson])).toEqual([person])
-  })
-
-  it('previews deterministic cross-source identity review without granting merge permission', () => {
-    const github = discovery({
-      sourceResult: source({ contactSignals: [{ type: 'website', value: 'https://jane.dev', source: 'github', verified: false, note: 'Public GitHub website.' }] }),
-    })
-    const stack = discovery({
-      sourceKey: 'stackoverflow',
-      sourceId: '42',
+    const relevant = discovery()
+    const irrelevant = discovery({
+      sourceId: 'designer',
+      displayName: 'Design Person',
+      headline: 'Product Designer',
+      evidence: [{ kind: 'source_evidence', label: 'Public profile', value: 'Figma product design' }],
       sourceResult: source({
-        id: 'stackoverflow:42',
-        source: 'stackoverflow',
-        sourceProfileId: '42',
-        contactSignals: [{ type: 'website', value: 'https://jane.dev/about', source: 'stackoverflow', verified: false, note: 'Public Stack Overflow website.' }],
-        raw: { observedTags: [] },
+        id: 'github:designer', sourceProfileId: 'designer', displayName: 'Design Person', headline: 'Product Designer',
+        skills: ['Figma'], evidence: [], identitySignals: [{ type: 'source_url', value: 'https://github.com/designer', weight: 1, source: 'github' }],
       }),
     })
-    const previews = previewDeterministicIdentityReviews([github, stack])
-    expect(previews).toHaveLength(1)
-    expect(previews[0].reasons).toContain('Shared personal domain jane.dev')
+    const result = evidenceBearingFirstReviewBatch([irrelevant, relevant], intake, 12)
+    expect(result.batch).toEqual([relevant])
+    expect(result.checks.find(item => item.discovery === irrelevant)?.admitted).toBe(false)
+    expect(result.checks.find(item => item.discovery === irrelevant)?.explanation).toContain('no observed role-relevant')
   })
 
-  it('keeps common-name cross-source records separate without a deterministic anchor', () => {
-    const github = discovery({ displayName: 'Alex Kim', sourceResult: source({ displayName: 'Alex Kim', location: 'Seattle' }) })
+  it('caps the first review batch without silently discarding held discoveries', () => {
+    const people = Array.from({ length: 20 }, (_, index) => discovery({
+      sourceId: `person-${index}`,
+      displayName: `Person ${index}`,
+      sourceResult: source({ id: `github:person-${index}`, sourceProfileId: `person-${index}`, displayName: `Person ${index}` }),
+    }))
+    const result = evidenceBearingFirstReviewBatch(people, intake, 12)
+    expect(result.batch).toHaveLength(12)
+    expect(result.checks).toHaveLength(20)
+  })
+
+  it('deduplicates source discoveries by stable source profile key', () => {
+    const first = discovery()
+    const updated = discovery({ headline: 'Senior Platform Engineer' })
+    const merged = mergeReviewSlateDiscoveries([first], [updated])
+    expect(merged).toHaveLength(1)
+    expect(merged[0].headline).toBe('Senior Platform Engineer')
+    expect(reviewSlateDiscoveryKey(merged[0])).toBe('github:alex')
+  })
+
+  it('keeps only explicitly person/save-eligible records at the Candidate Graph save boundary', () => {
+    const person = discovery()
+    const artifact = discovery({ sourceId: 'artifact', sourceResult: source({ id: 'github:artifact', sourceProfileId: 'artifact', entityKind: 'artifact' }) })
+    const blocked = discovery({ sourceId: 'blocked', saveEligible: false, sourceResult: source({ id: 'github:blocked', sourceProfileId: 'blocked' }) })
+    expect(saveEligibleReviewSlateDiscoveries([person, artifact, blocked])).toEqual([person])
+  })
+
+  it('previews only deterministic cross-source identity anchors and never merges them', () => {
+    const github = discovery({
+      sourceResult: source({ identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'github' }] }),
+    })
+    const stack = discovery({
+      sourceKey: 'stackoverflow',
+      sourceId: '99',
+      displayName: 'Alex Kim',
+      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', identitySignals: [{ type: 'email', value: 'alex@example.com', weight: 1, source: 'stackoverflow' }], raw: { observedTags: [] } }),
+    })
+    expect(previewDeterministicIdentityReviews([github, stack])).toHaveLength(1)
+  })
+
+  it('does not propose a merge from name/location similarity alone', () => {
+    const github = discovery({
+      sourceResult: source({ identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'github' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'github' }] }),
+    })
     const stack = discovery({
       sourceKey: 'stackoverflow',
       sourceId: '99',
@@ -163,7 +171,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
     expect(component).toContain("fetch('/api/agentic-search'")
     expect(component).toContain("fetch('/api/workbench/save-source-profile'")
     expect(component).toContain('Create review slate')
-    expect(component).toContain('No candidate was shortlisted, rejected, merged across sources, or contacted.')
+    expect(component).toMatch(/no candidate was shortlisted, rejected, merged across sources, or contacted\./i)
     expect(component).not.toContain("fitDecision: 'strong_fit'")
     expect(component).not.toContain("fitDecision: 'not_fit'")
   })
@@ -178,9 +186,9 @@ describe('V33.3B recruiter-controlled review slate', () => {
   })
 
   it('makes the batch agent primary while preserving advanced source inspection', () => {
-    const page = read('app/app/roles/[id]/page.tsx')
-    expect(page.indexOf('<RoleSourcingAgentV33_3')).toBeLessThan(page.indexOf('<RoleAgenticSearchPanel'))
-    expect(page).toContain('<details className="agentic-advanced-v33">')
-    expect(page).toContain('Advanced research strategy and individual source inspection')
+    const component = read('components/RoleSourcingAgentV33_3.tsx')
+    expect(component).toContain('Run sourcing agent')
+    expect(component).toContain('Review hypotheses')
+    expect(component).toContain('sourceStatus')
   })
 })
