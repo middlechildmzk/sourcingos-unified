@@ -32,9 +32,28 @@ export type EntityRelationshipType =
   | 'PART_OF_REGION'
   | 'NEAR'
   | 'SOURCE_USEFUL_FOR'
+  | 'FORMER_NAME_OF'
+  | 'PARENT_OF'
+  | 'SUBSIDIARY_OF'
+  | 'BUSINESS_UNIT_OF'
+  | 'OPERATES_IN'
+  | 'OBSERVED_TITLE'
+  | 'OBSERVED_TECHNOLOGY'
 
 export type EntityProvenance = {
-  source: 'legacy_search_taxonomy' | 'legacy_search_expansions' | 'cleared_market_adjacency' | 'v35_curated' | 'onet' | 'esco' | 'other'
+  source:
+    | 'legacy_search_taxonomy'
+    | 'legacy_search_expansions'
+    | 'cleared_market_adjacency'
+    | 'v35_curated'
+    | 'onet'
+    | 'esco'
+    | 'usaspending'
+    | 'sam_gov'
+    | 'gleif'
+    | 'sec_edgar'
+    | 'nppes'
+    | 'other'
   sourceRef?: string
   version: string
   reviewState: EntityReviewState
