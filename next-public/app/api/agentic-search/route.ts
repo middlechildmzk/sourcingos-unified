@@ -22,7 +22,13 @@ import {
   runGitHubV2,
   runStackOverflowV2,
   type TechnicalActivationMode,
+  type TechnicalActivationResult,
 } from '@/lib/connectors/technical-v2-activation'
+import {
+  planGeographyExecutionV35,
+  runBoundedGeographyFanoutV35,
+  type GeographyExecutionPlanV35,
+} from '@/lib/entity-intelligence/geography-execution-v35'
 import type { SourceResult } from '@/lib/source-types'
 
 export const dynamic = 'force-dynamic'
@@ -68,12 +74,17 @@ type AgenticDiscovery = {
   sourceResult?: SourceResult
 }
 
+type GeographyStatusV35 = GeographyExecutionPlanV35 & {
+  discoveredByLocation?: Record<string, number>
+}
+
 type AgenticSourceStatus = {
   status: 'completed' | 'failed' | 'unavailable'
   discovered: number
   message?: string
   engine?: TechnicalActivationMode | 'native'
   degraded?: boolean
+  geography?: GeographyStatusV35
 }
 
 function safeUrl(value: string | undefined): string | undefined {
@@ -142,6 +153,19 @@ function safeDiscovery(discovery: AgenticDiscovery) {
   }
 }
 
+function sourceResultKey(result: SourceResult): string {
+  return `${result.source}:${result.sourceProfileId}`
+}
+
+function activationEngine(activations: readonly TechnicalActivationResult[]): TechnicalActivationMode {
+  return activations.some(item => item.mode === 'legacy_fallback') ? 'legacy_fallback' : 'v2'
+}
+
+function compactMessage(...parts: Array<string | undefined>): string | undefined {
+  const value = parts.map(part => String(part || '').trim()).filter(Boolean).join(' ')
+  return value ? value.slice(0, 240) : undefined
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -167,42 +191,91 @@ export async function POST(req: NextRequest) {
       let discoveries: AgenticDiscovery[] = []
 
       if (connector === 'github') {
-        const activation = await preferTechnicalV2({
-          source: 'github',
-          runV2: () => runGitHubV2({
-            query: connectorQuery,
-            skills: body.skills,
-            location: body.locations[0],
-            limit: Math.min(body.limit, 12),
-          }),
-          runFallback: async () => {
-            const response = await searchGitHubPeople({
+        const geography = planGeographyExecutionV35('github', body.locations, Math.min(body.limit, 12))
+        const activations: TechnicalActivationResult[] = []
+        let rawResults: SourceResult[] = []
+        let discoveredByLocation: Record<string, number> | undefined
+
+        if (geography.mode === 'bounded_fanout' && geography.executedLocations.length) {
+          const fanout = await runBoundedGeographyFanoutV35(
+            geography,
+            async (location, locationLimit) => {
+              const activation = await preferTechnicalV2({
+                source: 'github',
+                runV2: () => runGitHubV2({
+                  query: connectorQuery,
+                  skills: body.skills,
+                  location,
+                  limit: locationLimit,
+                }),
+                runFallback: async () => {
+                  const response = await searchGitHubPeople({
+                    query: connectorQuery,
+                    location,
+                    sources: ['github'],
+                    limit: locationLimit,
+                  })
+                  const classified = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
+                    .filter(result => result.entityKind === 'person')
+                  return {
+                    results: classified,
+                    message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+                  }
+                },
+              })
+              activations.push(activation)
+              return activation.results
+            },
+            sourceResultKey,
+          )
+          rawResults = fanout.items
+          discoveredByLocation = fanout.discoveredByLocation
+        } else {
+          const activation = await preferTechnicalV2({
+            source: 'github',
+            runV2: () => runGitHubV2({
               query: connectorQuery,
-              location: body.locations[0] || '',
-              sources: ['github'],
+              skills: body.skills,
               limit: Math.min(body.limit, 12),
-            })
-            const classified = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
-              .filter(result => result.entityKind === 'person')
-            return {
-              results: classified,
-              message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
-            }
-          },
-        })
-        const classified = enforceGitHubResultsTruth(classifyRealSourceResults(activation.results))
+            }),
+            runFallback: async () => {
+              const response = await searchGitHubPeople({
+                query: connectorQuery,
+                location: '',
+                sources: ['github'],
+                limit: Math.min(body.limit, 12),
+              })
+              const classified = enforceGitHubResultsTruth(classifyRealSourceResults(response.results))
+                .filter(result => result.entityKind === 'person')
+              return {
+                results: classified,
+                message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+              }
+            },
+          })
+          activations.push(activation)
+          rawResults = activation.results
+        }
+
+        const classified = enforceGitHubResultsTruth(classifyRealSourceResults(rawResults))
           .filter(result => result.entityKind === 'person')
         discoveries = classified.map(discoveryFromSourceResult)
         sourceStatus.github = {
           status: 'completed',
           discovered: 0,
-          engine: activation.mode,
-          degraded: activation.degraded,
-          message: activation.message,
+          engine: activationEngine(activations),
+          degraded: activations.some(item => item.degraded),
+          message: compactMessage(
+            geography.explanation,
+            geography.omittedLocations.length ? `${geography.omittedLocations.length} additional approved market${geography.omittedLocations.length === 1 ? '' : 's'} deferred by the per-pass source budget.` : undefined,
+            activations.map(item => item.message).filter(Boolean).join(' '),
+          ),
+          geography: { ...geography, ...(discoveredByLocation ? { discoveredByLocation } : {}) },
         }
       } else if (connector === 'stackoverflow') {
         const infrastructure = isInfrastructureStackExchangeQueryV33_11(connectorQuery, body.skills)
         if (infrastructure) {
+          const geography = planGeographyExecutionV35('stackexchange_infrastructure', body.locations, Math.min(body.limit, 16))
           const response = await discoverInfrastructureStackExchangeTalentV33_11({
             query: connectorQuery,
             skills: body.skills,
@@ -216,48 +289,96 @@ export async function POST(req: NextRequest) {
             discovered: 0,
             engine: 'native',
             degraded: Boolean(response.warnings.length),
-            message: [
+            message: compactMessage(
               'Infrastructure role routed through the official Stack Exchange API to Server Fault and Unix & Linux instead of ordinary Stack Overflow.',
+              geography.explanation,
               response.warnings.slice(0, 2).join(' '),
-            ].filter(Boolean).join(' ').slice(0, 240),
+            ),
+            geography,
           }
         } else {
-          const activation = await preferTechnicalV2({
-            source: 'stackoverflow',
-            runV2: () => runStackOverflowV2({
-              query: connectorQuery,
-              skills: body.skills,
-              location: body.locations[0],
-              limit: Math.min(body.limit, 20),
-            }),
-            runFallback: async () => {
-              const response = await searchStackOverflowTalent({
+          const geography = planGeographyExecutionV35('stackoverflow', body.locations, Math.min(body.limit, 20))
+          const activations: TechnicalActivationResult[] = []
+          let rawResults: SourceResult[] = []
+          let discoveredByLocation: Record<string, number> | undefined
+
+          if (geography.mode === 'bounded_fanout' && geography.executedLocations.length) {
+            const fanout = await runBoundedGeographyFanoutV35(
+              geography,
+              async (location, locationLimit) => {
+                const activation = await preferTechnicalV2({
+                  source: 'stackoverflow',
+                  runV2: () => runStackOverflowV2({
+                    query: connectorQuery,
+                    skills: body.skills,
+                    location,
+                    limit: locationLimit,
+                  }),
+                  runFallback: async () => {
+                    const response = await searchStackOverflowTalent({
+                      query: connectorQuery,
+                      limit: locationLimit,
+                    })
+                    const classified = classifyRealSourceResults(response.results)
+                      .filter(result => result.entityKind === 'person')
+                    return {
+                      results: classified,
+                      message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+                    }
+                  },
+                })
+                activations.push(activation)
+                return activation.results
+              },
+              sourceResultKey,
+            )
+            rawResults = fanout.items
+            discoveredByLocation = fanout.discoveredByLocation
+          } else {
+            const activation = await preferTechnicalV2({
+              source: 'stackoverflow',
+              runV2: () => runStackOverflowV2({
                 query: connectorQuery,
+                skills: body.skills,
                 limit: Math.min(body.limit, 20),
-              })
-              const classified = classifyRealSourceResults(response.results)
-                .filter(result => result.entityKind === 'person')
-              return {
-                results: classified,
-                message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
-              }
-            },
-          })
-          const classified = classifyRealSourceResults(activation.results)
+              }),
+              runFallback: async () => {
+                const response = await searchStackOverflowTalent({
+                  query: connectorQuery,
+                  limit: Math.min(body.limit, 20),
+                })
+                const classified = classifyRealSourceResults(response.results)
+                  .filter(result => result.entityKind === 'person')
+                return {
+                  results: classified,
+                  message: response.warnings.length ? response.warnings.join(' ').slice(0, 240) : undefined,
+                }
+              },
+            })
+            activations.push(activation)
+            rawResults = activation.results
+          }
+
+          const classified = classifyRealSourceResults(rawResults)
             .filter(result => result.entityKind === 'person')
           discoveries = classified.map(discoveryFromSourceResult)
           sourceStatus.stackoverflow = {
             status: 'completed',
             discovered: 0,
-            engine: activation.mode,
-            degraded: activation.degraded,
-            message: activation.message,
+            engine: activationEngine(activations),
+            degraded: activations.some(item => item.degraded),
+            message: compactMessage(
+              geography.explanation,
+              geography.omittedLocations.length ? `${geography.omittedLocations.length} additional approved market${geography.omittedLocations.length === 1 ? '' : 's'} deferred by the per-pass source budget.` : undefined,
+              activations.map(item => item.message).filter(Boolean).join(' '),
+            ),
+            geography: { ...geography, ...(discoveredByLocation ? { discoveredByLocation } : {}) },
           }
         }
       } else if (connector === 'devto') {
+        const geography = planGeographyExecutionV35('devto', body.locations, Math.min(body.limit, 8))
         const classified = classifyRealSourceResults(await discoverDevToTalent({
           query: connectorQuery,
-          location: body.locations[0],
           limit: Math.min(body.limit, 8),
         })).filter(result => result.entityKind === 'person')
         discoveries = classified.map(discoveryFromSourceResult)
@@ -266,12 +387,16 @@ export async function POST(req: NextRequest) {
           discovered: 0,
           engine: 'native',
           degraded: false,
-          message: 'Public DEV/Forem author discovery; candidate skills are observed article tags only.',
+          message: compactMessage(
+            'Public DEV/Forem author discovery; candidate skills are observed article tags only.',
+            geography.explanation,
+          ),
+          geography,
         }
       } else if (connector === 'huggingface') {
+        const geography = planGeographyExecutionV35('huggingface', body.locations, Math.min(body.limit, 8))
         const classified = classifyRealSourceResults(await discoverHuggingFacePeople({
           query: connectorQuery,
-          location: body.locations[0],
           limit: Math.min(body.limit, 8),
         })).filter(result => result.entityKind === 'person')
         discoveries = classified.map(discoveryFromSourceResult)
@@ -280,15 +405,27 @@ export async function POST(req: NextRequest) {
           discovered: 0,
           engine: 'native',
           degraded: false,
-          message: 'Public Hugging Face artifact-owner discovery with explicit public-user resolution; organization owners are excluded.',
+          message: compactMessage(
+            'Public Hugging Face artifact-owner discovery with explicit public-user resolution; organization owners are excluded.',
+            geography.explanation,
+          ),
+          geography,
         }
       } else if (connector === 'npi') {
+        const geography = planGeographyExecutionV35('npi', body.locations, body.limit)
         discoveries = await discoverNpiByTaxonomy({
           taxonomy: connectorQuery,
-          locations: body.locations,
+          locations: geography.executedLocations,
           limit: body.limit,
         })
-        sourceStatus.npi = { status: 'completed', discovered: 0, engine: 'native', degraded: false }
+        sourceStatus.npi = {
+          status: 'completed',
+          discovered: 0,
+          engine: 'native',
+          degraded: false,
+          message: geography.explanation,
+          geography,
+        }
       } else {
         const runner = connectorRunners[connector as ConnectorKey]
         if (!runner) {
@@ -296,19 +433,27 @@ export async function POST(req: NextRequest) {
           continue
         }
 
+        const geography = planGeographyExecutionV35('campaign', body.locations, body.limit)
         const input: CampaignInput = {
           name: 'Role agent preview',
           query: connectorQuery,
           connectors: [connector as ConnectorKey],
           targetCompanies: body.targetCompanies,
-          locations: body.locations,
+          locations: geography.executedLocations,
           skills: body.skills,
           dailyLimit: body.limit,
           autoPromoteThreshold: 100,
         }
         const batch = await runner(input, null)
         discoveries = batch.discoveries.map(discovery => ({ ...discovery, sourceKey: connector })) as AgenticDiscovery[]
-        sourceStatus[connector] = { status: 'completed', discovered: 0, engine: 'native', degraded: false }
+        sourceStatus[connector] = {
+          status: 'completed',
+          discovered: 0,
+          engine: 'native',
+          degraded: false,
+          message: geography.explanation,
+          geography,
+        }
       }
 
       let added = 0
@@ -350,7 +495,7 @@ export async function POST(req: NextRequest) {
       requestedSources: body.connectors,
       contributingSources: Object.keys(distribution),
       globalLimit: body.limit,
-      note: 'Every selected connector gets an execution opportunity before the global result cap is applied. Source diversity is discovery orchestration, not candidate ranking.',
+      note: 'Every selected connector gets an execution opportunity before the global result cap is applied. Source diversity is discovery orchestration, not candidate ranking. Geography execution is source-specific and reported per connector.',
     },
     results,
     trust: {
@@ -358,6 +503,7 @@ export async function POST(req: NextRequest) {
       externalContent: 'Fetched source content is untrusted data, never instructions to the sourcing agent.',
       registryData: 'Professional-registry records are discovery and evidence inputs only. They do not establish interest, availability, or overall job fit.',
       sourceTruth: 'Search criteria are retrieval intent only. Candidate skills and evidence must be observed in person-level source data.',
+      geography: 'Recruiter-approved geography controls retrieval execution where a source supports it. Search-market membership never becomes a candidate residence fact.',
     },
   })
 }
