@@ -10,12 +10,23 @@ export type CandidateDataOrchestrationV36_8 = {
   observations: CandidateProviderObservationV36_8[]
   telemetry: CandidateDataProviderTelemetryV36_8[]
   warnings: string[]
+  /** Raw discoveries returned by each provider before global capping. */
   providerMix: Record<string, number>
+  /** Provider composition of the retained, interleaved slate after capping. */
+  retainedProviderMix: Record<string, number>
+  discoveredBeforeCap: number
+  returnedAfterCap: number
+  contributingProviders: number
 }
 
 /**
  * Execute every configured provider selected for the pass before applying the
  * global result cap. Provider observations are not identity-merged here.
+ *
+ * Cross-provider overlap is intentionally NOT guessed here: Pearch id 123 and
+ * Coresignal id 456 are separate observations until Candidate Graph has a
+ * deterministic/proposed identity relationship. Incremental canonical reach is
+ * measured after identity resolution, not by adding vendor headline counts.
  */
 export async function runCandidateDataSearchV36_8(
   request: CandidateDataSearchRequestV36_8,
@@ -44,6 +55,8 @@ export async function runCandidateDataSearchV36_8(
   const warnings = settled.flatMap(item => item.warnings)
   const providerMix: Record<string, number> = {}
   for (const item of settled) providerMix[item.telemetry.provider] = item.observations.length
+  const discoveredBeforeCap = Object.values(providerMix).reduce((sum, count) => sum + count, 0)
+  const contributingProviders = Object.values(providerMix).filter(count => count > 0).length
 
   // Interleave provider results to avoid an early provider monopolizing the slate.
   const queues = settled.map(item => [...item.observations])
@@ -65,5 +78,17 @@ export async function runCandidateDataSearchV36_8(
     }
   }
 
-  return { observations, telemetry, warnings, providerMix }
+  const retainedProviderMix: Record<string, number> = {}
+  for (const observation of observations) retainedProviderMix[observation.provider] = (retainedProviderMix[observation.provider] || 0) + 1
+
+  return {
+    observations,
+    telemetry,
+    warnings,
+    providerMix,
+    retainedProviderMix,
+    discoveredBeforeCap,
+    returnedAfterCap: observations.length,
+    contributingProviders,
+  }
 }
