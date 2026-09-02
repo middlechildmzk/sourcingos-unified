@@ -2,15 +2,21 @@ import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { resolveStoredEntityKind } from '@/lib/entity-classification'
 import type { EntityKind } from '@/lib/source-types'
+import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
   offset?: number
   search?: string
+  roleId?: string
 }
 
 function safeSearch(value = '') {
   return value.trim().replace(/[^a-zA-Z0-9 ._@+\-]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
+}
+
+function safeRoleId(value = '') {
+  return value.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100)
 }
 
 function relationCandidateName(value: unknown) {
@@ -41,6 +47,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const limit = Math.max(1, Math.min(200, Number(query.limit) || 100))
   const offset = Math.max(0, Number(query.offset) || 0)
   const search = safeSearch(query.search)
+  const activeRoleId = safeRoleId(query.roleId)
 
   let candidateQuery = sb
     .from('candidates')
@@ -72,14 +79,18 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const rows = candidateResult.data || []
   const candidateIds = rows.map(row => row.id)
   const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
-  const [profiles, evidence, contacts, openSignals] = candidateIds.length ? await Promise.all([
+  const [profiles, evidence, contacts, openSignals, roleCandidates] = candidateIds.length ? await Promise.all([
     sb.from('source_profiles').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
     sb.from('evidence_items').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
     sb.from('candidate_contacts').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
     sb.from('open_to_work_signals').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-  ]) : [emptyRelated, emptyRelated, emptyRelated, emptyRelated]
+    sb.from('role_candidates')
+      .select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at')
+      .eq('owner_id', ownerId)
+      .in('candidate_id', candidateIds),
+  ]) : [emptyRelated, emptyRelated, emptyRelated, emptyRelated, emptyRelated]
 
-  const relatedError = profiles.error || evidence.error || contacts.error || openSignals.error
+  const relatedError = profiles.error || evidence.error || contacts.error || openSignals.error || roleCandidates.error
   if (relatedError) throw new Error(relatedError.message)
 
   const byCandidate = <T extends { candidate_id?: string | null }>(items: T[]) => {
@@ -97,9 +108,12 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const evidenceMap = byCandidate(evidence.data || [])
   const contactMap = byCandidate(contacts.data || [])
   const openMap = byCandidate(openSignals.data || [])
+  const roleCandidateMap = byCandidate(roleCandidates.data || [])
 
   const candidates = rows.map(row => {
     const candidateProfiles = profileMap.get(row.id) || []
+    const candidateEvidence = evidenceMap.get(row.id) || []
+    const candidateRoleHistory = roleCandidateMap.get(row.id) || []
     return {
       id: row.id,
       canonicalName: row.canonical_name,
@@ -114,10 +128,19 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       lastRefreshedAt: row.last_refreshed_at || undefined,
       entityKind: candidateEntityKind(candidateProfiles),
       sourceProfileIds: candidateProfiles.map(item => item.id),
-      evidenceItemIds: (evidenceMap.get(row.id) || []).map(item => item.id),
+      evidenceItemIds: candidateEvidence.map(item => item.id),
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
       openToWorkSignalIds: (openMap.get(row.id) || []).map(item => item.id),
       mergeStatus: row.merge_status || 'pending',
+      universe: buildCandidateUniverseProjectionV36({
+        candidateId: row.id,
+        profiles: candidateProfiles,
+        evidenceItems: candidateEvidence,
+        roleCandidates: candidateRoleHistory,
+        activeRoleId: activeRoleId || undefined,
+        candidateCreatedAt: row.created_at,
+        candidateUpdatedAt: row.updated_at,
+      }),
     }
   })
 
@@ -163,5 +186,6 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
     },
     page: { limit, offset, hasMore: offset + rows.length < (candidateResult.count || 0) },
     search,
+    activeRoleId: activeRoleId || null,
   }
 }
