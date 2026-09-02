@@ -8,13 +8,15 @@ import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v
 import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
+import { searchCoresignalV36_8 } from '@/lib/candidate-data/providers/coresignal-v36-8'
 import { searchDataVertexV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
 import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
+import { searchSignalHireV36_8 } from '@/lib/candidate-data/providers/signalhire-v36-8'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8 } from '@/lib/candidate-data/types-v36-8'
 
 export const dynamic = 'force-dynamic'
 
-const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout'])
+const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire'])
 const bodySchema = z.object({
   query: z.string().trim().min(2).max(3000),
   requirements: z.array(z.object({ text: z.string().trim().min(1).max(300), mustHave: z.boolean() })).max(30).optional(),
@@ -24,15 +26,17 @@ const bodySchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
   offset: z.number().int().min(0).max(100000).default(0),
   providerPersonBlacklist: z.array(z.string().trim().min(1).max(200)).max(1000).optional(),
-  providers: z.array(providerEnum).max(5).optional(),
+  providers: z.array(providerEnum).max(6).optional(),
   highFreshness: z.boolean().default(false),
 }).strict()
 
 function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapterV36_8 | undefined {
   if (provider === 'pearch') return { provider, search: searchPearchV36_8 }
   if (provider === 'people_data_labs') return { provider, search: searchPeopleDataLabsV36_8 }
+  if (provider === 'coresignal') return { provider, search: searchCoresignalV36_8 }
   if (provider === 'data_vertex') return { provider, search: searchDataVertexV36_8 }
   if (provider === 'contactout') return { provider, search: searchContactOutV36_8 }
+  if (provider === 'signalhire') return { provider, search: searchSignalHireV36_8 }
   return undefined
 }
 
