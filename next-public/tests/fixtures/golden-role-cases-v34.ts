@@ -9,6 +9,7 @@ export type GoldenRoleCaseV34 = {
   expectedClearance?: string
   expectedLocationText?: string
   forbiddenRoleTokens?: string[]
+  expectedContextModifiers?: JobFamilyId[]
 }
 
 /**
@@ -27,6 +28,7 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     expectedMustHaves: ['RHEL', '5+ years relevant experience'],
     expectedClearance: 'Secret or higher',
     expectedLocationText: 'Annapolis Junction',
+    expectedContextModifiers: ['federal_govcon'],
     forbiddenRoleTokens: ['TypeScript', 'React', 'TS/SCI or higher'],
   },
   {
@@ -54,6 +56,7 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     expectedMustHaves: ['Splunk', 'SIEM'],
     expectedClearance: 'Secret',
     expectedLocationText: 'Arlington',
+    expectedContextModifiers: ['federal_govcon'],
     forbiddenRoleTokens: ['React', 'RHEL'],
   },
   {
@@ -64,6 +67,7 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     expectedMustHaves: ['NIST RMF', 'AWS'],
     expectedClearance: 'TS/SCI',
     expectedLocationText: 'Chantilly',
+    expectedContextModifiers: ['federal_govcon'],
     forbiddenRoleTokens: ['TypeScript', 'Epic'],
   },
   {
@@ -133,7 +137,8 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     id: 'federal-program-manager-secret',
     prompt: 'Federal program manager in Washington, DC with a Secret security clearance',
     expectedTitleText: 'federal program manager',
-    expectedFamily: 'federal_govcon',
+    expectedFamily: 'program_management',
+    expectedContextModifiers: ['federal_govcon'],
     expectedClearance: 'Secret',
     expectedLocationText: 'Washington',
     forbiddenRoleTokens: ['TypeScript', 'RHEL'],
@@ -158,7 +163,7 @@ export const GOLDEN_ROLE_CASES_V34: GoldenRoleCaseV34[] = [
     id: 'general-product-manager',
     prompt: 'Product manager with roadmapping and stakeholder management experience in Chicago, IL',
     expectedTitleText: 'product manager',
-    expectedFamily: 'general',
+    expectedFamily: 'product_management',
     expectedLocationText: 'Chicago',
     forbiddenRoleTokens: ['TypeScript', 'RHEL', 'TS/SCI'],
   },
