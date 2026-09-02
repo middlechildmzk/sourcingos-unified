@@ -8,6 +8,10 @@ import {
   type AgenticSourceTask,
 } from './agentic-search-v30'
 import { buildDomainPackProfile, type DomainPackMatch } from './domain-packs-v31'
+import {
+  approvedRetrievalContextV35,
+  type RoleSearchIntelligenceStateV35,
+} from './entity-intelligence/search-approval-v35'
 import { retrievalCapabilityTerms } from './explicit-role-requirements-v33-6'
 import { buildJobFamilyRoutingV34, type JobFamilyRoutingV34 } from './job-family-router-v34'
 import { militaryLaneDrafts, type MilitarySourcingHypothesis } from './military-talent-intelligence-v33'
@@ -29,6 +33,8 @@ export type CanonicalRoleIntelligenceContext = {
   onet?: OnetRoleIntelligence
   military?: MilitarySourcingHypothesis
   militaryApproved?: boolean
+  /** Recruiter-approved retrieval expansion only; never candidate evidence. */
+  searchIntelligence?: RoleSearchIntelligenceStateV35
 }
 
 export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
@@ -42,6 +48,9 @@ export type CanonicalAgenticSearchPlan = AgenticSearchPlan & {
     militaryAvailable: boolean
     militaryApproved: boolean
     militaryProvisional: boolean
+    approvedSearchExpansionCount: number
+    approvedLocationExpansionCount: number
+    approvedSearchLabels: string[]
   }
 }
 
@@ -88,28 +97,53 @@ function providerRegistryQuery(intake: RoleIntake): string {
   return match.replace(/\b\w/g, char => char.toUpperCase())
 }
 
-export function publicQueryForAgenticLane(intake: RoleIntake, laneId: AgenticLaneId): string {
+export function publicQueryForAgenticLane(
+  intake: RoleIntake,
+  laneId: AgenticLaneId,
+  searchIntelligence?: RoleSearchIntelligenceStateV35,
+): string {
   const searchIntake = retrievalIntake(intake)
+  const approved = approvedRetrievalContextV35(searchIntelligence)
   const title = SENSITIVE.test(searchIntake.title) ? clean(searchIntake.title).replace(/\b(?:ts\/?sci|top secret|secret|public trust|polygraph|clearance)\b/ig, '').trim() : clean(searchIntake.title)
   const must = publicTerms(searchIntake.mustHaves)
   const nice = publicTerms(searchIntake.niceToHaves)
   const adjacent = publicTerms(searchIntake.adjacentBackgrounds)
+  const approvedTitles = publicTerms(approved.titleTerms)
+  const approvedCapabilities = publicTerms([...approved.capabilityTerms, ...approved.industryTerms])
   const targets = uniq(searchIntake.targetCompanies, 6)
+  const approvedCompanies = uniq(approved.companyTerms, 6)
 
   const fallback = and([title ? quote(title) : '', or(must.slice(0, 5))]) || or([...must, ...nice].slice(0, 6))
   switch (laneId) {
+    // Exact remains exact even when the recruiter approves discovery expansion.
     case 'exact_title':
       return and([title ? quote(title) : '', or(must.slice(0, 4))]) || fallback
     case 'adjacent_title':
-      return and([or([title, ...adjacent.slice(0, 5)]), or([...must.slice(0, 3), ...nice.slice(0, 2)])]) || fallback
+      return and([
+        or([title, ...adjacent.slice(0, 5), ...approvedTitles], 8),
+        or([...must.slice(0, 3), ...nice.slice(0, 2), ...approvedCapabilities], 7),
+      ]) || fallback
     case 'skill_cluster':
-      return and([or(must.slice(0, 6)), nice.length ? or(nice.slice(0, 3)) : '']) || fallback
+      return and([
+        or([...must, ...approvedCapabilities], 8),
+        nice.length ? or(nice.slice(0, 3)) : '',
+      ]) || fallback
     case 'evidence_first':
-      return and([or([...must.slice(0, 4), ...nice.slice(0, 3)]), title ? quote(title) : '']) || fallback
+      return and([
+        or([...must.slice(0, 4), ...nice.slice(0, 3), ...approvedCapabilities], 8),
+        title ? quote(title) : '',
+      ]) || fallback
     case 'target_company':
-      return and([or(targets), or([title, ...adjacent.slice(0, 3)]), or(must.slice(0, 3))]) || fallback
+      return and([
+        or([...targets, ...approvedCompanies], 8),
+        or([title, ...adjacent.slice(0, 3), ...approvedTitles], 6),
+        or([...must.slice(0, 3), ...approvedCapabilities], 6),
+      ]) || fallback
     case 'clearance_first':
-      return and([or(must.slice(0, 4)), or([title, ...adjacent.slice(0, 2)])]) || fallback
+      return and([
+        or([...must.slice(0, 4), ...approvedCapabilities], 6),
+        or([title, ...adjacent.slice(0, 2), ...approvedTitles], 5),
+      ]) || fallback
   }
 }
 
@@ -155,6 +189,7 @@ export function buildCanonicalAgenticSearchPlan(
 ): CanonicalAgenticSearchPlan {
   const enrichedIntake = enrichRoleIntakeWithOnet(intake, context.onet)
   const searchIntake = retrievalIntake(enrichedIntake)
+  const approved = approvedRetrievalContextV35(context.searchIntelligence)
   const domainProfile = buildDomainPackProfile(enrichedIntake)
   const jobFamilyRouting = buildJobFamilyRoutingV34(enrichedIntake)
   const base = buildAgenticSearchPlan(searchIntake, state)
@@ -170,7 +205,7 @@ export function buildCanonicalAgenticSearchPlan(
       : ''
 
   const lanes = base.lanes.map(lane => {
-    const publicQuery = publicQueryForAgenticLane(searchIntake, lane.id)
+    const publicQuery = publicQueryForAgenticLane(searchIntake, lane.id, context.searchIntelligence)
     const tasks = lane.tasks
       .map(task => PUBLIC_SURFACES.has(task.surface) ? { ...task, query: publicQuery } : task)
       .filter(task => surfaceMayExecute(surfaceRouting, task.surface))
@@ -209,6 +244,9 @@ export function buildCanonicalAgenticSearchPlan(
   if (surfaceRouting.declinedSurfaces.length) {
     integrityWarnings.push('Public-source routing declined for one or more surfaces because occupational/source intelligence is incomplete. This is unknown, not a negative source judgment.')
   }
+  if (approved.approvedLabels.length) {
+    integrityWarnings.push(`${approved.approvedLabels.length} recruiter-approved discovery expansion${approved.approvedLabels.length === 1 ? '' : 's'} applied to retrieval lanes only; exact-title criteria and candidate evidence remain unchanged.`)
+  }
 
   const onetCompatible = Boolean(
     context.onet?.matchedOccupation
@@ -230,6 +268,9 @@ export function buildCanonicalAgenticSearchPlan(
       militaryAvailable,
       militaryApproved: Boolean(context.militaryApproved && militaryAvailable && !militaryProvisional),
       militaryProvisional,
+      approvedSearchExpansionCount: context.searchIntelligence?.approvedEntityIds.length || 0,
+      approvedLocationExpansionCount: context.searchIntelligence?.approvedLocationExpansionIds.length || 0,
+      approvedSearchLabels: approved.approvedLabels,
     },
   }
 }
