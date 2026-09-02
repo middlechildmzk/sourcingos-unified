@@ -9,6 +9,7 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
   const cs = configured(process.env.CORESIGNAL_API_KEY)
   const dv = configured(process.env.DATAVERTEX_API_KEY)
   const co = configured(process.env.CONTACTOUT_API_KEY)
+  const sh = configured(process.env.SIGNALHIRE_API_KEY)
   const own = configured(process.env.OPENWEBNINJA_API_KEY)
 
   return [
@@ -23,9 +24,9 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
       message: pdl ? 'PDL Person Search and identity enrichment are wired and configured.' : 'PDL Person Search and enrichment are wired; PDL_API_KEY is not configured.',
     },
     {
-      provider: 'coresignal', label: 'Coresignal', state: cs ? 'configured' : 'missing_key', executable: false,
-      capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment'],
-      message: cs ? 'Coresignal credentials are present; candidate-search adapter is not wired yet.' : 'CORESIGNAL_API_KEY is not configured; search adapter is not wired yet.',
+      provider: 'coresignal', label: 'Coresignal', state: cs ? 'configured' : 'missing_key', executable: cs,
+      capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment', 'freshness_refresh'],
+      message: cs ? 'Coresignal Agentic Search /fast employee adapter is wired and configured.' : 'Coresignal Agentic Search adapter is wired; CORESIGNAL_API_KEY is not configured.',
     },
     {
       provider: 'data_vertex', label: 'DataVertex', state: dv ? 'configured' : 'missing_key', executable: dv,
@@ -36,6 +37,11 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
       provider: 'contactout', label: 'ContactOut', state: co ? 'configured' : 'missing_key', executable: co,
       capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment'],
       message: co ? 'ContactOut People Search adapter is wired and configured.' : 'ContactOut People Search adapter is wired; CONTACTOUT_API_KEY is not configured.',
+    },
+    {
+      provider: 'signalhire', label: 'SignalHire', state: sh ? 'configured' : 'missing_key', executable: sh,
+      capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment', 'freshness_refresh'],
+      message: sh ? 'SignalHire Search API adapter is wired and configured.' : 'SignalHire Search adapter is wired; SIGNALHIRE_API_KEY is not configured.',
     },
     {
       provider: 'openweb_ninja', label: 'OpenWeb Ninja', state: own ? 'configured' : 'missing_key', executable: false,
