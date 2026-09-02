@@ -16,6 +16,56 @@ import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 const WORKBENCH_DRAFT_KEY = 'sourcingos.workbench.intake-draft.v1'
 const LEGACY_ACTIVE_ROLE_KEY = 'sourcingos.active-role-context.v1'
 
+type SearchSurface = 'talent_universe' | 'workbench'
+
+function SearchSurfaceSwitcher({ value, onChange, roleScoped = false }: {
+  value: SearchSurface
+  onChange: (value: SearchSurface) => void
+  roleScoped?: boolean
+}) {
+  return (
+    <section className="product-panel" aria-label="Candidate search source scope" style={{ marginBottom: 16 }}>
+      <div className="product-panel-head" style={{ alignItems: 'flex-start' }}>
+        <div>
+          <span className="kicker">Where SourcingOS should search</span>
+          <h2 style={{ marginBottom: 6 }}>Keep external discovery and your saved database distinct.</h2>
+          <p className="muted" style={{ margin: 0, maxWidth: 760 }}>
+            Talent Universe searches configured external professional-data providers. My Database / Workbench searches and works with candidates you already imported or saved. SourcingOS keeps the provenance separate even when the same person later resolves into one Candidate 360.
+          </p>
+        </div>
+        <span className="status-pill active">{roleScoped ? 'role scoped' : 'global search'}</span>
+      </div>
+
+      <div className="mode-row" role="tablist" aria-label="Candidate search mode" style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={value === 'talent_universe'}
+          className={value === 'talent_universe' ? 'active' : ''}
+          onClick={() => onChange('talent_universe')}
+        >
+          Talent Universe
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={value === 'workbench'}
+          className={value === 'workbench' ? 'active' : ''}
+          onClick={() => onChange('workbench')}
+        >
+          My Database / Workbench
+        </button>
+      </div>
+
+      <p className="muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.6 }}>
+        {value === 'talent_universe'
+          ? 'External mode: provider results should name the provider that returned them. Imported LinkedIn connections are not presented as external provider discoveries.'
+          : 'Local mode: this surface works with your existing Candidate Graph, imports, saved profiles, and the legacy sourcing workbench.'}
+      </p>
+    </section>
+  )
+}
+
 export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string; laneId?: string }) {
   const { roles, mode, message, updateRole } = useRoleWorkspaces()
   const role = useMemo(() => roleId ? roles.find(item => item.id === roleId) : undefined, [roleId, roles])
@@ -25,6 +75,7 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
   )
   const [prepared, setPrepared] = useState(!roleId)
   const [status, setStatus] = useState('')
+  const [surface, setSurface] = useState<SearchSurface>('talent_universe')
   const preparedKey = useRef('')
 
   useEffect(() => {
@@ -91,8 +142,18 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
   }, [roleId, updateRole])
 
   if (!roleId) return <>
-    <UniversalPeopleSearchV36_9 />
-    <WorkbenchClient publicMode={false} />
+    <SearchSurfaceSwitcher value={surface} onChange={setSurface} />
+    {surface === 'talent_universe'
+      ? <UniversalPeopleSearchV36_9 />
+      : <>
+        <section className="product-panel" style={{ marginBottom: 16 }} aria-label="Candidate database shortcut">
+          <span className="kicker">Your saved talent</span>
+          <h2>Candidate Graph and imported records</h2>
+          <p className="muted">Use the database for people you already imported or saved. Switching here does not change the provenance of external discoveries.</p>
+          <div className="button-row"><Link className="btn secondary" href="/app/candidate-database">Open Candidate Database</Link><Link className="btn ghost" href="/app/candidate-graph">Open Candidate Graph</Link></div>
+        </section>
+        <WorkbenchClient publicMode={false} />
+      </>}
   </>
 
   if (mode === 'checking' || !prepared) {
@@ -145,8 +206,10 @@ export function RoleScopedCandidateSearch({ roleId, laneId }: { roleId?: string;
         </div>
       )}
 
-      <UniversalPeopleSearchV36_9 roleId={role.id} />
-      <WorkbenchClient key={`${role.id}:${lane?.id || 'role'}`} publicMode={false} initialTab="intake" />
+      <SearchSurfaceSwitcher value={surface} onChange={setSurface} roleScoped />
+      {surface === 'talent_universe'
+        ? <UniversalPeopleSearchV36_9 roleId={role.id} />
+        : <WorkbenchClient key={`${role.id}:${lane?.id || 'role'}`} publicMode={false} initialTab="intake" />}
     </>
   )
 }
