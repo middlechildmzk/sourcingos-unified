@@ -20,6 +20,7 @@ export type CandidateDataProviderStatusV36_8 = {
   label: string
   state: CandidateDataProviderStateV36_8
   capabilities: CandidateDataCapabilityV36_8[]
+  /** True only when an adapter is implemented AND the runtime key is present. */
   executable: boolean
   message: string
 }
@@ -32,6 +33,10 @@ export type CandidateSearchRequirementV36_8 = {
 export type CandidateDataSearchRequestV36_8 = {
   query: string
   requirements?: CandidateSearchRequirementV36_8[]
+  /** Recruiter-approved title terms from Role Brain; provider must not expand silently. */
+  titles?: string[]
+  /** Recruiter-approved capability terms from Role Brain. */
+  skills?: string[]
   locations?: string[]
   limit?: number
   offset?: number
