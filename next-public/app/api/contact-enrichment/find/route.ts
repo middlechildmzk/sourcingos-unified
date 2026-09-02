@@ -5,13 +5,25 @@ import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { enrichWithPeopleDataLabs } from '@/lib/contact-enrichment/providers/people-data-labs'
 import { canUseDataVertexLookupV36_8, enrichWithDataVertexV36_8 } from '@/lib/contact-enrichment/providers/data-vertex-v36-8'
+import { canUseSignalHireLookupV36_8, enrichWithSignalHireV36_8 } from '@/lib/contact-enrichment/providers/signalhire-v36-8'
+import { canUseAnyMailFinderV36_8, enrichWithAnyMailFinderV36_8 } from '@/lib/contact-enrichment/providers/anymail-finder-v36-8'
+import { canUseTombaV36_8, enrichWithTombaV36_8 } from '@/lib/contact-enrichment/providers/tomba-v36-8'
+import { canUseHunterV36_8, enrichWithHunterV36_8 } from '@/lib/contact-enrichment/providers/hunter-v36-8'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
-import { runContactEnrichmentOrchestratorV35, type ContactProviderAdapterV35 } from '@/lib/contact-enrichment/orchestrator-v35'
+import { runContactEnrichmentOrchestratorV35, type ContactProviderAdapterV35, type EnrichmentPurposeV35 } from '@/lib/contact-enrichment/orchestrator-v35'
 import { ContactEnrichmentRequest, ContactSignal, type ContactEnrichmentProvider } from '@/lib/contact-enrichment/types'
 
 export const dynamic = 'force-dynamic'
 
-const PROVIDERS = new Set<ContactEnrichmentProvider>(['people_data_labs', 'data_vertex', 'pearch', 'coresignal', 'contactout', 'openweb_ninja', 'hunter', 'apollo', 'none'])
+const PROVIDERS = new Set<ContactEnrichmentProvider>([
+  'people_data_labs', 'data_vertex', 'pearch', 'coresignal', 'contactout', 'signalhire',
+  'anymail_finder', 'tomba', 'openweb_ninja', 'hunter', 'apollo', 'none',
+])
+const PURPOSES = new Set<EnrichmentPurposeV35>(['identity_enrichment', 'work_email_finder', 'email_verification', 'phone_enrichment'])
+
+function validEmail(value?: string): boolean {
+  return Boolean(value && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+}
 
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
@@ -32,6 +44,8 @@ export async function POST(req: NextRequest) {
   const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined)
   const providerRaw = str(body.providerName)
   const providerName = providerRaw && PROVIDERS.has(providerRaw as ContactEnrichmentProvider) ? providerRaw as ContactEnrichmentProvider : undefined
+  const purposeRaw = str(body.purpose)
+  const purpose: EnrichmentPurposeV35 = purposeRaw && PURPOSES.has(purposeRaw as EnrichmentPurposeV35) ? purposeRaw as EnrichmentPurposeV35 : 'identity_enrichment'
 
   const request: ContactEnrichmentRequest = {
     candidateId: str(body.candidateId),
@@ -48,11 +62,13 @@ export async function POST(req: NextRequest) {
     profileUrl: str(body.profileUrl),
     githubUrl: str(body.githubUrl),
     linkedinUrl: str(body.linkedinUrl),
+    email: str(body.email),
     sourceContext: str(body.sourceContext),
   }
 
   const identity = assessEnrichmentIdentityV34(request)
-  if (!identity.attemptProvider) {
+  const verificationOnly = purpose === 'email_verification' && validEmail(request.email)
+  if (!identity.attemptProvider && !verificationOnly) {
     return NextResponse.json({
       ok: false,
       code: 'identity_insufficient',
@@ -66,45 +82,96 @@ export async function POST(req: NextRequest) {
 
   const pdlConfigured = Boolean(process.env.PDL_API_KEY)
   const dataVertexConfigured = Boolean(process.env.DATAVERTEX_API_KEY)
+  const signalHireConfigured = Boolean(process.env.SIGNALHIRE_API_KEY)
+  const anyMailConfigured = Boolean(process.env.ANYMAILFINDER_API_KEY)
+  const tombaConfigured = Boolean(process.env.TOMBA_API_KEY && process.env.TOMBA_SECRET_KEY)
+  const hunterConfigured = Boolean(process.env.HUNTER_API_KEY)
   const adapters: ContactProviderAdapterV35[] = []
 
   const dataVertexAdapter: ContactProviderAdapterV35 = {
     id: 'data_vertex',
     purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
     estimatedCredits: 10,
-    enrich: () => enrichWithDataVertexV36_8(request, 'identity_enrichment'),
+    enrich: () => enrichWithDataVertexV36_8(request, purpose === 'phone_enrichment' ? 'phone_enrichment' : purpose === 'work_email_finder' ? 'work_email_finder' : 'identity_enrichment'),
   }
   const pdlAdapter: ContactProviderAdapterV35 = {
     id: 'people_data_labs',
-    purposes: ['identity_enrichment'],
+    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
     estimatedCredits: 1,
     enrich: () => enrichWithPeopleDataLabs(request),
   }
+  const signalHireAdapter: ContactProviderAdapterV35 = {
+    id: 'signalhire',
+    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
+    estimatedCredits: 1,
+    enrich: () => enrichWithSignalHireV36_8(request),
+  }
+  const anyMailAdapter: ContactProviderAdapterV35 = {
+    id: 'anymail_finder',
+    purposes: ['work_email_finder'],
+    estimatedCredits: 1,
+    enrich: () => enrichWithAnyMailFinderV36_8(request),
+  }
+  const tombaAdapter: ContactProviderAdapterV35 = {
+    id: 'tomba',
+    purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'],
+    estimatedCredits: 1,
+    enrich: () => enrichWithTombaV36_8(request, purpose),
+  }
+  const hunterAdapter: ContactProviderAdapterV35 = {
+    id: 'hunter',
+    purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'],
+    estimatedCredits: 1,
+    enrich: () => enrichWithHunterV36_8(request, purpose),
+  }
 
-  // Same-provider deterministic lookup gets first priority. Otherwise PDL can
-  // resolve a grounded professional identity before a URL-keyed DataVertex pass.
+  // Exact same-provider anchors run first. They do not authorize any cross-provider merge.
+  if (signalHireConfigured && request.providerName === 'signalhire' && canUseSignalHireLookupV36_8(request)) adapters.push(signalHireAdapter)
   if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
-  if (pdlConfigured) adapters.push(pdlAdapter)
-  if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+
+  if (purpose === 'identity_enrichment') {
+    if (pdlConfigured) adapters.push(pdlAdapter)
+    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+  } else if (purpose === 'work_email_finder') {
+    // Prefer lower-cost/pay-on-success finders before expensive broad enrichment.
+    if (anyMailConfigured && canUseAnyMailFinderV36_8(request)) adapters.push(anyMailAdapter)
+    if (hunterConfigured && canUseHunterV36_8(request, purpose)) adapters.push(hunterAdapter)
+    if (tombaConfigured && canUseTombaV36_8(request, purpose)) adapters.push(tombaAdapter)
+    if (pdlConfigured) adapters.push(pdlAdapter)
+    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+  } else if (purpose === 'email_verification') {
+    if (hunterConfigured && canUseHunterV36_8(request, purpose)) adapters.push(hunterAdapter)
+    if (tombaConfigured && canUseTombaV36_8(request, purpose)) adapters.push(tombaAdapter)
+  } else if (purpose === 'phone_enrichment') {
+    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+    if (pdlConfigured) adapters.push(pdlAdapter)
+    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+  }
 
   if (!adapters.length) {
     return NextResponse.json({
       ok: false,
       code: 'provider_not_configured',
-      error: 'No configured contact provider can use the available identity anchors.',
+      error: `No configured contact provider can run the ${purpose.replace(/_/g, ' ')} lane with the available identity anchors.`,
       providers: {
         peopleDataLabs: pdlConfigured ? 'configured' : 'missing_key',
         dataVertex: dataVertexConfigured ? (canUseDataVertexLookupV36_8(request) ? 'configured' : 'needs_linkedin_or_provider_id') : 'missing_key',
+        signalHire: signalHireConfigured ? (canUseSignalHireLookupV36_8(request) ? 'configured' : 'needs_signalhire_id_or_linkedin') : 'missing_key',
+        anyMailFinder: anyMailConfigured ? (canUseAnyMailFinderV36_8(request) ? 'configured' : 'needs_linkedin_or_name_company') : 'missing_key',
+        tomba: tombaConfigured ? (canUseTombaV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
+        hunter: hunterConfigured ? (canUseHunterV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
       },
     }, { status: 503 })
   }
 
   const orchestration = await runContactEnrichmentOrchestratorV35({
     request,
-    purpose: 'identity_enrichment',
+    purpose,
     adapters,
-    maxPaidAttempts: Math.min(2, adapters.length),
-    maxEstimatedCredits: 11,
+    maxPaidAttempts: Math.min(4, adapters.length),
+    maxEstimatedCredits: purpose === 'work_email_finder' ? 13 : purpose === 'phone_enrichment' ? 12 : 4,
   })
   const result = orchestration.result
 
@@ -162,11 +229,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     provider: result.provider,
+    purpose,
     message: result.message,
     signals: result.signals,
     providerMatch: result.match,
-    identityStrength: identity.strength,
-    identityAnchors: identity.anchors,
+    identityStrength: verificationOnly ? 'email_verification_input' : identity.strength,
+    identityAnchors: verificationOnly ? ['email supplied for explicit verification'] : identity.anchors,
     orchestration: {
       purpose: orchestration.purpose,
       stopReason: orchestration.stopReason,
