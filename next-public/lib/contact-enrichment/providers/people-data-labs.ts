@@ -15,6 +15,8 @@ import {
   ContactOwnershipConfidence,
   ContactSignal,
   ProviderMatchMetadata,
+  ResolvedProfessionalPerson,
+  ResolvedProfessionalProfileUrl,
   enrichmentFieldsUsed,
   makeContactSignal,
 } from '../types'
@@ -37,6 +39,7 @@ export const PDL_DATA_INCLUDE_V35 = [
   'linkedin_url',
   'github_url',
   'website',
+  'skills',
   'work_email',
   'recommended_personal_email',
   'emails.address',
@@ -140,6 +143,53 @@ function ownershipFor(match: ProviderMatchMetadata): ContactOwnershipConfidence 
   if (match.matchState === 'possible') return 'moderate'
   if (match.matchState === 'conflict' || match.matchState === 'no_match') return 'unknown'
   return 'weak'
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function strings(value: unknown, max = 40): string[] {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(value.map(stringValue).filter(Boolean) as string[])).slice(0, max)
+}
+
+function safeHttp(value: unknown): string | undefined {
+  const raw = stringValue(value)
+  if (!raw) return undefined
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, '')}`)
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resolvedPerson(person: Record<string, unknown>, match: ProviderMatchMetadata): ResolvedProfessionalPerson | undefined {
+  const displayName = stringValue(person.full_name)
+  if (!displayName) return undefined
+  const profileUrls: ResolvedProfessionalProfileUrl[] = []
+  const add = (kind: ResolvedProfessionalProfileUrl['kind'], value: unknown) => {
+    const url = safeHttp(value)
+    if (!url || profileUrls.some(item => item.url === url)) return
+    profileUrls.push({ kind, url })
+  }
+  add('linkedin', person.linkedin_url)
+  add('github', person.github_url)
+  add('personal', person.website)
+  for (const item of Array.isArray(person.profiles) ? person.profiles : []) {
+    const profile = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+    add('other', profile.url)
+  }
+  return {
+    ...(match.providerPersonId ? { providerPersonId: match.providerPersonId } : {}),
+    displayName,
+    currentTitle: stringValue(person.job_title),
+    currentEmployer: stringValue(person.job_company_name),
+    location: stringValue(person.location_name),
+    skills: strings(person.skills),
+    profileUrls: profileUrls.slice(0, 12),
+  }
 }
 
 /** Map a PDL person record to normalized, compliant ContactSignal[]. */
@@ -290,15 +340,19 @@ export async function enrichWithPeopleDataLabs(
 
     const match = pdlMatchMetadata(person, json.likelihood, json.matched)
     const signals = mapSignals(person, match)
+    const professionalPerson = resolvedPerson(person, match)
 
     return {
       provider: PROVIDER,
       providerConfigured: true,
-      message: signals.length > 0
-        ? `Found ${signals.length} unverified contact signal${signals.length !== 1 ? 's' : ''}.`
-        : 'A profile match was found but no contact signals were available.',
+      message: professionalPerson
+        ? `${professionalPerson.displayName} resolved from People Data Labs${signals.length ? ` with ${signals.length} unverified contact/profile signal${signals.length === 1 ? '' : 's'}` : ''}.`
+        : signals.length > 0
+          ? `Found ${signals.length} unverified contact signal${signals.length !== 1 ? 's' : ''}.`
+          : 'A profile match was found but no contact signals were available.',
       signals,
       match,
+      person: professionalPerson,
       log: {
         provider: PROVIDER,
         attemptedAt: new Date().toISOString(),
