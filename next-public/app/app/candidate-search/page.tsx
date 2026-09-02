@@ -21,12 +21,13 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
       <h1>People & Candidate Search</h1>
       <p className="lead">
-        Find a specific person or source a market. Search configured professional-data providers, continue into role-aware public research, resolve identity, inspect evidence, find contact data on demand, and save one Candidate 360 — without jumping between a stack of separate recruiting tools.
+        Search the external Talent Universe or work inside your saved Candidate Database without confusing the two. External discovery uses only configured professional-data providers; imported LinkedIn connections and previously saved candidates remain in My Database / Workbench. When a person is saved, SourcingOS can resolve the observations into one recruiter-controlled Candidate 360.
       </p>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
         <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
           Provider retrieval ≠ qualification ·
+          Source provenance stays visible ·
           No auto-merge at any confidence level ·
           Contact ownership ≠ outreach permission ·
           Open-to-work is a signal, not a verified claim ·
@@ -54,7 +55,7 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
           <Link href="/app/candidate-database" style={{ color: 'inherit' }}>
             <strong>Candidate Database</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
-              Import resumes and CSV, normalize candidates, review identity matches, confirm merges, and add records to a role.
+              Search existing imports and saved candidates, import resumes/CSV, review identity matches, confirm merges, and add records to a role.
             </p>
           </Link>
           <Link href="/app/candidate-graph" style={{ color: 'inherit' }}>
