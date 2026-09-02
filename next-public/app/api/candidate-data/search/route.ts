@@ -7,6 +7,7 @@ import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/pr
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
+import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
 import { searchDataVertexV36_8 } from '@/lib/candidate-data/providers/data-vertex-v36-8'
 import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout-v36-8'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8 } from '@/lib/candidate-data/types-v36-8'
@@ -29,6 +30,7 @@ const bodySchema = z.object({
 
 function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapterV36_8 | undefined {
   if (provider === 'pearch') return { provider, search: searchPearchV36_8 }
+  if (provider === 'people_data_labs') return { provider, search: searchPeopleDataLabsV36_8 }
   if (provider === 'data_vertex') return { provider, search: searchDataVertexV36_8 }
   if (provider === 'contactout') return { provider, search: searchContactOutV36_8 }
   return undefined
