@@ -5,6 +5,7 @@ import type {
   CandidateProviderObservationV36_8,
 } from './types-v36-8'
 import { candidateObservationKeyV36_8 } from './types-v36-8'
+import { candidateObservationMatchExplanationV36_9 } from './observation-match-explanation-v36-9'
 
 export type CandidateDataOrchestrationV36_8 = {
   observations: CandidateProviderObservationV36_8[]
@@ -58,8 +59,17 @@ export async function runCandidateDataSearchV36_8(
   const discoveredBeforeCap = Object.values(providerMix).reduce((sum, count) => sum + count, 0)
   const contributingProviders = Object.values(providerMix).filter(count => count > 0).length
 
+  // Attach a SourcingOS explanation derived only from normalized provider fields
+  // and recruiter-entered search criteria. This is transparency, not ranking.
+  const queues = settled.map(item => item.observations.map(observation => ({
+    ...observation,
+    providerExplanation: [
+      observation.providerExplanation,
+      candidateObservationMatchExplanationV36_9(request, observation),
+    ].filter(Boolean).join(' '),
+  })))
+
   // Interleave provider results to avoid an early provider monopolizing the slate.
-  const queues = settled.map(item => [...item.observations])
   const observations: CandidateProviderObservationV36_8[] = []
   const seenProviderIds = new Set<string>()
   const cap = Math.max(1, Math.min(100, globalLimit))
