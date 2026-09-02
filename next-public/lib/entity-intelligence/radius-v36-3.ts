@@ -12,9 +12,12 @@ export interface RadiusAssessmentV36_3 {
   explanation: string
 }
 
-function validCoordinate(latitude?: number, longitude?: number): latitude is number {
-  return typeof latitude === 'number' && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
-    typeof longitude === 'number' && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
+function validLatitude(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -90 && value <= 90
+}
+
+function validLongitude(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180
 }
 
 function toRadians(value: number): number {
@@ -29,7 +32,7 @@ export function distanceMilesV36_3(
   const lon1 = a.metadata?.longitude
   const lat2 = b.metadata?.latitude
   const lon2 = b.metadata?.longitude
-  if (!validCoordinate(lat1, lon1) || !validCoordinate(lat2, lon2)) return null
+  if (!validLatitude(lat1) || !validLongitude(lon1) || !validLatitude(lat2) || !validLongitude(lon2)) return null
 
   const earthRadiusMiles = 3958.7613
   const dLat = toRadians(lat2 - lat1)
