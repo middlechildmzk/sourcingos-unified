@@ -40,7 +40,7 @@ describe('V35 PDL privacy and identity-metadata contract', () => {
   })
 
   it('preserves provider identity-match metadata without conflating it with contact verification', () => {
-    expect(typesSource).toContain('export type ProviderMatchMetadata')
+    expect(typesSource).toMatch(/export\s+(?:type|interface)\s+ProviderMatchMetadata\b/)
     expect(typesSource).toContain('providerPersonId?: string')
     expect(typesSource).toContain('providerScore?: number')
     expect(typesSource).toContain('matchedOn: string[]')
