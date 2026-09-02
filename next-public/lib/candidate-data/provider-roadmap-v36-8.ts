@@ -52,11 +52,25 @@ export const candidateProviderRoadmapV36_8: CandidateProviderRoadmapEntryV36_8[]
     rationale: 'Dedicated professional people-search backend is useful for parallel recall and source discovery. Treat results as locator evidence until a structured identity is resolved.',
   },
   {
+    id: 'openai_web',
+    label: 'OpenAI Web Search / MCP',
+    state: 'research',
+    uses: ['public_web_locator'],
+    rationale: 'Use as an agentic research/orchestration layer over current public web and direct SourcingOS tools, not as a claimed proprietary people database.',
+  },
+  {
+    id: 'anthropic_web',
+    label: 'Claude Web Search',
+    state: 'research',
+    uses: ['public_web_locator'],
+    rationale: 'Use cited current-web search as a corroboration/locator lane. It is an agent research surface, not a canonical professional profile provider.',
+  },
+  {
     id: 'lusha',
     label: 'Lusha',
     state: 'next',
     uses: ['candidate_search', 'contact_enrichment'],
-    rationale: 'Search/prospecting and explicit enrichment are a natural fit; preserve direct provenance instead of treating opaque third-party waterfall output as canonical evidence.',
+    rationale: 'V3 prospecting plus explicit enrich is a natural fit and MCP is available; preserve direct provenance instead of treating opaque third-party waterfall output as canonical evidence.',
   },
   {
     id: 'zoominfo',
