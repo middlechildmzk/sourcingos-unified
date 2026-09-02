@@ -4,6 +4,7 @@ import { LOCATION_ENTITIES_V35, LOCATION_RELATIONSHIPS_V35 } from './location-v3
 import type {
   EntityKind,
   EntityMatchType,
+  EntityProvenance,
   EntityRegistryV35,
   EntityRelationship,
   EntityRelationshipType,
@@ -11,26 +12,26 @@ import type {
   IntelligenceEntity,
 } from './types-v35'
 
-const LEGACY = {
-  source: 'legacy_search_taxonomy' as const,
+const LEGACY: EntityProvenance = {
+  source: 'legacy_search_taxonomy',
   sourceRef: 'data/search-taxonomy.ts',
   version: 'v35.2',
-  reviewState: 'reviewed' as const,
+  reviewState: 'reviewed',
 }
 
-const LEGACY_EXPANSION = {
-  source: 'legacy_search_expansions' as const,
+const LEGACY_EXPANSION: EntityProvenance = {
+  source: 'legacy_search_expansions',
   sourceRef: 'data/search-expansions.ts',
   version: 'v35.2',
-  reviewState: 'needs_review' as const,
+  reviewState: 'needs_review',
   note: 'Legacy expansions are discovery hypotheses, not qualification evidence.',
 }
 
-const CURATED = {
-  source: 'v35_curated' as const,
+const CURATED: EntityProvenance = {
+  source: 'v35_curated',
   sourceRef: 'entity-intelligence/registry-v35',
   version: 'v35.2',
-  reviewState: 'reviewed' as const,
+  reviewState: 'reviewed',
 }
 
 function slug(value: string): string {
@@ -123,7 +124,7 @@ function relationship(
   fromEntityId: string,
   toEntityId: string,
   type: EntityRelationshipType,
-  provenance = CURATED,
+  provenance: EntityProvenance = CURATED,
   direction: EntityRelationship['direction'] = 'directed',
   note?: string,
 ): EntityRelationship {
