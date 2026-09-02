@@ -50,7 +50,18 @@ function reviewedAliases(entity: IntelligenceEntity): string[] {
     : [entity.canonicalLabel.toLowerCase()]
 }
 
+function ambiguousBareAcronymConcepts(requirementText: string): QualificationConceptV35[] | undefined {
+  if (requirementText.trim().toLowerCase() !== 'ts') return undefined
+  return [
+    { canonical: 'TypeScript', entityType: 'skill', aliases: ['typescript'] },
+    { canonical: 'Top Secret', entityType: 'clearance', aliases: ['top secret', 'top secret clearance'] },
+  ]
+}
+
 export function qualificationConceptsV35(requirementText: string): QualificationConceptV35[] {
+  const ambiguous = ambiguousBareAcronymConcepts(requirementText)
+  if (ambiguous) return ambiguous
+
   const concepts = ENTITY_REGISTRY_V35.entities.flatMap(entity => {
     const entityType = entityTypeForKind(entity.kind)
     if (!entityType || entityType === 'location') return []
