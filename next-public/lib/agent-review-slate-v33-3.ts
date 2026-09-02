@@ -122,7 +122,7 @@ function normalizedLocationText(value: string): string {
 }
 
 const FORT_MEADE_MARKET = /annapolis\s+junction|fort\s+meade|laurel|jessup|columbia|hanover|odenton|severn|savage|elkridge/i
-const DMV_MARKET = /washington\s*(?:dc|d\s+c)|district of columbia|\bdmv\b|northern virginia|\bnova\b|arlington|alexandria|fairfax|reston|herndon|mclean|mc lean|tysons|chantilly|sterling|maryland|bethesda|rockville|silver spring|fort meade|annapolis junction|laurel|columbia/i
+const DMV_MARKET = /washington\s*(?:dc|d\s+c)|district of columbia|\bdmv\b|northern virginia|\bnova\b|arlington|alexandria|fairfax|reston|herndon|mclean|mc lean|tysons|chantilly|sterling|bethesda|rockville|silver spring|fort meade|annapolis junction|laurel|columbia/i
 
 function marketCompatible(requested: string, observed: string): boolean {
   const requestedText = normalizedLocationText(requested)
@@ -170,17 +170,18 @@ function summaryFromChecks(checks: ReviewSlateEvidenceCheck[]): FirstReviewBatch
 }
 
 /**
- * V36.7 first-review admission deliberately separates relevance from proof.
+ * V36.7 separates relevance from proof without weakening explicit observable
+ * must-haves. Unknown verification-only facts can reach recruiter review, but an
+ * observable must-have such as RHEL, React, Kubernetes, or a required skill pair
+ * still needs public evidence before automatic first-batch admission.
  *
- * - Review Ready: role-relevant observed evidence + no missing observable must-have
- *   + compatible/not-constrained geography.
- * - Promising — Verify: role-relevant evidence exists, but one or more public-source
- *   fields are incomplete (including location, quantified tenure, clearance, or an
- *   observable must-have). These records ARE shown to the recruiter.
- * - Held: no meaningful role evidence or observed geography is demonstrably outside
- *   every recruiter-approved search market.
+ * - Review Ready: all observable must-haves supported and no verification gap.
+ * - Promising — Verify: all observable must-haves supported, but tenure,
+ *   clearance, location, or another verification-only fact is incomplete.
+ * - Held: missing an observable must-have, no meaningful role evidence, or an
+ *   observed location demonstrably outside every approved market.
  *
- * Unknown is never treated as rejection. Clearance remains verification-gated.
+ * Held remains inspectable and is not a recruiter rejection.
  */
 export function evidenceBearingFirstReviewBatch(
   discoveries: ReviewSlateDiscovery[],
@@ -216,14 +217,17 @@ export function evidenceBearingFirstReviewBatch(
     const roleRelevant = matchedGateable.length > 0 || matchedTitleSignals.length > 0
 
     const holdReasons: string[] = []
-    if (!roleRelevant) holdReasons.push('insufficient role-relevant public evidence')
+    if (missingObservableNonVerification.length) {
+      holdReasons.push(`no observed role-relevant evidence yet for mandatory ${missingObservableNonVerification.join(', ')}`)
+    } else if (!roleRelevant) {
+      holdReasons.push('no observed role-relevant skill or work evidence')
+    }
     if (geography === 'outside_search_area') holdReasons.push('observed location outside approved search geography')
 
     let reviewState: ReviewAdmissionStateV36_7
     if (holdReasons.length) reviewState = 'held'
     else if (
-      missingObservableNonVerification.length > 0
-      || geography === 'unknown'
+      geography === 'unknown'
       || nonObservableMustHaves.length > 0
       || matchedGateable.some(item => item.verificationGated)
       || (intake.clearance && intake.clearance !== 'Not specified')
@@ -233,7 +237,7 @@ export function evidenceBearingFirstReviewBatch(
     const admitted = reviewState !== 'held'
     const unverifiedRequirements = Array.from(new Set([
       ...nonObservableMustHaves,
-      ...missingMustHaves,
+      ...missingGateable.filter(item => item.verificationGated).map(item => item.requirement),
       ...matchedGateable.filter(item => item.verificationGated).map(item => item.requirement),
       ...(geography === 'unknown' ? ['Candidate location'] : []),
       ...(intake.clearance && intake.clearance !== 'Not specified' ? [`Clearance: ${intake.clearance}`] : []),
@@ -242,7 +246,7 @@ export function evidenceBearingFirstReviewBatch(
     const explanation = reviewState === 'held'
       ? `Held for recruiter inspection — not rejected: ${holdReasons.join('; ')}.`
       : reviewState === 'promising_verify'
-        ? `Promising — verify. Observed role signals: ${matchedSignals.join(', ') || 'role-relevant source evidence'}.${geography === 'compatible' ? ' Observed location is compatible with recruiter-approved geography.' : geography === 'unknown' ? ' Location not observed.' : ''}${unverifiedRequirements.length ? ` Verify next: ${unverifiedRequirements.join(', ')}.` : ''}`
+        ? `Promising — verify. Observed role signals: ${matchedSignals.join(', ') || 'role-relevant source evidence'}.${geography === 'compatible' ? ' Observed location is compatible with recruiter-approved geography.' : geography === 'unknown' ? ' Location not observed.' : ''}${unverifiedRequirements.length ? ` Still unverified: ${unverifiedRequirements.join(', ')}.` : ''}`
         : `Review Ready. Observed role signals: ${matchedSignals.join(', ')}.${geography === 'compatible' ? ' Observed location is compatible with recruiter-approved geography.' : ''}`
 
     return {
