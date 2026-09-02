@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { buildRoleEntityIntelligenceV35 } from '@/lib/entity-intelligence/role-intelligence-v35'
+import { entityByIdV35 } from '@/lib/entity-intelligence/registry-v35'
 import {
   clearApprovedSearchIntelligenceV35,
   setApprovedSearchEntityV35,
@@ -18,6 +19,7 @@ function label(value: string): string {
 
 export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
   const { roles, updateRole } = useRoleWorkspaces()
+  const [changeStatus, setChangeStatus] = useState('')
   const role = useMemo(() => roles.find(item => item.id === roleId), [roleId, roles])
   const intelligence = useMemo(
     () => role ? buildRoleEntityIntelligenceV35(role.intake, role.searchIntelligence) : null,
@@ -29,6 +31,9 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
   const location = intelligence.location
   const expansions = intelligence.suggestedExpansions.slice(0, 16)
   const approvedCount = intelligence.approvedExpansionIds.length
+  const approvedEntities = intelligence.approvedExpansionIds
+    .map(id => entityByIdV35(id))
+    .filter((entity): entity is NonNullable<typeof entity> => Boolean(entity))
 
   function setApproval(entityId: string, entityLabel: string, approved: boolean) {
     const now = new Date()
@@ -39,6 +44,9 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
       activity: [...current.activity, event].slice(-10000),
       updatedAt: now.toISOString(),
     }))
+    setChangeStatus(approved
+      ? `${entityLabel} added to Active Search Expansion. It will affect the next sourcing pass only; Role Brief requirements are unchanged.`
+      : `${entityLabel} removed from Active Search Expansion. Role Brief requirements are unchanged.`)
   }
 
   function clearApprovals() {
@@ -51,6 +59,7 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
       activity: [...current.activity, event].slice(-10000),
       updatedAt: now.toISOString(),
     }))
+    setChangeStatus('Cleared Active Search Expansion. The approved Role Brief and exact-title lane are unchanged.')
   }
 
   const locationLabel = [
@@ -62,7 +71,7 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
     <section className="role-entity-intel-v35" aria-label="Role entity intelligence">
       <div className="role-entity-intel-v35__header">
         <div>
-          <div className="eyebrow">V35 entity intelligence</div>
+          <div className="eyebrow">V36.7 entity intelligence</div>
           <h2>What SourcingOS understands</h2>
           <p>Normalized recruiter intent and recruiter-controlled discovery expansion. Approved suggestions affect future sourcing passes, never candidate evidence.</p>
         </div>
@@ -87,6 +96,32 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
         </article>
       </div>
 
+      {changeStatus && <div className="role-entity-intel-v35__approved-note" role="status">{changeStatus}</div>}
+
+      {approvedEntities.length > 0 && (
+        <div className="role-entity-intel-v35__section" aria-label="Active Search Expansion">
+          <div className="role-entity-intel-v35__section-title">
+            <span>Active Search Expansion</span>
+            <button type="button" className="role-entity-intel-v35__clear" onClick={clearApprovals}>Clear all</button>
+          </div>
+          <p className="role-entity-intel-v35__hint">These recruiter-approved terms are active for the next sourcing pass. They are discovery controls, not must-haves and not candidate facts.</p>
+          <div className="role-entity-intel-v35__chips">
+            {approvedEntities.map(entity => (
+              <button
+                type="button"
+                key={`active:${entity.id}`}
+                className="role-entity-intel-v35__chip role-entity-intel-v35__chip--button is-active"
+                onClick={() => setApproval(entity.id, entity.canonicalLabel, false)}
+                aria-label={`Remove ${entity.canonicalLabel} from Active Search Expansion`}
+                title="Remove from the next sourcing pass"
+              >
+                ✓ {entity.canonicalLabel}<em>Active · click to remove</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {intelligence.recognized.length > 0 && (
         <div className="role-entity-intel-v35__section">
           <div className="role-entity-intel-v35__section-title">Recognized entities</div>
@@ -105,9 +140,9 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
         <div className="role-entity-intel-v35__section">
           <div className="role-entity-intel-v35__section-title">
             <span>Find similar / broaden search</span>
-            {approvedCount > 0 && <button type="button" className="role-entity-intel-v35__clear" onClick={clearApprovals}>Clear {approvedCount} approved</button>}
+            {approvedCount > 0 && <span>{approvedCount} active above</span>}
           </div>
-          <p className="role-entity-intel-v35__hint">Select only the adjacencies you want SourcingOS to use in future retrieval. The exact-title lane and approved Role Brief stay unchanged.</p>
+          <p className="role-entity-intel-v35__hint">Click + to add a discovery adjacency. The chip will immediately appear in Active Search Expansion above and will be sent to the next sourcing pass.</p>
           <div className="role-entity-intel-v35__chips">
             {expansions.map(item => {
               const active = item.activation === 'suggested_active'
@@ -121,23 +156,16 @@ export function RoleEntityIntelligenceV35({ roleId }: { roleId: string }) {
                   title={item.explanation}
                 >
                   {active ? '✓ ' : '+ '}{item.entity.canonicalLabel}
-                  <em>{active ? 'Approved · ' : ''}{item.relationship ? label(item.relationship.type) : label(item.matchType)}</em>
+                  <em>{active ? 'Active · ' : 'Add · '}{item.relationship ? label(item.relationship.type) : label(item.matchType)}</em>
                 </button>
               )
             })}
           </div>
-          {approvedCount > 0 && (
-            <div className="role-entity-intel-v35__approved-note">
-              {approvedCount} recruiter-approved expansion{approvedCount === 1 ? '' : 's'} will be applied to adjacent/capability/company/location retrieval on the next sourcing pass.
-            </div>
-          )}
         </div>
       )}
 
       {location.ambiguousCandidateIds?.length ? (
-        <div className="role-entity-intel-v35__warning">
-          Location is ambiguous. SourcingOS did not silently choose one interpretation.
-        </div>
+        <div className="role-entity-intel-v35__warning">Location is ambiguous. SourcingOS did not silently choose one interpretation.</div>
       ) : null}
 
       <details className="role-entity-intel-v35__trust">
