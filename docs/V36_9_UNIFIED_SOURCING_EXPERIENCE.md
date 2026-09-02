@@ -1,6 +1,6 @@
 # V36.9 — Unified Sourcing Experience
 
-Status: product direction locked while V36.8 Candidate Data Fabric is completed.
+Status: implementation release candidate on `v36-8-candidate-data-fabric`; production remains untouched pending authenticated provider runtime testing and recruiter preview acceptance.
 
 ## Product thesis
 
@@ -27,17 +27,24 @@ A first-class traditional people-search surface must coexist with agentic sourci
 
 More supplied anchors should narrow identity resolution rather than merely adding ranking weight.
 
+Candidate Search now presents two explicit source scopes instead of visually stacking them into one ambiguous mobile flow:
+
+- **Talent Universe** — configured external professional-data providers only.
+- **My Database / Workbench** — imported LinkedIn connections, saved Candidate Graph records, resumes/CSV, and the existing local workbench.
+
+Imported records are never presented as if they were external provider discoveries. When zero professional providers are executable, the Talent Universe surface says so explicitly and does not silently fall back to imported candidates.
+
 ### 2. Agentic Sourcing
 
-Natural-language role intent is parsed by Role Brain into recruiter-visible requirements, discovery expansions, geography, clearance breadcrumbs, and search hypotheses. SourcingOS should then run eligible public connectors and configured professional-data providers in parallel, not make the recruiter choose a database first.
+Natural-language role intent is parsed by Role Brain into recruiter-visible requirements, discovery expansions, geography, clearance breadcrumbs, and search hypotheses. SourcingOS then runs eligible public connectors and configured professional-data providers in parallel, rather than making the recruiter choose a database first.
 
 ### 3. Candidate 360 / Identity Graph
 
-Search results from providers are observations, not canonical people and not qualification truth. SourcingOS should reconcile observations using deterministic anchors and recruiter-reviewable identity proposals. No silent cross-provider identity merge.
+Search results from providers are observations, not canonical people and not qualification truth. SourcingOS reconciles observations using deterministic anchors and recruiter-reviewable identity proposals. No silent cross-provider identity merge.
 
 ### 4. Contact Resolution
 
-Contact discovery is explicit and separate from search. The contact fabric should run a bounded stop-on-success waterfall ordered by expected cost, confidence, and provider-specific success for the current use case. Ownership, deliverability, and outreach permission remain separate dimensions.
+Contact discovery is explicit and separate from search. The contact fabric runs a bounded stop-on-success waterfall ordered by expected cost, confidence, and provider-specific success for the current use case. Ownership, deliverability, and outreach permission remain separate dimensions.
 
 ### 5. Browser Extension
 
@@ -124,7 +131,7 @@ Sensitive consumer/public-record attributes such as age, relatives, criminal rec
 
 ## Unified execution model
 
-A role search should ultimately execute as one orchestration pass:
+A role search executes as one orchestration pass:
 
 1. Role Brain produces structured requirements and approved discovery expansions.
 2. Source router selects eligible public + professional provider lanes.
@@ -133,9 +140,45 @@ A role search should ultimately execute as one orchestration pass:
 5. Within-source exact duplicates are suppressed.
 6. Cross-source identity is proposed, never silently merged.
 7. Candidate evidence and missing requirements are evaluated separately from provider retrieval scores.
-8. Source-diverse candidates enter recruiter review.
+8. Source-diverse candidates enter recruiter review only after explicit save.
 9. Contact enrichment occurs only on explicit recruiter action or an explicitly approved workflow step.
 10. Recruiter decisions calibrate the next search without becoming autonomous rejection/selection logic.
+
+## Natural-language search interpretation
+
+The universal search box is a recruiter control surface, not direct vendor query syntax. For broad professional free text, SourcingOS now deterministically extracts only bounded search structure that providers can safely consume:
+
+- role/title phrase
+- explicit city/state geography
+- explicitly named technical skills
+- years-of-experience floor
+- clearance requirement
+- explicitly entered company/title/location/skill fields
+
+Example:
+
+`Find me a RHEL admin with 5+ years of experience in or near Annapolis Junction, MD with Secret clearance or higher`
+
+is represented for structured provider lanes with:
+
+- title: `RHEL admin`
+- location: `Annapolis Junction, MD`
+- skill/search term: `RHEL`
+- hard requirement: `5+ years relevant experience`
+- hard requirement: `Secret clearance or higher`
+
+Free-text alternatives remain alternatives/search-expansion terms rather than becoming accidental AND constraints. For example, `cloud engineer with AWS or Azure` may search both technologies, but neither inferred term becomes an independent hard must-have unless the recruiter explicitly marks it required or it is part of the role phrase. Explicit structured Must Haves remain authoritative.
+
+## Why a candidate appeared
+
+Provider-native retrieval explanations are supplemented by a SourcingOS transparency layer derived only from normalized provider-observed fields and recruiter search criteria. Result cards can state:
+
+- observed title overlap
+- observed skill overlap
+- observed location overlap
+- must-have requirements not verified in the normalized provider observation
+
+This is explanation, not qualification scoring. If the provider returns a record with no direct normalized title/skill/location overlap, SourcingOS says that explicitly instead of manufacturing a match reason.
 
 ## Metrics that matter
 
@@ -156,17 +199,42 @@ Do not sum vendor marketing database counts into a unique-human claim. Measure a
 
 The source stack should eventually adapt by role/domain based on these metrics.
 
-## Immediate completion sequence
+## V36.9 implementation state
 
-1. Ship Universal People Search inside the private Candidate Search workbench.
-2. Bridge configured provider observations into the visible role sourcing/review flow.
-3. Make provider/public search feel like one run while preserving source truth.
-4. Add signed provider-save → Candidate Graph → role queue flow.
-5. Surface provider execution, contribution, overlap and contact-availability telemetry.
-6. Add explicit contact lookup from result cards / Candidate 360.
-7. Polish responsive layout and loading/empty/error states.
-8. Verify current credentials and preview runtime behavior.
-9. Merge/deploy only after full CI + preview validation.
+Implemented and regression-covered:
+
+1. Universal People Search in the private Candidate Search workbench.
+2. Explicit **Talent Universe** vs **My Database / Workbench** source scopes.
+3. Provider-readiness banner with an explicit zero-provider state and no silent fallback to imports.
+4. Configured provider observations bridged into visible Agentic Sourcing.
+5. Public + professional provider fan-out in one recruiter action while preserving provenance.
+6. Signed provider-save → Candidate Graph → duplicate-safe role queue.
+7. Provider execution/contribution/contact-availability telemetry.
+8. Explicit contact lookup from provider result cards / Candidate 360 path.
+9. Responsive Candidate Search polish.
+10. Structured natural-language extraction for provider lanes that require fields.
+11. Evidence-safe “why this candidate appeared” analysis.
+12. Alternative free-text skills remain soft instead of being converted into accidental hard AND requirements.
+
+Current code gate at commit `60fab910da52185ee5722b1452d1a54d2f80e189`: GitHub CI #910 passed TypeScript, **919/919 deterministic tests across 320 suites**, dependency audit capture, production Next.js build, and atomic role/Postgres migration smoke.
+
+## Remaining runtime gate
+
+The remaining blocker is runtime/infrastructure, not an unimplemented search flow:
+
+1. Add at least one professional candidate-provider credential to the authenticated Vercel Preview environment; ideally begin with several independent providers for overlap testing.
+2. After Vercel's current Hobby build-rate limit resets, create a fresh preview from the exact branch head.
+3. Confirm `/api/candidate-data/status` reports the actual executable provider set without exposing secrets.
+4. Run the flagship RHEL / Annapolis Junction / Secret+ search and confirm `/api/candidate-data/search` executes.
+5. Verify results include external people not already present in imported LinkedIn/Candidate Database records.
+6. Inspect provider telemetry and “why this record is here” explanations.
+7. Save a provider observation into Candidate 360 and verify duplicate-safe role linking.
+8. Run explicit work-contact resolution and verify no automatic outreach.
+9. Run Agentic Sourcing and confirm public + configured provider fan-out.
+10. Re-check desktop and narrow/mobile rendering.
+11. Merge/deploy production only after explicit recruiter approval.
+
+Vercel is currently returning `Deployment rate limited — retry in 24 hours` for new preview builds. The last READY preview predates the source-scope/readiness/search-interpretation/match-explanation polish above, so it must not be represented as the exact current release candidate.
 
 ## Non-negotiable trust boundaries
 
