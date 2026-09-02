@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRoleIntelligenceV33 } from '@/components/RoleIntelligenceProviderV33'
 import { buildCanonicalAgenticSearchPlan } from '@/lib/canonical-agentic-search-v30'
 import {
+  approvedExecutionLocationsV35,
+  approvedRetrievalContextV35,
+} from '@/lib/entity-intelligence/search-approval-v35'
+import {
   accumulatedResultKeys,
   resultNoveltyRate,
   searchFingerprint,
@@ -85,12 +89,21 @@ function mergeSourceStatus(current: Record<string, SourceStatus>, incoming: RunR
   return next
 }
 
+function unique(values: string[], max: number): string[] {
+  return Array.from(new Set(values.map(value => value.trim()).filter(Boolean))).slice(0, max)
+}
+
 export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
   const { roles, mode, updateRole } = useRoleWorkspaces()
   const { onet, military, militaryApproved } = useRoleIntelligenceV33()
   const role = useMemo(() => roles.find(item => item.id === roleId), [roleId, roles])
   const plan = useMemo(
-    () => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, { onet, military, militaryApproved }) : null,
+    () => role ? buildCanonicalAgenticSearchPlan(role.intake, role.calibration, {
+      onet,
+      military,
+      militaryApproved,
+      searchIntelligence: role.searchIntelligence,
+    }) : null,
     [role, onet, military, militaryApproved]
   )
   const [attempts, setAttempts] = useState<SearchAttempt[]>([])
@@ -213,15 +226,19 @@ export function RoleSourcingAgentV33_3({ roleId }: { roleId: string }) {
 
         try {
           const intake = activeRole.intake
+          const approvedRetrieval = approvedRetrievalContextV35(activeRole.searchIntelligence)
+          const executionSkills = unique([...intake.mustHaves, ...approvedRetrieval.capabilityTerms], 40)
+          const executionCompanies = unique([...intake.targetCompanies, ...approvedRetrieval.companyTerms], 40)
+          const executionLocations = approvedExecutionLocationsV35(intake, activeRole.searchIntelligence)
           const response = await fetch('/api/agentic-search', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               query: allowedTasks[0].query,
               connectorQueries,
-              skills: intake.mustHaves,
-              targetCompanies: intake.targetCompanies,
-              locations: intake.location && intake.location !== 'Not specified' ? [intake.location] : [],
+              skills: executionSkills,
+              targetCompanies: executionCompanies,
+              locations: executionLocations,
               connectors,
               limit: 30,
             }),
