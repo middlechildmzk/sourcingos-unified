@@ -20,71 +20,32 @@ function read(path: string) {
 
 function source(overrides: Partial<SourceResult> = {}): SourceResult {
   return {
-    id: 'github:alex',
-    source: 'github',
-    sourceProfileId: 'alex',
-    entityKind: 'person',
-    displayName: 'Alex Kim',
-    headline: 'Platform Engineer',
-    location: 'Austin, TX',
-    profileUrl: 'https://github.com/alex',
-    skills: ['Kubernetes', 'Terraform'],
+    id: 'github:alex', source: 'github', sourceProfileId: 'alex', entityKind: 'person', displayName: 'Alex Kim',
+    headline: 'Platform Engineer', location: 'Austin, TX', profileUrl: 'https://github.com/alex', skills: ['Kubernetes', 'Terraform'],
     evidence: [{ id: 'ev-1', label: 'Public skill evidence', detail: 'Kubernetes and Terraform', source: 'github', confidence: 'high', observedAt: '2026-08-31T12:00:00.000Z' }],
-    contactSignals: [],
-    identitySignals: [{ type: 'source_url', value: 'https://github.com/alex', weight: 1, source: 'github' }],
-    refreshedAt: '2026-08-31T12:00:00.000Z',
-    raw: {},
-    ...overrides,
+    contactSignals: [], identitySignals: [{ type: 'source_url', value: 'https://github.com/alex', weight: 1, source: 'github' }], refreshedAt: '2026-08-31T12:00:00.000Z', raw: {}, ...overrides,
   }
 }
 
 function discovery(overrides: Partial<ReviewSlateDiscovery> = {}): ReviewSlateDiscovery {
   const result = overrides.sourceResult || source()
   return {
-    sourceKey: result.source as ReviewSlateDiscovery['sourceKey'],
-    sourceId: result.sourceProfileId,
-    sourceUrl: result.profileUrl,
-    displayName: result.displayName,
-    headline: result.headline,
-    organization: result.organization,
-    location: result.location,
+    sourceKey: result.source as ReviewSlateDiscovery['sourceKey'], sourceId: result.sourceProfileId, sourceUrl: result.profileUrl,
+    displayName: result.displayName, headline: result.headline, organization: result.organization, location: result.location,
     evidence: result.evidence.map(item => ({ kind: 'source_evidence', label: item.label, value: item.detail, url: item.url, observedAt: item.observedAt })),
-    identityConfidence: 80,
-    profileQuality: 80,
-    saveEligible: true,
-    sourceResult: result,
-    ...overrides,
+    identityConfidence: 80, profileQuality: 80, saveEligible: true, sourceResult: result, ...overrides,
   }
 }
 
 const intake: RoleIntake = {
-  title: 'Platform Engineer',
-  location: 'Austin, TX',
-  workMode: 'hybrid',
-  compensation: 'Not specified',
-  clearance: 'Not specified',
-  mustHaves: ['Kubernetes'],
-  niceToHaves: ['Terraform'],
-  disqualifiers: [],
-  targetCompanies: [],
-  adjacentBackgrounds: [],
-  hiringManagerNotes: '',
-  rawDescription: '',
+  title: 'Platform Engineer', location: 'Austin, TX', workMode: 'hybrid', compensation: 'Not specified', clearance: 'Not specified',
+  mustHaves: ['Kubernetes'], niceToHaves: ['Terraform'], disqualifiers: [], targetCompanies: [], adjacentBackgrounds: [], hiringManagerNotes: '', rawDescription: '',
 }
 
 describe('V33.3B recruiter-controlled review slate', () => {
   it('builds a small evidence-bearing first batch without treating held discoveries as rejected', () => {
     const relevant = discovery()
-    const irrelevant = discovery({
-      sourceId: 'designer',
-      displayName: 'Design Person',
-      headline: 'Product Designer',
-      evidence: [{ kind: 'source_evidence', label: 'Public profile', value: 'Figma product design' }],
-      sourceResult: source({
-        id: 'github:designer', sourceProfileId: 'designer', displayName: 'Design Person', headline: 'Product Designer',
-        skills: ['Figma'], evidence: [], identitySignals: [{ type: 'source_url', value: 'https://github.com/designer', weight: 1, source: 'github' }],
-      }),
-    })
+    const irrelevant = discovery({ sourceId: 'designer', displayName: 'Design Person', headline: 'Product Designer', evidence: [{ kind: 'source_evidence', label: 'Public profile', value: 'Figma product design' }], sourceResult: source({ id: 'github:designer', sourceProfileId: 'designer', displayName: 'Design Person', headline: 'Product Designer', skills: ['Figma'], evidence: [], identitySignals: [{ type: 'source_url', value: 'https://github.com/designer', weight: 1, source: 'github' }] }) })
     const result = evidenceBearingFirstReviewBatch([irrelevant, relevant], intake, 12)
     expect(result.batch).toEqual([relevant])
     expect(result.checks.find(item => item.discovery === irrelevant)?.admitted).toBe(false)
@@ -92,11 +53,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
   })
 
   it('caps the first review batch without silently discarding held discoveries', () => {
-    const people = Array.from({ length: 20 }, (_, index) => discovery({
-      sourceId: `person-${index}`,
-      displayName: `Person ${index}`,
-      sourceResult: source({ id: `github:person-${index}`, sourceProfileId: `person-${index}`, displayName: `Person ${index}` }),
-    }))
+    const people = Array.from({ length: 20 }, (_, index) => discovery({ sourceId: `person-${index}`, displayName: `Person ${index}`, sourceResult: source({ id: `github:person-${index}`, sourceProfileId: `person-${index}`, displayName: `Person ${index}` }) }))
     const result = evidenceBearingFirstReviewBatch(people, intake, 12)
     expect(result.batch).toHaveLength(12)
     expect(result.checks).toHaveLength(20)
@@ -119,47 +76,17 @@ describe('V33.3B recruiter-controlled review slate', () => {
   })
 
   it('previews only deterministic cross-source identity anchors and never merges them', () => {
-    const github = discovery({
-      sourceResult: source({
-        contactSignals: [{ type: 'public_email', value: 'alex@example.com', sourceUrl: 'https://github.com/alex', observedAt: '2026-08-31T12:00:00.000Z' }],
-      }),
-    })
+    const github = discovery({ sourceResult: source({ contactSignals: [{ type: 'public_email', value: 'alex@example.com', source: 'github', verified: false, note: 'Observed public email fixture.' }] }) })
     const stack = discovery({
-      sourceKey: 'stackoverflow',
-      sourceId: '99',
-      displayName: 'Alex Kim',
-      sourceResult: source({
-        id: 'stackoverflow:99',
-        source: 'stackoverflow',
-        sourceProfileId: '99',
-        displayName: 'Alex Kim',
-        profileUrl: 'https://stackoverflow.com/users/99/alex-kim',
-        contactSignals: [{ type: 'public_email', value: 'alex@example.com', sourceUrl: 'https://stackoverflow.com/users/99/alex-kim', observedAt: '2026-08-31T12:00:00.000Z' }],
-        raw: { observedTags: [] },
-      }),
+      sourceKey: 'stackoverflow', sourceId: '99', displayName: 'Alex Kim',
+      sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', profileUrl: 'https://stackoverflow.com/users/99/alex-kim', contactSignals: [{ type: 'public_email', value: 'alex@example.com', source: 'stackoverflow', verified: false, note: 'Observed public email fixture.' }], raw: { observedTags: [] } }),
     })
     expect(previewDeterministicIdentityReviews([github, stack])).toHaveLength(1)
   })
 
   it('does not propose a merge from name/location similarity alone', () => {
-    const github = discovery({
-      sourceResult: source({ identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'github' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'github' }] }),
-    })
-    const stack = discovery({
-      sourceKey: 'stackoverflow',
-      sourceId: '99',
-      displayName: 'Alex Kim',
-      sourceResult: source({
-        id: 'stackoverflow:99',
-        source: 'stackoverflow',
-        sourceProfileId: '99',
-        displayName: 'Alex Kim',
-        location: 'Boston',
-        profileUrl: 'https://stackoverflow.com/users/99/alex-kim',
-        identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'stackoverflow' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'stackoverflow' }],
-        raw: { observedTags: [] },
-      }),
-    })
+    const github = discovery({ sourceResult: source({ identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'github' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'github' }] }) })
+    const stack = discovery({ sourceKey: 'stackoverflow', sourceId: '99', displayName: 'Alex Kim', sourceResult: source({ id: 'stackoverflow:99', source: 'stackoverflow', sourceProfileId: '99', displayName: 'Alex Kim', location: 'Boston', profileUrl: 'https://stackoverflow.com/users/99/alex-kim', identitySignals: [{ type: 'name', value: 'Alex Kim', weight: 0.5, source: 'stackoverflow' }, { type: 'location', value: 'Boston', weight: 0.2, source: 'stackoverflow' }], raw: { observedTags: [] } }) })
     expect(previewDeterministicIdentityReviews([github, stack])).toEqual([])
   })
 
@@ -167,15 +94,7 @@ describe('V33.3B recruiter-controlled review slate', () => {
     const saved: SavedSlateDiscovery[] = [{ discovery: discovery(), candidateId: 'candidate-1', candidateUrl: '/app/candidate/candidate-1', reused: false }]
     const candidates = buildRoleReviewSlateCandidates(saved, [], '2026-08-31T12:00:00.000Z', () => 'role-candidate-1')
     expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({
-      id: 'role-candidate-1',
-      candidateId: 'candidate-1',
-      stage: 'needs_review',
-      fitDecision: 'unreviewed',
-      evidenceStatus: 'unreviewed',
-      fitReasons: [],
-      concerns: [],
-    })
+    expect(candidates[0]).toMatchObject({ id: 'role-candidate-1', candidateId: 'candidate-1', stage: 'needs_review', fitDecision: 'unreviewed', evidenceStatus: 'unreviewed', fitReasons: [], concerns: [] })
   })
 
   it('does not duplicate an existing canonical candidate in the same role', () => {
