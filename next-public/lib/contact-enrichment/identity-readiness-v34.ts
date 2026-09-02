@@ -52,22 +52,20 @@ function multiTokenPersonName(value: string): boolean {
 function singleTokenHandleLike(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed || /\s/.test(trimmed)) return false
-  // Lowercase single-token names are common public handles. Do not spend a paid
-  // enrichment lookup on them unless another deterministic profile anchor exists.
   return /^[a-z0-9._-]+$/.test(trimmed)
 }
 
 /**
  * Paid contact enrichment should resolve an already-grounded professional
- * identity, not discover identity from a username. This gate does not decide
- * whether two source profiles are the same person; Candidate Graph still owns
- * cross-source identity review. It only decides whether the provider request has
- * enough anchors to make a contact lookup responsible and useful.
+ * identity, not discover identity from a username. Provider-native ids are
+ * deterministic only within the explicitly named provider and never authorize a
+ * cross-provider identity merge.
  */
 export function assessEnrichmentIdentityV34(request: ContactEnrichmentRequest): EnrichmentIdentityAssessmentV34 {
   const anchors: string[] = []
   const missing: string[] = []
   const profile = profileAnchor(request)
+  const providerAnchor = Boolean(clean(request.providerPersonId) && request.providerName && request.providerName !== 'none')
   const name = normalizedName(request)
   const strongName = multiTokenPersonName(name)
   const handleLike = singleTokenHandleLike(name)
@@ -75,6 +73,7 @@ export function assessEnrichmentIdentityV34(request: ContactEnrichmentRequest): 
   const location = clean(request.location)
   const title = clean(request.title)
 
+  if (providerAnchor) anchors.push(`${request.providerName} provider person id`)
   if (profile) anchors.push(`${profile} profile URL`)
   if (strongName) anchors.push('multi-token person name')
   else if (name) anchors.push(handleLike ? 'single-token handle/name' : 'partial name')
@@ -82,44 +81,30 @@ export function assessEnrichmentIdentityV34(request: ContactEnrichmentRequest): 
   if (location) anchors.push('location')
   if (title) anchors.push('professional title')
 
-  if (profile) {
+  if (providerAnchor) {
     return {
-      strength: 'strong',
-      attemptProvider: true,
-      anchors,
-      missing,
-      message: `Identity is grounded by an observed ${profile} profile URL.`,
+      strength: 'strong', attemptProvider: true, anchors, missing,
+      message: `Identity is grounded by an observed ${request.providerName} provider person id for a same-provider enrichment lookup.`,
     }
+  }
+
+  if (profile) {
+    return { strength: 'strong', attemptProvider: true, anchors, missing, message: `Identity is grounded by an observed ${profile} profile URL.` }
   }
 
   if (strongName && company) {
-    return {
-      strength: 'strong',
-      attemptProvider: true,
-      anchors,
-      missing,
-      message: 'Identity has a multi-token name plus company/domain context.',
-    }
+    return { strength: 'strong', attemptProvider: true, anchors, missing, message: 'Identity has a multi-token name plus company/domain context.' }
   }
 
   if (strongName && location && title) {
-    return {
-      strength: 'usable',
-      attemptProvider: true,
-      anchors,
-      missing,
-      message: 'Identity has a multi-token name plus location and professional-title context.',
-    }
+    return { strength: 'usable', attemptProvider: true, anchors, missing, message: 'Identity has a multi-token name plus location and professional-title context.' }
   }
 
-  if (!strongName) missing.push('a real multi-token name or an observed GitHub/LinkedIn profile URL')
+  if (!strongName) missing.push('a real multi-token name, an observed GitHub/LinkedIn profile URL, or a same-provider person id')
   if (!company && !(location && title)) missing.push('company/domain or both location and professional title')
 
   return {
-    strength: 'insufficient',
-    attemptProvider: false,
-    anchors,
-    missing,
+    strength: 'insufficient', attemptProvider: false, anchors, missing,
     message: handleLike
       ? 'Contact lookup is paused because the record looks like a source handle, not a resolved professional identity.'
       : 'Contact lookup needs stronger professional identity anchors before calling a paid enrichment provider.',
