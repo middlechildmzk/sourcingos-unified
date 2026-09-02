@@ -11,6 +11,7 @@ function signingKey(provider: CandidateDataProviderV36_8): string | undefined {
   if (provider === 'contactout') return process.env.CONTACTOUT_API_KEY
   if (provider === 'people_data_labs') return process.env.PDL_API_KEY
   if (provider === 'coresignal') return process.env.CORESIGNAL_API_KEY
+  if (provider === 'signalhire') return process.env.SIGNALHIRE_API_KEY
   if (provider === 'openweb_ninja') return process.env.OPENWEBNINJA_API_KEY
   return undefined
 }
