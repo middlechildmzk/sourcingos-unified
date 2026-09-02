@@ -1,16 +1,7 @@
 import type { IntelligenceEntity } from './types-v35'
 
 export type GeographicPrecisionV36_6 =
-  | 'country'
-  | 'state'
-  | 'county'
-  | 'metro'
-  | 'city'
-  | 'town'
-  | 'postal_centroid'
-  | 'point'
-  | 'region'
-  | 'unknown'
+  | 'country' | 'state' | 'county' | 'metro' | 'city' | 'town' | 'postal_centroid' | 'point' | 'region' | 'unknown'
 
 export type GeographicSourceV36_6 = 'reviewed_registry' | 'iso_3166' | 'us_state' | 'postal_syntax' | 'external_authoritative'
 
@@ -44,12 +35,14 @@ const US_STATES: Record<string, string> = {
 
 const STATE_CODE_BY_NAME = new Map(Object.entries(US_STATES).map(([code, name]) => [name.toLowerCase(), code]))
 
-function clean(value: string): string {
-  return value.trim().replace(/\s+/g, ' ')
-}
+function clean(value: string): string { return value.trim().replace(/\s+/g, ' ') }
 
-function slug(value: string): string {
-  return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+function canonicalRegionCode(code: string): string {
+  try {
+    return new Intl.Locale(`und-${code.toUpperCase()}`).region || code.toUpperCase()
+  } catch {
+    return code.toUpperCase()
+  }
 }
 
 export function usStateObservationV36_6(input: string): GeographicObservationV36_6 | null {
@@ -59,48 +52,42 @@ export function usStateObservationV36_6(input: string): GeographicObservationV36
   if (!code) return null
   return {
     id: `geo:us-state:${code.toLowerCase()}`,
-    label: US_STATES[code],
-    kind: 'state',
-    source: 'us_state',
-    sourceRef: 'USPS/state abbreviation convention + ISO subdivision-compatible state codes',
-    sourceVersion: 'v36.6',
-    precision: 'state',
-    countryCode: 'US',
-    stateCode: code,
-    searchOnly: true,
-    candidateResidenceInferred: false,
+    label: US_STATES[code], kind: 'state', source: 'us_state',
+    sourceRef: 'USPS/state abbreviation convention + ISO subdivision-compatible state codes', sourceVersion: 'v36.6',
+    precision: 'state', countryCode: 'US', stateCode: code, searchOnly: true, candidateResidenceInferred: false,
   }
 }
 
 /**
- * Uses the runtime's ICU/Intl region data rather than shipping a stale country
- * list. Unknown/reserved codes are rejected when Intl returns the code or an
- * "Unknown Region" label.
+ * Uses runtime ICU/Intl region data and canonicalizes historical aliases through
+ * Intl.Locale (for example DD→DE, BU→MM, TP→TL, ZR→CD) before returning a code.
  */
 export function isoCountryObservationV36_6(input: string): GeographicObservationV36_6 | null {
   const raw = clean(input)
   const display = new Intl.DisplayNames(['en'], { type: 'region' })
   const normalizedInput = raw.toLowerCase()
-
   let matchCode = ''
   let matchLabel = ''
+
   if (/^[A-Za-z]{2}$/.test(raw)) {
-    const code = raw.toUpperCase()
-    const label = display.of(code) || ''
-    if (label && label.toUpperCase() !== code && !/^unknown region$/i.test(label)) {
-      matchCode = code
+    const canonical = canonicalRegionCode(raw)
+    const label = display.of(canonical) || ''
+    if (label && label.toUpperCase() !== canonical && !/^unknown region$/i.test(label)) {
+      matchCode = canonical
       matchLabel = label
     }
   } else {
-    // There are at most 676 alpha-2 combinations; this deterministic scan is
-    // small and avoids maintaining a duplicate country vocabulary.
+    const seenCanonical = new Set<string>()
     outer: for (let a = 65; a <= 90; a++) {
       for (let b = 65; b <= 90; b++) {
-        const code = String.fromCharCode(a, b)
-        const label = display.of(code) || ''
-        if (!label || label.toUpperCase() === code || /^unknown region$/i.test(label)) continue
+        const candidate = String.fromCharCode(a, b)
+        const canonical = canonicalRegionCode(candidate)
+        if (seenCanonical.has(canonical)) continue
+        seenCanonical.add(canonical)
+        const label = display.of(canonical) || ''
+        if (!label || label.toUpperCase() === canonical || /^unknown region$/i.test(label)) continue
         if (label.toLowerCase() === normalizedInput) {
-          matchCode = code
+          matchCode = canonical
           matchLabel = label
           break outer
         }
@@ -110,16 +97,9 @@ export function isoCountryObservationV36_6(input: string): GeographicObservation
 
   if (!matchCode) return null
   return {
-    id: `geo:country:${matchCode.toLowerCase()}`,
-    label: matchLabel,
-    kind: 'country',
-    source: 'iso_3166',
-    sourceRef: 'ICU Intl.DisplayNames region data',
-    sourceVersion: 'runtime-icu',
-    precision: 'country',
-    countryCode: matchCode,
-    searchOnly: true,
-    candidateResidenceInferred: false,
+    id: `geo:country:${matchCode.toLowerCase()}`, label: matchLabel, kind: 'country', source: 'iso_3166',
+    sourceRef: 'ICU Intl.DisplayNames/Intl.Locale region data', sourceVersion: 'runtime-icu', precision: 'country',
+    countryCode: matchCode, searchOnly: true, candidateResidenceInferred: false,
   }
 }
 
@@ -128,17 +108,9 @@ export function usPostalObservationV36_6(input: string): GeographicObservationV3
   const match = raw.match(/^([0-9]{5})(?:-[0-9]{4})?$/)
   if (!match) return null
   return {
-    id: `geo:us-postal:${match[1]}`,
-    label: match[1],
-    kind: 'postal_area',
-    source: 'postal_syntax',
-    sourceRef: 'US ZIP syntax only; no centroid/boundary asserted without an authoritative postal dataset',
-    sourceVersion: 'v36.6',
-    precision: 'unknown',
-    countryCode: 'US',
-    postalCode: match[1],
-    searchOnly: true,
-    candidateResidenceInferred: false,
+    id: `geo:us-postal:${match[1]}`, label: match[1], kind: 'postal_area', source: 'postal_syntax',
+    sourceRef: 'US ZIP syntax only; no centroid/boundary asserted without an authoritative postal dataset', sourceVersion: 'v36.6',
+    precision: 'unknown', countryCode: 'US', postalCode: match[1], searchOnly: true, candidateResidenceInferred: false,
   }
 }
 
@@ -146,30 +118,21 @@ export function observationFromEntityV36_6(entity: IntelligenceEntity): Geograph
   if (!['location', 'place', 'metro', 'region', 'postal_area', 'country', 'state', 'county'].includes(entity.kind)) return null
   const placeType = String(entity.metadata?.placeType || '')
   const precision: GeographicPrecisionV36_6 =
-    entity.kind === 'country' ? 'country' :
-    entity.kind === 'state' ? 'state' :
-    entity.kind === 'county' ? 'county' :
-    entity.kind === 'metro' ? 'metro' :
-    entity.kind === 'region' ? 'region' :
+    entity.kind === 'country' ? 'country' : entity.kind === 'state' ? 'state' : entity.kind === 'county' ? 'county' :
+    entity.kind === 'metro' ? 'metro' : entity.kind === 'region' ? 'region' :
     entity.kind === 'postal_area' ? (typeof entity.metadata?.latitude === 'number' ? 'postal_centroid' : 'unknown') :
-    placeType === 'town' ? 'town' :
-    placeType === 'city' ? 'city' :
-    typeof entity.metadata?.latitude === 'number' ? 'point' : 'unknown'
+    placeType === 'town' ? 'town' : placeType === 'city' ? 'city' : typeof entity.metadata?.latitude === 'number' ? 'point' : 'unknown'
   return {
-    id: entity.id,
-    label: entity.canonicalLabel,
+    id: entity.id, label: entity.canonicalLabel,
     kind: entity.kind === 'location' ? 'place' : entity.kind as GeographicObservationV36_6['kind'],
-    source: 'reviewed_registry',
-    sourceRef: entity.provenance[0]?.sourceRef || 'shared Entity Intelligence registry',
-    sourceVersion: entity.provenance[0]?.version || 'unknown',
-    precision,
+    source: 'reviewed_registry', sourceRef: entity.provenance[0]?.sourceRef || 'shared Entity Intelligence registry',
+    sourceVersion: entity.provenance[0]?.version || 'unknown', precision,
     ...(entity.metadata?.countryCode ? { countryCode: entity.metadata.countryCode } : {}),
     ...(entity.metadata?.stateCode ? { stateCode: entity.metadata.stateCode } : {}),
     ...(entity.metadata?.postalCode ? { postalCode: entity.metadata.postalCode } : {}),
     ...(typeof entity.metadata?.latitude === 'number' ? { latitude: entity.metadata.latitude } : {}),
     ...(typeof entity.metadata?.longitude === 'number' ? { longitude: entity.metadata.longitude } : {}),
-    searchOnly: true,
-    candidateResidenceInferred: false,
+    searchOnly: true, candidateResidenceInferred: false,
   }
 }
 
@@ -178,21 +141,16 @@ export function administrativeGeographySuggestionsV36_6(query: string, limit = 1
   if (raw.length < 2) return []
   const lower = raw.toLowerCase()
   const out: GeographicObservationV36_6[] = []
-
   for (const [code, name] of Object.entries(US_STATES)) {
     if (code.toLowerCase().startsWith(lower) || name.toLowerCase().startsWith(lower)) {
       const item = usStateObservationV36_6(code)
       if (item) out.push(item)
     }
   }
-
-  // Exact ISO country/name recognition is deterministic and avoids noisy global
-  // prefix scans over ICU's region labels.
   const country = isoCountryObservationV36_6(raw)
   if (country) out.push(country)
   const postal = usPostalObservationV36_6(raw)
   if (postal) out.push(postal)
-
   const seen = new Set<string>()
   return out.filter(item => {
     if (seen.has(item.id)) return false
