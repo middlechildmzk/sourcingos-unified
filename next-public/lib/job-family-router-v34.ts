@@ -10,6 +10,12 @@ export type JobFamilyId =
   | 'ai_ml'
   | 'healthcare_clinical'
   | 'research_science'
+  | 'talent_acquisition'
+  | 'product_management'
+  | 'program_management'
+  | 'gtm_sales'
+  | 'operations'
+  | 'legal_compliance'
   | 'federal_govcon'
   | 'finance_regulated'
   | 'aviation'
@@ -21,9 +27,13 @@ export type JobFamilyMatchV34 = {
   reasons: string[]
 }
 
+export type JobFamilyKind = 'occupation' | 'context_modifier'
+
 export type JobFamilyRoutingV34 = {
   primaryFamily: JobFamilyId
   matches: JobFamilyMatchV34[]
+  contextModifiers: JobFamilyMatchV34[]
+  occupationResolved: boolean
   preferredPublicSurfaces: AgenticSearchSurface[]
   deprioritizedPublicSurfaces: AgenticSearchSurface[]
   rationale: string[]
@@ -31,6 +41,7 @@ export type JobFamilyRoutingV34 = {
 
 type FamilyDefinition = {
   id: JobFamilyId
+  kind: JobFamilyKind
   strong: RegExp[]
   signals: RegExp[]
   preferred: AgenticSearchSurface[]
@@ -44,6 +55,14 @@ const PUBLIC_EVIDENCE_SURFACES: AgenticSearchSurface[] = [
   'huggingface',
   'research_publications',
   'healthcare_registry',
+]
+
+const PUBLIC_TECHNICAL_SURFACES: AgenticSearchSurface[] = [
+  'github',
+  'stackoverflow',
+  'devto',
+  'huggingface',
+  'research_publications',
 ]
 
 function explicitTextFor(intake: RoleIntake): string {
@@ -67,6 +86,7 @@ function expansionTextFor(intake: RoleIntake): string {
 const DEFINITIONS: FamilyDefinition[] = [
   {
     id: 'infrastructure',
+    kind: 'occupation',
     strong: [
       /\b(?:rhel|red hat enterprise linux|red hat administrator|linux administrator|unix administrator|system administrator|systems administrator|sysadmin)\b/,
       /\b(?:windows server administrator|vmware administrator|network administrator)\b/,
@@ -80,6 +100,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'cloud_devops',
+    kind: 'occupation',
     strong: [
       /\b(?:devops engineer|devsecops engineer|site reliability engineer|sre|cloud engineer|platform engineer|cloud architect)\b/,
     ],
@@ -92,6 +113,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'cybersecurity',
+    kind: 'occupation',
     strong: [
       /\b(?:security engineer|cybersecurity engineer|cyber security engineer|soc analyst|security analyst|penetration tester|incident responder|threat hunter|security architect)\b/,
     ],
@@ -104,6 +126,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'ai_ml',
+    kind: 'occupation',
     strong: [
       /\b(?:machine learning engineer|ml engineer|ai engineer|nlp engineer|computer vision engineer|llm engineer|mlops engineer)\b/,
     ],
@@ -116,6 +139,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'data',
+    kind: 'occupation',
     strong: [
       /\b(?:data engineer|analytics engineer|database administrator|dba|data architect|data scientist|bi engineer)\b/,
     ],
@@ -128,6 +152,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'software',
+    kind: 'occupation',
     strong: [
       /\b(?:software engineer|software developer|frontend engineer|front end engineer|backend engineer|back end engineer|full stack engineer|fullstack engineer|mobile engineer)\b/,
     ],
@@ -139,6 +164,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'healthcare_clinical',
+    kind: 'occupation',
     strong: [
       /\b(?:physician|doctor|registered nurse|nurse practitioner|physician assistant|pharmacist|therapist|clinician|clinical informatics)\b/,
     ],
@@ -150,6 +176,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'research_science',
+    kind: 'occupation',
     strong: [
       /\b(?:research scientist|applied scientist|researcher|postdoc|principal investigator|biostatistician)\b/,
     ],
@@ -160,7 +187,61 @@ const DEFINITIONS: FamilyDefinition[] = [
     deprioritized: ['devto'],
   },
   {
+    id: 'talent_acquisition',
+    kind: 'occupation',
+    strong: [
+      /\b(?:technical sourcer|talent sourcer|sourcing specialist|technical recruiter|corporate recruiter|talent acquisition specialist|talent acquisition partner|recruiting manager|talent partner)\b/,
+    ],
+    signals: [
+      /\bsourcing\b/, /\brecruiting\b/, /\brecruiter\b/, /\btalent acquisition\b/, /\bboolean search\b/, /\bcandidate pipeline\b/,
+      /\bats\b/, /\bgreenhouse\b/, /\blever\b/, /\bworkday recruiting\b/, /\bavature\b/,
+    ],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
+    id: 'product_management',
+    kind: 'occupation',
+    strong: [/\b(?:product manager|senior product manager|technical product manager|group product manager|product lead|director of product)\b/],
+    signals: [/\bproduct strategy\b/, /\bproduct roadmap\b/, /\buser research\b/, /\bproduct discovery\b/, /\bproduct requirements?\b/, /\bprd\b/],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
+    id: 'program_management',
+    kind: 'occupation',
+    strong: [/\b(?:program manager|technical program manager|project manager|program director|pmo manager|project management professional)\b/],
+    signals: [/\bprogram management\b/, /\bproject management\b/, /\bpmp\b/, /\bpmo\b/, /\bmilestone\b/, /\bschedule management\b/],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
+    id: 'gtm_sales',
+    kind: 'occupation',
+    strong: [/\b(?:enterprise account executive|account executive|sales executive|sales director|business development manager|sales engineer|solutions engineer|customer success manager)\b/],
+    signals: [/\bquota\b/, /\bpipeline generation\b/, /\bterritory\b/, /\benterprise sales\b/, /\bgo[- ]to[- ]market\b/, /\bgtm\b/, /\bpre[- ]sales\b/],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
+    id: 'operations',
+    kind: 'occupation',
+    strong: [/\b(?:operations manager|operations supervisor|warehouse supervisor|warehouse manager|logistics manager|supply chain manager|distribution center manager)\b/],
+    signals: [/\boperations\b/, /\bwarehouse\b/, /\blogistics\b/, /\bsupply chain\b/, /\bdistribution center\b/, /\binventory management\b/],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
+    id: 'legal_compliance',
+    kind: 'occupation',
+    strong: [/\b(?:attorney|lawyer|paralegal|legal counsel|general counsel|compliance officer|regulatory counsel)\b/],
+    signals: [/\blegal\b/, /\bcontract law\b/, /\bregulatory compliance\b/, /\blitigation\b/, /\bbar admission\b/],
+    preferred: [],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
+  },
+  {
     id: 'federal_govcon',
+    kind: 'context_modifier',
     strong: [
       /\b(?:ts\/?sci|top secret|secret clearance|public trust|polygraph)\b/,
       /\b(?:federal contractor|government contractor|govcon)\b/,
@@ -173,6 +254,7 @@ const DEFINITIONS: FamilyDefinition[] = [
   },
   {
     id: 'finance_regulated',
+    kind: 'occupation',
     strong: [
       /\b(?:financial advisor|broker|investment adviser|portfolio manager|wealth manager)\b/,
     ],
@@ -180,21 +262,26 @@ const DEFINITIONS: FamilyDefinition[] = [
       /\bfinra\b/, /\bsecurities\b/, /\bseries 7\b/, /\bseries 63\b/, /\bseries 65\b/, /\bbrokerage\b/, /\bwealth management\b/,
     ],
     preferred: [],
-    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications'],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
   },
   {
     id: 'aviation',
+    kind: 'occupation',
     strong: [
-      /\b(?:pilot|aircraft mechanic|a&p mechanic|flight instructor|avionics technician)\b/,
+      /\b(?:pilot|aircraft mechanic|aircraft maintenance technician|a&p mechanic|a&p technician|airframe and powerplant|flight instructor|avionics technician)\b/,
+      /\b(?:a&p|a and p)\s*(?:certificat\w+|licens\w+|mechanic|technician)\b/,
+      /\bairframe and powerplant\b/,
     ],
     signals: [
       /\baviation\b/, /\baircraft\b/, /\bairline\b/, /\bairman\b/, /\bflight\b/, /\baerospace operations\b/,
+      /\ba&p\b/, /\bpart 145\b/, /\bmro\b/, /\bavionics\b/, /\bpowerplant\b/, /\bfaa\b/,
     ],
     preferred: [],
-    deprioritized: ['github', 'stackoverflow', 'devto', 'huggingface', 'research_publications'],
+    deprioritized: PUBLIC_TECHNICAL_SURFACES,
   },
   {
     id: 'general',
+    kind: 'occupation',
     strong: [],
     signals: [],
     preferred: [],
@@ -207,7 +294,6 @@ function scoreDefinition(intake: RoleIntake, definition: FamilyDefinition): JobF
   const reasons: string[] = []
   let score = 0
 
-  // Recruiter-authored title/requirements outrank generated adjacent-title expansions.
   for (const pattern of definition.strong) {
     const match = explicit.match(pattern)?.[0]
     if (!match) continue
@@ -220,8 +306,6 @@ function scoreDefinition(intake: RoleIntake, definition: FamilyDefinition): JobF
     score += 0.14
     reasons.push(match)
   }
-  // Expansions can support a family hypothesis but cannot independently create a
-  // high-confidence routing decision or beat an explicit title.
   for (const pattern of definition.signals) {
     const match = expansion.match(pattern)?.[0]
     if (!match) continue
@@ -229,8 +313,6 @@ function scoreDefinition(intake: RoleIntake, definition: FamilyDefinition): JobF
     reasons.push(`adjacent: ${match}`)
   }
 
-  // Clearance is a field-level federal/GovCon signal even when the normalized
-  // value is simply "Secret" and therefore lacks the literal word "clearance".
   if (definition.id === 'federal_govcon' && intake.clearance && intake.clearance !== 'Not specified') {
     score += 0.38
     reasons.push('role clearance requirement')
@@ -247,11 +329,6 @@ function uniq<T>(values: T[]): T[] {
   return Array.from(new Set(values))
 }
 
-/**
- * Explainable role-family routing for retrieval. This does not establish candidate
- * facts and does not alter recruiter-approved role criteria. It only decides
- * which public evidence communities are likely to have signal for this role.
- */
 export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): JobFamilyRoutingV34 {
   const scored = DEFINITIONS
     .filter(definition => definition.id !== 'general')
@@ -262,14 +339,17 @@ export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): 
   const matches = scored.length
     ? scored
     : [{ id: 'general' as const, score: 0.25, reasons: ['no specialized family reached routing threshold'] }]
-  // Federal/GovCon is usually a market/clearance modifier rather than the
-  // occupation itself. When a substantive occupational family is present, keep
-  // federal in the match set but do not let clearance replace the role family.
-  // A role such as "Federal Program Manager" with no other supported family may
-  // still use federal_govcon as its primary routing family.
-  const occupationalPrimary = matches.find(match => match.id !== 'federal_govcon')
-  const primaryFamily = occupationalPrimary?.id ?? matches[0].id
-  const activeDefinitions = DEFINITIONS.filter(definition => matches.some(match => match.id === definition.id))
+
+  const kindOf = (id: JobFamilyId): JobFamilyKind =>
+    DEFINITIONS.find(definition => definition.id === id)?.kind ?? 'occupation'
+
+  const occupationMatches = matches.filter(match => kindOf(match.id) === 'occupation')
+  const contextModifiers = matches.filter(match => kindOf(match.id) === 'context_modifier')
+  const occupationResolved = occupationMatches.some(match => match.id !== 'general')
+  const primaryFamily: JobFamilyId = occupationMatches[0]?.id ?? 'general'
+
+  const activeDefinitions = DEFINITIONS.filter(definition =>
+    definition.kind === 'occupation' && occupationMatches.some(match => match.id === definition.id))
   const preferredPublicSurfaces = uniq(activeDefinitions.flatMap(definition => definition.preferred))
   const explicitlyDeprioritized = uniq(activeDefinitions.flatMap(definition => definition.deprioritized || []))
   const deprioritizedPublicSurfaces = explicitlyDeprioritized.filter(surface => !preferredPublicSurfaces.includes(surface))
@@ -278,6 +358,12 @@ export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): 
     const evidence = match.reasons.length ? ` from ${match.reasons.join(', ')}` : ''
     return `${match.id} ${Math.round(match.score * 100)}%${evidence}`
   })
+  for (const modifier of contextModifiers) {
+    rationale.push(`${modifier.id} is a hiring-context modifier, not the occupation. It shapes constraints and does not select public evidence sources.`)
+  }
+  if (!occupationResolved) {
+    rationale.push('No occupational family reached the routing threshold. Source selection has no occupational intelligence for this role, which is unknown rather than a judgment that these sources are noisy.')
+  }
   if (!preferredPublicSurfaces.length) {
     rationale.push('No public evidence community is automatically preferred; use recruiter-authorized or authoritative domain surfaces where available.')
   }
@@ -285,6 +371,8 @@ export function buildJobFamilyRoutingV34(intake: RoleIntake, threshold = 0.28): 
   return {
     primaryFamily,
     matches,
+    contextModifiers,
+    occupationResolved,
     preferredPublicSurfaces: preferredPublicSurfaces.filter(surface => PUBLIC_EVIDENCE_SURFACES.includes(surface)),
     deprioritizedPublicSurfaces: deprioritizedPublicSurfaces.filter(surface => PUBLIC_EVIDENCE_SURFACES.includes(surface)),
     rationale,
