@@ -5,6 +5,10 @@ import {
   RECRUITING_KNOWLEDGE_ENTITIES_V36_3,
   RECRUITING_KNOWLEDGE_RELATIONSHIPS_V36_3,
 } from './knowledge-v36-3'
+import {
+  CREDENTIAL_CLEARANCE_ENTITIES_V36_5,
+  CREDENTIAL_CLEARANCE_RELATIONSHIPS_V36_5,
+} from './credentials-clearance-v36-5'
 import type {
   EntityKind,
   EntityMatchType,
@@ -147,7 +151,15 @@ function relationship(
 
 function allEntities(): IntelligenceEntity[] {
   const byId = new Map<string, IntelligenceEntity>()
-  for (const entity of [...LEGACY_ENTITIES, ...CURATED_ENTITIES, ...RECRUITING_KNOWLEDGE_ENTITIES_V36_3, ...LOCATION_ENTITIES_V35]) byId.set(entity.id, entity)
+  // Later reviewed packs intentionally override earlier entities that share a
+  // stable id, while preserving the same shared registry API for all clients.
+  for (const entity of [
+    ...LEGACY_ENTITIES,
+    ...CURATED_ENTITIES,
+    ...RECRUITING_KNOWLEDGE_ENTITIES_V36_3,
+    ...CREDENTIAL_CLEARANCE_ENTITIES_V36_5,
+    ...LOCATION_ENTITIES_V35,
+  ]) byId.set(entity.id, entity)
   return Array.from(byId.values())
 }
 
@@ -212,6 +224,7 @@ const ENTITIES = allEntities()
 const RELATIONSHIPS = [
   ...LOCATION_RELATIONSHIPS_V35,
   ...RECRUITING_KNOWLEDGE_RELATIONSHIPS_V36_3,
+  ...CREDENTIAL_CLEARANCE_RELATIONSHIPS_V36_5,
   ...expansionRelationships(ENTITIES),
   ...curatedRelationships(ENTITIES),
 ]
