@@ -76,6 +76,20 @@ describe('V36.9 universal people search', () => {
     ]))
   })
 
+  it('keeps alternative free-text skills soft instead of turning OR into AND must-haves', () => {
+    const request = buildUniversalPeopleProviderRequestV36_9({
+      query: 'Find me a cloud engineer with AWS or Azure',
+      limit: 20,
+    })
+
+    expect(request.titles).toEqual(['cloud engineer'])
+    expect(request.skills).toEqual(expect.arrayContaining(['AWS', 'Azure']))
+    expect(request.requirements).toEqual(expect.arrayContaining([
+      { text: 'AWS', mustHave: false },
+      { text: 'Azure', mustHave: false },
+    ]))
+  })
+
   it('does not reinterpret a person name as structured role criteria', () => {
     const request = buildUniversalPeopleProviderRequestV36_9({ query: 'Jane Doe', limit: 10 })
     expect(request.titles).toBeUndefined()
