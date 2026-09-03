@@ -14,10 +14,12 @@ import {
   bestPhoneChannelV36_13,
   contactSupportLabelV36_13,
   evidenceCoverageForObservationV36_13,
+  observationPassesExplicitFiltersV36_13,
   orderObservationsByEvidenceV36_13,
   summarizeContactSignalsV36_13,
   type ContactReviewChannelV36_13,
   type ContactSignalForReviewV36_13,
+  type ExplicitPeopleFiltersV36_13,
 } from '@/lib/people-review-v36-13'
 
 type ProfileUrl = { kind: 'linkedin' | 'github' | 'stackoverflow' | 'personal' | 'other'; url: string }
@@ -167,6 +169,7 @@ export function PeopleSearchFlagshipV36_12() {
   const [working, setWorking] = useState(false)
   const [response, setResponse] = useState<SearchResponse | null>(null)
   const [activeSearchRequest, setActiveSearchRequest] = useState<UniversalPeopleProviderRequestV36_9>()
+  const [activeExplicitFilters, setActiveExplicitFilters] = useState<ExplicitPeopleFiltersV36_13>({})
   const [status, setStatus] = useState('')
   const [sourceCount, setSourceCount] = useState(0)
   const [signingReady, setSigningReady] = useState(false)
@@ -181,17 +184,21 @@ export function PeopleSearchFlagshipV36_12() {
 
   const intent = useMemo(() => classifyUniversalPeopleSearchV36_9(query), [query])
   const observations = response?.observations || []
-  const orderedObservations = useMemo(
+  const rawOrderedObservations = useMemo(
     () => orderObservationsByEvidenceV36_13(observations, activeSearchRequest),
     [observations, activeSearchRequest],
+  )
+  const orderedObservations = useMemo(
+    () => rawOrderedObservations.filter(observation => observationPassesExplicitFiltersV36_13(observation, activeExplicitFilters)),
+    [rawOrderedObservations, activeExplicitFilters],
   )
   const reviewByKey = useMemo(() => {
     const map = new Map<string, ReviewObservation>()
     for (const review of response?.reviewObservations || []) map.set(observationKey(review.observation), review)
     return map
   }, [response])
-  const activeIndex = Math.max(0, orderedObservations.findIndex(item => observationKey(item) === activeKey))
-  const activeObservation = orderedObservations[activeIndex]
+  const activeIndex = activeKey ? orderedObservations.findIndex(item => observationKey(item) === activeKey) : -1
+  const activeObservation = activeIndex >= 0 ? orderedObservations[activeIndex] : undefined
   const resolvedActiveKey = activeObservation ? observationKey(activeObservation) : ''
   const activeContact = resolvedActiveKey ? contacts[resolvedActiveKey] : undefined
   const activeContactSummary = useMemo(
@@ -212,6 +219,7 @@ export function PeopleSearchFlagshipV36_12() {
   }, [activeCoverage])
   const allSelected = Boolean(orderedObservations.length) && orderedObservations.every(item => selectedKeys.has(observationKey(item)))
   const selectedObservations = orderedObservations.filter(item => selectedKeys.has(observationKey(item)))
+  const activeFilterEntries = useMemo(() => (Object.entries(activeExplicitFilters) as Array<[keyof ExplicitPeopleFiltersV36_13, string | undefined]>).filter(([, value]) => String(value || '').trim()), [activeExplicitFilters])
 
   useEffect(() => {
     let active = true
@@ -233,6 +241,13 @@ export function PeopleSearchFlagshipV36_12() {
       return
     }
     if (working) return
+
+    const explicitFilters: ExplicitPeopleFiltersV36_13 = {
+      company: company.trim(),
+      title: title.trim(),
+      location: location.trim(),
+      skills: skills.trim(),
+    }
 
     setWorking(true)
     setResponse(null)
@@ -258,6 +273,7 @@ export function PeopleSearchFlagshipV36_12() {
 
       const [providerOutcome, exactOutcome] = await Promise.allSettled([providerPromise, exactPromise])
       let found = 0
+      let constrainedFound = 0
       let providerError = ''
 
       if (providerOutcome.status === 'fulfilled') {
@@ -265,16 +281,25 @@ export function PeopleSearchFlagshipV36_12() {
           const json = providerOutcome.value.json
           setResponse(json)
           setActiveSearchRequest(providerRequest)
+          setActiveExplicitFilters(explicitFilters)
           const raw = json.observations || []
           const ordered = orderObservationsByEvidenceV36_13(raw, providerRequest)
-          if (ordered[0]) setActiveKey(observationKey(ordered[0]))
+          const constrained = ordered.filter(observation => observationPassesExplicitFiltersV36_13(observation, explicitFilters))
+          if (constrained[0]) setActiveKey(observationKey(constrained[0]))
           found = raw.length || json.returnedAfterCap || 0
+          constrainedFound = constrained.length
         } else providerError = providerOutcome.value.json.error || 'Search failed.'
       } else providerError = providerOutcome.reason instanceof Error ? providerOutcome.reason.message : 'Search failed.'
 
       if (exactOutcome.status === 'fulfilled' && exactOutcome.value?.res.ok && exactOutcome.value.json.ok) setExactContact(exactOutcome.value.json)
       if (!found && providerError) throw new Error(providerError)
-      setStatus(found ? `${found} result${found === 1 ? '' : 's'}` : exactOutcome.status === 'fulfilled' && exactOutcome.value?.json.ok ? 'Exact identity result returned.' : 'No matching people returned.')
+      if (found) {
+        setStatus(activeFilterEntries.length || Object.values(explicitFilters).some(Boolean)
+          ? `${constrainedFound} pass active filters · ${found} returned from sources`
+          : `${found} result${found === 1 ? '' : 's'}`)
+      } else {
+        setStatus(exactOutcome.status === 'fulfilled' && exactOutcome.value?.json.ok ? 'Exact identity result returned.' : 'No matching people returned.')
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'People search failed.')
     } finally {
@@ -416,13 +441,13 @@ export function PeopleSearchFlagshipV36_12() {
   }
 
   function showPrevious() {
-    if (!orderedObservations.length) return
+    if (!activeObservation || !orderedObservations.length) return
     const nextIndex = activeIndex <= 0 ? orderedObservations.length - 1 : activeIndex - 1
     setActiveKey(observationKey(orderedObservations[nextIndex]))
   }
 
   function showNext() {
-    if (!orderedObservations.length) return
+    if (!activeObservation || !orderedObservations.length) return
     const nextIndex = activeIndex >= orderedObservations.length - 1 ? 0 : activeIndex + 1
     setActiveKey(observationKey(orderedObservations[nextIndex]))
   }
@@ -448,13 +473,16 @@ export function PeopleSearchFlagshipV36_12() {
   return <>
     <style>{`
       .people-review-layout{display:grid;grid-template-columns:minmax(310px,.72fr) minmax(460px,1.28fr);gap:14px;align-items:start}
+      .people-review-layout.collapsed{grid-template-columns:1fr}
       .people-review-list{padding:0;overflow:hidden}
       .people-review-scroll{max-height:72vh;overflow:auto}
+      .people-review-layout.collapsed .people-review-scroll{max-height:none}
       .people-review-row{padding:14px 14px 13px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s ease,border-color .15s ease}
       .people-review-row:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
       .people-review-row.active{background:color-mix(in srgb,var(--accent) 10%,transparent);box-shadow:inset 3px 0 0 var(--accent)}
       .people-review-detail{position:sticky;top:86px;max-height:calc(100vh - 105px);overflow:auto}
       .people-review-bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+      .people-active-filters{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;align-items:center}
       @media(max-width:1050px){.people-review-layout{grid-template-columns:1fr}.people-review-detail{position:static;max-height:none}.people-review-scroll{max-height:none}}
     `}</style>
 
@@ -481,16 +509,23 @@ export function PeopleSearchFlagshipV36_12() {
       </div>
 
       {showFilters && <div className="grid two" style={{ marginTop: 14 }}>
-        <label><span className="kicker">Company</span><input value={company} onChange={event => setCompany(event.target.value)} placeholder="Acme Corp" style={{ width: '100%', marginTop: 5 }} /></label>
-        <label><span className="kicker">Title</span><input value={title} onChange={event => setTitle(event.target.value)} placeholder="Senior Systems Engineer" style={{ width: '100%', marginTop: 5 }} /></label>
-        <label><span className="kicker">Location</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Arlington, VA" style={{ width: '100%', marginTop: 5 }} /></label>
-        <label><span className="kicker">Skills</span><input value={skills} onChange={event => setSkills(event.target.value)} placeholder="RHEL, Ansible, Linux" style={{ width: '100%', marginTop: 5 }} /></label>
+        <label><span className="kicker">Company</span><input value={company} onChange={event => setCompany(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runSearch() }} placeholder="Example Systems" style={{ width: '100%', marginTop: 5 }} /></label>
+        <label><span className="kicker">Title</span><input value={title} onChange={event => setTitle(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runSearch() }} placeholder="Senior Systems Engineer" style={{ width: '100%', marginTop: 5 }} /></label>
+        <label><span className="kicker">Location</span><input value={location} onChange={event => setLocation(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runSearch() }} placeholder="Arlington, VA" style={{ width: '100%', marginTop: 5 }} /></label>
+        <label><span className="kicker">Skills</span><input value={skills} onChange={event => setSkills(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void runSearch() }} placeholder="RHEL, Ansible, Linux" style={{ width: '100%', marginTop: 5 }} /></label>
+        <div className="button-row" style={{ gridColumn: '1 / -1', marginTop: 0 }}><button className="btn secondary" disabled={working} onClick={() => void runSearch()}>{working ? 'Applying…' : 'Apply filters & search'}</button></div>
+      </div>}
+
+      {!!activeFilterEntries.length && <div className="people-active-filters" aria-label="Active recruiter constraints">
+        <span className="kicker">Active constraints</span>
+        {activeFilterEntries.map(([key, value]) => <span className="status-pill active" key={key}>{key}: {value}</span>)}
+        <span className="muted" style={{ fontSize: 11 }}>These are enforced on returned results; inferred query expansion remains separate.</span>
       </div>}
 
       {status && <div role="status" style={{ marginTop: 12, fontSize: 14 }}>{status}</div>}
     </section>
 
-    {exactContact?.person && !orderedObservations.length && <section className="product-panel" style={{ marginTop: 14 }}>
+    {exactContact?.person && !rawOrderedObservations.length && <section className="product-panel" style={{ marginTop: 14 }}>
       <span className="kicker">Exact identity result</span>
       <h3 style={{ margin: '5px 0' }}>{exactContact.person.displayName}</h3>
       <p className="muted" style={{ margin: 0 }}>{[exactContact.person.currentTitle, exactContact.person.currentEmployer, exactContact.person.location].filter(Boolean).join(' · ')}</p>
@@ -500,7 +535,9 @@ export function PeopleSearchFlagshipV36_12() {
       <div className="agentic-results-head" style={{ marginBottom: 10, gap: 12, alignItems: 'flex-end' }}>
         <div>
           <h2 style={{ margin: 0 }}>People</h2>
-          <span className="muted" style={{ fontSize: 13 }}>{orderedObservations.length} returned · ordered for review by visible search evidence, not a fit score</span>
+          <span className="muted" style={{ fontSize: 13 }}>
+            {activeFilterEntries.length ? `${orderedObservations.length} pass active filters · ${rawOrderedObservations.length} returned` : `${orderedObservations.length} returned`} · ordered for review by visible search evidence, not a fit score
+          </span>
         </div>
         <div className="people-review-bulk">
           <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
@@ -512,11 +549,11 @@ export function PeopleSearchFlagshipV36_12() {
         </div>
       </div>
 
-      <div className="people-review-layout">
+      <div className={`people-review-layout${activeObservation ? '' : ' collapsed'}`}>
         <section className="product-panel people-review-list" aria-label="People search results">
           <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span className="kicker">Review queue</span>
-            <span className="muted" style={{ fontSize: 11 }}>Click a person to inspect</span>
+            <span className="muted" style={{ fontSize: 11 }}>{activeObservation ? 'Click another person to inspect' : 'Click a person to open candidate preview'}</span>
           </div>
           <div className="people-review-scroll">
             {orderedObservations.map((observation, index) => {
@@ -572,6 +609,7 @@ export function PeopleSearchFlagshipV36_12() {
             <div className="button-row" style={{ margin: 0 }}>
               <button className="btn ghost" onClick={showPrevious} aria-label="Previous candidate">← Previous</button>
               <button className="btn ghost" onClick={showNext} aria-label="Next candidate">Next →</button>
+              <button className="btn ghost" onClick={() => setActiveKey('')} aria-label="Close candidate preview" title="Close candidate preview">×</button>
             </div>
           </div>
 
@@ -591,12 +629,12 @@ export function PeopleSearchFlagshipV36_12() {
               <div><span className="kicker">Executed search</span><h3 style={{ margin: '3px 0 0' }}>Requirement evidence</h3></div>
               <span>{activeCoverage.observedCount}/{activeCoverage.totalCount} visible</span>
             </div>
-            <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 0 }}>Observed means the returned provider fields visibly support the criterion. Not evidenced is unknown here — not a rejection, contradiction, or fit score.</p>
+            <p className="muted" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 0 }}>Observed means normalized candidate fields visibly support the criterion. Provider retrieval rationale never counts as candidate evidence. Not evidenced is unknown here — not a rejection, contradiction, or fit score.</p>
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
               {activeCoverage.criteria.map(item => <span
                 key={item.id}
                 className={`status-pill ${item.status === 'observed' ? 'success' : ''}`}
-                title={item.evidence || 'This search result does not carry enough normalized evidence for this criterion.'}
+                title={item.evidence || 'This search result does not carry enough normalized candidate evidence for this criterion.'}
               >{item.mustHave ? 'Required · ' : ''}{item.label.replace(/^Current or relevant (?:title|employer):\s*/i, '')} · {item.status === 'observed' ? 'observed' : 'not evidenced'}</span>)}
             </div>
           </section>
@@ -651,18 +689,21 @@ export function PeopleSearchFlagshipV36_12() {
             {activeContact && <button className="btn secondary" disabled={Boolean(contactKey)} onClick={() => void findContact(activeObservation)}>{contactKey === resolvedActiveKey ? 'Refreshing contact…' : 'Refresh contact'}</button>}
           </div>
 
-          {activeObservation.providerExplanation && <details className="advanced-disclosure" style={{ marginTop: 14 }}><summary>Why did this provider return this person?</summary><p className="muted" style={{ fontSize: 12, lineHeight: 1.55 }}>{activeObservation.providerExplanation}</p></details>}
+          {activeObservation.providerExplanation && <details className="advanced-disclosure" style={{ marginTop: 14 }}><summary>Why did this provider return this person?</summary><p className="muted" style={{ fontSize: 12, lineHeight: 1.55 }}>{activeObservation.providerExplanation}</p><p className="muted" style={{ fontSize: 11 }}>Retrieval rationale is provenance/context only and is never counted as candidate qualification evidence.</p></details>}
         </aside>}
       </div>
     </section>}
 
-    {response && !orderedObservations.length && !working && <section className="product-panel" style={{ marginTop: 14 }}><strong>No people returned.</strong><p className="muted" style={{ marginBottom: 0 }}>Try adding a company, location, title, or another identity anchor.</p></section>}
+    {response && rawOrderedObservations.length > 0 && !orderedObservations.length && !working && <section className="product-panel" style={{ marginTop: 14 }}><strong>No returned people pass the active recruiter constraints.</strong><p className="muted" style={{ marginBottom: 0 }}>{rawOrderedObservations.length} source result{rawOrderedObservations.length === 1 ? '' : 's'} returned before explicit Company / Title / Location / Skills constraints were enforced. Adjust a filter and Search again.</p></section>}
+
+    {response && !rawOrderedObservations.length && !working && <section className="product-panel" style={{ marginTop: 14 }}><strong>No people returned.</strong><p className="muted" style={{ marginBottom: 0 }}>Try adding a company, location, title, or another identity anchor.</p></section>}
 
     {response && <details className="product-panel" style={{ marginTop: 16 }}>
       <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Search diagnostics</summary>
       <div className="agentic-run-metrics" style={{ marginTop: 12 }}>
         <span><b>{response.discoveredBeforeCap || 0}</b><small>discovered</small></span>
-        <span><b>{response.returnedAfterCap ?? orderedObservations.length}</b><small>returned</small></span>
+        <span><b>{response.returnedAfterCap ?? rawOrderedObservations.length}</b><small>returned</small></span>
+        <span><b>{orderedObservations.length}</b><small>pass active filters</small></span>
         <span><b>{response.contributingProviders || 0}</b><small>sources contributed</small></span>
       </div>
       {!!response.telemetry?.length && <div className="agentic-source-status-row" style={{ marginTop: 12 }}>{response.telemetry.map(item => <span key={item.provider} className={`status-pill ${item.status === 'completed' ? 'success' : item.status === 'failed' ? 'warning' : ''}`}>{providerLabel(item.provider)} · {item.status} · {item.discovered}</span>)}</div>}
