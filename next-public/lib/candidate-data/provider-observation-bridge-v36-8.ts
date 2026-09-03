@@ -56,29 +56,29 @@ export function verifyProviderObservationV36_8(observation: CandidateProviderObs
 function evidenceForObservation(observation: CandidateProviderObservationV36_8): EvidenceItem[] {
   const source = observation.provider as SourceName
   const observedAt = observation.observedAt
-  const profileUrl = observation.profileUrls[0]?.url
+  const observedProfileUrl = observation.profileUrls[0]?.url
   const items: EvidenceItem[] = []
   if (observation.currentTitle || observation.headline) {
-    items.push({ id: `${source}:${observation.providerPersonId}:role`, label: `${source} profile observation`, detail: `Professional profile lists role: ${observation.currentTitle || observation.headline}.`, source, confidence: 'medium', url: profileUrl, observedAt })
+    items.push({ id: `${source}:${observation.providerPersonId}:role`, label: `${source} profile observation`, detail: `Professional profile lists role: ${observation.currentTitle || observation.headline}.`, source, confidence: 'medium', url: observedProfileUrl, observedAt })
   }
   if (observation.currentEmployer) {
-    items.push({ id: `${source}:${observation.providerPersonId}:employer`, label: `${source} employer observation`, detail: `Professional profile lists current employer: ${observation.currentEmployer}.`, source, confidence: 'medium', url: profileUrl, observedAt })
+    items.push({ id: `${source}:${observation.providerPersonId}:employer`, label: `${source} employer observation`, detail: `Professional profile lists current employer: ${observation.currentEmployer}.`, source, confidence: 'medium', url: observedProfileUrl, observedAt })
   }
   for (const skill of observation.skills.slice(0, 20)) {
-    items.push({ id: `${source}:${observation.providerPersonId}:skill:${skill.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, label: `${source} skill observation`, detail: `Professional profile lists skill: ${skill}.`, source, confidence: 'medium', url: profileUrl, observedAt })
+    items.push({ id: `${source}:${observation.providerPersonId}:skill:${skill.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, label: `${source} skill observation`, detail: `Professional profile lists skill: ${skill}.`, source, confidence: 'medium', url: observedProfileUrl, observedAt })
   }
   return items
 }
 
 export function providerObservationToSourceResultV36_8(observation: CandidateProviderObservationV36_8): SourceResult {
   const source = observation.provider as SourceName
-  const profileUrl = observation.profileUrls[0]?.url
 
-  // A commercial/provider-index row may report third-party professional URLs
-  // such as LinkedIn or GitHub. Preserve those URLs as observed profile links,
-  // but do not promote whichever URL happens to be first into a weight-1
-  // `source_url` identity signal. Cross-source identity authority is governed by
-  // the explicit identity-anchor policy and recruiter review, not array order.
+  // Commercial/provider-index rows often report third-party professional URLs.
+  // Those links belong to the observed person, not to the provider source row
+  // itself. Preserve them as profile_url signals and evidence citations, but do
+  // not assign them to SourceResult.profileUrl or source_url identity authority.
+  // This prevents a LinkedIn/GitHub URL returned by a vendor from being treated
+  // as a source-native profile link by older identity-resolution code.
   const identitySignals: IdentitySignal[] = [
     { type: 'name', value: observation.displayName, weight: 0.5, source },
     ...(observation.location ? [{ type: 'location' as const, value: observation.location, weight: 0.2, source }] : []),
@@ -94,7 +94,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
     headline: observation.currentTitle || observation.headline,
     location: observation.location,
     organization: observation.currentEmployer,
-    profileUrl,
+    profileUrl: undefined,
     skills: [...observation.skills],
     evidence: evidenceForObservation(observation),
     contactSignals: observation.profileUrls.slice(0, 10).map(item => ({
@@ -114,6 +114,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
       providerScoreScale: observation.providerScoreScale,
       providerExplanation: observation.providerExplanation,
       contactAvailability: observation.contactAvailability,
+      observedProfileUrls: observation.profileUrls,
       observationNote: 'Commercial/provider-index observation; recruiter verification remains required for qualification and cross-source identity claims.',
     },
   }
