@@ -19,7 +19,7 @@ function result(input: Partial<SourceResult> & Pick<SourceResult, 'source' | 'so
 }
 
 describe('V36.10 canonical professional identity anchors', () => {
-  it('normalizes equivalent LinkedIn profile URLs while ignoring query strings and scheme differences', () => {
+  it('normalizes equivalent LinkedIn profile URLs for display/dedupe without making them deterministic identity authority', () => {
     const a = canonicalProfessionalProfileUrlV36_10('https://www.linkedin.com/in/John-Doe/?utm_source=test')
     const b = canonicalProfessionalProfileUrlV36_10('linkedin.com/in/john-doe')
     expect(a?.canonicalUrl).toBe('https://linkedin.com/in/john-doe')
@@ -35,37 +35,61 @@ describe('V36.10 canonical professional identity anchors', () => {
     expect(canonicalProfessionalProfileUrlV36_10('https://github.com/acme/shared-project')).toBeNull()
   })
 
-  it('finds the same LinkedIn profile when one source is a provider and another is a public resume', () => {
+  it('keeps the same LinkedIn URL review-only even when a provider and public resume both report it', () => {
     const provider = result({
       source: 'people_data_labs',
       sourceProfileId: 'pdl-1',
-      displayName: 'John Doe',
-      profileUrl: 'https://www.linkedin.com/in/john-doe/',
+      displayName: 'Example Person',
+      profileUrl: 'https://www.linkedin.com/in/example-person/',
     })
     const resume = result({
       source: 'resume_xray',
       sourceProfileId: 'resume-1',
-      displayName: 'John Doe',
+      displayName: 'Example Person',
       evidence: [{
         id: 'ev-1',
         label: 'Public URL',
         detail: 'LinkedIn profile',
         source: 'resume_xray',
         confidence: 'medium',
-        url: 'https://linkedin.com/in/JOHN-DOE?trk=resume',
+        url: 'https://linkedin.com/in/EXAMPLE-PERSON?trk=resume',
         observedAt: '2026-09-02T00:00:00.000Z',
       }],
     })
 
     const shared = sharedProfessionalProfileAnchorsV36_10(provider, resume)
+    expect(shared.matched).toBe(false)
+    expect(shared.anchors).toEqual([])
+  })
+
+  it('can still use independently observed public GitHub person profiles as deterministic review anchors', () => {
+    const provider = result({
+      source: 'people_data_labs',
+      sourceProfileId: 'pdl-2',
+      displayName: 'Example Person',
+      contactSignals: [{
+        type: 'profile_url',
+        value: 'https://github.com/example-person',
+        source: 'people_data_labs',
+        verified: false,
+      }],
+    })
+    const github = result({
+      source: 'github',
+      sourceProfileId: 'example-person',
+      displayName: 'Example Person',
+      profileUrl: 'https://github.com/example-person',
+    })
+
+    const shared = sharedProfessionalProfileAnchorsV36_10(provider, github)
     expect(shared.matched).toBe(true)
-    expect(shared.anchors[0]?.network).toBe('linkedin')
-    expect(shared.anchors[0]?.canonicalUrl).toBe('https://linkedin.com/in/john-doe')
+    expect(shared.anchors[0]?.network).toBe('github')
+    expect(shared.anchors[0]?.canonicalUrl).toBe('https://github.com/example-person')
   })
 
   it('keeps different professional profiles separate', () => {
-    const a = result({ source: 'github', sourceProfileId: 'a', displayName: 'John Doe', profileUrl: 'https://github.com/john-a' })
-    const b = result({ source: 'exa', sourceProfileId: 'b', displayName: 'John Doe', profileUrl: 'https://github.com/john-b' })
+    const a = result({ source: 'github', sourceProfileId: 'a', displayName: 'Example Person', profileUrl: 'https://github.com/example-a' })
+    const b = result({ source: 'exa', sourceProfileId: 'b', displayName: 'Example Person', profileUrl: 'https://github.com/example-b' })
     expect(sharedProfessionalProfileAnchorsV36_10(a, b).matched).toBe(false)
   })
 })
