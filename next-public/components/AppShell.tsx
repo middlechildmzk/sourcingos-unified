@@ -33,9 +33,9 @@ const primary: NavigationItem[] = [
 
 function active(pathname: string, href: string) {
   if (href === '/app/roles') return pathname === href || pathname.startsWith('/app/roles/') || pathname.startsWith('/app/agentic-sourcing/')
-  if (href === '/app/search') return pathname === href || pathname.startsWith('/app/search/') || pathname === '/app/people-search' || pathname === '/app/agentic-sourcing' || pathname === '/app/candidate-search' || pathname === '/app/acquisition'
+  if (href === '/app/search') return pathname === href || pathname.startsWith('/app/search/') || pathname === '/app/people-search' || pathname === '/app/agentic-sourcing' || pathname === '/app/candidate-search'
   if (href === '/app/candidate-database') return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/app/network' || pathname === '/app/evidence-ledger'
-  if (href === '/app/sources') return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/sources' || pathname === '/app/import'
+  if (href === '/app/sources') return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/sources' || pathname === '/app/import' || pathname === '/app/acquisition'
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
