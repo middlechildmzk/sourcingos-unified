@@ -1,19 +1,10 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// lib/contact-enrichment/providers/people-data-labs.ts — Live PDL adapter.
-//
-// SERVER-ONLY. Never import in a client component.
-//   - Reads PDL_API_KEY from process.env (never NEXT_PUBLIC_)
-//   - API key sent via X-Api-Key header, never logged, never returned to client
-//   - Explicit data allowlist: request only professional/contact fields we use
-//   - Ownership, deliverability, and outreach permission remain separate
-//   - Raw provider errors and full payloads never reach the client
-// ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
 import {
   ContactEnrichmentRequest,
   ContactEnrichmentResult,
   ContactOwnershipConfidence,
   ContactSignal,
+  type ContactChannelKind,
   ProviderMatchMetadata,
   ResolvedProfessionalPerson,
   ResolvedProfessionalProfileUrl,
@@ -24,10 +15,6 @@ import {
 const PROVIDER = 'people_data_labs' as const
 const PDL_ENDPOINT = 'https://api.peopledatalabs.com/v5/person/enrich'
 
-/**
- * Data minimization is part of the provider contract, not a UI concern.
- * Do not broaden this list without an explicit product need + regression update.
- */
 export const PDL_DATA_INCLUDE_V35 = [
   'id',
   'likelihood',
@@ -46,6 +33,7 @@ export const PDL_DATA_INCLUDE_V35 = [
   'emails.type',
   'emails.first_seen',
   'emails.last_seen',
+  'mobile_phone',
   'phone_numbers',
   'profiles.url',
 ] as const
@@ -68,7 +56,6 @@ function emptyResult(message: string, request: ContactEnrichmentRequest, warning
   }
 }
 
-/** Build conservative PDL query params. Professional identity fields only. */
 export function buildPeopleDataLabsParamsV35(request: ContactEnrichmentRequest): URLSearchParams {
   const params = new URLSearchParams()
   if (request.fullName) {
@@ -81,9 +68,6 @@ export function buildPeopleDataLabsParamsV35(request: ContactEnrichmentRequest):
   if (request.companyDomain) params.set('company', request.companyDomain)
   if (request.location) params.set('location', request.location)
 
-  // Title is deliberately NOT sent as a provider match input. A title can rank
-  // an already-grounded identity proposal, but it is too weak to establish the
-  // person's identity and can amplify same-name false positives.
   const profile = request.linkedinUrl || request.profileUrl || request.githubUrl
   if (profile) params.append('profile', profile)
 
@@ -192,79 +176,82 @@ function resolvedPerson(person: Record<string, unknown>, match: ProviderMatchMet
   }
 }
 
-/** Map a PDL person record to normalized, compliant ContactSignal[]. */
+function emailKind(value: unknown): ContactChannelKind {
+  const type = String(value || '').toLowerCase()
+  if (/work|professional|business/.test(type)) return 'work_email'
+  if (/personal|private/.test(type)) return 'personal_email'
+  return 'other_email'
+}
+
+function phoneKind(value: unknown): ContactChannelKind {
+  const type = String(value || '').toLowerCase()
+  if (/mobile|cell/.test(type)) return 'mobile_phone'
+  if (/work|office|business/.test(type)) return 'work_phone'
+  if (/home|residential/.test(type)) return 'home_phone'
+  return 'other_phone'
+}
+
 function mapSignals(person: Record<string, unknown>, match: ProviderMatchMetadata): ContactSignal[] {
   const signals: ContactSignal[] = []
   const ownershipConfidence = ownershipFor(match)
   const providerRef = match.providerPersonId ? `pdl_person:${match.providerPersonId}` : undefined
+  const confidence = match.matchState === 'strong' || match.matchState === 'exact_anchor' ? 'high' : 'medium'
 
-  const emails = person.emails
-  if (Array.isArray(emails)) {
-    for (const e of emails) {
-      const value = typeof e === 'string' ? e : (e?.address as string | undefined)
-      if (value) {
-        signals.push(makeContactSignal({
-          type: 'email',
-          value,
-          sourceProvider: PROVIDER,
-          confidence: match.matchState === 'strong' || match.matchState === 'exact_anchor' ? 'high' : 'medium',
-          ownershipConfidence,
-          deliverability: 'unknown',
-          rawSource: providerRef,
-          notes: 'Discovered via People Data Labs. Identity-match confidence and email deliverability are separate; permission remains unknown.',
-        }))
-      }
-    }
+  const addEmail = (value: unknown, channelKind: ContactChannelKind, notes: string) => {
+    const email = stringValue(value)
+    if (!email) return
+    signals.push(makeContactSignal({
+      type: 'email', channelKind, value: email, sourceProvider: PROVIDER,
+      confidence, ownershipConfidence, deliverability: 'unknown', rawSource: providerRef, notes,
+    }))
+  }
+  const addPhone = (value: unknown, channelKind: ContactChannelKind, notes: string) => {
+    const phone = stringValue(value)
+    if (!phone) return
+    signals.push(makeContactSignal({
+      type: 'phone', channelKind, value: phone, sourceProvider: PROVIDER,
+      confidence: channelKind === 'mobile_phone' ? confidence : 'low', ownershipConfidence,
+      deliverability: 'unknown', rawSource: providerRef, notes,
+    }))
   }
 
-  const phones = person.phone_numbers
-  if (Array.isArray(phones)) {
-    for (const p of phones) {
-      const value = typeof p === 'string' ? p : (p?.number as string | undefined)
-      if (value) {
-        signals.push(makeContactSignal({
-          type: 'phone',
-          value,
-          sourceProvider: PROVIDER,
-          confidence: 'low',
-          ownershipConfidence,
-          deliverability: 'unknown',
-          rawSource: providerRef,
-          notes: 'Discovered via People Data Labs. Unverified phone signal; permission remains unknown.',
-        }))
-      }
-    }
+  // Direct normalized fields are intentionally admitted first so a later less-
+  // specific array duplicate cannot downgrade their channel semantics.
+  addEmail(person.work_email, 'work_email', 'People Data Labs explicitly returned work_email. Identity ownership, deliverability, and permission remain separate.')
+  addEmail(person.recommended_personal_email, 'personal_email', 'People Data Labs explicitly returned recommended_personal_email. Provider recommendation does not imply verification or outreach permission.')
+  addPhone(person.mobile_phone, 'mobile_phone', 'People Data Labs explicitly returned mobile_phone. Permission remains unknown.')
+
+  for (const e of Array.isArray(person.emails) ? person.emails : []) {
+    const row = e && typeof e === 'object' ? e as Record<string, unknown> : {}
+    const value = typeof e === 'string' ? e : row.address
+    addEmail(value, emailKind(row.type), 'People Data Labs email-array observation. Provider type is preserved when supplied; permission remains unknown.')
+  }
+
+  for (const p of Array.isArray(person.phone_numbers) ? person.phone_numbers : []) {
+    const row = p && typeof p === 'object' ? p as Record<string, unknown> : {}
+    const value = typeof p === 'string' ? p : row.number || row.value
+    addPhone(value, phoneKind(row.type || row.sub_type || row.subType), 'People Data Labs phone-array observation. Provider subtype is preserved when supplied; permission remains unknown.')
   }
 
   if (typeof person.linkedin_url === 'string') {
     signals.push(makeContactSignal({
-      type: 'social_url',
-      value: person.linkedin_url,
-      sourceProvider: PROVIDER,
-      confidence: ownershipConfidence === 'strong' ? 'high' : 'medium',
-      ownershipConfidence,
-      rawSource: providerRef,
+      type: 'social_url', channelKind: 'professional_profile', value: person.linkedin_url,
+      sourceProvider: PROVIDER, confidence: ownershipConfidence === 'strong' ? 'high' : 'medium',
+      ownershipConfidence, rawSource: providerRef,
     }))
   }
   if (typeof person.github_url === 'string') {
     signals.push(makeContactSignal({
-      type: 'profile_url',
-      value: person.github_url,
-      sourceProvider: PROVIDER,
-      confidence: ownershipConfidence === 'strong' ? 'high' : 'medium',
-      ownershipConfidence,
-      rawSource: providerRef,
+      type: 'profile_url', channelKind: 'professional_profile', value: person.github_url,
+      sourceProvider: PROVIDER, confidence: ownershipConfidence === 'strong' ? 'high' : 'medium',
+      ownershipConfidence, rawSource: providerRef,
     }))
   }
   const jobDomain = person.job_company_website as string | undefined
   if (jobDomain) {
     signals.push(makeContactSignal({
-      type: 'company_domain',
-      value: jobDomain,
-      sourceProvider: PROVIDER,
-      confidence: 'low',
-      ownershipConfidence,
-      rawSource: providerRef,
+      type: 'company_domain', channelKind: 'company_domain', value: jobDomain,
+      sourceProvider: PROVIDER, confidence: 'low', ownershipConfidence, rawSource: providerRef,
     }))
   }
 
@@ -310,33 +297,21 @@ export async function enrichWithPeopleDataLabs(
     })
 
     if (res.status === 404) {
-      return emptyResult(
-        'No contact signal found from People Data Labs. Try adding a company domain or source profile URL.',
-        request,
-      )
+      return emptyResult('No contact signal found from People Data Labs. Try adding a company domain or source profile URL.', request)
     }
-
     if (res.status === 401 || res.status === 403) {
       return emptyResult('Contact enrichment provider rejected the request. Check provider configuration.', request, ['Provider auth error.'])
     }
-
     if (res.status === 429) {
       return emptyResult('Contact enrichment rate limit reached. Try again shortly.', request, ['Provider rate limited.'])
     }
-
     if (!res.ok) {
       return emptyResult('Contact enrichment service is unavailable right now. Try again later.', request, [`Provider status ${res.status}.`])
     }
 
-    const json = await res.json() as {
-      data?: Record<string, unknown>
-      likelihood?: number
-      matched?: unknown
-    }
+    const json = await res.json() as { data?: Record<string, unknown>; likelihood?: number; matched?: unknown }
     const person = json.data
-    if (!person) {
-      return emptyResult('No contact signal found from People Data Labs.', request)
-    }
+    if (!person) return emptyResult('No contact signal found from People Data Labs.', request)
 
     const match = pdlMatchMetadata(person, json.likelihood, json.matched)
     const signals = mapSignals(person, match)
