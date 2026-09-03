@@ -123,7 +123,7 @@ describe('V36.16 provider data fabric', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(4)
     expect(result.observations).toHaveLength(1)
     const person = result.observations[0]
-    expect(person.displayName).toBe('Sample Candidate - Senior Linux Engineer')
+    expect(person.displayName).toBe('Sample Candidate')
     expect(person.skills).toEqual([])
     expect(person.currentEmployer).toBeUndefined()
     expect(person.currentTitle).toBeUndefined()
