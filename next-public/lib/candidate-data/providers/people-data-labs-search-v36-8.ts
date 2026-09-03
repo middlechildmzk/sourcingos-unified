@@ -35,19 +35,30 @@ function simplePersonName(value: string): string | undefined {
   return cleaned.toLowerCase()
 }
 
+/**
+ * PDL supports bool/should, but its restricted Person Search parser does not
+ * accept every optional Elasticsearch bool parameter. A bool containing only
+ * should clauses already requires one match by Elasticsearch default, so do
+ * not send `minimum_should_match` here.
+ */
 function oneOfMatch(field: string, values: string[]) {
   return {
     bool: {
       should: values.map(value => ({ match_phrase: { [field]: value } })),
-      minimum_should_match: 1,
     },
   }
+}
+
+function exactKeywordMatch(field: string, values: string[]) {
+  return values.length === 1
+    ? { term: { [field]: values[0] } }
+    : { terms: { [field]: values } }
 }
 
 /**
  * PDL Search executes Elasticsearch directly against its dataset with no query
  * cleaning. SourcingOS therefore sends only bounded structured fields. A plain
- * 2-4 token person name is also safe to map to the documented full_name field.
+ * 2-4 token person name maps to PDL's documented keyword `full_name` field.
  */
 export function buildPeopleDataLabsSearchBodyV36_8(request: CandidateDataSearchRequestV36_8) {
   const names = normalizeTerms(request.names, 20)
@@ -57,7 +68,7 @@ export function buildPeopleDataLabsSearchBodyV36_8(request: CandidateDataSearchR
   const locations = normalizeTerms(request.locations, 30)
   const must: Record<string, unknown>[] = []
 
-  if (names.length || inferredName) must.push(oneOfMatch('full_name', names.length ? names : [inferredName!]))
+  if (names.length || inferredName) must.push(exactKeywordMatch('full_name', names.length ? names : [inferredName!]))
   if (titles.length) must.push(oneOfMatch('job_title', titles))
   if (skills.length) must.push(oneOfMatch('skills', skills))
   if (locations.length) must.push(oneOfMatch('location_name', locations))
@@ -161,9 +172,8 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
   }
 
   try {
-    // PDL's current Person Search contract documents GET with the Elasticsearch
-    // query serialized in the `query` request parameter. Do not POST a legacy
-    // body or send the unsupported legacy `from` offset field.
+    // PDL supports GET and POST for Person Search. GET keeps this bounded query
+    // explicit and easy to inspect while the API key remains header-only.
     const url = new URL(ENDPOINT)
     url.searchParams.set('query', JSON.stringify(body.query))
     url.searchParams.set('size', String(body.size))
