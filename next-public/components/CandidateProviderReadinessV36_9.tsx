@@ -48,7 +48,7 @@ export function CandidateProviderReadinessV36_9() {
     return (
       <div className="preview-banner" style={{ marginBottom: 16 }} role="status">
         <span className="pb-icon">!</span>
-        <div><strong>Could not verify external provider readiness.</strong><br />The search page is available, but SourcingOS could not read the provider-status endpoint in this session.</div>
+        <div><strong>Could not verify external provider configuration.</strong><br />The search page is available, but SourcingOS could not read the provider-status endpoint in this session.</div>
       </div>
     )
   }
@@ -59,7 +59,7 @@ export function CandidateProviderReadinessV36_9() {
         <span className="pb-icon">!</span>
         <div>
           <strong>External Talent Universe is not active in this environment.</strong><br />
-          Zero professional people-search providers are executable. This Talent Universe tab does <b>not</b> silently fall back to your imported LinkedIn connections or Candidate Database; external results will remain empty until at least one provider key is configured. {missing.length ? `${missing.length} implemented provider ${missing.length === 1 ? 'lane is' : 'lanes are'} waiting for credentials.` : ''}
+          Zero professional people-search providers have executable credentials present. This Talent Universe tab does <b>not</b> silently fall back to your imported LinkedIn connections or Candidate Database; external results will remain empty until at least one provider key is configured. {missing.length ? `${missing.length} implemented provider ${missing.length === 1 ? 'lane is' : 'lanes are'} waiting for credentials.` : ''}
         </div>
       </div>
     )
@@ -67,12 +67,12 @@ export function CandidateProviderReadinessV36_9() {
 
   return (
     <div className="cta" style={{ marginTop: 0, marginBottom: 16 }} role="status">
-      <strong>External Talent Universe active · {executable.length} provider{executable.length === 1 ? '' : 's'} ready.</strong>
+      <strong>External Talent Universe configured · {executable.length} provider key{executable.length === 1 ? '' : 's'} present.</strong>
       <div className="chips" style={{ marginTop: 8 }}>
-        {executable.map(provider => <span className="tag" key={provider.provider}>{provider.label} · ready</span>)}
+        {executable.map(provider => <span className="tag" key={provider.provider}>{provider.label} · key present</span>)}
         {!!missing.length && <span className="tag muted">{missing.length} more waiting for keys</span>}
       </div>
-      <small className="muted">Only providers labeled ready can execute. Saved/imported candidates remain a separate source class in My Database / Workbench.</small>
+      <small className="muted">Key presence makes a provider executable but does not prove vendor authentication or API compatibility. A provider is live-verified only after a real search returns successful telemetry. Saved/imported candidates remain a separate source class in My Database / Workbench.</small>
     </div>
   )
 }
