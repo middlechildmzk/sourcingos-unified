@@ -1,5 +1,6 @@
 import 'server-only'
 import { compareSourceProfiles } from './candidate-graph'
+import { sharedProfessionalProfileAnchorsV36_10 } from './identity-anchors-v36-10'
 import { sourceResultFromStoredProfile } from './stored-source-profile-v33-2'
 import type { SourceResult } from './source-types'
 
@@ -29,14 +30,35 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|')
 }
 
+function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
+  const base = compareSourceProfiles(existing, incoming)
+  const professional = sharedProfessionalProfileAnchorsV36_10(existing, incoming)
+  const professionalRule = {
+    ruleId: 'shared_canonical_professional_profile',
+    passed: professional.matched,
+    evidence: professional.matched
+      ? professional.reasons.join(' · ')
+      : 'No shared canonical LinkedIn, GitHub, Stack Overflow, Hugging Face, DEV, Kaggle, or ORCID profile URL',
+  }
+
+  return {
+    ...base,
+    score: Math.min(100, base.score + (professional.matched ? 40 : 0)),
+    reasons: Array.from(new Set([...base.reasons, ...professional.reasons])),
+    deterministicRules: [...base.deterministicRules, professionalRule],
+    deterministicAnchor: base.deterministicAnchor || professional.matched,
+  }
+}
+
 /**
  * Create recruiter-review proposals for a newly saved source profile.
  *
  * Automatic proposal creation is intentionally stricter than manual identity
  * review: at least one deterministic cross-source anchor is required (shared
- * observed public email, personal domain, or explicit profile cross-link).
- * Names, locations, organizations, and topic overlap may rank a proposal but
- * can never cause one to be created on their own.
+ * observed public email, personal domain, explicit profile cross-link, or the
+ * same canonical professional profile URL observed independently by two
+ * sources). Names, locations, organizations, and topic overlap may rank a
+ * proposal but can never cause one to be created on their own.
  *
  * This function never links source profiles and never changes candidate IDs.
  */
@@ -76,7 +98,7 @@ export async function createDeterministicIdentityProposals(input: {
       if (!existing) continue
       considered += 1
 
-      const comparison = compareSourceProfiles(existing, input.incomingResult)
+      const comparison = identityComparisonV36_10(existing, input.incomingResult)
       if (comparison.sameStableId || comparison.blocked || !comparison.deterministicAnchor) continue
 
       candidates.push({
