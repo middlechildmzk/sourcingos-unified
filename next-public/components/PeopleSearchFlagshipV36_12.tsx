@@ -305,7 +305,7 @@ export function PeopleSearchFlagshipV36_12() {
       </div>
 
       {showFilters && <div className="grid two" style={{ marginTop: 14 }}>
-        <label><span className="kicker">Company</span><input value={company} onChange={event => setCompany(event.target.value)} placeholder="Maximus" style={{ width: '100%', marginTop: 5 }} /></label>
+        <label><span className="kicker">Company</span><input value={company} onChange={event => setCompany(event.target.value)} placeholder="Acme Corp" style={{ width: '100%', marginTop: 5 }} /></label>
         <label><span className="kicker">Title</span><input value={title} onChange={event => setTitle(event.target.value)} placeholder="Senior Talent Sourcer" style={{ width: '100%', marginTop: 5 }} /></label>
         <label><span className="kicker">Location</span><input value={location} onChange={event => setLocation(event.target.value)} placeholder="Minneapolis, MN" style={{ width: '100%', marginTop: 5 }} /></label>
         <label><span className="kicker">Skills</span><input value={skills} onChange={event => setSkills(event.target.value)} placeholder="RHEL, Ansible, Linux" style={{ width: '100%', marginTop: 5 }} /></label>
