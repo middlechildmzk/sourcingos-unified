@@ -100,8 +100,9 @@ function toObservation(person: JsonRecord): CandidateProviderObservationV36_8 | 
   const organization = record(person.organization)
   const currentEmployer = str(organization.name) || str(person.organization_name)
   const hasEmail = bool(person.has_email)
-  const directPhoneRaw = person.has_direct_phone
-  const hasPhone = typeof directPhoneRaw === 'boolean' ? directPhoneRaw : str(directPhoneRaw) ? true : undefined
+  // Apollo may return explanatory text for direct-phone availability. Text is not a
+  // boolean observation, so it remains unknown until an explicit phone reveal resolves it.
+  const hasPhone = bool(person.has_direct_phone)
 
   return {
     provider: PROVIDER,
