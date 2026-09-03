@@ -48,5 +48,39 @@ drop policy if exists candidate_artifacts_owner_delete on public.candidate_artif
 create policy candidate_artifacts_owner_delete on public.candidate_artifacts
   for delete using (auth.uid() = owner_id);
 
+-- Identity fusion moves the explicitly reviewed source profile onto the selected
+-- canonical candidate. Keep any document provenance linked to that source
+-- profile synchronized automatically so a resume can never point at the old
+-- temporary candidate after the observation itself has moved.
+create or replace function public.sync_candidate_artifact_identity_v36_10()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.candidate_id is distinct from old.candidate_id then
+    update public.candidate_artifacts
+       set candidate_id = new.candidate_id,
+           updated_at = now()
+     where owner_id = new.owner_id
+       and source_profile_id = new.id;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.sync_candidate_artifact_identity_v36_10() from public, anon, authenticated;
+
+drop trigger if exists sync_candidate_artifact_identity_v36_10 on public.source_profiles;
+create trigger sync_candidate_artifact_identity_v36_10
+  after update of candidate_id on public.source_profiles
+  for each row
+  when (old.candidate_id is distinct from new.candidate_id)
+  execute function public.sync_candidate_artifact_identity_v36_10();
+
 comment on table public.candidate_artifacts is
   'V36.10 provenance-preserving candidate documents/artifacts. Artifacts are never merge authority by themselves; extracted identity anchors feed recruiter-reviewed identity resolution.';
+
+comment on function public.sync_candidate_artifact_identity_v36_10() is
+  'Keeps candidate artifact provenance attached to the same canonical person when a recruiter-confirmed identity review moves its source profile.';
