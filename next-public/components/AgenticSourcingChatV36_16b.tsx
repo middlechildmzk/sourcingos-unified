@@ -3,148 +3,32 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 type Requirement = { text: string; mustHave: boolean }
-type ProviderRequest = {
-  query: string
-  requirements?: Requirement[]
-  names?: string[]
-  titles?: string[]
-  skills?: string[]
-  companies?: string[]
-  locations?: string[]
-  limit: number
-  highFreshness: boolean
-}
-type ToolPlan = {
-  tool: string
-  rationale: string
-  costClass: string
-  freshnessClass: string
-  approvalRequired: boolean
-  executableNow: boolean
-  targetCount?: number
-}
-type PeoplePlan = {
-  version: 'v36.15'
-  action: 'search_people' | 'approval_required'
-  assistantSummary: string
-  providerRequest: ProviderRequest
-  criteria: { titles: string[]; skills: string[]; companies: string[]; locations: string[]; requirements: Requirement[]; limit: number }
-  toolPlan: ToolPlan[]
-  readOnly: true
-  model: { configured: boolean; used: boolean; provider?: string; model?: string }
-  assumptions: string[]
-  warnings: string[]
-}
-type WebPlan = {
-  version: 'v36.16'
-  action: 'search_web'
-  assistantSummary: string
-  webRequest: { action: 'search_web'; query: string }
-  toolPlan: ToolPlan[]
-  readOnly: true
-  model: { configured: boolean; used: false; provider?: string; model?: string }
-  assumptions: string[]
-  warnings: string[]
-}
+type ProviderRequest = { query: string; requirements?: Requirement[]; names?: string[]; titles?: string[]; skills?: string[]; companies?: string[]; locations?: string[]; limit: number; highFreshness: boolean }
+type ToolPlan = { tool: string; rationale: string; costClass: string; freshnessClass: string; approvalRequired: boolean; executableNow: boolean; targetCount?: number }
+type PeoplePlan = { version: 'v36.15'; action: 'search_people' | 'approval_required'; assistantSummary: string; providerRequest: ProviderRequest; criteria: { titles: string[]; skills: string[]; companies: string[]; locations: string[]; requirements: Requirement[]; limit: number }; toolPlan: ToolPlan[]; readOnly: true; model: { configured: boolean; used: boolean; provider?: string; model?: string }; assumptions: string[]; warnings: string[] }
+type WebPlan = { version: 'v36.16'; action: 'search_web'; assistantSummary: string; webRequest: { action: 'search_web'; query: string }; toolPlan: ToolPlan[]; readOnly: true; model: { configured: boolean; used: false; provider?: string; model?: string }; assumptions: string[]; warnings: string[] }
 type AgentPlan = PeoplePlan | WebPlan
 
 type ProfileUrl = { kind: string; url: string }
-type Observation = {
-  provider: string
-  providerPersonId: string
-  displayName: string
-  headline?: string
-  currentTitle?: string
-  currentEmployer?: string
-  location?: string
-  skills?: string[]
-  profileUrls?: ProfileUrl[]
-  contactAvailability?: { email: boolean | 'unknown'; phone: boolean | 'unknown' }
-  observedAt?: string
-}
+type Observation = { provider: string; providerPersonId: string; displayName: string; headline?: string; currentTitle?: string; currentEmployer?: string; location?: string; skills?: string[]; profileUrls?: ProfileUrl[]; contactAvailability?: { email: boolean | 'unknown'; phone: boolean | 'unknown' }; observedAt?: string }
 type Telemetry = { provider: string; status: string; discovered: number; latencyMs: number; message?: string }
-type SearchResult = {
-  observations: Observation[]
-  telemetry: Telemetry[]
-  discoveredBeforeCap: number
-  returnedAfterCap: number
-  contributingProviders: number
-  warnings: string[]
-}
-type WebResearchResult = {
-  provider: string
-  transport?: string
-  tool?: string
-  text: string
-  observedAt?: string
-  freshness?: string
-}
-type ContactSignal = {
-  type: 'email' | 'phone'
-  value: string
-  channelKind?: string
-  sourceProvider?: string
-  confidence?: string
-  deliverability?: string
-  permissionStatus?: string
-}
-type AsyncAttempt = {
-  provider: string
-  state: string
-  estimatedCredits?: number
-  actualCredits?: number
-  underlyingProvider?: string
-  resultCount?: number
-  warnings?: string[]
-}
-type AsyncContactJob = {
-  id: string
-  status: 'queued' | 'running' | 'completed' | 'exhausted' | 'failed' | 'canceled'
-  requestedGoals: string[]
-  satisfiedGoals: string[]
-  missingGoals: string[]
-  currentProvider?: string | null
-  providerChain: string[]
-  attempts: AsyncAttempt[]
-  signals: ContactSignal[]
-  estimatedCredits: number
-  actualCredits: number
-  error?: string | null
-  updatedAt?: string
-}
-type ContactOutcome = {
-  person: Observation
-  ok: boolean
-  message: string
-  signals: ContactSignal[]
-  missingGoals: string[]
-  asyncJob?: AsyncContactJob
-  asyncError?: string
-  error?: string
-}
+type SearchResult = { observations: Observation[]; telemetry: Telemetry[]; discoveredBeforeCap: number; returnedAfterCap: number; contributingProviders: number; warnings: string[] }
+type WebResearchResult = { provider: string; transport?: string; tool?: string; text: string; observedAt?: string; freshness?: string }
+type ContactSignal = { type: 'email' | 'phone'; value: string; channelKind?: string; sourceProvider?: string; confidence?: string; deliverability?: string; permissionStatus?: string }
+type AsyncAttempt = { provider: string; state: string; estimatedCredits?: number; actualCredits?: number; underlyingProvider?: string; resultCount?: number; warnings?: string[] }
+type AsyncContactJob = { id: string; status: 'queued' | 'running' | 'completed' | 'exhausted' | 'failed' | 'canceled'; requestedGoals: string[]; satisfiedGoals: string[]; missingGoals: string[]; currentProvider?: string | null; providerChain: string[]; attempts: AsyncAttempt[]; signals: ContactSignal[]; estimatedCredits: number; actualCredits: number; error?: string | null; updatedAt?: string }
+type ContactOutcome = { person: Observation; ok: boolean; message: string; signals: ContactSignal[]; missingGoals: string[]; asyncJob?: AsyncContactJob; asyncError?: string; error?: string }
 type ContactBatch = { requested: number; outcomes: ContactOutcome[] }
 type Turn = { id: string; user: string; plan?: AgentPlan; search?: SearchResult; web?: WebResearchResult; contact?: ContactBatch; error?: string }
 
-function label(value: string) {
-  return value.split('_').map(part => part ? part[0].toUpperCase() + part.slice(1) : '').join(' ')
-}
+const ACTIVE_JOB_STATES = new Set(['queued', 'running'])
 
-function channel(value: boolean | 'unknown' | undefined) {
-  if (value === true) return 'available'
-  if (value === false) return 'not returned'
-  return 'unknown'
-}
-
+function label(value: string) { return value.split('_').map(part => part ? part[0].toUpperCase() + part.slice(1) : '').join(' ') }
+function channel(value: boolean | 'unknown' | undefined) { return value === true ? 'available' : value === false ? 'not returned' : 'unknown' }
 function dedupeSignals(signals: ContactSignal[]) {
   const seen = new Set<string>()
-  return signals.filter(signal => {
-    const key = `${signal.type}:${signal.channelKind || ''}:${signal.value.toLowerCase()}:${signal.sourceProvider || ''}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  return signals.filter(signal => { const key = `${signal.type}:${signal.channelKind || ''}:${signal.value.toLowerCase()}:${signal.sourceProvider || ''}`; if (seen.has(key)) return false; seen.add(key); return true })
 }
-
 function criterionGroups(plan: AgentPlan) {
   if (!('criteria' in plan)) return []
   const groups: Array<{ label: string; values: string[]; kind?: 'must' | 'preference' }> = []
@@ -163,10 +47,7 @@ function PlanCard({ plan }: { plan: AgentPlan }) {
   const groups = criterionGroups(plan)
   const executionLabel = plan.action === 'search_people' ? 'auto-run people search' : plan.action === 'search_web' ? 'auto-run live web' : 'approval gated'
   return <div className="agent-chat-plan">
-    <div className="agent-chat-plan-head">
-      <div><span className="kicker">SourcingOS interpretation</span><div className="agent-chat-answer">{plan.assistantSummary}</div></div>
-      <div className="chips"><span className="status-pill success">{executionLabel}</span><span className="status-pill">{plan.model.used ? `${label(plan.model.provider || 'AI')} · ${plan.model.model || 'model'}` : 'deterministic planner'}</span></div>
-    </div>
+    <div className="agent-chat-plan-head"><div><span className="kicker">SourcingOS interpretation</span><div className="agent-chat-answer">{plan.assistantSummary}</div></div><div className="chips"><span className="status-pill success">{executionLabel}</span><span className="status-pill">{plan.model.used ? `${label(plan.model.provider || 'AI')} · ${plan.model.model || 'model'}` : 'deterministic planner'}</span></div></div>
     {!!groups.length && <div className="agent-chat-criteria">{groups.map(group => <div key={group.label} className="agent-chat-criterion"><small>{group.label}</small><div className="chips">{group.values.slice(0, 12).map(value => <span className={group.kind === 'must' ? 'status-pill success' : 'tag'} key={value}>{value}</span>)}</div></div>)}</div>}
     <div className="agent-tool-trace">{plan.toolPlan.map((tool, index) => <div className="product-row" key={`${tool.tool}-${index}`}><div className="product-row-main"><div className="product-row-title">{tool.executableNow ? '→' : '⏸'} {tool.tool}</div><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{tool.rationale}</div></div><div className="chips"><span className="status-pill">{tool.costClass}</span><span className="status-pill">{tool.freshnessClass}</span>{tool.approvalRequired && <span className="status-pill">approval required</span>}</div></div>)}</div>
     {!!plan.warnings.length && <details className="advanced-disclosure" style={{ marginTop: 10 }}><summary>Planner notes ({plan.warnings.length})</summary><div className="product-list" style={{ marginTop: 8 }}>{plan.warnings.map((warning, index) => <div className="product-row" key={`${warning}-${index}`}><div className="product-row-meta" style={{ whiteSpace: 'normal' }}>{warning}</div></div>)}</div></details>}
@@ -192,12 +73,8 @@ function WebResearch({ result }: { result: WebResearchResult }) {
 }
 
 function AsyncJobStatus({ job }: { job: AsyncContactJob }) {
-  const active = job.status === 'queued' || job.status === 'running'
-  return <div className="agent-async-job">
-    <div className="agent-async-head"><strong>{active ? 'Continuing enrichment in background' : `Async enrichment ${job.status}`}</strong><div className="chips"><span className={`status-pill ${job.status === 'completed' ? 'success' : ''}`}>{job.status}</span><span className="status-pill">est. {job.estimatedCredits} cr</span><span className="status-pill">actual {job.actualCredits} cr</span></div></div>
-    <div className="muted" style={{ marginTop: 5 }}>{job.currentProvider ? `Waiting on ${label(job.currentProvider)}.` : job.missingGoals.length ? `Still missing ${job.missingGoals.map(label).join(', ')}.` : 'Requested contact goals are satisfied.'}</div>
-    {!!job.attempts.length && <div className="agent-async-attempts">{job.attempts.map((attempt, index) => <span className={`status-pill ${attempt.state === 'completed' ? 'success' : ''}`} key={`${attempt.provider}-${index}`}>{label(attempt.provider)} · {attempt.state}{attempt.underlyingProvider ? ` → ${label(attempt.underlyingProvider)}` : ''}{typeof attempt.actualCredits === 'number' ? ` · ${attempt.actualCredits}cr` : ''}</span>)}</div>}
-  </div>
+  const active = ACTIVE_JOB_STATES.has(job.status)
+  return <div className="agent-async-job"><div className="agent-async-head"><strong>{active ? 'Continuing enrichment in background' : `Async enrichment ${job.status}`}</strong><div className="chips"><span className={`status-pill ${job.status === 'completed' ? 'success' : ''}`}>{job.status}</span><span className="status-pill">est. {job.estimatedCredits} cr</span><span className="status-pill">actual {job.actualCredits} cr</span></div></div><div className="muted" style={{ marginTop: 5 }}>{job.currentProvider ? `Waiting on ${label(job.currentProvider)}.` : job.missingGoals.length ? `Still missing ${job.missingGoals.map(label).join(', ')}.` : 'Requested contact goals are satisfied.'}</div>{!!job.attempts.length && <div className="agent-async-attempts">{job.attempts.map((attempt, index) => <span className={`status-pill ${attempt.state === 'completed' ? 'success' : ''}`} key={`${attempt.provider}-${index}`}>{label(attempt.provider)} · {attempt.state}{attempt.underlyingProvider ? ` → ${label(attempt.underlyingProvider)}` : ''}{typeof attempt.actualCredits === 'number' ? ` · ${attempt.actualCredits}cr` : ''}</span>)}</div>}</div>
 }
 
 function ContactApproval({ plan, contact, disabled, onApprove }: { plan: PeoplePlan; contact?: ContactBatch; disabled: boolean; onApprove: () => void }) {
@@ -206,25 +83,15 @@ function ContactApproval({ plan, contact, disabled, onApprove }: { plan: PeopleP
   const count = tool.targetCount || 1
   const signalCount = (contact?.outcomes || []).reduce((sum, item) => sum + item.signals.length, 0)
   return <div className="agent-approval-card"><div className="agent-approval-head"><div><span className="kicker">Recruiter approval</span><h3>Find contact info for the top {count}</h3></div><div className="chips"><span className="status-pill">paid read</span><span className="status-pill success">no workflow write</span></div></div>
-    {!contact && <><p className="muted">Cached and synchronous sources run first. If a contact goal is still missing, SourcingOS can continue through Wiza, Apollo phone, FullEnrich, and ColdIQ in a durable sequential job. Nothing is sent and no ATS stage is changed.</p><div className="agent-approval-actions"><button className="btn" type="button" onClick={onApprove} disabled={disabled}>{disabled ? 'Starting enrichment…' : `Approve & enrich top ${count}`}</button><span className="muted">Work email · personal email · phone pursued independently</span></div></>}
-    {contact && <div className="agent-contact-results"><div className="agent-contact-summary"><strong>{contact.outcomes.length} processed · {signalCount} contact signals</strong><span className="muted">Provider observations; not permission to contact.</span></div>{contact.outcomes.map((outcome, index) => <div className="agent-contact-person" key={`${outcome.person.provider}:${outcome.person.providerPersonId}`}><div className="agent-chat-candidate-rank">{index + 1}</div><div style={{ minWidth: 0, flex: 1 }}><div className="agent-chat-candidate-head"><strong>{outcome.person.displayName}</strong><span className={`status-pill ${outcome.signals.length ? 'success' : ''}`}>{outcome.signals.length ? `${outcome.signals.length} found` : 'searching'}</span></div>{!!outcome.signals.length && <div className="agent-contact-signals">{outcome.signals.map(signal => <div className="agent-contact-signal" key={`${signal.type}:${signal.value}:${signal.sourceProvider || ''}`}><b>{signal.type === 'email' ? 'Email' : 'Phone'}</b><span>{signal.value}</span><small>{[signal.channelKind, signal.sourceProvider ? label(signal.sourceProvider) : '', signal.deliverability, signal.permissionStatus === 'do_not_contact' ? 'DNC' : ''].filter(Boolean).join(' · ')}</small></div>)}</div>}{outcome.asyncJob && <AsyncJobStatus job={outcome.asyncJob} />}{outcome.asyncError && <div className="muted" style={{ marginTop: 7 }}>Background waterfall unavailable: {outcome.asyncError}</div>}{!outcome.asyncJob && !outcome.signals.length && <div className="muted" style={{ marginTop: 5 }}>{outcome.error || outcome.message}{outcome.missingGoals.length ? ` · Missing: ${outcome.missingGoals.map(label).join(', ')}` : ''}</div>}</div></div>)}</div>}
+    {!contact && <><p className="muted">Cached and synchronous sources run first. If a contact goal is still missing, SourcingOS continues through configured webhook-backed and broker providers in a durable sequential job. Nothing is sent and no ATS stage is changed.</p><div className="agent-approval-actions"><button className="btn" type="button" onClick={onApprove} disabled={disabled}>{disabled ? 'Starting enrichment…' : `Approve & enrich top ${count}`}</button><span className="muted">Work email · personal email · phone pursued independently</span></div></>}
+    {contact && <div className="agent-contact-results"><div className="agent-contact-summary"><strong>{contact.outcomes.length} processed · {signalCount} contact signals</strong><span className="muted">Provider observations; not permission to contact.</span></div>{contact.outcomes.map((outcome, index) => <div className="agent-contact-person" key={`${outcome.person.provider}:${outcome.person.providerPersonId}`}><div className="agent-chat-candidate-rank">{index + 1}</div><div style={{ minWidth: 0, flex: 1 }}><div className="agent-chat-candidate-head"><strong>{outcome.person.displayName}</strong><span className={`status-pill ${outcome.signals.length ? 'success' : ''}`}>{outcome.signals.length ? `${outcome.signals.length} found` : outcome.asyncJob && ACTIVE_JOB_STATES.has(outcome.asyncJob.status) ? 'searching' : 'no signal'}</span></div>{!!outcome.signals.length && <div className="agent-contact-signals">{outcome.signals.map(signal => <div className="agent-contact-signal" key={`${signal.type}:${signal.value}:${signal.sourceProvider || ''}`}><b>{signal.type === 'email' ? 'Email' : 'Phone'}</b><span>{signal.value}</span><small>{[signal.channelKind, signal.sourceProvider ? label(signal.sourceProvider) : '', signal.deliverability, signal.permissionStatus === 'do_not_contact' ? 'DNC' : ''].filter(Boolean).join(' · ')}</small></div>)}</div>}{outcome.asyncJob && <AsyncJobStatus job={outcome.asyncJob} />}{outcome.asyncError && <div className="muted" style={{ marginTop: 7 }}>Background waterfall unavailable: {outcome.asyncError}</div>}{!outcome.asyncJob && !outcome.signals.length && <div className="muted" style={{ marginTop: 5 }}>{outcome.error || outcome.message}{outcome.missingGoals.length ? ` · Missing: ${outcome.missingGoals.map(label).join(', ')}` : ''}</div>}</div></div>)}</div>}
   </div>
 }
 
 function identityPayload(person: Observation) {
   const linkedinUrl = (person.profileUrls || []).find(item => item.kind === 'linkedin')?.url
   const profileUrl = linkedinUrl || person.profileUrls?.[0]?.url
-  return {
-    providerName: person.provider,
-    providerPersonId: person.providerPersonId,
-    fullName: person.displayName,
-    title: person.currentTitle || person.headline,
-    currentCompany: person.currentEmployer,
-    location: person.location,
-    profileUrl,
-    linkedinUrl,
-    sourceContext: 'agentic_sourcing_v36_16b',
-  }
+  return { providerName: person.provider, providerPersonId: person.providerPersonId, fullName: person.displayName, title: person.currentTitle || person.headline, currentCompany: person.currentEmployer, location: person.location, profileUrl, linkedinUrl, sourceContext: 'agentic_sourcing_v36_16b' }
 }
 
 export function AgenticSourcingChatV36_16b() {
@@ -233,16 +100,12 @@ export function AgenticSourcingChatV36_16b() {
   const [previousPlan, setPreviousPlan] = useState<PeoplePlan | undefined>()
   const [working, setWorking] = useState<'planning' | 'searching' | 'web' | 'enriching' | ''>('')
   const threadRef = useRef<HTMLDivElement>(null)
-
   const placeholder = useMemo(() => previousPlan ? 'Refine the search, research the web, or ask for contact info…' : 'Describe who you need…', [previousPlan])
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' }))
-    return () => cancelAnimationFrame(frame)
-  }, [turns, working])
+  useEffect(() => { const frame = requestAnimationFrame(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: 'smooth' })); return () => cancelAnimationFrame(frame) }, [turns, working])
 
   useEffect(() => {
-    const jobs = turns.flatMap(turn => (turn.contact?.outcomes || []).flatMap(outcome => outcome.asyncJob && ['queued', 'running'].includes(outcome.asyncJob.status) ? [{ turnId: turn.id, personKey: `${outcome.person.provider}:${outcome.person.providerPersonId}`, jobId: outcome.asyncJob.id }] : []))
+    const jobs = turns.flatMap(turn => (turn.contact?.outcomes || []).flatMap(outcome => outcome.asyncJob && ACTIVE_JOB_STATES.has(outcome.asyncJob.status) ? [{ turnId: turn.id, personKey: `${outcome.person.provider}:${outcome.person.providerPersonId}`, jobId: outcome.asyncJob.id }] : []))
     if (!jobs.length) return
     let cancelled = false
     const poll = async () => {
@@ -252,26 +115,13 @@ export function AgenticSourcingChatV36_16b() {
           const json = await response.json().catch(() => ({}))
           if (cancelled || !response.ok || !json.ok || !json.job) return
           const job = json.job as AsyncContactJob
-          setTurns(current => current.map(turn => turn.id !== ref.turnId ? turn : {
-            ...turn,
-            contact: turn.contact ? {
-              ...turn.contact,
-              outcomes: turn.contact.outcomes.map(outcome => `${outcome.person.provider}:${outcome.person.providerPersonId}` !== ref.personKey ? outcome : {
-                ...outcome,
-                asyncJob: job,
-                signals: dedupeSignals([...outcome.signals, ...(job.signals || [])]),
-                missingGoals: job.missingGoals || outcome.missingGoals,
-                ok: outcome.ok || job.signals.length > 0 || job.status === 'completed',
-              }),
-            } : turn.contact,
-          }))
+          setTurns(current => current.map(turn => turn.id !== ref.turnId ? turn : { ...turn, contact: turn.contact ? { ...turn.contact, outcomes: turn.contact.outcomes.map(outcome => `${outcome.person.provider}:${outcome.person.providerPersonId}` !== ref.personKey ? outcome : { ...outcome, asyncJob: job, signals: dedupeSignals([...outcome.signals, ...(job.signals || [])]), missingGoals: job.missingGoals || outcome.missingGoals, ok: outcome.ok || job.signals.length > 0 || job.status === 'completed' }) } : turn.contact }))
         } catch {
-          // A transient polling failure must not erase contact observations or
-          // restart provider work. The next interval retries our own job read.
+          // Poll only SourcingOS durable job state. Transient read failures do not
+          // restart providers or erase signals; the next paced interval retries.
         }
       }))
     }
-    void poll()
     const timer = window.setInterval(() => void poll(), 3500)
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [turns])
@@ -319,10 +169,7 @@ export function AgenticSourcingChatV36_16b() {
     const priorSearch = targetIndex > 0 ? [...turns.slice(0, targetIndex)].reverse().find(turn => turn.search?.observations?.length) : undefined
     const count = Math.max(1, Math.min(25, tool?.targetCount || 1))
     const people = priorSearch?.search?.observations.slice(0, count) || []
-    if (!targetTurn || !people.length) {
-      setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, error: 'There is no prior ranked search slate available for this contact action.' } : turn))
-      return
-    }
+    if (!targetTurn || !people.length) { setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, error: 'There is no prior ranked search slate available for this contact action.' } : turn)); return }
     setWorking('enriching')
     const outcomes: ContactOutcome[] = []
     try {
@@ -339,15 +186,11 @@ export function AgenticSourcingChatV36_16b() {
             try {
               const asyncRes = await fetch('/api/contact-enrichment/async/start', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ goals: missingGoals, ...identity }) })
               const asyncJson = await asyncRes.json().catch(() => ({}))
-              if (asyncRes.ok && asyncJson.ok && asyncJson.job) outcome = { ...outcome, asyncJob: asyncJson.job as AsyncContactJob, ok: outcome.ok || true }
+              if (asyncRes.ok && asyncJson.ok && asyncJson.job) outcome = { ...outcome, asyncJob: asyncJson.job as AsyncContactJob, ok: true }
               else outcome = { ...outcome, asyncError: String(asyncJson.error || 'Background enrichment could not be started.') }
-            } catch (error) {
-              outcome = { ...outcome, asyncError: error instanceof Error ? error.message : 'Background enrichment could not be started.' }
-            }
+            } catch (error) { outcome = { ...outcome, asyncError: error instanceof Error ? error.message : 'Background enrichment could not be started.' } }
           }
-        } catch (error) {
-          outcome = { person, ok: false, message: 'Contact enrichment failed.', signals: [], missingGoals: ['work_email', 'personal_email', 'phone'], error: error instanceof Error ? error.message : 'Contact enrichment failed.' }
-        }
+        } catch (error) { outcome = { person, ok: false, message: 'Contact enrichment failed.', signals: [], missingGoals: ['work_email', 'personal_email', 'phone'], error: error instanceof Error ? error.message : 'Contact enrichment failed.' } }
         outcomes.push(outcome)
         setTurns(current => current.map(turn => turn.id === turnId ? { ...turn, contact: { requested: count, outcomes: [...outcomes] } } : turn))
       }
@@ -357,9 +200,7 @@ export function AgenticSourcingChatV36_16b() {
   const workingLabel = working === 'planning' ? 'Interpreting recruiter intent…' : working === 'searching' ? 'Searching professional and X-ray sources…' : working === 'web' ? 'Researching the live web…' : 'Starting approved contact enrichment…'
 
   return <section className="product-panel agent-chat-shell">
-    <style>{`
-      .agent-chat-shell{overflow:hidden;background:linear-gradient(145deg,color-mix(in srgb,var(--panel) 96%,var(--accent) 4%),var(--panel));display:flex;flex-direction:column;height:calc(100vh - 175px);min-height:640px;max-height:900px;padding-bottom:0}.agent-chat-head{display:flex;justify-content:space-between;gap:16px;align-items:start;flex-wrap:wrap;margin-bottom:12px}.agent-chat-head h2{font-size:24px;margin:4px 0 4px}.agent-chat-head p{max-width:760px;margin:0}.agent-chat-thread{display:grid;align-content:start;gap:14px;flex:1;min-height:0;overflow:auto;padding:2px 5px 18px 0;scrollbar-gutter:stable}.agent-chat-turn{display:grid;gap:10px}.agent-chat-user{justify-self:end;max-width:min(760px,90%);padding:11px 14px;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--accent) 20%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));font-weight:650}.agent-chat-plan,.agent-chat-search-result,.agent-chat-web-result{padding:14px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--panel) 94%,#fff 1%)}.agent-chat-plan-head,.agent-chat-result-summary,.agent-approval-head,.agent-async-head{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}.agent-chat-answer{font-size:14px;font-weight:700;line-height:1.55;margin-top:5px;max-width:820px}.agent-chat-criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:13px}.agent-chat-criterion{padding:9px 10px;border:1px solid var(--border);border-radius:11px}.agent-chat-criterion small{display:block;text-transform:uppercase;letter-spacing:.08em;font-size:9px;color:var(--muted);margin-bottom:6px}.agent-tool-trace{display:grid;gap:7px;margin-top:12px}.agent-chat-telemetry{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}.agent-chat-candidates{display:grid;gap:7px;margin-top:12px}.agent-chat-candidate,.agent-contact-person{display:flex;gap:10px;padding:11px;border:1px solid var(--border);border-radius:12px}.agent-chat-candidate-rank{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 13%,transparent);font-size:10px;font-weight:850;flex:0 0 auto}.agent-chat-candidate-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.agent-chat-contact-state{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:10px}.agent-chat-contact-state a{color:inherit;text-decoration:underline}.agent-chat-show-more,.agent-chat-diagnostics{margin-top:10px}.agent-chat-web-copy{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:11px;background:color-mix(in srgb,var(--panel) 78%,transparent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto}.agent-approval-card{padding:15px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:16px;background:color-mix(in srgb,var(--accent) 7%,var(--panel))}.agent-approval-head h3{margin:4px 0 0}.agent-approval-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}.agent-contact-results{display:grid;gap:8px;margin-top:12px}.agent-contact-summary{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px;border-radius:11px;background:color-mix(in srgb,var(--panel) 75%,transparent)}.agent-contact-signals{display:grid;gap:5px;margin-top:8px}.agent-contact-signal{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--border);border-radius:9px}.agent-contact-signal span{overflow-wrap:anywhere}.agent-contact-signal small{color:var(--muted)}.agent-async-job{margin-top:9px;padding:9px 10px;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:10px}.agent-async-attempts{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.agent-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin:0 -16px;padding:12px 16px 16px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--panel) 97%,transparent);backdrop-filter:blur(12px);position:relative;z-index:5}.agent-chat-compose textarea{resize:none;min-height:52px;max-height:120px;width:100%}.agent-chat-empty{padding:18px;border:1px dashed var(--border);border-radius:14px;margin-bottom:4px}.agent-chat-examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.agent-chat-error{padding:10px 12px;border:1px solid color-mix(in srgb,#ef4444 38%,var(--border));border-radius:11px;color:var(--muted)}@media(max-width:900px){.agent-chat-shell{height:calc(100vh - 150px);min-height:560px}.agent-contact-signal{grid-template-columns:48px 1fr}.agent-contact-signal small{grid-column:2}}@media(max-width:720px){.agent-chat-shell{height:auto;max-height:none;min-height:0}.agent-chat-compose{grid-template-columns:1fr;margin-left:-12px;margin-right:-12px}.agent-chat-thread{max-height:70vh}.agent-chat-head p{display:none}}
-    `}</style>
+    <style>{`.agent-chat-shell{overflow:hidden;background:linear-gradient(145deg,color-mix(in srgb,var(--panel) 96%,var(--accent) 4%),var(--panel));display:flex;flex-direction:column;height:calc(100vh - 175px);min-height:640px;max-height:900px;padding-bottom:0}.agent-chat-head{display:flex;justify-content:space-between;gap:16px;align-items:start;flex-wrap:wrap;margin-bottom:12px}.agent-chat-head h2{font-size:24px;margin:4px 0}.agent-chat-head p{max-width:760px;margin:0}.agent-chat-thread{display:grid;align-content:start;gap:14px;flex:1;min-height:0;overflow:auto;padding:2px 5px 18px 0;scrollbar-gutter:stable}.agent-chat-turn{display:grid;gap:10px}.agent-chat-user{justify-self:end;max-width:min(760px,90%);padding:11px 14px;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--accent) 20%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));font-weight:650}.agent-chat-plan,.agent-chat-search-result,.agent-chat-web-result{padding:14px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--panel) 94%,#fff 1%)}.agent-chat-plan-head,.agent-chat-result-summary,.agent-approval-head,.agent-async-head{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}.agent-chat-answer{font-size:14px;font-weight:700;line-height:1.55;margin-top:5px;max-width:820px}.agent-chat-criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:13px}.agent-chat-criterion{padding:9px 10px;border:1px solid var(--border);border-radius:11px}.agent-chat-criterion small{display:block;text-transform:uppercase;letter-spacing:.08em;font-size:9px;color:var(--muted);margin-bottom:6px}.agent-tool-trace{display:grid;gap:7px;margin-top:12px}.agent-chat-telemetry{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}.agent-chat-candidates{display:grid;gap:7px;margin-top:12px}.agent-chat-candidate,.agent-contact-person{display:flex;gap:10px;padding:11px;border:1px solid var(--border);border-radius:12px}.agent-chat-candidate-rank{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 13%,transparent);font-size:10px;font-weight:850;flex:0 0 auto}.agent-chat-candidate-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.agent-chat-contact-state{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:10px}.agent-chat-contact-state a{color:inherit;text-decoration:underline}.agent-chat-show-more,.agent-chat-diagnostics{margin-top:10px}.agent-chat-web-copy{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:11px;background:color-mix(in srgb,var(--panel) 78%,transparent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto}.agent-approval-card{padding:15px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:16px;background:color-mix(in srgb,var(--accent) 7%,var(--panel))}.agent-approval-head h3{margin:4px 0}.agent-approval-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}.agent-contact-results{display:grid;gap:8px;margin-top:12px}.agent-contact-summary{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px;border-radius:11px;background:color-mix(in srgb,var(--panel) 75%,transparent)}.agent-contact-signals{display:grid;gap:5px;margin-top:8px}.agent-contact-signal{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--border);border-radius:9px}.agent-contact-signal span{overflow-wrap:anywhere}.agent-contact-signal small{color:var(--muted)}.agent-async-job{margin-top:9px;padding:9px 10px;border:1px dashed color-mix(in srgb,var(--accent) 45%,var(--border));border-radius:10px}.agent-async-attempts{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.agent-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin:0 -16px;padding:12px 16px 16px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--panel) 97%,transparent);backdrop-filter:blur(12px);position:relative;z-index:5}.agent-chat-compose textarea{resize:none;min-height:52px;max-height:120px;width:100%}.agent-chat-empty{padding:18px;border:1px dashed var(--border);border-radius:14px;margin-bottom:4px}.agent-chat-examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.agent-chat-error{padding:10px 12px;border:1px solid color-mix(in srgb,#ef4444 38%,var(--border));border-radius:11px;color:var(--muted)}@media(max-width:900px){.agent-chat-shell{height:calc(100vh - 150px);min-height:560px}.agent-contact-signal{grid-template-columns:48px 1fr}.agent-contact-signal small{grid-column:2}}@media(max-width:720px){.agent-chat-shell{height:auto;max-height:none;min-height:0}.agent-chat-compose{grid-template-columns:1fr;margin-left:-12px;margin-right:-12px}.agent-chat-thread{max-height:70vh}.agent-chat-head p{display:none}}`}</style>
     <div className="agent-chat-head"><div><span className="kicker">Virtual Sourcer</span><h2>Search is a conversation.</h2><p className="muted">Describe the talent you need. SourcingOS keeps requirements, preferences, provider execution, live web evidence, and paid enrichment visibly separated.</p></div><button className="btn ghost" type="button" onClick={() => { setTurns([]); setPreviousPlan(undefined); setInput('') }} disabled={Boolean(working)}>New search</button></div>
     <div className="agent-chat-thread" ref={threadRef}>{!turns.length && <div className="agent-chat-empty"><strong>Start with the hiring need, not a filter form.</strong><p className="muted">SourcingOS will expose what it understood and which read-only tools it can run.</p><div className="agent-chat-examples">{['Find 25 backend engineers in Minneapolis, MN with AWS + Kubernetes','Find a RHEL admin near Annapolis Junction, MD with Secret clearance or higher','Search the web for recent RHEL hiring at GDIT'].map(example => <button className="btn ghost" type="button" key={example} onClick={() => setInput(example)}>{example}</button>)}</div></div>}{turns.map(turn => <div className="agent-chat-turn" key={turn.id}><div className="agent-chat-user">{turn.user}</div>{turn.plan && <PlanCard plan={turn.plan} />}{turn.search && <SearchResults result={turn.search} />}{turn.web && <WebResearch result={turn.web} />}{turn.plan?.action === 'approval_required' && <ContactApproval plan={turn.plan} contact={turn.contact} disabled={working === 'enriching'} onApprove={() => void approveContacts(turn.id)} />}{turn.error && <div className="agent-chat-error">{turn.error}</div>}</div>)}{working && <div className="product-row"><div className="product-row-main"><div className="product-row-title">{workingLabel}</div><div className="product-row-meta">SourcingOS is preserving source, cost, freshness, and approval boundaries while this tool runs.</div></div><span className="status-pill success">working</span></div>}</div>
     <form className="agent-chat-compose" onSubmit={submit}><textarea value={input} onChange={event => setInput(event.target.value)} placeholder={placeholder} disabled={Boolean(working)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit() } }} /><button className="btn" type="submit" disabled={!input.trim() || Boolean(working)}>Send</button></form>
