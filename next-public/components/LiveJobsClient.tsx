@@ -19,6 +19,8 @@ type LiveJob = {
 const sourceOptions = [
   { id: 'persisted', label: 'SourcingOS reviewed/cache layer' },
   { id: 'ats', label: 'Curated company ATS feeds' },
+  { id: 'openwebninja', label: 'OpenWebNinja real-time jobs' },
+  { id: 'adzuna', label: 'Adzuna' },
   { id: 'remotive', label: 'Remotive' },
   { id: 'arbeitnow', label: 'Arbeitnow' },
   { id: 'usajobs', label: 'USAJOBS' },
@@ -47,7 +49,7 @@ export function LiveJobsClient({
   const [jobs, setJobs] = useState<LiveJob[]>([])
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
-  const [sources, setSources] = useState<Record<string, boolean>>({ persisted: true, ats: true, remotive: true, arbeitnow: true, usajobs: true })
+  const [sources, setSources] = useState<Record<string, boolean>>({ persisted: true, ats: true, openwebninja: true, adzuna: true, remotive: true, arbeitnow: true, usajobs: true })
   const [remoteOnly, setRemoteOnly] = useState(false)
   const [salaryOnly, setSalaryOnly] = useState(false)
   const initialSearchDone = useRef(false)
@@ -60,7 +62,7 @@ export function LiveJobsClient({
   }), [jobs, remoteOnly, salaryOnly])
 
   const searchJobs = useCallback(async (nextQuery = query) => {
-    const selected = activeSources.length ? activeSources : ['persisted', 'ats', 'remotive', 'arbeitnow', 'usajobs']
+    const selected = activeSources.length ? activeSources : ['persisted', 'ats', 'openwebninja', 'adzuna', 'remotive', 'arbeitnow', 'usajobs']
     setLoading(true)
     setMessage('')
     try {
@@ -76,7 +78,7 @@ export function LiveJobsClient({
       const json = await res.json()
       const nextJobs = Array.isArray(json.jobs) ? json.jobs : []
       setJobs(nextJobs)
-      setMessage(nextJobs.length ? `Found ${nextJobs.length} listings from selected sources. Always confirm details on the original source.` : 'No recruiter listings returned from the selected sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
+      setMessage(nextJobs.length ? `Found ${nextJobs.length} recruiter/TA listings from selected sources. Always confirm details on the original/provider-authorized posting.` : 'No recruiter listings returned from the selected sources for this query. Try a broader search like recruiter, sourcer, or talent acquisition.')
     } catch {
       setMessage('Live job search is temporarily unavailable. The curated category pages are still available.')
     } finally {
@@ -91,7 +93,7 @@ export function LiveJobsClient({
   }, [searchJobs])
 
   return <div className="interactive-tool">
-    <div className="cta"><b>Job source note:</b> this search combines SourcingOS-reviewed jobs when available, public/free job sources, and curated employer ATS feeds. Apply buttons link back to the original posting. SourcingOS does not copy third-party job descriptions or present them as owned listings.</div>
+    <div className="cta"><b>Recruiter jobs aggregator:</b> this search combines SourcingOS-reviewed jobs, public employer ATS feeds, OpenWebNinja real-time hiring data, Adzuna, and other configured sources. We normalize and deduplicate listings, show only recruiter/sourcer/TA-related roles, and send applicants back to the original/provider-authorized posting. Adzuna listings retain Jobs by Adzuna attribution.</div>
 
     <div className="chips" style={{ marginBottom: '12px' }}>
       {presets.map(preset => <button
@@ -104,8 +106,8 @@ export function LiveJobsClient({
     </div>
 
     <div className="grid two">
-      <div><label>Search</label><input className="input" value={query} onChange={event => setQuery(event.target.value)} placeholder="technical sourcer remote" /></div>
-      <div><label>Location</label><input className="input" value={location} onChange={event => setLocation(event.target.value)} placeholder="Remote, United States, Minnesota" /></div>
+      <div><label>Search</label><input className="input" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void searchJobs() }} placeholder="technical sourcer remote" /></div>
+      <div><label>Location</label><input className="input" value={location} onChange={event => setLocation(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void searchJobs() }} placeholder="Remote, United States, Minnesota" /></div>
     </div>
 
     <div className="card" style={{ marginTop: '12px' }}>
@@ -130,7 +132,7 @@ export function LiveJobsClient({
       {visibleJobs.map(job => <article className="card" key={job.id}>
         <div className="job-row">
           <div>
-            <span className="kicker">{job.source} · {job.remoteType}</span>
+            <span className="kicker">{job.source === 'Adzuna' ? 'Jobs by Adzuna' : job.source} · {job.remoteType}</span>
             <h3>{job.title}</h3>
             <p className="muted"><strong>{job.company}</strong> · {job.location || 'Location not listed'} · {job.employmentType}</p>
             <p>{job.description}</p>
