@@ -27,6 +27,14 @@ function normalizeTerms(values: string[] | undefined, max: number): string[] {
   return Array.from(new Set((values || []).map(value => value.trim().toLowerCase()).filter(Boolean))).slice(0, max)
 }
 
+function simplePersonName(value: string): string | undefined {
+  const cleaned = value.replace(/\s+/g, ' ').trim()
+  const tokens = cleaned.split(' ').filter(Boolean)
+  if (tokens.length < 2 || tokens.length > 4) return undefined
+  if (!tokens.every(token => /^[\p{L}][\p{L}'’.\-]*$/u.test(token))) return undefined
+  return cleaned.toLowerCase()
+}
+
 function oneOfMatch(field: string, values: string[]) {
   return {
     bool: {
@@ -38,29 +46,28 @@ function oneOfMatch(field: string, values: string[]) {
 
 /**
  * PDL Search executes Elasticsearch directly against its dataset with no query
- * cleaning. SourcingOS therefore sends only bounded Role Brain fields instead
- * of forwarding raw recruiter prose as an Elasticsearch query.
+ * cleaning. SourcingOS therefore sends only bounded structured fields. A plain
+ * 2-4 token person name is also safe to map to the documented full_name field.
  */
 export function buildPeopleDataLabsSearchBodyV36_8(request: CandidateDataSearchRequestV36_8) {
+  const names = normalizeTerms(request.names, 20)
+  const inferredName = !names.length ? simplePersonName(request.query) : undefined
   const titles = normalizeTerms(request.titles, 30)
   const skills = normalizeTerms(request.skills, 40)
   const locations = normalizeTerms(request.locations, 30)
   const must: Record<string, unknown>[] = []
 
+  if (names.length || inferredName) must.push(oneOfMatch('full_name', names.length ? names : [inferredName!]))
   if (titles.length) must.push(oneOfMatch('job_title', titles))
   if (skills.length) must.push(oneOfMatch('skills', skills))
   if (locations.length) must.push(oneOfMatch('location_name', locations))
 
-  // The provider lane is intentionally unavailable when Role Brain has no
-  // structured professional search terms. Do not reinterpret arbitrary prose
-  // as Elasticsearch syntax or silently broaden it here.
   const query = must.length
     ? { bool: { must } }
     : { match_none: {} }
 
   return {
     size: safeCandidateSearchLimitV36_8(request.limit),
-    from: Math.max(0, Math.min(9999, Math.trunc(request.offset || 0))),
     dataset: 'resume',
     titlecase: true,
     query,
@@ -124,9 +131,18 @@ function toObservation(row: Record<string, unknown>): CandidateProviderObservati
   }
 }
 
+function safeProviderError(payload: unknown): string | undefined {
+  const root = record(payload)
+  const error = root.error
+  const nested = record(error)
+  const candidate = str(root.message) || str(nested.message) || str(root.detail) || str(error)
+  if (!candidate) return undefined
+  return candidate.replace(/[A-Za-z0-9_\-]{24,}/g, '[redacted]').slice(0, 240)
+}
+
 export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequestV36_8): Promise<CandidateDataSearchResultV36_8> {
   const started = Date.now()
-  const key = process.env.PDL_API_KEY
+  const key = process.env.PDL_API_KEY || process.env.PEOPLE_DATA_LABS_API_KEY
   if (!key) {
     return {
       observations: [],
@@ -139,23 +155,34 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
   if ('match_none' in body.query) {
     return {
       observations: [],
-      telemetry: { provider: PROVIDER, status: 'skipped', discovered: 0, latencyMs: 0, message: 'PDL Search skipped because no structured Role Brain title, skill, or location terms were supplied.' },
-      warnings: ['PDL Search requires structured Role Brain fields; raw recruiter prose is not sent as an Elasticsearch query.'],
+      telemetry: { provider: PROVIDER, status: 'skipped', discovered: 0, latencyMs: 0, message: 'PDL Search skipped because no safe person-name, title, skill, or location anchor was supplied.' },
+      warnings: ['PDL Search needs a person name or structured professional fields; arbitrary recruiter prose is not forwarded as Elasticsearch syntax.'],
     }
   }
 
   try {
-    const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'X-Api-Key': key, 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify(body),
+    // PDL's current Person Search contract documents GET with the Elasticsearch
+    // query serialized in the `query` request parameter. Do not POST a legacy
+    // body or send the unsupported legacy `from` offset field.
+    const url = new URL(ENDPOINT)
+    url.searchParams.set('query', JSON.stringify(body.query))
+    url.searchParams.set('size', String(body.size))
+    url.searchParams.set('dataset', body.dataset)
+    url.searchParams.set('titlecase', String(body.titlecase))
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'X-Api-Key': key, Accept: 'application/json' },
       cache: 'no-store',
     })
     if (!response.ok) {
+      const payload = await response.json().catch(() => undefined)
+      const reason = safeProviderError(payload)
+      const suffix = reason ? ` ${reason}` : ''
       return {
         observations: [],
-        telemetry: { provider: PROVIDER, status: 'failed', discovered: 0, latencyMs: Date.now() - started, message: `People Data Labs returned HTTP ${response.status}.` },
-        warnings: [`PDL Person Search failed with status ${response.status}.`],
+        telemetry: { provider: PROVIDER, status: 'failed', discovered: 0, latencyMs: Date.now() - started, message: `People Data Labs returned HTTP ${response.status}.${suffix}`.trim() },
+        warnings: [`PDL Person Search failed with status ${response.status}.${suffix}`.trim()],
       }
     }
 
@@ -171,11 +198,10 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
         discovered: observations.length,
         latencyMs: Date.now() - started,
         estimatedCredits: observations.length,
-        message: 'PDL Person Search charges per returned profile. Results are retrieval observations, not qualification decisions.',
+        message: 'PDL Person Search completed. Results are retrieval observations, not qualification decisions.',
       },
-      nextOffset: Math.max(0, Math.trunc(request.offset || 0)) + observations.length,
       ...(scrollToken ? { threadId: scrollToken } : {}),
-      warnings: request.offset && request.offset > 0 ? ['PDL returned a scroll token; the current gateway still uses bounded legacy offset pagination and should migrate to provider cursors before deep paging.'] : [],
+      warnings: request.offset && request.offset > 0 ? ['PDL uses scroll_token cursor pagination; legacy numeric offset is intentionally not forwarded.'] : [],
     }
   } catch {
     return {
