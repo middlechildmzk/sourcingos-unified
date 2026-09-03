@@ -10,6 +10,7 @@ import { canUseAnyMailFinderV36_8, enrichWithAnyMailFinderV36_8 } from '@/lib/co
 import { canUseTombaV36_8, enrichWithTombaV36_8 } from '@/lib/contact-enrichment/providers/tomba-v36-8'
 import { canUseHunterV36_8, enrichWithHunterV36_8 } from '@/lib/contact-enrichment/providers/hunter-v36-8'
 import { canUseApolloV36_16, enrichWithApolloV36_16 } from '@/lib/contact-enrichment/providers/apollo-v36-16'
+import { canUseLushaV36_16, enrichWithLushaV36_16 } from '@/lib/contact-enrichment/providers/lusha-v36-16'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
 import {
   contactGoalStateV36_12,
@@ -26,7 +27,7 @@ export const dynamic = 'force-dynamic'
 
 const PROVIDERS = new Set<ContactEnrichmentProvider>([
   'people_data_labs', 'data_vertex', 'pearch', 'coresignal', 'contactout', 'signalhire',
-  'anymail_finder', 'tomba', 'openweb_ninja', 'hunter', 'apollo', 'none',
+  'anymail_finder', 'tomba', 'openweb_ninja', 'hunter', 'apollo', 'lusha', 'none',
 ])
 const PURPOSES = new Set<EnrichmentPurposeV35>(['identity_enrichment', 'work_email_finder', 'email_verification', 'phone_enrichment', 'contact_bundle'])
 const CONTACT_GOALS = new Set<ContactResolutionGoalV36_12>(['work_email', 'personal_email', 'phone'])
@@ -144,6 +145,7 @@ export async function POST(req: NextRequest) {
   const tombaConfigured = Boolean(process.env.TOMBA_API_KEY && process.env.TOMBA_SECRET_KEY)
   const hunterConfigured = Boolean(process.env.HUNTER_API_KEY)
   const apolloConfigured = Boolean(process.env.APOLLO_API_KEY)
+  const lushaConfigured = Boolean(process.env.LUSHA_API_KEY || process.env.LUSA_API_KEY)
 
   function adaptersFor(lane: Exclude<EnrichmentPurposeV35, 'contact_bundle'>): ContactProviderAdapterV35[] {
     const adapters: ContactProviderAdapterV35[] = []
@@ -175,10 +177,20 @@ export async function POST(req: NextRequest) {
       id: 'apollo', purposes: ['work_email_finder'], estimatedCredits: requestedGoals.includes('personal_email') ? 2 : 1,
       enrich: () => enrichWithApolloV36_16(request, { revealPersonalEmail: requestedGoals.includes('personal_email') }),
     }
+    const lushaEmailAdapter: ContactProviderAdapterV35 = {
+      id: 'lusha', purposes: ['work_email_finder'], estimatedCredits: 2,
+      enrich: () => enrichWithLushaV36_16(request, { revealEmails: true, revealPhones: false }),
+    }
+    const lushaPhoneAdapter: ContactProviderAdapterV35 = {
+      id: 'lusha', purposes: ['phone_enrichment'], estimatedCredits: 6,
+      enrich: () => enrichWithLushaV36_16(request, { revealEmails: false, revealPhones: true }),
+    }
 
     if (signalHireConfigured && request.providerName === 'signalhire' && canUseSignalHireLookupV36_8(request)) adapters.push(signalHireAdapter)
     if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
     if (lane === 'work_email_finder' && apolloConfigured && request.providerName === 'apollo' && canUseApolloV36_16(request)) adapters.push(apolloAdapter)
+    if (lane === 'work_email_finder' && lushaConfigured && request.providerName === 'lusha' && canUseLushaV36_16(request)) adapters.push(lushaEmailAdapter)
+    if (lane === 'phone_enrichment' && lushaConfigured && request.providerName === 'lusha' && canUseLushaV36_16(request)) adapters.push(lushaPhoneAdapter)
 
     if (lane === 'identity_enrichment') {
       const exactIdentifierOnly = Boolean(request.email || request.phone) && !request.fullName && !request.firstName && !request.lastName && !request.profileUrl && !request.linkedinUrl && !request.githubUrl && !request.providerPersonId
@@ -189,6 +201,7 @@ export async function POST(req: NextRequest) {
       if (anyMailConfigured && canUseAnyMailFinderV36_8(request)) adapters.push(anyMailAdapter)
       if (hunterConfigured && canUseHunterV36_8(request, lane)) adapters.push(hunterAdapter)
       if (tombaConfigured && canUseTombaV36_8(request, lane)) adapters.push(tombaAdapter)
+      if (lushaConfigured && canUseLushaV36_16(request) && !adapters.some(item => item.id === 'lusha')) adapters.push(lushaEmailAdapter)
       if (apolloConfigured && canUseApolloV36_16(request) && !adapters.some(item => item.id === 'apollo')) adapters.push(apolloAdapter)
       if (pdlConfigured) adapters.push(pdlAdapter)
       if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
@@ -198,6 +211,7 @@ export async function POST(req: NextRequest) {
       if (tombaConfigured && canUseTombaV36_8(request, lane)) adapters.push(tombaAdapter)
     } else if (lane === 'phone_enrichment') {
       if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+      if (lushaConfigured && canUseLushaV36_16(request) && !adapters.some(item => item.id === 'lusha')) adapters.push(lushaPhoneAdapter)
       if (pdlConfigured) adapters.push(pdlAdapter)
       if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
     }
@@ -346,7 +360,7 @@ export async function POST(req: NextRequest) {
             source: s.sourceProvider,
             confidence: s.confidence,
             verified: false,
-            permission_status: 'unknown',
+            permission_status: s.permissionStatus || 'unknown',
             ownership_confidence: s.ownershipConfidence || null,
             deliverability: s.deliverability || null,
             provider_status_raw: s.providerStatusRaw || null,
