@@ -15,13 +15,16 @@ import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout
 import { searchSignalHireV36_8 } from '@/lib/candidate-data/providers/signalhire-v36-8'
 import { searchLinkUpV36_8 } from '@/lib/candidate-data/providers/linkup-v36-8'
 import { searchExaPeopleV36_8 } from '@/lib/candidate-data/providers/exa-v36-8'
+import { searchCrustdataV36_16 } from '@/lib/candidate-data/providers/crustdata-v36-16'
+import { searchApolloPeopleV36_16 } from '@/lib/candidate-data/providers/apollo-v36-16'
+import { searchSerperXrayV36_16 } from '@/lib/candidate-data/providers/serper-xray-v36-16'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8, CandidateDataSearchRequestV36_8 } from '@/lib/candidate-data/types-v36-8'
 import { buildSearchQualitySnapshotV36_12 } from '@/lib/search-quality-v36-12'
 import { sourceHealthEventsForSearchV36_12 } from '@/lib/source-health-v36-12'
 
 export const dynamic = 'force-dynamic'
 
-const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire', 'linkup', 'exa'])
+const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire', 'linkup', 'exa', 'crustdata', 'apollo', 'serper'])
 const bodySchema = z.object({
   query: z.string().trim().min(2).max(3000),
   requirements: z.array(z.object({ text: z.string().trim().min(1).max(300), mustHave: z.boolean() })).max(30).optional(),
@@ -33,7 +36,7 @@ const bodySchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
   offset: z.number().int().min(0).max(100000).default(0),
   providerPersonBlacklist: z.array(z.string().trim().min(1).max(200)).max(1000).optional(),
-  providers: z.array(providerEnum).max(8).optional(),
+  providers: z.array(providerEnum).max(12).optional(),
   highFreshness: z.boolean().default(false),
 }).strict()
 
@@ -46,6 +49,9 @@ function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapt
   if (provider === 'signalhire') return { provider, search: searchSignalHireV36_8 }
   if (provider === 'linkup') return { provider, search: searchLinkUpV36_8 }
   if (provider === 'exa') return { provider, search: searchExaPeopleV36_8 }
+  if (provider === 'crustdata') return { provider, search: searchCrustdataV36_16 }
+  if (provider === 'apollo') return { provider, search: searchApolloPeopleV36_16 }
+  if (provider === 'serper') return { provider, search: searchSerperXrayV36_16 }
   return undefined
 }
 

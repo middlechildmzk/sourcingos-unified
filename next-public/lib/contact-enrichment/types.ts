@@ -66,6 +66,7 @@ export type ContactEnrichmentProvider =
   | 'openweb_ninja'
   | 'hunter'
   | 'apollo'
+  | 'lusha'
   | 'none'
 
 export interface ProviderStatus {

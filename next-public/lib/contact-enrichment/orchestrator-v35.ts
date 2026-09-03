@@ -82,7 +82,14 @@ function uniqueSignals(signals: ContactSignal[]): ContactSignal[] {
   })
 }
 
+function usableForGoal(signal: ContactSignal): boolean {
+  if (signal.permissionStatus === 'do_not_contact') return false
+  if (signal.deliverability === 'invalid' || signal.deliverability === 'disconnected') return false
+  return true
+}
+
 export function signalSatisfiesContactGoalV36_12(signal: ContactSignal, goal: ContactResolutionGoalV36_12): boolean {
+  if (!usableForGoal(signal)) return false
   if (goal === 'work_email') return signal.type === 'email' && signal.channelKind === 'work_email'
   if (goal === 'personal_email') return signal.type === 'email' && signal.channelKind === 'personal_email'
   if (goal === 'phone') return signal.type === 'phone'
@@ -125,9 +132,10 @@ function aggregateResult(
 
 /**
  * Provider-neutral contact waterfall. With goals supplied, the waterfall does
- * not stop merely because a provider returned something: only a signal that
- * satisfies the requested channel goal counts. Cached Candidate Graph signals
- * are evaluated first at zero cost.
+ * not stop merely because a provider returned something: only a usable signal
+ * that satisfies the requested channel goal counts. Cached Candidate Graph
+ * signals are evaluated first at zero cost. DNC, invalid, and disconnected
+ * observations remain visible for provenance but never satisfy a resolution goal.
  */
 export async function runContactEnrichmentOrchestratorV35(options: RunOptions): Promise<ContactEnrichmentOrchestrationV35> {
   const maxPaidAttempts = Math.max(1, Math.min(8, options.maxPaidAttempts ?? 1))

@@ -23,7 +23,7 @@ type ToolPlan = {
   executableNow: boolean
   targetCount?: number
 }
-type AgentPlan = {
+type PeoplePlan = {
   version: 'v36.15'
   action: 'search_people' | 'approval_required'
   assistantSummary: string
@@ -42,6 +42,18 @@ type AgentPlan = {
   assumptions: string[]
   warnings: string[]
 }
+type WebPlan = {
+  version: 'v36.16'
+  action: 'search_web'
+  assistantSummary: string
+  webRequest: { action: 'search_web'; query: string }
+  toolPlan: ToolPlan[]
+  readOnly: true
+  model: { configured: boolean; used: false; provider?: string; model?: string }
+  assumptions: string[]
+  warnings: string[]
+}
+type AgentPlan = PeoplePlan | WebPlan
 
 type ProfileUrl = { kind: string; url: string }
 type Observation = {
@@ -65,6 +77,15 @@ type SearchResult = {
   returnedAfterCap: number
   contributingProviders: number
   warnings: string[]
+}
+type WebResearchResult = {
+  provider: string
+  transport?: string
+  tool?: string
+  text: string
+  observedAt?: string
+  freshness?: string
+  trust?: { externalContentIsUntrusted?: boolean; becomesCandidateFact?: boolean }
 }
 type ContactSignal = {
   type: 'email' | 'phone'
@@ -91,6 +112,7 @@ type Turn = {
   user: string
   plan?: AgentPlan
   search?: SearchResult
+  web?: WebResearchResult
   contact?: ContactBatch
   error?: string
 }
@@ -106,6 +128,7 @@ function channel(value: boolean | 'unknown' | undefined) {
 }
 
 function criterionGroups(plan: AgentPlan) {
+  if (!('criteria' in plan)) return []
   const groups: Array<{ label: string; values: string[]; kind?: 'must' | 'preference' }> = []
   if (plan.criteria.titles.length) groups.push({ label: 'Role / titles', values: plan.criteria.titles })
   if (plan.criteria.skills.length) groups.push({ label: 'Skills', values: plan.criteria.skills })
@@ -120,6 +143,11 @@ function criterionGroups(plan: AgentPlan) {
 
 function PlanCard({ plan }: { plan: AgentPlan }) {
   const groups = plan.action === 'search_people' ? criterionGroups(plan) : []
+  const executionLabel = plan.action === 'search_people'
+    ? 'auto-run people search'
+    : plan.action === 'search_web'
+      ? 'auto-run live web'
+      : 'approval gated'
   return <div className="agent-chat-plan">
     <div className="agent-chat-plan-head">
       <div>
@@ -127,8 +155,8 @@ function PlanCard({ plan }: { plan: AgentPlan }) {
         <div className="agent-chat-answer">{plan.assistantSummary}</div>
       </div>
       <div className="chips">
-        <span className="status-pill success">{plan.action === 'search_people' ? 'auto-run read' : 'approval gated'}</span>
-        <span className="status-pill">{plan.model.used ? `${label(plan.model.provider || 'AI')} · ${plan.model.model || 'model'}` : 'deterministic parser'}</span>
+        <span className="status-pill success">{executionLabel}</span>
+        <span className="status-pill">{plan.model.used ? `${label(plan.model.provider || 'AI')} · ${plan.model.model || 'model'}` : 'deterministic planner'}</span>
       </div>
     </div>
     {!!groups.length && <div className="agent-chat-criteria">
@@ -196,10 +224,29 @@ function SearchResults({ result }: { result: SearchResult }) {
   </div>
 }
 
-function ContactApproval({ plan, contact, disabled, onApprove }: { plan: AgentPlan; contact?: ContactBatch; disabled: boolean; onApprove: () => void }) {
+function WebResearch({ result }: { result: WebResearchResult }) {
+  const preview = result.text.slice(0, 6000)
+  const remainder = result.text.slice(6000)
+  return <div className="agent-chat-web-result">
+    <div className="agent-chat-result-summary">
+      <div><span className="kicker">Live web research</span><h3 style={{ margin: '4px 0 0' }}>Fresh external source material</h3></div>
+      <div className="chips">
+        <span className="status-pill success">{label(result.provider || 'web')}</span>
+        {result.transport && <span className="status-pill">{result.transport.toUpperCase()}</span>}
+        <span className="status-pill">{result.freshness || 'live'}</span>
+        <span className="status-pill">untrusted evidence input</span>
+      </div>
+    </div>
+    <div className="agent-chat-web-copy">{preview || 'The live-web tool returned no readable text.'}</div>
+    {!!remainder && <details className="advanced-disclosure" style={{ marginTop: 10 }}><summary>Show remaining web result</summary><div className="agent-chat-web-copy" style={{ marginTop: 8 }}>{remainder}</div></details>}
+    <div className="muted" style={{ marginTop: 10, fontSize: 10, lineHeight: 1.5 }}>Live web material is not automatically a candidate fact, verified identity, qualification, or contact permission. Person-linked evidence must be reviewed through SourcingOS evidence/provenance rules.</div>
+  </div>
+}
+
+function ContactApproval({ plan, contact, disabled, onApprove }: { plan: PeoplePlan; contact?: ContactBatch; disabled: boolean; onApprove: () => void }) {
   const tool = plan.toolPlan[0]
   if (!tool || tool.tool !== 'find_contacts') {
-    return <div className="agent-approval-card"><strong>Approval checkpoint</strong><p className="muted">This action is recognized but is not executable in V36.15 yet. SourcingOS will not fake the write.</p></div>
+    return <div className="agent-approval-card"><strong>Approval checkpoint</strong><p className="muted">This action is recognized but is not executable in this release yet. SourcingOS will not fake the write.</p></div>
   }
   const count = tool.targetCount || 1
   const successful = contact?.outcomes.filter(item => item.ok) || []
@@ -210,7 +257,7 @@ function ContactApproval({ plan, contact, disabled, onApprove }: { plan: AgentPl
       <div className="chips"><span className="status-pill">paid read</span><span className="status-pill success">no workflow write</span></div>
     </div>
     {!contact && <>
-      <p className="muted">This will run the existing SourcingOS contact waterfall against the top {count} ranked candidate{count === 1 ? '' : 's'} from the preceding search. Providers may consume credits. Nothing is sent and no ATS stage is changed.</p>
+      <p className="muted">This will run the SourcingOS goal-specific contact waterfall against the top {count} ranked candidate{count === 1 ? '' : 's'}. Cached signals are checked first; providers stop per channel when a usable goal is satisfied. Nothing is sent and no ATS stage is changed.</p>
       <div className="agent-approval-actions"><button className="btn" type="button" onClick={onApprove} disabled={disabled}>{disabled ? 'Running enrichment…' : `Approve & enrich top ${count}`}</button><span className="muted">Work email · personal email · phone pursued independently</span></div>
     </>}
     {contact && <div className="agent-contact-results">
@@ -230,12 +277,12 @@ function ContactApproval({ plan, contact, disabled, onApprove }: { plan: AgentPl
 export function AgenticSourcingChatV36_15() {
   const [input, setInput] = useState('')
   const [turns, setTurns] = useState<Turn[]>([])
-  const [previousPlan, setPreviousPlan] = useState<AgentPlan | undefined>()
-  const [working, setWorking] = useState<'planning' | 'searching' | 'enriching' | ''>('')
+  const [previousPlan, setPreviousPlan] = useState<PeoplePlan | undefined>()
+  const [working, setWorking] = useState<'planning' | 'searching' | 'web' | 'enriching' | ''>('')
   const threadRef = useRef<HTMLDivElement>(null)
 
   const placeholder = useMemo(() => previousPlan
-    ? 'Refine the search, compare candidates, or ask for contact info…'
+    ? 'Refine the search, research the web, compare candidates, or ask for contact info…'
     : 'Describe who you need…', [previousPlan])
 
   useEffect(() => {
@@ -266,6 +313,20 @@ export function AgenticSourcingChatV36_15() {
       const plan = planJson.plan as AgentPlan
       if (plan.action === 'search_people') setPreviousPlan(plan)
       setTurns(current => current.map(turn => turn.id === id ? { ...turn, plan } : turn))
+
+      if (plan.action === 'search_web') {
+        setWorking('web')
+        const webRes = await fetch('/api/agentic-sourcing/web', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify(plan.webRequest),
+        })
+        const webJson = await webRes.json().catch(() => ({}))
+        if (!webRes.ok || !webJson.ok || !webJson.result) throw new Error(webJson.error || 'Live web research failed.')
+        const web = webJson.result as WebResearchResult
+        setTurns(current => current.map(turn => turn.id === id ? { ...turn, plan, web } : turn))
+        return
+      }
 
       if (plan.action !== 'search_people') return
 
@@ -326,7 +387,7 @@ export function AgenticSourcingChatV36_15() {
               location: person.location,
               profileUrl,
               linkedinUrl,
-              sourceContext: 'agentic_sourcing_v36_15',
+              sourceContext: 'agentic_sourcing_v36_16',
             }),
           })
           const json = await response.json().catch(() => ({}))
@@ -348,16 +409,32 @@ export function AgenticSourcingChatV36_15() {
     }
   }
 
+  const workingLabel = working === 'planning'
+    ? 'Interpreting recruiter intent…'
+    : working === 'searching'
+      ? 'Searching professional and X-ray sources…'
+      : working === 'web'
+        ? 'Researching the live web…'
+        : 'Running approved contact enrichment…'
+  const workingDetail = working === 'planning'
+    ? 'Building explicit criteria and the next tool plan.'
+    : working === 'searching'
+      ? 'Structured providers, semantic sources, and bounded Serper X-rays can contribute observations before the global result cap.'
+      : working === 'web'
+        ? 'Live external material will attach to this turn as untrusted source evidence, not candidate truth.'
+        : 'Work email, personal email, and phone are pursued independently through the goal-specific contact waterfall.'
+
   return <section className="product-panel agent-chat-shell">
     <style>{`
       .agent-chat-shell{overflow:hidden;background:linear-gradient(145deg,color-mix(in srgb,var(--panel) 96%,var(--accent) 4%),var(--panel));display:flex;flex-direction:column;height:calc(100vh - 175px);min-height:640px;max-height:900px;padding-bottom:0}
       .agent-chat-head{display:flex;justify-content:space-between;gap:16px;align-items:start;flex-wrap:wrap;margin-bottom:12px}.agent-chat-head h2{font-size:24px;margin:4px 0 4px}.agent-chat-head p{max-width:760px;margin:0}
       .agent-chat-thread{display:grid;align-content:start;gap:14px;flex:1;min-height:0;overflow:auto;padding:2px 5px 18px 0;scrollbar-gutter:stable}
       .agent-chat-turn{display:grid;gap:10px}.agent-chat-user{justify-self:end;max-width:min(760px,90%);padding:11px 14px;border-radius:16px 16px 4px 16px;background:color-mix(in srgb,var(--accent) 20%,var(--panel));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));font-weight:650}
-      .agent-chat-plan,.agent-chat-search-result{padding:14px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--panel) 94%,#fff 1%)}
+      .agent-chat-plan,.agent-chat-search-result,.agent-chat-web-result{padding:14px;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--panel) 94%,#fff 1%)}
       .agent-chat-plan-head,.agent-chat-result-summary,.agent-approval-head{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}.agent-chat-answer{font-size:14px;font-weight:700;line-height:1.55;margin-top:5px;max-width:820px}
       .agent-chat-criteria{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:13px}.agent-chat-criterion{padding:9px 10px;border:1px solid var(--border);border-radius:11px}.agent-chat-criterion small{display:block;text-transform:uppercase;letter-spacing:.08em;font-size:9px;color:var(--muted);margin-bottom:6px}
       .agent-tool-trace{display:grid;gap:7px;margin-top:12px}.agent-chat-telemetry{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0}.agent-chat-candidates{display:grid;gap:7px;margin-top:12px}.agent-chat-candidate,.agent-contact-person{display:flex;gap:10px;padding:11px;border:1px solid var(--border);border-radius:12px}.agent-chat-candidate-rank{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 13%,transparent);font-size:10px;font-weight:850;flex:0 0 auto}.agent-chat-candidate-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.agent-chat-contact-state{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:10px}.agent-chat-contact-state a{color:inherit;text-decoration:underline}.agent-chat-show-more{margin-top:10px}.agent-chat-diagnostics{margin-top:10px}
+      .agent-chat-web-copy{margin-top:12px;padding:12px;border:1px solid var(--border);border-radius:11px;background:color-mix(in srgb,var(--panel) 78%,transparent);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto}
       .agent-approval-card{padding:15px;border:1px solid color-mix(in srgb,var(--accent) 35%,var(--border));border-radius:16px;background:color-mix(in srgb,var(--accent) 7%,var(--panel))}.agent-approval-head h3{margin:4px 0 0}.agent-approval-card p{line-height:1.55}.agent-approval-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:12px}.agent-contact-results{display:grid;gap:8px;margin-top:12px}.agent-contact-summary{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px;border-radius:11px;background:color-mix(in srgb,var(--panel) 75%,transparent)}.agent-contact-signals{display:grid;gap:5px;margin-top:8px}.agent-contact-signal{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 9px;border:1px solid var(--border);border-radius:9px}.agent-contact-signal span{overflow-wrap:anywhere}.agent-contact-signal small{color:var(--muted)}
       .agent-chat-compose{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin:0 -16px;padding:12px 16px 16px;border-top:1px solid var(--border);background:color-mix(in srgb,var(--panel) 97%,transparent);backdrop-filter:blur(12px);position:relative;z-index:5}.agent-chat-compose textarea{resize:none;min-height:52px;max-height:120px;width:100%}.agent-chat-empty{padding:18px;border:1px dashed var(--border);border-radius:14px;margin-bottom:4px}.agent-chat-examples{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.agent-chat-error{padding:10px 12px;border:1px solid color-mix(in srgb,#ef4444 38%,var(--border));border-radius:11px;color:var(--muted)}
       @media(max-width:900px){.agent-chat-shell{height:calc(100vh - 150px);min-height:560px}.agent-contact-signal{grid-template-columns:48px 1fr}.agent-contact-signal small{grid-column:2}}
@@ -365,26 +442,27 @@ export function AgenticSourcingChatV36_15() {
     `}</style>
 
     <div className="agent-chat-head">
-      <div><span className="kicker">V36.15 · Conversational sourcing</span><h2>Chat with SourcingOS.</h2><p className="muted">Search, refine, review, then approve paid or consequential actions without leaving the conversation.</p></div>
-      <div className="chips"><span className="status-pill success">search auto-runs</span><span className="status-pill">paid reads need approval</span>{previousPlan && <button className="btn ghost" type="button" onClick={() => { setTurns([]); setPreviousPlan(undefined); setInput('') }} disabled={!!working}>New search</button>}</div>
+      <div><span className="kicker">V36.16 · Conversational sourcing</span><h2>Chat with SourcingOS.</h2><p className="muted">Search people, run bounded X-rays, research the live web, review evidence, then approve paid or consequential actions without leaving the conversation.</p></div>
+      <div className="chips"><span className="status-pill success">read-only search auto-runs</span><span className="status-pill">paid reads need approval</span>{previousPlan && <button className="btn ghost" type="button" onClick={() => { setTurns([]); setPreviousPlan(undefined); setInput('') }} disabled={!!working}>New search</button>}</div>
     </div>
 
     <div className="agent-chat-thread" ref={threadRef} aria-live="polite">
       {!turns.length && <div className="agent-chat-empty">
         <strong>The conversation is the control surface.</strong>
-        <p className="muted" style={{ margin: '5px 0 0', lineHeight: 1.55 }}>People search can run automatically. Contact enrichment is a paid read with an approval checkpoint. Saving, outreach, ATS writes, and identity merges remain recruiter-controlled.</p>
+        <p className="muted" style={{ margin: '5px 0 0', lineHeight: 1.55 }}>People search can fan out across structured providers plus bounded X-ray retrieval. Explicit live-web research can auto-run as a read. Contact enrichment is a paid read with an approval checkpoint. Saving, outreach, ATS writes, and identity merges remain recruiter-controlled.</p>
         <div className="agent-chat-examples">
-          {['Find 25 backend engineers in Minneapolis, MN with AWS + Kubernetes', 'Find a RHEL admin near Annapolis Junction, MD with Secret clearance or higher', 'Find senior technical sourcers in the DC area'].map(example => <button type="button" className="btn ghost" key={example} onClick={() => setInput(example)}>{example}</button>)}
+          {['Find 25 backend engineers in Minneapolis, MN with AWS + Kubernetes', 'Find a RHEL admin near Annapolis Junction, MD with Secret clearance or higher', 'Search the web for recent RHEL hiring at GDIT'].map(example => <button type="button" className="btn ghost" key={example} onClick={() => setInput(example)}>{example}</button>)}
         </div>
       </div>}
       {turns.map(turn => <div className="agent-chat-turn" key={turn.id}>
         <div className="agent-chat-user">{turn.user}</div>
         {turn.plan && <PlanCard plan={turn.plan} />}
         {turn.search && <SearchResults result={turn.search} />}
+        {turn.web && <WebResearch result={turn.web} />}
         {turn.plan?.action === 'approval_required' && <ContactApproval plan={turn.plan} contact={turn.contact} disabled={working === 'enriching'} onApprove={() => approveContacts(turn.id)} />}
         {turn.error && <div className="agent-chat-error">{turn.error}</div>}
       </div>)}
-      {!!working && <div className="cta" style={{ marginBottom: 0 }}><b>{working === 'planning' ? 'Interpreting recruiter intent…' : working === 'searching' ? 'Searching professional sources…' : 'Running approved contact enrichment…'}</b><div className="muted" style={{ marginTop: 3, fontSize: 11 }}>{working === 'planning' ? 'Building explicit criteria and the next tool plan.' : working === 'searching' ? 'Provider observations and source diagnostics will attach to this turn.' : 'Work email, personal email, and phone are pursued independently through the existing contact waterfall.'}</div></div>}
+      {!!working && <div className="cta" style={{ marginBottom: 0 }}><b>{workingLabel}</b><div className="muted" style={{ marginTop: 3, fontSize: 11 }}>{workingDetail}</div></div>}
     </div>
 
     <form className="agent-chat-compose" onSubmit={submit}>
