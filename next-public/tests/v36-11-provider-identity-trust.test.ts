@@ -79,6 +79,7 @@ describe('V36.11 provider identity trust boundary', () => {
         value: 'https://github.com/example-person',
         source: 'people_data_labs',
         verified: false,
+        note: 'Provider-observed public GitHub profile URL.',
       }],
     })
     const github = result({
