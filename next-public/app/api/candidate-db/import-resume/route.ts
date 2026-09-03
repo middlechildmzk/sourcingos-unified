@@ -12,8 +12,9 @@ import {
   SourceProfileRecord,
   uid,
 } from '@/lib/candidate-db-v18'
+import { buildCandidateArtifactV36_10, persistCandidateArtifactV36_10 } from '@/lib/candidate-artifacts-v36-10'
 import { persistCandidateGraphSnapshot } from '@/lib/supabase-candidate-graph'
-import { isSupabaseConfigured } from '@/lib/supabase/server'
+import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 
 function safeProfileUrl(value: unknown): string | undefined {
   const raw = String(value || '').trim().slice(0, 1000)
@@ -82,8 +83,30 @@ export async function POST(req: NextRequest) {
     openSignals.forEach(item => { item.candidateId = candidate.id })
     const importBatch = { id: uid('batch'), importType: 'resume_text' as const, fileName, rowsSeen: 1, recordsCreated: 1, warnings: [], createdAt }
     const snapshot: CandidateDbSnapshot = { candidates: [candidate], sourceProfiles: [sourceProfile], evidenceItems: evidence, contactSignals: contacts, openToWorkSignals: openSignals, matchReviews: [], importBatches: [importBatch] }
+    const artifact = buildCandidateArtifactV36_10({
+      text,
+      candidateId: candidate.id,
+      sourceProfileId: sourceProfile.id,
+      artifactType: 'resume',
+      dataOrigin: 'recruiter_upload',
+      fileName,
+      mimeType: String(body.mimeType || 'text/plain').slice(0, 160),
+      sourceUrl: body.sourceUrl,
+      observedAt: createdAt,
+      metadata: {
+        source: 'uploaded_resume',
+        displayName,
+        profileUrl: profileUrl || null,
+      },
+    })
 
     const preview = gate.preview || !isSupabaseConfigured()
+    let artifactPersistence: { ok: boolean; persisted: boolean; warning?: string } = {
+      ok: true,
+      persisted: false,
+      warning: preview ? 'Preview mode does not persist candidate artifacts.' : undefined,
+    }
+
     if (preview) {
       const db = getCandidateDb()
       db.candidates.unshift(candidate)
@@ -95,9 +118,24 @@ export async function POST(req: NextRequest) {
     } else {
       const persisted = await persistCandidateGraphSnapshot(snapshot, gate.userId)
       if (!persisted.ok) return NextResponse.json({ ok: false, error: persisted.message, details: persisted.errors || [] }, { status: 500 })
+      const sb = createServerSupabaseClient()
+      artifactPersistence = sb
+        ? await persistCandidateArtifactV36_10({ sb, ownerId: gate.userId, artifact })
+        : { ok: false, persisted: false, warning: 'Candidate artifact storage client is unavailable.' }
     }
 
-    return NextResponse.json({ ok: true, persistence_mode: preview ? 'preview' : 'supabase', candidate, sourceProfile, evidence, contacts, openToWorkSignals: openSignals })
+    return NextResponse.json({
+      ok: true,
+      persistence_mode: preview ? 'preview' : 'supabase',
+      candidate,
+      sourceProfile,
+      artifact,
+      artifactPersistence,
+      evidence,
+      contacts,
+      openToWorkSignals: openSignals,
+      warning: artifactPersistence.warning,
+    })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Import failed' }, { status: 500 })
   }
