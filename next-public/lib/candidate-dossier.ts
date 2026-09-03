@@ -1,4 +1,5 @@
 import type { Candidate360ResolvedProfileV35 } from './candidate-field-resolution-v35'
+import type { CandidateProfessionalProfileV36_14 } from './candidate-professional-profile-v36-14'
 
 export type CandidateDossierCandidate = {
   id?: string
@@ -70,6 +71,7 @@ export type CandidateDossierMatchReview = {
 export type CandidateDossier = {
   candidate: CandidateDossierCandidate
   resolvedProfile?: Candidate360ResolvedProfileV35
+  professionalProfile?: CandidateProfessionalProfileV36_14
   evidence?: CandidateDossierEvidence[]
   sourceProfiles?: CandidateDossierProfile[]
   contacts?: CandidateDossierContact[]
