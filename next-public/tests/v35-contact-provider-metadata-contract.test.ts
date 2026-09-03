@@ -43,7 +43,9 @@ describe('V35 provider metadata and trust contract', () => {
     expect(route).toContain('ownership_confidence:')
     expect(route).toContain('deliverability:')
     expect(route).toContain('provider_status_raw:')
-    expect(route).toContain('permission_status: \'unknown\'')
+    // Permission metadata must survive persistence. Default unknown remains the
+    // fallback, but explicit provider DNC cannot be erased on write.
+    expect(route).toContain("permission_status: s.permissionStatus || 'unknown'")
   })
 
   it('keeps the Candidate 360 resolver read-only and shadow-labeled at the API seam', () => {
