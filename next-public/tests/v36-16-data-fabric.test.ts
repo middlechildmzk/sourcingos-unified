@@ -3,6 +3,7 @@ import { buildCrustdataPersonSearchBodyV36_16 } from '@/lib/candidate-data/provi
 import { buildApolloPeopleSearchUrlV36_16 } from '@/lib/candidate-data/providers/apollo-v36-16'
 import { agentProviderStatusesV36_16 } from '@/lib/agent-data/provider-registry-v36-16'
 import { enrichWithApolloV36_16 } from '@/lib/contact-enrichment/providers/apollo-v36-16'
+import { callAllowlistedRemoteMcpToolV36_16 } from '@/lib/mcp/streamable-http-v36-16'
 
 const savedEnv = new Map<string, string | undefined>()
 const envKeys = [
@@ -87,10 +88,11 @@ describe('V36.16 provider data fabric', () => {
     const statuses = agentProviderStatusesV36_16()
     expect(statuses.find(item => item.id === 'crustdata')).toEqual(expect.objectContaining({ configured: true, executableNow: true }))
     expect(statuses.find(item => item.id === 'apollo')).toEqual(expect.objectContaining({ configured: true, executableNow: true }))
+    expect(statuses.find(item => item.id === 'brightdata')).toEqual(expect.objectContaining({ configured: true, executableNow: true, transports: ['mcp'] }))
     expect(statuses.find(item => item.id === 'qdrant')).toEqual(expect.objectContaining({ configured: true, executableNow: false }))
     expect(statuses.find(item => item.id === 'merge')).toEqual(expect.objectContaining({ configured: true, executableNow: false }))
     const serialized = JSON.stringify(statuses)
-    for (const secret of ['crust-secret-fixture', 'apollo-secret-fixture', 'wiza-secret-fixture', 'vector-secret-fixture', 'ats-secret-fixture']) {
+    for (const secret of ['crust-secret-fixture', 'apollo-secret-fixture', 'wiza-secret-fixture', 'bright-secret-fixture', 'vector-secret-fixture', 'ats-secret-fixture']) {
       expect(serialized).not.toContain(secret)
     }
   })
@@ -119,5 +121,62 @@ describe('V36.16 provider data fabric', () => {
     expect(body.reveal_personal_emails).toBe(true)
     expect(body.reveal_phone_number).toBe(false)
     expect(body.webhook_url).toBeUndefined()
+  })
+
+  it('performs an MCP initialize/list/call sequence only against an allowlisted host and tool', async () => {
+    const seen: Array<{ method: string; headers: Headers; body: Record<string, any> }> = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body || '{}')) as Record<string, any>
+      const headers = new Headers(init?.headers)
+      seen.push({ method: String(body.method || ''), headers, body })
+      if (body.method === 'initialize') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { protocolVersion: '2025-11-25', capabilities: {}, serverInfo: { name: 'fixture', version: '1' } } }), {
+          status: 200, headers: { 'content-type': 'application/json', 'Mcp-Session-Id': 'session-fixture' },
+        })
+      }
+      if (body.method === 'notifications/initialized') return new Response(null, { status: 202 })
+      if (body.method === 'tools/list') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 2, result: { tools: [{ name: 'search_engine', description: 'fixture', inputSchema: { type: 'object' } }] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      if (body.method === 'tools/call') {
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: 3, result: { content: [{ type: 'text', text: 'live web fixture result' }], isError: false } }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response('unexpected', { status: 500 })
+    })
+
+    const result = await callAllowlistedRemoteMcpToolV36_16({
+      endpoint: 'https://mcp.brightdata.com/mcp?token=test-token',
+      allowedHosts: ['mcp.brightdata.com'],
+      allowedTools: ['search_engine', 'scrape_as_markdown'],
+      tool: 'search_engine',
+      arguments: { query: 'current recruiting market' },
+      clientName: 'sourcingos-test',
+    })
+
+    expect(result.text).toBe('live web fixture result')
+    expect(seen.map(item => item.method)).toEqual(['initialize', 'notifications/initialized', 'tools/list', 'tools/call'])
+    expect(seen.slice(1).every(item => item.headers.get('Mcp-Session-Id') === 'session-fixture')).toBe(true)
+    expect(seen.find(item => item.method === 'tools/call')?.body.params.name).toBe('search_engine')
+  })
+
+  it('rejects arbitrary MCP hosts and non-allowlisted tools before network execution', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    await expect(callAllowlistedRemoteMcpToolV36_16({
+      endpoint: 'https://untrusted.invalid/mcp',
+      allowedHosts: ['mcp.brightdata.com'],
+      allowedTools: ['search_engine'],
+      tool: 'search_engine',
+      arguments: { query: 'test' },
+      clientName: 'sourcingos-test',
+    })).rejects.toThrow(/allowlist/i)
+    await expect(callAllowlistedRemoteMcpToolV36_16({
+      endpoint: 'https://mcp.brightdata.com/mcp',
+      allowedHosts: ['mcp.brightdata.com'],
+      allowedTools: ['search_engine'],
+      tool: 'scraping_browser_navigate',
+      arguments: {},
+      clientName: 'sourcingos-test',
+    })).rejects.toThrow(/allowlist/i)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
