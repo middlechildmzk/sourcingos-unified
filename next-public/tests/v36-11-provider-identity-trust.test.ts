@@ -17,7 +17,7 @@ function result(input: Partial<SourceResult> & Pick<SourceResult, 'source' | 'so
 }
 
 describe('V36.11 provider identity trust boundary', () => {
-  it('preserves provider-observed LinkedIn as provenance without promoting it to a weight-1 source_url identity signal', () => {
+  it('preserves provider-observed LinkedIn as provenance without promoting it to a source-native URL or weight-1 identity signal', () => {
     const source = providerObservationToSourceResultV36_8({
       provider: 'contactout',
       providerPersonId: 'example-person',
@@ -31,13 +31,16 @@ describe('V36.11 provider identity trust boundary', () => {
       observedAt: '2026-09-03T00:00:00.000Z',
     })
 
-    expect(source.profileUrl).toBe('https://www.linkedin.com/in/example-person')
+    expect(source.profileUrl).toBeUndefined()
     expect(source.contactSignals).toContainEqual(expect.objectContaining({
       type: 'profile_url',
       value: 'https://www.linkedin.com/in/example-person',
       verified: false,
     }))
     expect(source.identitySignals.some(signal => signal.type === 'source_url')).toBe(false)
+    expect((source.raw as Record<string, unknown>)?.observedProfileUrls).toEqual([
+      { kind: 'linkedin', url: 'https://www.linkedin.com/in/example-person' },
+    ])
   })
 
   it('does not let matching LinkedIn URLs alone create deterministic cross-source identity authority', () => {
