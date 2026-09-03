@@ -72,6 +72,7 @@ describe('V36.10 canonical professional identity anchors', () => {
         value: 'https://github.com/example-person',
         source: 'people_data_labs',
         verified: false,
+        note: 'Provider-observed public GitHub profile URL.',
       }],
     })
     const github = result({
