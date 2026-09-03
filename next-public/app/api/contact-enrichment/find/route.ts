@@ -10,7 +10,13 @@ import { canUseAnyMailFinderV36_8, enrichWithAnyMailFinderV36_8 } from '@/lib/co
 import { canUseTombaV36_8, enrichWithTombaV36_8 } from '@/lib/contact-enrichment/providers/tomba-v36-8'
 import { canUseHunterV36_8, enrichWithHunterV36_8 } from '@/lib/contact-enrichment/providers/hunter-v36-8'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
-import { runContactEnrichmentOrchestratorV35, type ContactProviderAdapterV35, type EnrichmentPurposeV35 } from '@/lib/contact-enrichment/orchestrator-v35'
+import {
+  contactGoalStateV36_12,
+  runContactEnrichmentOrchestratorV35,
+  type ContactProviderAdapterV35,
+  type ContactResolutionGoalV36_12,
+  type EnrichmentPurposeV35,
+} from '@/lib/contact-enrichment/orchestrator-v35'
 import { ContactEnrichmentRequest, ContactSignal, type ContactEnrichmentProvider } from '@/lib/contact-enrichment/types'
 import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import type { CandidateDataProviderV36_8, CandidateProviderObservationV36_8 } from '@/lib/candidate-data/types-v36-8'
@@ -21,7 +27,8 @@ const PROVIDERS = new Set<ContactEnrichmentProvider>([
   'people_data_labs', 'data_vertex', 'pearch', 'coresignal', 'contactout', 'signalhire',
   'anymail_finder', 'tomba', 'openweb_ninja', 'hunter', 'apollo', 'none',
 ])
-const PURPOSES = new Set<EnrichmentPurposeV35>(['identity_enrichment', 'work_email_finder', 'email_verification', 'phone_enrichment'])
+const PURPOSES = new Set<EnrichmentPurposeV35>(['identity_enrichment', 'work_email_finder', 'email_verification', 'phone_enrichment', 'contact_bundle'])
+const CONTACT_GOALS = new Set<ContactResolutionGoalV36_12>(['work_email', 'personal_email', 'phone'])
 const SIGNABLE_IDENTITY_PROVIDERS = new Set<CandidateDataProviderV36_8>(['people_data_labs', 'data_vertex', 'signalhire'])
 
 function validEmail(value?: string): boolean {
@@ -54,6 +61,16 @@ function signedResolvedPerson(
   return signedProviderObservationV36_8(observation)
 }
 
+function dedupeSignals(signals: ContactSignal[]): ContactSignal[] {
+  const seen = new Set<string>()
+  return signals.filter(signal => {
+    const key = `${signal.type}:${signal.value.toLowerCase()}:${signal.sourceProvider}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -75,6 +92,15 @@ export async function POST(req: NextRequest) {
   const providerName = providerRaw && PROVIDERS.has(providerRaw as ContactEnrichmentProvider) ? providerRaw as ContactEnrichmentProvider : undefined
   const purposeRaw = str(body.purpose)
   const purpose: EnrichmentPurposeV35 = purposeRaw && PURPOSES.has(purposeRaw as EnrichmentPurposeV35) ? purposeRaw as EnrichmentPurposeV35 : 'identity_enrichment'
+  const requestedGoals = Array.isArray(body.goals)
+    ? Array.from(new Set(body.goals.filter(item => typeof item === 'string' && CONTACT_GOALS.has(item as ContactResolutionGoalV36_12)) as ContactResolutionGoalV36_12[]))
+    : purpose === 'contact_bundle'
+      ? ['work_email', 'personal_email', 'phone'] as ContactResolutionGoalV36_12[]
+      : purpose === 'work_email_finder'
+        ? ['work_email'] as ContactResolutionGoalV36_12[]
+        : purpose === 'phone_enrichment'
+          ? ['phone'] as ContactResolutionGoalV36_12[]
+          : []
 
   const request: ContactEnrichmentRequest = {
     candidateId: str(body.candidateId),
@@ -116,105 +142,175 @@ export async function POST(req: NextRequest) {
   const anyMailConfigured = Boolean(process.env.ANYMAILFINDER_API_KEY)
   const tombaConfigured = Boolean(process.env.TOMBA_API_KEY && process.env.TOMBA_SECRET_KEY)
   const hunterConfigured = Boolean(process.env.HUNTER_API_KEY)
-  const adapters: ContactProviderAdapterV35[] = []
 
-  const dataVertexAdapter: ContactProviderAdapterV35 = {
-    id: 'data_vertex',
-    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
-    estimatedCredits: 10,
-    enrich: () => enrichWithDataVertexV36_8(request, purpose === 'phone_enrichment' ? 'phone_enrichment' : purpose === 'work_email_finder' ? 'work_email_finder' : 'identity_enrichment'),
-  }
-  const pdlAdapter: ContactProviderAdapterV35 = {
-    id: 'people_data_labs',
-    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
-    estimatedCredits: 1,
-    enrich: () => enrichWithPeopleDataLabs(request),
-  }
-  const signalHireAdapter: ContactProviderAdapterV35 = {
-    id: 'signalhire',
-    purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'],
-    estimatedCredits: 1,
-    enrich: () => enrichWithSignalHireV36_8(request),
-  }
-  const anyMailAdapter: ContactProviderAdapterV35 = {
-    id: 'anymail_finder',
-    purposes: ['work_email_finder'],
-    estimatedCredits: 1,
-    enrich: () => enrichWithAnyMailFinderV36_8(request),
-  }
-  const tombaAdapter: ContactProviderAdapterV35 = {
-    id: 'tomba',
-    purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'],
-    estimatedCredits: 1,
-    enrich: () => enrichWithTombaV36_8(request, purpose),
-  }
-  const hunterAdapter: ContactProviderAdapterV35 = {
-    id: 'hunter',
-    purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'],
-    estimatedCredits: 1,
-    enrich: () => enrichWithHunterV36_8(request, purpose),
-  }
+  function adaptersFor(lane: Exclude<EnrichmentPurposeV35, 'contact_bundle'>): ContactProviderAdapterV35[] {
+    const adapters: ContactProviderAdapterV35[] = []
+    const dataVertexAdapter: ContactProviderAdapterV35 = {
+      id: 'data_vertex', purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'], estimatedCredits: 10,
+      enrich: () => enrichWithDataVertexV36_8(request, lane === 'phone_enrichment' ? 'phone_enrichment' : lane === 'work_email_finder' ? 'work_email_finder' : 'identity_enrichment'),
+    }
+    const pdlAdapter: ContactProviderAdapterV35 = {
+      id: 'people_data_labs', purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'], estimatedCredits: 1,
+      enrich: () => enrichWithPeopleDataLabs(request),
+    }
+    const signalHireAdapter: ContactProviderAdapterV35 = {
+      id: 'signalhire', purposes: ['identity_enrichment', 'work_email_finder', 'phone_enrichment'], estimatedCredits: 1,
+      enrich: () => enrichWithSignalHireV36_8(request),
+    }
+    const anyMailAdapter: ContactProviderAdapterV35 = {
+      id: 'anymail_finder', purposes: ['work_email_finder'], estimatedCredits: 1,
+      enrich: () => enrichWithAnyMailFinderV36_8(request),
+    }
+    const tombaAdapter: ContactProviderAdapterV35 = {
+      id: 'tomba', purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'], estimatedCredits: 1,
+      enrich: () => enrichWithTombaV36_8(request, lane),
+    }
+    const hunterAdapter: ContactProviderAdapterV35 = {
+      id: 'hunter', purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'], estimatedCredits: 1,
+      enrich: () => enrichWithHunterV36_8(request, lane),
+    }
 
-  // Exact same-provider anchors run first. They do not authorize any cross-provider merge.
-  if (signalHireConfigured && request.providerName === 'signalhire' && canUseSignalHireLookupV36_8(request)) adapters.push(signalHireAdapter)
-  if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
+    if (signalHireConfigured && request.providerName === 'signalhire' && canUseSignalHireLookupV36_8(request)) adapters.push(signalHireAdapter)
+    if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
 
-  if (purpose === 'identity_enrichment') {
-    const exactIdentifierOnly = Boolean(request.email || request.phone) && !request.fullName && !request.firstName && !request.lastName && !request.profileUrl && !request.linkedinUrl && !request.githubUrl && !request.providerPersonId
-    // PDL enrichment is only called when we have fields its adapter actually sends.
-    if (pdlConfigured && !exactIdentifierOnly) adapters.push(pdlAdapter)
-    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
-    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
-  } else if (purpose === 'work_email_finder') {
-    // Prefer lower-cost/pay-on-success finders before expensive broad enrichment.
-    if (anyMailConfigured && canUseAnyMailFinderV36_8(request)) adapters.push(anyMailAdapter)
-    if (hunterConfigured && canUseHunterV36_8(request, purpose)) adapters.push(hunterAdapter)
-    if (tombaConfigured && canUseTombaV36_8(request, purpose)) adapters.push(tombaAdapter)
-    if (pdlConfigured) adapters.push(pdlAdapter)
-    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
-    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
-  } else if (purpose === 'email_verification') {
-    if (hunterConfigured && canUseHunterV36_8(request, purpose)) adapters.push(hunterAdapter)
-    if (tombaConfigured && canUseTombaV36_8(request, purpose)) adapters.push(tombaAdapter)
-  } else if (purpose === 'phone_enrichment') {
-    if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
-    if (pdlConfigured) adapters.push(pdlAdapter)
-    if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+    if (lane === 'identity_enrichment') {
+      const exactIdentifierOnly = Boolean(request.email || request.phone) && !request.fullName && !request.firstName && !request.lastName && !request.profileUrl && !request.linkedinUrl && !request.githubUrl && !request.providerPersonId
+      if (pdlConfigured && !exactIdentifierOnly) adapters.push(pdlAdapter)
+      if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+      if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+    } else if (lane === 'work_email_finder') {
+      if (anyMailConfigured && canUseAnyMailFinderV36_8(request)) adapters.push(anyMailAdapter)
+      if (hunterConfigured && canUseHunterV36_8(request, lane)) adapters.push(hunterAdapter)
+      if (tombaConfigured && canUseTombaV36_8(request, lane)) adapters.push(tombaAdapter)
+      if (pdlConfigured) adapters.push(pdlAdapter)
+      if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+      if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+    } else if (lane === 'email_verification') {
+      if (hunterConfigured && canUseHunterV36_8(request, lane)) adapters.push(hunterAdapter)
+      if (tombaConfigured && canUseTombaV36_8(request, lane)) adapters.push(tombaAdapter)
+    } else if (lane === 'phone_enrichment') {
+      if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
+      if (pdlConfigured) adapters.push(pdlAdapter)
+      if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
+    }
+    return adapters
   }
 
-  if (!adapters.length) {
-    return NextResponse.json({
-      ok: false,
-      code: 'provider_not_configured',
-      error: `No configured contact provider can run the ${purpose.replace(/_/g, ' ')} lane with the available identity anchors.`,
-      providers: {
-        peopleDataLabs: pdlConfigured ? 'configured' : 'missing_key',
-        dataVertex: dataVertexConfigured ? (canUseDataVertexLookupV36_8(request) ? 'configured' : 'needs_linkedin_or_provider_id') : 'missing_key',
-        signalHire: signalHireConfigured ? (canUseSignalHireLookupV36_8(request) ? 'configured' : 'needs_signalhire_id_linkedin_email_or_phone') : 'missing_key',
-        anyMailFinder: anyMailConfigured ? (canUseAnyMailFinderV36_8(request) ? 'configured' : 'needs_linkedin_or_name_company') : 'missing_key',
-        tomba: tombaConfigured ? (canUseTombaV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
-        hunter: hunterConfigured ? (canUseHunterV36_8(request, purpose) ? 'configured' : 'needs_supported_identity_fields') : 'missing_key',
-      },
-    }, { status: 503 })
+  // Candidate Graph cache is the first provider: $0 and no network call.
+  let cachedSignals: ContactSignal[] = []
+  if (request.candidateId && ownerId && isSupabaseConfigured()) {
+    const sb = createServerSupabaseClient()
+    if (sb) {
+      try {
+        const { data } = await sb.from('candidate_contacts')
+          .select('type,value,source,confidence,permission_status,contact_kind,ownership_confidence,deliverability,provider_status_raw,observed_at,created_at')
+          .eq('candidate_id', request.candidateId)
+          .eq('owner_id', ownerId)
+        cachedSignals = (data || []).map((row: any) => ({
+          type: row.type,
+          channelKind: row.contact_kind || undefined,
+          value: row.value,
+          sourceProvider: PROVIDERS.has(row.source as ContactEnrichmentProvider) ? row.source as ContactEnrichmentProvider : 'none',
+          confidence: row.confidence || 'medium',
+          verified: false,
+          permissionStatus: row.permission_status || 'unknown',
+          ownershipConfidence: row.ownership_confidence || undefined,
+          deliverability: row.deliverability || undefined,
+          providerStatusRaw: row.provider_status_raw || undefined,
+          discoveredAt: row.observed_at || row.created_at || new Date().toISOString(),
+          rawSource: 'candidate_graph_cache',
+          notes: 'Existing Candidate Graph contact observation reused before paid enrichment.',
+        })) as ContactSignal[]
+      } catch { cachedSignals = [] }
+    }
   }
 
-  const orchestration = await runContactEnrichmentOrchestratorV35({
-    request,
-    purpose,
-    adapters,
-    maxPaidAttempts: Math.min(4, adapters.length),
-    maxEstimatedCredits: purpose === 'work_email_finder' ? 13 : purpose === 'phone_enrichment' ? 12 : 4,
-  })
-  const result = orchestration.result
+  let result: Awaited<ReturnType<typeof runContactEnrichmentOrchestratorV35>>['result']
+  let orchestration: {
+    purpose: EnrichmentPurposeV35
+    stopReason: string
+    maxPaidAttempts: number
+    attempts: Array<{ provider: ContactEnrichmentProvider; purpose: EnrichmentPurposeV35; configured: boolean; resultCount: number; latencyMs: number; estimatedCredits?: number; warnings: string[] }>
+    requestedGoals?: ContactResolutionGoalV36_12[]
+    satisfiedGoals?: ContactResolutionGoalV36_12[]
+    missingGoals?: ContactResolutionGoalV36_12[]
+  }
+
+  if (purpose === 'contact_bundle') {
+    let combined = dedupeSignals(cachedSignals)
+    const attempts: typeof orchestration.attempts = []
+    let maxPaidAttempts = 0
+
+    const emailGoals = requestedGoals.filter(goal => goal === 'work_email' || goal === 'personal_email')
+    if (emailGoals.length && contactGoalStateV36_12(combined, emailGoals).missing.length) {
+      const laneAdapters = adaptersFor('work_email_finder')
+      const emailRun = await runContactEnrichmentOrchestratorV35({
+        request, purpose: 'work_email_finder', adapters: laneAdapters,
+        goals: emailGoals, initialSignals: combined,
+        maxPaidAttempts: Math.min(6, Math.max(1, laneAdapters.length)), maxEstimatedCredits: 15,
+      })
+      combined = dedupeSignals(emailRun.result.signals)
+      attempts.push(...emailRun.attempts)
+      maxPaidAttempts += emailRun.maxPaidAttempts
+    }
+
+    if (requestedGoals.includes('phone') && contactGoalStateV36_12(combined, ['phone']).missing.length) {
+      const laneAdapters = adaptersFor('phone_enrichment')
+      const phoneRun = await runContactEnrichmentOrchestratorV35({
+        request, purpose: 'phone_enrichment', adapters: laneAdapters,
+        goals: ['phone'], initialSignals: combined,
+        maxPaidAttempts: Math.min(4, Math.max(1, laneAdapters.length)), maxEstimatedCredits: 12,
+      })
+      combined = dedupeSignals(phoneRun.result.signals)
+      attempts.push(...phoneRun.attempts)
+      maxPaidAttempts += phoneRun.maxPaidAttempts
+      result = phoneRun.result
+    } else {
+      const state = contactGoalStateV36_12(combined, requestedGoals)
+      result = {
+        provider: 'none', providerConfigured: false,
+        message: combined.length ? `Resolved ${combined.length} cached/provider contact signal${combined.length === 1 ? '' : 's'}.` : 'No contact signal found.',
+        signals: combined,
+        log: { provider: 'none', attemptedAt: new Date().toISOString(), fieldsUsed: Object.keys(request).filter(key => (request as any)[key]), resultCount: combined.length, warnings: [], persistenceMode: 'none' },
+      }
+      if (!state.missing.length && !attempts.length) result.message = 'Requested contact goals were already satisfied by Candidate Graph cache.'
+    }
+
+    result = { ...result, signals: combined }
+    const state = contactGoalStateV36_12(combined, requestedGoals)
+    orchestration = {
+      purpose,
+      stopReason: !state.missing.length ? (attempts.length ? 'goal_met' : 'cache_hit') : attempts.length ? 'providers_exhausted' : 'no_provider',
+      maxPaidAttempts,
+      attempts,
+      requestedGoals: state.requested,
+      satisfiedGoals: state.satisfied,
+      missingGoals: state.missing,
+    }
+  } else {
+    const laneAdapters = adaptersFor(purpose)
+    if (!laneAdapters.length && !cachedSignals.length) {
+      return NextResponse.json({
+        ok: false,
+        code: 'provider_not_configured',
+        error: `No configured contact provider can run the ${purpose.replace(/_/g, ' ')} lane with the available identity anchors.`,
+      }, { status: 503 })
+    }
+    const single = await runContactEnrichmentOrchestratorV35({
+      request,
+      purpose,
+      adapters: laneAdapters,
+      ...(requestedGoals.length ? { goals: requestedGoals, initialSignals: cachedSignals } : {}),
+      maxPaidAttempts: Math.min(6, Math.max(1, laneAdapters.length)),
+      maxEstimatedCredits: purpose === 'work_email_finder' ? 15 : purpose === 'phone_enrichment' ? 12 : 4,
+    })
+    result = single.result
+    orchestration = single
+  }
 
   let persistenceMode: 'supabase' | 'preview' | 'not_persisted' = 'not_persisted'
   let persistedCount = 0
 
-  // Rich V35 match/deliverability metadata is returned in shadow mode until a
-  // replay-safe ledger write path exists. Only the longstanding normalized
-  // contact fields are persisted here; provider match/ownership/deliverability
-  // metadata remains response-only so a partial retry cannot create conflicting
-  // identity state.
   if (result.signals.length > 0 && request.candidateId && isSupabaseConfigured() && ownerId) {
     const sb = createServerSupabaseClient()
     if (sb) {
@@ -230,17 +326,23 @@ export async function POST(req: NextRequest) {
         )
 
         const rows = result.signals
+          .filter((s: ContactSignal) => s.sourceProvider !== 'none')
           .filter((s: ContactSignal) => !existingKeys.has(`${s.type}:${s.value.toLowerCase()}:${s.sourceProvider}`))
           .map((s: ContactSignal) => ({
             owner_id: ownerId,
             candidate_id: request.candidateId,
             source_profile_id: request.sourceProfileId || null,
             type: s.type,
+            contact_kind: s.channelKind || null,
             value: s.value,
             source: s.sourceProvider,
             confidence: s.confidence,
             verified: false,
             permission_status: 'unknown',
+            ownership_confidence: s.ownershipConfidence || null,
+            deliverability: s.deliverability || null,
+            provider_status_raw: s.providerStatusRaw || null,
+            observed_at: s.discoveredAt || null,
           }))
 
         if (rows.length > 0) {
@@ -278,6 +380,10 @@ export async function POST(req: NextRequest) {
       stopReason: orchestration.stopReason,
       maxPaidAttempts: orchestration.maxPaidAttempts,
       attempts: orchestration.attempts,
+      requestedGoals: orchestration.requestedGoals,
+      satisfiedGoals: orchestration.satisfiedGoals,
+      missingGoals: orchestration.missingGoals,
+      cacheSignalsConsidered: cachedSignals.length,
     },
     persistenceMode,
     persistedCount,
