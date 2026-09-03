@@ -9,6 +9,7 @@ import { canUseSignalHireLookupV36_8, enrichWithSignalHireV36_8 } from '@/lib/co
 import { canUseAnyMailFinderV36_8, enrichWithAnyMailFinderV36_8 } from '@/lib/contact-enrichment/providers/anymail-finder-v36-8'
 import { canUseTombaV36_8, enrichWithTombaV36_8 } from '@/lib/contact-enrichment/providers/tomba-v36-8'
 import { canUseHunterV36_8, enrichWithHunterV36_8 } from '@/lib/contact-enrichment/providers/hunter-v36-8'
+import { canUseApolloV36_16, enrichWithApolloV36_16 } from '@/lib/contact-enrichment/providers/apollo-v36-16'
 import { assessEnrichmentIdentityV34 } from '@/lib/contact-enrichment/identity-readiness-v34'
 import {
   contactGoalStateV36_12,
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
   const anyMailConfigured = Boolean(process.env.ANYMAILFINDER_API_KEY)
   const tombaConfigured = Boolean(process.env.TOMBA_API_KEY && process.env.TOMBA_SECRET_KEY)
   const hunterConfigured = Boolean(process.env.HUNTER_API_KEY)
+  const apolloConfigured = Boolean(process.env.APOLLO_API_KEY)
 
   function adaptersFor(lane: Exclude<EnrichmentPurposeV35, 'contact_bundle'>): ContactProviderAdapterV35[] {
     const adapters: ContactProviderAdapterV35[] = []
@@ -169,9 +171,14 @@ export async function POST(req: NextRequest) {
       id: 'hunter', purposes: ['identity_enrichment', 'work_email_finder', 'email_verification'], estimatedCredits: 1,
       enrich: () => enrichWithHunterV36_8(request, lane),
     }
+    const apolloAdapter: ContactProviderAdapterV35 = {
+      id: 'apollo', purposes: ['work_email_finder'], estimatedCredits: requestedGoals.includes('personal_email') ? 2 : 1,
+      enrich: () => enrichWithApolloV36_16(request, { revealPersonalEmail: requestedGoals.includes('personal_email') }),
+    }
 
     if (signalHireConfigured && request.providerName === 'signalhire' && canUseSignalHireLookupV36_8(request)) adapters.push(signalHireAdapter)
     if (dataVertexConfigured && request.providerName === 'data_vertex' && canUseDataVertexLookupV36_8(request)) adapters.push(dataVertexAdapter)
+    if (lane === 'work_email_finder' && apolloConfigured && request.providerName === 'apollo' && canUseApolloV36_16(request)) adapters.push(apolloAdapter)
 
     if (lane === 'identity_enrichment') {
       const exactIdentifierOnly = Boolean(request.email || request.phone) && !request.fullName && !request.firstName && !request.lastName && !request.profileUrl && !request.linkedinUrl && !request.githubUrl && !request.providerPersonId
@@ -182,6 +189,7 @@ export async function POST(req: NextRequest) {
       if (anyMailConfigured && canUseAnyMailFinderV36_8(request)) adapters.push(anyMailAdapter)
       if (hunterConfigured && canUseHunterV36_8(request, lane)) adapters.push(hunterAdapter)
       if (tombaConfigured && canUseTombaV36_8(request, lane)) adapters.push(tombaAdapter)
+      if (apolloConfigured && canUseApolloV36_16(request) && !adapters.some(item => item.id === 'apollo')) adapters.push(apolloAdapter)
       if (pdlConfigured) adapters.push(pdlAdapter)
       if (signalHireConfigured && canUseSignalHireLookupV36_8(request) && !adapters.some(item => item.id === 'signalhire')) adapters.push(signalHireAdapter)
       if (dataVertexConfigured && canUseDataVertexLookupV36_8(request) && !adapters.some(item => item.id === 'data_vertex')) adapters.push(dataVertexAdapter)
