@@ -48,8 +48,9 @@ describe('V33.2 unified agent source-truth boundary', () => {
     const route = read('app/api/candidate-db/match-review/route.ts')
     expect(route).toContain('compareSourceProfiles')
     expect(route).not.toContain('scoreIdentityMatch')
-    expect(route).toContain("version: 'v29.2.1-proposal-only'")
+    expect(route).toContain("version: 'v36.10-professional-anchor-review'")
     expect(route).toContain('mergeAuthorized: false')
+    expect(route).toContain('reviewRequired: true')
   })
 
   it('creates automatic identity proposals only from deterministic anchors and never links profiles', () => {
