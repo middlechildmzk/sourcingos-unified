@@ -103,13 +103,17 @@ describe('V36.16 provider data fabric', () => {
   it('keeps Serper snippets as retrieval context instead of candidate qualification fields', async () => {
     saveAndSet('SERPER_API_KEY', 'serper-test-key')
     const linkedin = 'https://www.linkedin.com/in/sample-candidate/'
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+    const payload = JSON.stringify({
       organic: [{
         title: 'Sample Candidate - Senior Linux Engineer | LinkedIn',
         link: linkedin,
         snippet: 'Secret clearance. 10+ years. RHEL, Ansible, Kubernetes. Northstar Systems.',
       }],
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(payload, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
 
     const result = await searchSerperXrayV36_16({
       query: 'Find RHEL admins near Annapolis Junction',
