@@ -6,7 +6,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
-import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
+import { observationSigningConfiguredV36_12, signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
 import { searchCoresignalV36_8 } from '@/lib/candidate-data/providers/coresignal-v36-8'
@@ -17,6 +17,7 @@ import { searchLinkUpV36_8 } from '@/lib/candidate-data/providers/linkup-v36-8'
 import { searchExaPeopleV36_8 } from '@/lib/candidate-data/providers/exa-v36-8'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8, CandidateDataSearchRequestV36_8 } from '@/lib/candidate-data/types-v36-8'
 import { buildSearchQualitySnapshotV36_12 } from '@/lib/search-quality-v36-12'
+import { sourceHealthEventsForSearchV36_12 } from '@/lib/source-health-v36-12'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,16 +82,16 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit)
-  const reviewObservations = result.observations.map(signedProviderObservationV36_8).filter(Boolean)
+  const signingConfigured = observationSigningConfiguredV36_12()
+  const reviewObservations = signingConfigured ? result.observations.map(signedProviderObservationV36_8).filter(Boolean) : []
   const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
+  const sourceHealthEvents = sourceHealthEventsForSearchV36_12(result.telemetry, result.retainedProviderMix)
 
-  // Persist recruiter-owned measurement before later provider repairs. This is
-  // the baseline ledger for Provider Lift; it is not a candidate-data store.
   if (!gate.preview && isSupabaseConfigured()) {
     const sb = createServerSupabaseClient()
     if (sb) {
       try {
-        await sb.from('search_quality_runs').insert({
+        const { data: run } = await sb.from('search_quality_runs').insert({
           owner_id: gate.userId,
           canonical_role_key: searchQuality.canonicalRoleKey || null,
           query: searchRequest.query,
@@ -105,32 +106,50 @@ export async function POST(req: NextRequest) {
           },
           metrics: searchQuality,
           provider_telemetry: result.telemetry,
-        })
+        }).select('id').single()
+
+        await sb.from('source_health_events').insert(sourceHealthEvents.map(event => ({
+          owner_id: gate.userId,
+          search_quality_run_id: run?.id || null,
+          canonical_role_key: searchQuality.canonicalRoleKey || null,
+          provider: event.provider,
+          status: event.status,
+          outcome: event.outcome,
+          discovered: event.discovered,
+          retained: event.retained,
+          latency_ms: event.latencyMs,
+          estimated_credits: event.estimatedCredits,
+          message: event.message || null,
+        })))
       } catch {
-        // Search success must never depend on analytics persistence.
+        // Search success must never depend on analytics/health persistence.
       }
     }
   }
+
+  const warnings = [...result.warnings]
+  if (!signingConfigured) warnings.unshift('Provider review observations cannot be saved until OBSERVATION_SIGNING_SECRET is configured for this environment.')
 
   return NextResponse.json({
     ok: true,
     observations: result.observations,
     reviewObservations,
     telemetry: result.telemetry,
+    sourceHealth: sourceHealthEvents,
     providerMix: result.providerMix,
     retainedProviderMix: result.retainedProviderMix,
     discoveredBeforeCap: result.discoveredBeforeCap,
     returnedAfterCap: result.returnedAfterCap,
     contributingProviders: result.contributingProviders,
     searchQuality,
-    warnings: result.warnings,
+    warnings,
     trust: {
       providerObservationsAreCandidateFacts: false,
       providerScoresAreQualificationScores: false,
       contactRevealDuringSearch: false,
       identityMergePerformed: false,
       recruiterDecisionPerformed: false,
-      providerReviewObservationsSignedServerSide: true,
+      providerReviewObservationsSignedServerSide: signingConfigured,
       providerDatabaseCountsAreNotUniquePeopleCounts: true,
     },
   })
