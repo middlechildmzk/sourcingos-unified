@@ -245,20 +245,29 @@ function hasProfessionalRoleHint(value: string): boolean {
   return value.split(/\s+/).some(isProfessionalRoleHint)
 }
 
+function looksLikeExplicitPersonName(value: string): boolean {
+  const tokens = clean(value).split(/\s+/).filter(Boolean)
+  return tokens.length >= 2
+    && tokens.length <= 4
+    && !hasProfessionalRoleHint(value)
+    && tokens.every(token => /^[\p{L}][\p{L}'’.\-]*$/u.test(token))
+}
+
 /** Explicit syntax is parsed before generic intent classification so `Jane Doe at Acme`
- * and `Jane Doe, Acme` remain deterministic identity anchors. Professional queries are
- * protected by the role-hint guard, including plural role nouns. */
+ * and `Jane Doe, Acme` remain deterministic identity anchors. The left side must
+ * actually look like a compact person name, so geographic commas such as
+ * `St. Paul, MN` in a recruiter refinement can never become fake company anchors. */
 function inferPersonSearchAnchors(query: string, explicitCompany?: string): { names: string[]; companies: string[] } {
   const value = clean(query)
   const companies = explicitCompany ? [clean(explicitCompany)] : []
   if (!value) return { names: [], companies }
 
   const atMatch = value.match(/^(.+?)\s+at\s+(.+)$/i)
-  if (atMatch && !hasProfessionalRoleHint(atMatch[1])) {
+  if (atMatch && looksLikeExplicitPersonName(atMatch[1])) {
     return { names: [clean(atMatch[1])], companies: companies.length ? companies : [clean(atMatch[2])] }
   }
   const commaMatch = value.match(/^([^,]+),\s*(.+)$/)
-  if (commaMatch && !hasProfessionalRoleHint(commaMatch[1])) {
+  if (commaMatch && looksLikeExplicitPersonName(commaMatch[1])) {
     return { names: [clean(commaMatch[1])], companies: companies.length ? companies : [clean(commaMatch[2])] }
   }
 
