@@ -24,7 +24,7 @@ describe('V35 provider metadata and trust contract', () => {
     )
 
     const gateCall = route.indexOf('assessEnrichmentIdentityV34(request)')
-    const orchestratorCall = route.indexOf('const orchestration = await runContactEnrichmentOrchestratorV35')
+    const orchestratorCall = route.indexOf('runContactEnrichmentOrchestratorV35({')
     expect(gateCall).toBeGreaterThan(-1)
     expect(orchestratorCall).toBeGreaterThan(-1)
     expect(gateCall).toBeLessThan(orchestratorCall)
@@ -33,16 +33,17 @@ describe('V35 provider metadata and trust contract', () => {
     expect(route).not.toMatch(/NEXT_PUBLIC_.*PDL/i)
   })
 
-  it('does not persist shadow-only provider match metadata before the replay-safe ledger write path exists', () => {
+  it('persists replay-safe contact-channel metadata without promoting provider match metadata into identity authority', () => {
     const route = readFileSync(
       fileURLToPath(new URL('../app/api/contact-enrichment/find/route.ts', import.meta.url)),
       'utf8',
     )
 
-    expect(route).toContain('Rich V35 match/deliverability metadata is returned in shadow mode')
     expect(route).not.toContain('provider_person_id:')
-    expect(route).not.toContain('ownership_confidence:')
-    expect(route).not.toContain('deliverability_status:')
+    expect(route).toContain('ownership_confidence:')
+    expect(route).toContain('deliverability:')
+    expect(route).toContain('provider_status_raw:')
+    expect(route).toContain('permission_status: \'unknown\'')
   })
 
   it('keeps the Candidate 360 resolver read-only and shadow-labeled at the API seam', () => {
