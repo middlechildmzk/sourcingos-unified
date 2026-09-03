@@ -40,9 +40,10 @@ describe('V36.8 Candidate Data Fabric', () => {
     expect(body).not.toHaveProperty('query')
   })
 
-  it('builds PDL Elasticsearch only from structured Role Brain fields', () => {
+  it('builds PDL Elasticsearch only from safe structured professional fields and no legacy offset transport', () => {
     const body = buildPeopleDataLabsSearchBodyV36_8(request)
-    expect(body).toMatchObject({ size: 20, from: 0, dataset: 'resume', titlecase: true })
+    expect(body).toMatchObject({ size: 20, dataset: 'resume', titlecase: true })
+    expect(body).not.toHaveProperty('from')
     expect(body.query).toEqual({
       bool: {
         must: [
@@ -63,6 +64,18 @@ describe('V36.8 Candidate Data Fabric', () => {
       },
     })
     expect(JSON.stringify(body)).not.toContain(request.query)
+  })
+
+  it('turns a plain person name into an explicit PDL full-name lookup instead of skipping the provider', () => {
+    const body = buildPeopleDataLabsSearchBodyV36_8({ query: 'Dan Larson', limit: 10 })
+    expect(body).toMatchObject({ size: 10, dataset: 'resume', titlecase: true })
+    expect(body.query).toEqual({
+      bool: {
+        must: [
+          { bool: { should: [{ match_phrase: { full_name: 'dan larson' } }], minimum_should_match: 1 } },
+        ],
+      },
+    })
   })
 
   it('uses Coresignal /fast as an employee lane with a controlled Role Brain prompt', () => {
