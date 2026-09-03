@@ -14,6 +14,7 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
   const exa = configured(process.env.EXA_API_KEY)
   const crust = configured(process.env.CRUSTDATA_API_KEY)
   const apollo = configured(process.env.APOLLO_API_KEY)
+  const serper = configured(process.env.SERPER_API_KEY)
   const own = configured(process.env.OPENWEBNINJA_API_KEY)
 
   return [
@@ -66,6 +67,11 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
       provider: 'apollo', label: 'Apollo', state: apollo ? 'configured' : 'missing_key', executable: apollo,
       capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment'],
       message: apollo ? 'Apollo People API Search is wired for contact-free discovery; contact enrichment remains separate and approval-gated.' : 'Apollo People Search is wired; APOLLO_API_KEY is not configured.',
+    },
+    {
+      provider: 'serper', label: 'Serper X-Ray', state: serper ? 'configured' : 'missing_key', executable: serper,
+      capabilities: ['candidate_search', 'public_web_corroboration'],
+      message: serper ? 'Serper Google X-ray portfolio search is wired and configured. SERP snippets are retrieval context only.' : 'Serper X-ray adapter is wired; SERPER_API_KEY is not configured.',
     },
     {
       provider: 'openweb_ninja', label: 'OpenWeb Ninja', state: own ? 'configured' : 'missing_key', executable: false,
