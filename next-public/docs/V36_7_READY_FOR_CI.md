@@ -1,0 +1,1 @@
+V36.7 recruiter-loop implementation is ready for full CI. This file is bookkeeping only and does not change runtime behavior.

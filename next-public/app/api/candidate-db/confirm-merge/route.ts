@@ -9,7 +9,8 @@ import { getRouteSession } from '@/lib/supabase/route-session'
 export const dynamic = 'force-dynamic'
 
 // Guardrail: no auto-merge — recruiter action required for every merge decision.
-// 'confirmed' = link source profiles to candidate; 'rejected' = keep separate.
+// 'confirmed' = atomically link explicitly reviewed source-profile provenance to
+// the selected canonical candidate; 'rejected' = keep identities separate.
 
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const reviewId = String(body.reviewId || '')
     const decision = body.decision === 'confirmed' ? 'confirmed' : body.decision === 'rejected' ? 'rejected' : ''
-    const decidedBy = String(body.decidedBy || 'recruiter')
+    const decidedBy = String(body.decidedBy || 'recruiter').slice(0, 120)
 
     if (!reviewId || !decision) {
       return NextResponse.json({ ok: false, error: 'reviewId and decision (confirmed|rejected) are required.' }, { status: 400 })
@@ -34,81 +35,54 @@ export async function POST(req: NextRequest) {
 
       const sb = createServerSupabaseClient()
       const ownerId = session.userId!
+      if (!sb) return NextResponse.json({ ok: false, error: 'Candidate database unavailable.' }, { status: 503 })
 
-      // Fetch the review — must be owned by this user
-      const { data: review, error: fetchError } = await sb!
-        .from('identity_match_reviews')
-        .select('*')
-        .eq('id', reviewId)
-        .eq('owner_id', ownerId)
-        .single()
+      // V34: one database transaction owns the entire recruiter-confirmed
+      // identity decision. A partial route-level write can no longer leave the
+      // source profile on one candidate while its evidence/contact rows remain
+      // on another candidate.
+      const { data, error } = await sb.rpc('confirm_identity_match_atomic_v34', {
+        p_owner_id: ownerId,
+        p_review_id: reviewId,
+        p_decision: decision,
+        p_decided_by: decidedBy || 'recruiter',
+      })
 
-      if (fetchError || !review) {
-        return NextResponse.json({ ok: false, error: 'Review not found or not owned by you.' }, { status: 404 })
+      if (error) {
+        console.error('[confirm-merge] atomic identity fusion RPC failed:', error.message)
+        return NextResponse.json({ ok: false, error: 'Identity decision could not be committed atomically.' }, { status: 500 })
       }
 
-      // 1. Update the review decision (creates audit record)
-      const { error: updateReviewError } = await sb!
-        .from('identity_match_reviews')
-        .update({
-          decision,
-          decided_by: decidedBy,
-          decided_at: new Date().toISOString(),
-        })
-        .eq('id', reviewId)
-        .eq('owner_id', ownerId)
-
-      if (updateReviewError) {
-        return NextResponse.json({ ok: false, error: `Review update failed: ${updateReviewError.message}` }, { status: 500 })
+      const result = data && typeof data === 'object' && !Array.isArray(data)
+        ? data as Record<string, unknown>
+        : {}
+      if (result.ok === false) {
+        const status = Number(result.status || 409)
+        return NextResponse.json({
+          ok: false,
+          code: String(result.code || 'identity_decision_failed'),
+          error: String(result.error || 'Identity decision could not be completed.'),
+        }, { status: Number.isInteger(status) && status >= 400 && status < 600 ? status : 409 })
       }
 
-      // 2. Update source_profiles.status for all involved profiles
-      const profileIds: string[] = Array.isArray(review.source_profile_ids) ? review.source_profile_ids : []
-      if (profileIds.length > 0) {
-        const { error: spError } = await sb!
-          .from('source_profiles')
-          .update({ status: decision, updated_at: new Date().toISOString() })
-          .in('id', profileIds)
-          .eq('owner_id', ownerId)
-
-        if (spError) {
-          console.error('[confirm-merge] source_profiles update error:', spError.message)
-        }
-      }
-
-      // 3. On confirmed merge: link source profiles to the candidate
-      if (decision === 'confirmed' && review.candidate_id) {
-        const { error: linkError } = await sb!
-          .from('source_profiles')
-          .update({ candidate_id: review.candidate_id, updated_at: new Date().toISOString() })
-          .in('id', profileIds)
-          .eq('owner_id', ownerId)
-
-        if (linkError) {
-          console.error('[confirm-merge] source profile link error:', linkError.message)
-        }
-
-        // Update the candidate's merge_status
-        const { error: candError } = await sb!
-          .from('candidates')
-          .update({ merge_status: 'confirmed', updated_at: new Date().toISOString() })
-          .eq('id', review.candidate_id)
-          .eq('owner_id', ownerId)
-
-        if (candError) {
-          console.error('[confirm-merge] candidate merge_status update error:', candError.message)
-        }
-      }
-
+      const profilesUpdated = Number(result.sourceProfilesMoved || 0)
       return NextResponse.json({
         ok: true,
         mode: 'supabase',
         decision,
         reviewId,
-        profilesUpdated: profileIds.length,
+        candidateId: result.candidateId || undefined,
+        profilesUpdated,
+        fusion: decision === 'confirmed' ? {
+          evidenceMoved: Number(result.evidenceMoved || 0),
+          contactsMoved: Number(result.contactsMoved || 0),
+          availabilityMoved: Number(result.availabilityMoved || 0),
+          roleCandidatesMoved: Number(result.roleCandidatesMoved || 0),
+          acquisitionRowsMoved: Number(result.acquisitionRowsMoved || 0),
+        } : undefined,
         note: decision === 'confirmed'
-          ? `Identity match confirmed. ${profileIds.length} source profile(s) linked to candidate. Merge was recruiter-approved, not automatic.`
-          : `Profiles kept separate. No merge performed. Each source profile retains independent identity.`,
+          ? `Identity match confirmed. ${profilesUpdated} explicitly reviewed source profile(s) and their linked provenance were moved atomically to the canonical candidate. Merge was recruiter-approved, not automatic.`
+          : 'Profiles kept separate. No merge performed. Each source profile retains independent identity.',
       })
     }
 
@@ -116,9 +90,12 @@ export async function POST(req: NextRequest) {
     const db = getCandidateDb()
     const review = db.matchReviews.find(r => r.id === reviewId)
     if (!review) return NextResponse.json({ ok: false, error: 'Review not found (preview mode).' }, { status: 404 })
+    if (review.decision !== 'pending') {
+      return NextResponse.json({ ok: false, error: 'Identity review has already been decided.' }, { status: 409 })
+    }
 
     review.decision = decision
-    review.decidedBy = decidedBy
+    review.decidedBy = decidedBy || 'recruiter'
     review.decidedAt = nowIso()
 
     const profiles = db.sourceProfiles.filter(p => review.sourceProfileIds.includes(p.id))

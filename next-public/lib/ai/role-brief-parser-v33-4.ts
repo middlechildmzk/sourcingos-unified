@@ -48,11 +48,35 @@ export function shortRecruiterBriefV33_11(rawText: string): boolean {
   return lines.length <= 3 && compact.length > 0 && compact.length <= 800
 }
 
+/**
+ * Ambiguous abbreviations from the shared taxonomy must not cross semantic
+ * domains. In particular, `TS` is common shorthand for both TypeScript and Top
+ * Secret. When the recruiter explicitly writes a clearance form such as TS/SCI
+ * or TS clearance, a taxonomy hit for TypeScript is contamination unless the
+ * recruiter also spells out TypeScript elsewhere in the request.
+ */
+export function sanitizeShortRoleAliasesV34(rawText: string, intake: RoleIntake): RoleIntake {
+  const clearanceTs = /\b(?:ts\s*\/\s*sci|ts\s+sci|ts\s+clearance|active\s+ts)\b/i.test(rawText)
+  const explicitTypeScript = /\btypescript\b/i.test(rawText)
+  if (!clearanceTs || explicitTypeScript) return intake
+
+  const withoutTypeScript = (values: string[]) => values.filter(value => value.trim().toLowerCase() !== 'typescript')
+  return {
+    ...intake,
+    mustHaves: withoutTypeScript(intake.mustHaves),
+    niceToHaves: withoutTypeScript(intake.niceToHaves),
+    adjacentBackgrounds: withoutTypeScript(intake.adjacentBackgrounds),
+  }
+}
+
 export function mergeAiRoleBriefV33_11(
   rawText: string,
   model: Record<string, unknown>,
 ): RoleIntake {
-  const fallback = interpretRoleBrief(rawText).intake
+  const deterministic = interpretRoleBrief(rawText).intake
+  const fallback = shortRecruiterBriefV33_11(rawText)
+    ? sanitizeShortRoleAliasesV34(rawText, deterministic)
+    : deterministic
   const shortBrief = shortRecruiterBriefV33_11(rawText)
   const modelMustHaves = strings(model.mustHaves, fallback.mustHaves, 16)
 
@@ -124,11 +148,14 @@ Return exactly this shape:
 
   const result = await callModelJson<Record<string, unknown>>(prompt, 1400)
   if (!result.ok || !result.data) {
+    const sanitized = shortRecruiterBriefV33_11(rawText)
+      ? sanitizeShortRoleAliasesV34(rawText, fallback.intake)
+      : fallback.intake
     return {
-      intake: fallback.intake,
+      intake: sanitized,
       questions: fallback.questions.filter(question => /target role title|must-have/i.test(question)).slice(0, 2),
       aiGenerated: false,
-      summary: compactSummary(fallback.intake),
+      summary: compactSummary(sanitized),
     }
   }
 

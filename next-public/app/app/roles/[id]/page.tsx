@@ -1,9 +1,11 @@
 import { RoleAgenticSearchPanel } from '@/components/RoleAgenticSearchPanel'
 import { RoleAutoStartV33_4 } from '@/components/RoleAutoStartV33_4'
 import { RoleCalibrationPreviewV33_4 } from '@/components/RoleCalibrationPreviewV33_4'
+import { RoleCandidateIntelligenceV35 } from '@/components/RoleCandidateIntelligenceV35'
 import { RoleCanonicalSearchActions } from '@/components/RoleCanonicalSearchActions'
 import { RoleDeleteControl } from '@/components/RoleDeleteControl'
 import { RoleDetailClient } from '@/components/RoleDetailClient'
+import { RoleEntityIntelligenceV35 } from '@/components/RoleEntityIntelligenceV35'
 import { RoleIntelligenceProviderV33 } from '@/components/RoleIntelligenceProviderV33'
 import { RoleMilitaryIntelligencePanel } from '@/components/RoleMilitaryIntelligencePanel'
 import { RolePasteBackV33 } from '@/components/RolePasteBackV33'
@@ -28,10 +30,14 @@ export default async function RoleDetailPage({ params, searchParams }: { params:
       <link rel="stylesheet" href="/role-agent-intake-v33-4.css" />
       <link rel="stylesheet" href="/role-product-intelligence-v33-4.css" />
       <link rel="stylesheet" href="/role-review-v33-9.css" />
+      <link rel="stylesheet" href="/role-entity-intelligence-v35.css" />
+      <link rel="stylesheet" href="/role-candidate-intelligence-v35.css" />
 
       <RoleAutoStartV33_4 roleId={id} />
       <RoleCalibrationPreviewV33_4 roleId={id} />
+      <RoleEntityIntelligenceV35 roleId={id} />
       <RoleUnifiedWorkbenchV33_4 roleId={id} />
+      <RoleCandidateIntelligenceV35 roleId={id} />
 
       <RoleIntelligenceProviderV33 roleId={id}>
         <details className="role-sourcing-execution-v33-4">

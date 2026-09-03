@@ -2,15 +2,23 @@ import 'server-only'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { resolveStoredEntityKind } from '@/lib/entity-classification'
 import type { EntityKind } from '@/lib/source-types'
+import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
+import { searchCandidateGraphIdsV36_10 } from '@/lib/candidate-graph-search-v36-10'
+import { candidateIdentityFamiliesV36_10, candidateIdentityRedirectStateV36_10 } from '@/lib/candidate-identity-redirects-v36-10'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
   offset?: number
   search?: string
+  roleId?: string
 }
 
 function safeSearch(value = '') {
-  return value.trim().replace(/[^a-zA-Z0-9 ._@+\-]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
+  return value.trim().replace(/[^a-zA-Z0-9 ._@+\-/:]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
+}
+
+function safeRoleId(value = '') {
+  return value.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100)
 }
 
 function relationCandidateName(value: unknown) {
@@ -41,21 +49,35 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const limit = Math.max(1, Math.min(200, Number(query.limit) || 100))
   const offset = Math.max(0, Number(query.offset) || 0)
   const search = safeSearch(query.search)
+  const activeRoleId = safeRoleId(query.roleId)
+  const graphSearch = search
+    ? await searchCandidateGraphIdsV36_10({ sb, ownerId, query: search, limit, offset })
+    : null
+  const graphSearchActive = Boolean(search && graphSearch?.migrationReady)
 
-  let candidateQuery = sb
-    .from('candidates')
-    .select('*', { count: 'exact' })
-    .eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+  let candidatePromise: PromiseLike<any>
+  if (graphSearchActive) {
+    const ids = graphSearch?.candidateIds || []
+    candidatePromise = ids.length
+      ? sb.from('candidates').select('*', { count: 'exact' }).eq('owner_id', ownerId).in('id', ids)
+      : Promise.resolve({ data: [], error: null, count: 0 })
+  } else {
+    let candidateQuery = sb
+      .from('candidates')
+      .select('*', { count: 'exact' })
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-  if (search) {
-    const pattern = `%${search}%`
-    candidateQuery = candidateQuery.or(`canonical_name.ilike.${pattern},headline.ilike.${pattern},current_company.ilike.${pattern},location.ilike.${pattern}`)
+    if (search) {
+      const pattern = `%${search}%`
+      candidateQuery = candidateQuery.or(`canonical_name.ilike.${pattern},headline.ilike.${pattern},current_title.ilike.${pattern},current_company.ilike.${pattern},location.ilike.${pattern}`)
+    }
+    candidatePromise = candidateQuery
   }
 
   const [candidateResult, totalCandidates, sourceCount, evidenceCount, contactCount, openCount, pendingReviewCount, matchReviews, importBatches] = await Promise.all([
-    candidateQuery,
+    candidatePromise,
     sb.from('candidates').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
     sb.from('source_profiles').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
     sb.from('evidence_items').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
@@ -69,37 +91,58 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const fatal = candidateResult.error || totalCandidates.error || sourceCount.error || evidenceCount.error || contactCount.error || openCount.error || pendingReviewCount.error || matchReviews.error || importBatches.error
   if (fatal) throw new Error(fatal.message)
 
-  const rows = candidateResult.data || []
-  const candidateIds = rows.map(row => row.id)
-  const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
-  const [profiles, evidence, contacts, openSignals] = candidateIds.length ? await Promise.all([
-    sb.from('source_profiles').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('evidence_items').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('candidate_contacts').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('open_to_work_signals').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-  ]) : [emptyRelated, emptyRelated, emptyRelated, emptyRelated]
+  const graphOrder = new Map((graphSearch?.candidateIds || []).map((id, index) => [id, index]))
+  const fetchedRows = [...(candidateResult.data || [])]
+  const redirectState = await candidateIdentityRedirectStateV36_10({
+    sb,
+    ownerId,
+    candidateIds: fetchedRows.map(row => row.id),
+  })
+  const rows = fetchedRows.filter(row => !redirectState.redirectedIds.has(row.id))
+  if (graphSearchActive) rows.sort((a, b) => (graphOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (graphOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER))
 
-  const relatedError = profiles.error || evidence.error || contacts.error || openSignals.error
+  const candidateIds = rows.map(row => row.id)
+  const identityFamilies = await candidateIdentityFamiliesV36_10({ sb, ownerId, candidateIds })
+  const relationshipCandidateIds = Array.from(identityFamilies.familyToCanonical.keys())
+  const relatedCandidateIds = relationshipCandidateIds.length ? relationshipCandidateIds : candidateIds
+  const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
+  const [profiles, evidence, contacts, openSignals, roleCandidates] = relatedCandidateIds.length ? await Promise.all([
+    sb.from('source_profiles').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('evidence_items').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('candidate_contacts').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('open_to_work_signals').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('role_candidates')
+      .select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at')
+      .eq('owner_id', ownerId)
+      .in('candidate_id', relatedCandidateIds),
+  ]) : [emptyRelated, emptyRelated, emptyRelated, emptyRelated, emptyRelated]
+
+  const relatedError = profiles.error || evidence.error || contacts.error || openSignals.error || roleCandidates.error
   if (relatedError) throw new Error(relatedError.message)
 
-  const byCandidate = <T extends { candidate_id?: string | null }>(items: T[]) => {
+  const byCanonicalCandidate = <T extends { candidate_id?: string | null }>(items: T[]) => {
     const map = new Map<string, T[]>()
     for (const item of items) {
       if (!item.candidate_id) continue
-      const current = map.get(item.candidate_id) || []
+      const canonicalId = identityFamilies.familyToCanonical.get(item.candidate_id) || item.candidate_id
+      const current = map.get(canonicalId) || []
       current.push(item)
-      map.set(item.candidate_id, current)
+      map.set(canonicalId, current)
     }
     return map
   }
 
-  const profileMap = byCandidate(profiles.data || [])
-  const evidenceMap = byCandidate(evidence.data || [])
-  const contactMap = byCandidate(contacts.data || [])
-  const openMap = byCandidate(openSignals.data || [])
+  const profileMap = byCanonicalCandidate(profiles.data || [])
+  const evidenceMap = byCanonicalCandidate(evidence.data || [])
+  const contactMap = byCanonicalCandidate(contacts.data || [])
+  const openMap = byCanonicalCandidate(openSignals.data || [])
+  const roleCandidateMap = byCanonicalCandidate(roleCandidates.data || [])
 
   const candidates = rows.map(row => {
     const candidateProfiles = profileMap.get(row.id) || []
+    const candidateEvidence = evidenceMap.get(row.id) || []
+    const candidateRoleHistory = roleCandidateMap.get(row.id) || []
+    const identityFamilyIds = identityFamilies.canonicalToFamily.get(row.id) || [row.id]
     return {
       id: row.id,
       canonicalName: row.canonical_name,
@@ -114,15 +157,37 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       lastRefreshedAt: row.last_refreshed_at || undefined,
       entityKind: candidateEntityKind(candidateProfiles),
       sourceProfileIds: candidateProfiles.map(item => item.id),
-      evidenceItemIds: (evidenceMap.get(row.id) || []).map(item => item.id),
+      evidenceItemIds: candidateEvidence.map(item => item.id),
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
       openToWorkSignalIds: (openMap.get(row.id) || []).map(item => item.id),
       mergeStatus: row.merge_status || 'pending',
+      searchRank: graphSearchActive ? graphSearch?.ranks.get(row.id) || 0 : undefined,
+      identityFamilyIds,
+      absorbedIdentityCount: Math.max(0, identityFamilyIds.length - 1),
+      universe: buildCandidateUniverseProjectionV36({
+        candidateId: row.id,
+        profiles: candidateProfiles,
+        evidenceItems: candidateEvidence,
+        roleCandidates: candidateRoleHistory,
+        activeRoleId: activeRoleId || undefined,
+        candidateCreatedAt: row.created_at,
+        candidateUpdatedAt: row.updated_at,
+      }),
     }
   })
 
   const personCandidatesOnPage = candidates.filter(candidate => candidate.entityKind === 'person').length
   const nonPersonCandidatesOnPage = candidates.length - personCandidatesOnPage
+  const activeCandidateCount = Math.max(0, (totalCandidates.count || 0) - (redirectState.migrationReady ? redirectState.totalRedirects : 0))
+  const filteredCandidates = graphSearchActive
+    ? graphSearch?.total || 0
+    : search
+      ? Math.max(0, (candidateResult.count || 0) - (fetchedRows.length - rows.length))
+      : activeCandidateCount
+
+  const canonicalCandidateId = (candidateId: string | null | undefined) => candidateId
+    ? identityFamilies.familyToCanonical.get(candidateId) || candidateId
+    : undefined
 
   return {
     ok: true,
@@ -130,7 +195,8 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
     candidates,
     sourceProfiles: (profiles.data || []).map(row => ({
       id: row.id,
-      candidateId: row.candidate_id || undefined,
+      candidateId: canonicalCandidateId(row.candidate_id),
+      historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined,
       source: row.source,
       sourceProfileId: row.source_profile_id,
       profileUrl: row.profile_url || undefined,
@@ -145,14 +211,14 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       lastSeenAt: row.last_seen_at,
       createdAt: row.created_at,
     })),
-    evidenceItems: (evidence.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, url: row.url || undefined, createdAt: row.created_at })),
-    contactSignals: (contacts.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, type: row.type, value: row.value, source: row.source, confidence: row.confidence, verified: false, permissionStatus: row.permission_status, createdAt: row.created_at })),
-    openToWorkSignals: (openSignals.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, requiresReview: true, createdAt: row.created_at })),
+    evidenceItems: (evidence.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, url: row.url || undefined, createdAt: row.created_at })),
+    contactSignals: (contacts.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, type: row.type, value: row.value, source: row.source, confidence: row.confidence, verified: false, permissionStatus: row.permission_status, createdAt: row.created_at })),
+    openToWorkSignals: (openSignals.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, requiresReview: true, createdAt: row.created_at })),
     matchReviews: (matchReviews.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileIds: Array.isArray(row.source_profile_ids) ? row.source_profile_ids : [], proposedCanonicalName: relationCandidateName(row.candidates) || 'Potential identity match', score: row.match_score || 0, reasons: Array.isArray(row.match_reasons) ? row.match_reasons : [], conflicts: Array.isArray(row.conflicts) ? row.conflicts : [], decision: row.decision, decidedBy: row.decided_by || undefined, decidedAt: row.decided_at || undefined, createdAt: row.created_at })),
     importBatches: (importBatches.data || []).map(row => ({ id: row.id, importType: row.import_type, fileName: row.file_name || undefined, rowsSeen: row.rows_seen, recordsCreated: row.records_created, warnings: Array.isArray(row.warnings) ? row.warnings : [], createdAt: row.created_at })),
     counts: {
-      candidates: totalCandidates.count || 0,
-      filteredCandidates: candidateResult.count || 0,
+      candidates: activeCandidateCount,
+      filteredCandidates,
       personCandidatesOnPage,
       nonPersonCandidatesOnPage,
       sourceProfiles: sourceCount.count || 0,
@@ -161,7 +227,9 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       openToWorkSignals: openCount.count || 0,
       pendingMatchReviews: pendingReviewCount.count || 0,
     },
-    page: { limit, offset, hasMore: offset + rows.length < (candidateResult.count || 0) },
+    page: { limit, offset, hasMore: offset + fetchedRows.length < filteredCandidates },
     search,
+    searchMode: search ? graphSearchActive ? 'candidate_graph' : 'legacy_scalar' : 'none',
+    activeRoleId: activeRoleId || null,
   }
 }

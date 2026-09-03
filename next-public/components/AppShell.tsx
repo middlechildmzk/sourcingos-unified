@@ -25,13 +25,15 @@ type NavigationItem = {
 
 const primary: NavigationItem[] = [
   { href: '/app/today', label: 'Today', icon: 'today', description: 'What needs your judgment now' },
+  { href: '/app/people-search', label: 'People Search', icon: 'search', description: 'Find a person or search the talent universe' },
+  { href: '/app/agentic-sourcing', label: 'AI Sourcing', icon: 'agentic', description: 'Natural language, JD, Boolean, and role search' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Search strategy, slate, calibration' },
-  { href: '/app/agentic-sourcing', label: 'Agentic Sourcing', icon: 'agentic', description: 'Plan, run, review, and learn by role' },
-  { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'People, evidence, rediscovery' },
+  { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'Canonical people, evidence, rediscovery' },
+  { href: '/app/talent-insights', label: 'Talent Insights', icon: 'acquisition', description: 'Market size, difficulty, and sourcing strategy' },
 ]
 
 const tools: NavigationItem[] = [
-  { href: '/app/candidate-search', label: 'Search Lab', icon: 'search', description: 'Run supported source searches' },
+  { href: '/app/candidate-search', label: 'Search Lab', icon: 'search', description: 'Inspect raw search surfaces and source behavior' },
   { href: '/app/autosource', label: 'AutoSource', icon: 'autosource', description: 'Continuous discovery for active roles' },
   { href: '/app/import', label: 'Import Center', icon: 'import', description: 'Bring authorized candidate data in' },
   { href: '/app/evidence-ledger', label: 'Evidence Ledger', icon: 'ledger', description: 'Claim provenance and review' },

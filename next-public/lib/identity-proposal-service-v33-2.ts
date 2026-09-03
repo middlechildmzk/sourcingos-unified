@@ -1,5 +1,6 @@
 import 'server-only'
 import { compareSourceProfiles } from './candidate-graph'
+import { sharedProfessionalProfileAnchorsV36_10 } from './identity-anchors-v36-10'
 import { sourceResultFromStoredProfile } from './stored-source-profile-v33-2'
 import type { SourceResult } from './source-types'
 
@@ -29,14 +30,84 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|')
 }
 
+function isLinkedInProfileUrl(value?: string): boolean {
+  const raw = String(value || '').trim()
+  if (!raw) return false
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+    return host === 'linkedin.com' && /^\/(?:in|pub)\//i.test(parsed.pathname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The legacy explicit-cross-profile rule predates commercial provider rows. A
+ * provider-reported LinkedIn URL must not become deterministic identity
+ * authority merely because another observation exposes the same URL. Preserve
+ * the comparison as ordinary review evidence, but remove its deterministic
+ * weight when the linked target is a LinkedIn profile.
+ */
+function suppressLinkedInCrossLinkAuthority(
+  base: ReturnType<typeof compareSourceProfiles>,
+  existing: SourceResult,
+  incoming: SourceResult,
+) {
+  const crossLink = base.deterministicRules.find(rule => rule.ruleId === 'explicit_cross_profile_link')
+  const restrictedTarget = isLinkedInProfileUrl(existing.profileUrl) || isLinkedInProfileUrl(incoming.profileUrl)
+  if (!crossLink?.passed || !restrictedTarget) return base
+
+  const deterministicRules = base.deterministicRules.map(rule => rule.ruleId === 'explicit_cross_profile_link'
+    ? {
+        ...rule,
+        passed: false,
+        evidence: 'LinkedIn profile overlap is preserved for review but is not deterministic cross-source identity authority',
+      }
+    : rule)
+  const reasons = base.reasons.filter(reason => reason !== 'One profile explicitly links to the other')
+  const deterministicAnchor = deterministicRules.some(rule => rule.passed && rule.ruleId !== 'same_source_stable_id')
+
+  return {
+    ...base,
+    score: Math.max(0, base.score - 30),
+    reasons,
+    deterministicRules,
+    deterministicAnchor,
+  }
+}
+
+export function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
+  const rawBase = compareSourceProfiles(existing, incoming)
+  const base = suppressLinkedInCrossLinkAuthority(rawBase, existing, incoming)
+  const professional = sharedProfessionalProfileAnchorsV36_10(existing, incoming)
+  const professionalRule = {
+    ruleId: 'shared_canonical_professional_profile',
+    passed: professional.matched,
+    evidence: professional.matched
+      ? professional.reasons.join(' · ')
+      : 'No shared deterministic GitHub, Stack Overflow, Hugging Face, DEV, Kaggle, or ORCID profile URL',
+  }
+
+  return {
+    ...base,
+    score: Math.min(100, base.score + (professional.matched ? 40 : 0)),
+    reasons: Array.from(new Set([...base.reasons, ...professional.reasons])),
+    deterministicRules: [...base.deterministicRules, professionalRule],
+    deterministicAnchor: base.deterministicAnchor || professional.matched,
+  }
+}
+
 /**
  * Create recruiter-review proposals for a newly saved source profile.
  *
  * Automatic proposal creation is intentionally stricter than manual identity
  * review: at least one deterministic cross-source anchor is required (shared
- * observed public email, personal domain, or explicit profile cross-link).
- * Names, locations, organizations, and topic overlap may rank a proposal but
- * can never cause one to be created on their own.
+ * observed public email, personal domain, explicit source-native cross-link,
+ * or the same approved public professional profile observed independently by
+ * two sources). LinkedIn overlap is review context only and cannot satisfy this
+ * deterministic gate. Names, locations, organizations, and topic overlap may
+ * rank a proposal but can never cause one to be created on their own.
  *
  * This function never links source profiles and never changes candidate IDs.
  */
@@ -76,7 +147,7 @@ export async function createDeterministicIdentityProposals(input: {
       if (!existing) continue
       considered += 1
 
-      const comparison = compareSourceProfiles(existing, input.incomingResult)
+      const comparison = identityComparisonV36_10(existing, input.incomingResult)
       if (comparison.sameStableId || comparison.blocked || !comparison.deterministicAnchor) continue
 
       candidates.push({

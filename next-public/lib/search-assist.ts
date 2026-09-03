@@ -1,28 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// lib/search-assist.ts — Deterministic search-assist suggestion engine.
+// lib/search-assist.ts — Deterministic recruiter search-assist.
 //
-// Powers the candidate-search typeahead. Pure functions, client-safe, no AI, no
-// network, no new deps. Builds on the existing taxonomy + expansions:
-//   • ALL_TAXONOMY        (entity recognition dictionary)
-//   • EXPANSIONS          (title/skill adjacency map)
-//   • ALL_SOURCE_LANES    (source lane catalog)
-//
-// Adds, on top of repo data:
-//   • nearby cleared-market adjacency (Fort Meade → Annapolis Junction, etc.)
-//   • adaptive cross-suggestions (DevSecOps → Terraform/AWS; healthcare → HL7)
-//   • lane-aware filtering (GitHub query never gets clearance/location/soft terms)
-//   • partial-token typeahead matching against taxonomy aliases
-//
-// Trust posture: every suggestion is a *search helper*, never a candidate fact.
-// Clearance is never auto-suggested into a public X-Ray / GitHub lane.
+// V36.3 recognizes/typeaheads from the shared Entity Intelligence registry.
+// Legacy EXPANSIONS remain a compatibility discovery layer, but reviewed graph
+// relationships are preferred and neither expansion source becomes candidate
+// evidence. Public technical lanes filter clearance/location terms.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ALL_TAXONOMY, type EntityType, type TaxonomyEntry } from '@/data/search-taxonomy'
+import type { EntityType } from '@/data/search-taxonomy'
 import { EXPANSIONS, ALL_SOURCE_LANES } from '@/data/search-expansions'
+import {
+  ENTITY_REGISTRY_V35,
+  matchEntitiesV35,
+  suggestRelatedEntitiesV35,
+} from '@/lib/entity-intelligence/registry-v35'
+import type { EntityKind, IntelligenceEntity } from '@/lib/entity-intelligence/types-v35'
 
 export type SuggestionKind =
   | 'title'
   | 'skill'
   | 'tool'
+  | 'credential'
+  | 'industry'
   | 'clearance'
   | 'location'
   | 'company'
@@ -32,25 +30,18 @@ export type SuggestionKind =
   | 'related'
 
 export interface Suggestion {
-  /** The term to add to the query (or operator snippet). */
   value: string
   kind: SuggestionKind
-  /** Short reason shown in the dropdown ("adjacent to DevSecOps"). */
   reason: string
-  /** Lower = higher in the list. */
   rank: number
 }
 
 export interface AssistResult {
-  /** Entities recognized in the current input (for the interpretation panel). */
   recognized: { canonical: string; type: EntityType }[]
   suggestions: Suggestion[]
-  /** Trust/caution notes relevant to the current input. */
   notes: string[]
 }
 
-// ─── Cleared-market adjacency (self-contained; no taxonomy edits) ─────────────
-// Maps a recognized market hint → nearby cleared markets a sourcer should add.
 const CLEARED_MARKET_ADJACENCY: Record<string, string[]> = {
   'fort meade': ['Annapolis Junction', 'Columbia MD', 'Hanover MD', 'BWI corridor', 'DC Metro'],
   'meade': ['Annapolis Junction', 'Columbia MD', 'Hanover MD', 'BWI corridor'],
@@ -66,45 +57,80 @@ const CLEARED_MARKET_ADJACENCY: Record<string, string[]> = {
   'washington dc': ['Northern Virginia', 'Bethesda', 'Fort Meade corridor'],
 }
 
-// Healthcare-IT adjacency that isn't fully covered by EXPANSIONS.
 const HEALTHCARE_IT_TERMS = ['Epic', 'Cerner', 'HL7', 'FHIR', 'EMR', 'EHR', 'Meditech', 'Interoperability']
-
-// Recruiting/TA adjacency (so a sourcer search doesn't get engineering skills).
 const RECRUITING_TERMS = ['Talent Sourcer', 'Technical Recruiter', 'Talent Acquisition', 'Recruiting Coordinator', 'TA Partner', 'Recruitment Marketing']
-
-// Standard exclusions that improve almost any people-search.
 const STANDARD_EXCLUSIONS = ['jobs', 'hiring', 'recruiter', 'training', 'student', 'course', 'bootcamp']
-
-// Source lanes keyed by what's in the query.
 const LANE_LABEL: Record<string, string> = Object.fromEntries(ALL_SOURCE_LANES.map(l => [l.id, l.name]))
+const LOCATION_KINDS = new Set<EntityKind>(['location', 'place', 'metro', 'region', 'postal_area', 'country', 'state', 'county'])
 
-// ─── Recognition (reuses the taxonomy used by SearchComposer) ─────────────────
-function recognize(input: string): { canonical: string; type: EntityType; entry: TaxonomyEntry }[] {
-  const lower = ` ${input.toLowerCase()} `
-  const found: { canonical: string; type: EntityType; entry: TaxonomyEntry }[] = []
-  const seen = new Set<string>()
-  for (const entry of ALL_TAXONOMY) {
-    for (const alias of entry.aliases) {
-      // word-ish boundary match to avoid partial-substring noise
-      if (lower.includes(` ${alias} `) || lower.includes(` ${alias}`) || lower.includes(`${alias} `)) {
-        if (!seen.has(entry.canonical)) {
-          seen.add(entry.canonical)
-          found.push({ canonical: entry.canonical, type: entry.type, entry })
-        }
-        break
-      }
-    }
-  }
-  return found
+function entityTypeFor(kind: EntityKind): EntityType {
+  if (kind === 'occupation') return 'title'
+  if (kind === 'technology') return 'tool'
+  if (kind === 'credential') return 'certification'
+  if (LOCATION_KINDS.has(kind)) return 'location'
+  if (kind === 'title' || kind === 'skill' || kind === 'tool' || kind === 'certification' || kind === 'location' || kind === 'clearance' || kind === 'company' || kind === 'industry' || kind === 'seniority' || kind === 'employment-signal' || kind === 'source') return kind
+  return 'skill'
 }
 
-/** Last whitespace-delimited token the user is mid-typing (for typeahead). */
+function suggestionKindFor(kind: EntityKind): SuggestionKind {
+  if (kind === 'occupation' || kind === 'title') return 'title'
+  if (kind === 'technology' || kind === 'tool') return 'tool'
+  if (kind === 'credential' || kind === 'certification') return 'credential'
+  if (LOCATION_KINDS.has(kind)) return 'location'
+  if (kind === 'clearance') return 'clearance'
+  if (kind === 'company') return 'company'
+  if (kind === 'industry') return 'industry'
+  if (kind === 'skill') return 'skill'
+  return 'related'
+}
+
+function reviewed(entity: IntelligenceEntity): boolean {
+  return entity.provenance.some(item => item.reviewState === 'reviewed')
+}
+
+function recognize(input: string): { canonical: string; type: EntityType; entity: IntelligenceEntity }[] {
+  const out: { canonical: string; type: EntityType; entity: IntelligenceEntity }[] = []
+  const seen = new Set<string>()
+  for (const match of matchEntitiesV35(input)) {
+    // Unreviewed legacy aliases remain visible as search intelligence elsewhere,
+    // but are not silently normalized into the recruiter interpretation.
+    if (match.activation === 'suggested_inactive') continue
+    if (seen.has(match.entity.id)) continue
+    seen.add(match.entity.id)
+    out.push({ canonical: match.entity.canonicalLabel, type: entityTypeFor(match.entity.kind), entity: match.entity })
+  }
+  return out
+}
+
 function activeToken(input: string): string {
   const m = input.match(/([A-Za-z0-9+#./-]+)$/)
   return m ? m[1].toLowerCase() : ''
 }
 
-// ─── Main entry point ─────────────────────────────────────────────────────────
+function expansionTerms(entity: IntelligenceEntity): string[] {
+  const keys = Array.from(new Set([entity.canonicalLabel.toLowerCase(), ...entity.aliases]))
+  return Array.from(new Set(keys.flatMap(key => EXPANSIONS[key] || [])))
+}
+
+function typeaheadEntities(token: string): IntelligenceEntity[] {
+  if (token.length < 2) return []
+  // Bare TS is intentionally ambiguous between TypeScript and Top Secret.
+  if (token === 'ts') return []
+
+  return ENTITY_REGISTRY_V35.entities
+    .filter(entity => {
+      if (reviewed(entity)) return [entity.canonicalLabel.toLowerCase(), ...entity.aliases].some(value => value.startsWith(token))
+      // Legacy dictionaries have mixed alias semantics. Their canonical labels
+      // can still typeahead, but unreviewed aliases cannot silently normalize.
+      return entity.canonicalLabel.toLowerCase().startsWith(token)
+    })
+    .sort((a, b) => {
+      const aExactPrefix = a.canonicalLabel.toLowerCase().startsWith(token) ? 0 : 1
+      const bExactPrefix = b.canonicalLabel.toLowerCase().startsWith(token) ? 0 : 1
+      return aExactPrefix - bExactPrefix || a.canonicalLabel.localeCompare(b.canonicalLabel)
+    })
+}
+
 export function getSearchAssistSuggestions(
   input: string,
   opts: { selectedLaneId?: string; alreadyAdded?: string[] } = {}
@@ -121,111 +147,118 @@ export function getSearchAssistSuggestions(
   const hasClearance = types.has('clearance')
   const hasSkill = types.has('skill') || types.has('tool')
   const hasLocation = types.has('location')
-  const isHealthcare = recognized.some(r => r.canonical === 'Healthcare' || r.canonical === 'Epic' || r.canonical === 'Cerner')
-  const isGovCon = hasClearance || recognized.some(r => r.canonical === 'GovCon')
+  const isHealthcare = recognized.some(r => /healthcare|epic|cerner|oracle health|hl7|fhir/i.test(r.canonical))
+  const isGovCon = hasClearance || recognized.some(r => /govcon|federal government contracting/i.test(r.canonical))
   const isRecruitingSearch = recognized.some(r => /sourcer|recruiter|talent acquisition/i.test(r.canonical))
 
   const out: Suggestion[] = []
   const push = (s: Suggestion) => {
     const key = s.value.toLowerCase()
     if (present.has(key) || added.has(key)) return
-    // Lane-aware filtering: GitHub query is skills/tools only.
     if (isGithubLane && (s.kind === 'clearance' || s.kind === 'location' || s.kind === 'exclusion')) return
     if (out.some(o => o.value.toLowerCase() === key && o.kind === s.kind)) return
     out.push(s)
   }
 
-  // 1) Typeahead: partial-token matches against taxonomy aliases.
-  if (token.length >= 2) {
-    for (const entry of ALL_TAXONOMY) {
-      if (present.has(entry.canonical.toLowerCase())) continue
-      const hit = entry.aliases.some(a => a.startsWith(token)) || entry.canonical.toLowerCase().startsWith(token)
-      if (hit) {
-        push({
-          value: entry.canonical,
-          kind: (entry.type === 'industry' || entry.type === 'seniority' || entry.type === 'employment-signal' || entry.type === 'company' || entry.type === 'certification' || entry.type === 'source') ? 'related' : (entry.type as SuggestionKind),
-          reason: `matches "${token}"`,
-          rank: 0,
-        })
-      }
-    }
-  }
-
-  // 2) Adjacent titles + skills from EXPANSIONS for each recognized entity.
-  for (const r of recognized) {
-    const exps = (EXPANSIONS[r.canonical.toLowerCase()] || []).filter(
-      e => e.toLowerCase() !== r.canonical.toLowerCase()
-    )
-    exps.slice(0, 5).forEach((e, i) => {
-      const kind: SuggestionKind = r.type === 'title' ? 'title' : (r.type === 'skill' || r.type === 'tool') ? 'skill' : 'related'
-      push({ value: e, kind, reason: `adjacent to ${r.canonical}`, rank: 2 + i * 0.1 })
+  // 1) Registry-backed categorized typeahead.
+  for (const entity of typeaheadEntities(token).slice(0, 12)) {
+    push({
+      value: entity.canonicalLabel,
+      kind: suggestionKindFor(entity.kind),
+      reason: reviewed(entity) ? `reviewed ${entity.kind} match for "${token}"` : `canonical match for "${token}"`,
+      rank: 0,
     })
   }
 
-  // 3) Adaptive combination rules.
+  // 2) Reviewed graph adjacency. Related concepts are search helpers only.
+  for (const r of recognized) {
+    // Never broaden one clearance concept into another. Clearance floors are
+    // recruiter requirements/verification gates, not "Find Similar" fodder.
+    if (r.type === 'clearance') continue
+    for (const related of suggestRelatedEntitiesV35(r.entity.id).slice(0, 6)) {
+      if (related.entity.kind === 'clearance') continue
+      push({
+        value: related.entity.canonicalLabel,
+        kind: suggestionKindFor(related.entity.kind),
+        reason: related.relationship?.note || `search adjacency to ${r.canonical}`,
+        rank: related.relationship?.provenance.some(p => p.reviewState === 'reviewed') ? 1 : 2.4,
+      })
+    }
+  }
+
+  // 3) Legacy expansion compatibility. These are discovery suggestions, never
+  // normalization or candidate qualification evidence.
+  for (const r of recognized) {
+    const exps = expansionTerms(r.entity).filter(e => e.toLowerCase() !== r.canonical.toLowerCase())
+    exps.slice(0, 5).forEach((e, i) => {
+      const kind: SuggestionKind = r.type === 'title' ? 'title' : (r.type === 'skill' || r.type === 'tool') ? 'skill' : 'related'
+      push({ value: e, kind, reason: `legacy discovery adjacency to ${r.canonical}`, rank: 2.5 + i * 0.1 })
+    })
+  }
+
+  // 4) Adaptive combination rules retained for recruiter usefulness.
   if (hasTitle && !hasSkill) {
-    // Title with no skills yet — pull the title's strongest skill adjacents.
     for (const r of recognized.filter(r => r.type === 'title')) {
-      (EXPANSIONS[r.canonical.toLowerCase()] || [])
+      expansionTerms(r.entity)
         .filter(e => e.toLowerCase() !== r.canonical.toLowerCase())
-        .slice(0, 4).forEach((e, i) =>
-        push({ value: e, kind: 'skill', reason: `common for ${r.canonical}`, rank: 1.5 + i * 0.1 }))
+        .slice(0, 4)
+        .forEach((e, i) => push({ value: e, kind: 'skill', reason: `common discovery term for ${r.canonical}`, rank: 2 + i * 0.1 }))
     }
   }
 
   if (isHealthcare) {
-    HEALTHCARE_IT_TERMS.forEach((t, i) => push({ value: t, kind: 'skill', reason: 'healthcare IT stack', rank: 3 + i * 0.1 }))
+    HEALTHCARE_IT_TERMS.forEach((t, i) => push({ value: t, kind: 'skill', reason: 'healthcare IT discovery stack', rank: 3 + i * 0.1 }))
   }
 
   if (isRecruitingSearch) {
-    // Recruiting search: suggest TA variants, NOT engineering skills.
     RECRUITING_TERMS.forEach((t, i) => push({ value: t, kind: 'title', reason: 'recruiting/TA variant', rank: 2 + i * 0.1 }))
   }
 
-  // 4) Nearby cleared markets. Triggered by recognized locations OR any raw
-  //    market hint in the text (some markets aren't in the core taxonomy).
+  // 5) Nearby cleared markets. This is sourcing-area expansion only; it never
+  // asserts candidate residence or willingness to commute.
   const lowerInput = input.toLowerCase()
   if (hasLocation || isGovCon || /\b(secret|ts\/sci|clearance|cleared)\b/.test(lowerInput)) {
     for (const r of recognized.filter(r => r.type === 'location')) {
-      const near = CLEARED_MARKET_ADJACENCY[r.canonical.toLowerCase()]
-      if (near) near.forEach((m, i) => push({ value: m, kind: 'location', reason: `near ${r.canonical}`, rank: 2 + i * 0.1 }))
+      const keys = [r.canonical.toLowerCase(), ...r.entity.aliases]
+      for (const key of keys) {
+        const near = CLEARED_MARKET_ADJACENCY[key]
+        if (near) near.forEach((m, i) => push({ value: m, kind: 'location', reason: `near ${r.canonical}`, rank: 2 + i * 0.1 }))
+      }
     }
     for (const [hint, markets] of Object.entries(CLEARED_MARKET_ADJACENCY)) {
       if (lowerInput.includes(hint)) markets.forEach((m, i) => push({ value: m, kind: 'location', reason: `near ${hint}`, rank: 2.5 + i * 0.1 }))
     }
   }
 
-  // 5) Source-lane suggestions (adaptive to entities). Ranked above exclusions
-  //    so cleared lanes survive the cap on dense cleared queries.
-  const lowerForLanes = input.toLowerCase()
-  const clearedHint = isGovCon || /\b(secret|ts\/sci|ts sci|poly|clearance|cleared)\b/.test(lowerForLanes)
+  // 6) Source-lane suggestions.
+  const clearedHint = isGovCon || /\b(secret|ts\/sci|ts sci|poly|clearance|cleared)\b/.test(lowerInput)
   const laneSuggest: { id: string; reason: string }[] = []
-  if (clearedHint) { laneSuggest.push({ id: 'clearancejobs', reason: 'cleared talent' }, { id: 'usajobs', reason: 'federal roles' }) }
-  if (hasSkill || hasTitle) { laneSuggest.push({ id: 'linkedin-xray', reason: 'broad reach' }, { id: 'github', reason: 'technical evidence' }) }
+  if (clearedHint) laneSuggest.push({ id: 'clearancejobs', reason: 'cleared talent' }, { id: 'usajobs', reason: 'federal roles' })
+  if (hasSkill || hasTitle) laneSuggest.push({ id: 'linkedin-xray', reason: 'broad reach' }, { id: 'github', reason: 'technical evidence' })
   if (isHealthcare) laneSuggest.push({ id: 'npi', reason: 'provider registry' }, { id: 'pubmed', reason: 'clinical publications' })
-  if (recognized.some(r => ['PyTorch', 'TensorFlow', 'Hugging Face', 'LLM'].includes(r.canonical))) laneSuggest.push({ id: 'huggingface', reason: 'model authors' }, { id: 'arxiv', reason: 'AI research' })
+  if (recognized.some(r => /pytorch|tensorflow|hugging face|large language models|llm/i.test(r.canonical))) laneSuggest.push({ id: 'huggingface', reason: 'model authors' }, { id: 'arxiv', reason: 'AI research' })
   for (const { id, reason } of laneSuggest) {
     if (LANE_LABEL[id]) push({ value: LANE_LABEL[id], kind: 'source-lane', reason, rank: 4 })
   }
 
-  // 6) Exclusions (skip on GitHub lane).
+  // 7) Exclusions and operator helpers.
   if ((hasTitle || hasSkill) && !isGithubLane) {
     STANDARD_EXCLUSIONS.slice(0, 4).forEach((x, i) => push({ value: x, kind: 'exclusion', reason: 'reduce noise', rank: 6 + i * 0.1 }))
   }
-
-  // 7) Operator hint once there are ≥2 recognized entities.
   if (recognized.length >= 2 && !/\b(AND|OR|NOT)\b/.test(input)) {
     push({ value: 'AND', kind: 'operator', reason: 'combine required terms', rank: 7 })
   }
 
-  // ─── Notes (trust + caution) ────────────────────────────────────────────────
-  const rawClearedHint = /\b(secret|ts\/sci|ts sci|top secret|poly|polygraph|clearance|cleared)\b/.test(input.toLowerCase())
-  const notes: string[] = ['Suggestions are search helpers, not verified candidate facts.']
+  const rawClearedHint = /\b(secret|ts\/sci|ts sci|top secret|poly|polygraph|clearance|cleared)\b/.test(lowerInput)
+  const notes: string[] = [
+    'Suggestions are search helpers, not verified candidate facts.',
+    'Adjacent titles, technologies and credentials do not satisfy must-haves without candidate evidence.',
+  ]
   if (hasClearance || rawClearedHint) {
     notes.push('Clearance must be confirmed through the proper process.')
-    notes.push('Public X-Ray cannot verify clearance — keep clearance terms in LinkedIn Recruiter / ClearanceJobs lanes.')
+    notes.push('Public X-Ray cannot verify clearance — keep clearance terms in authorized professional / cleared-market lanes.')
   }
-  if (isGithubLane) notes.push('GitHub signals technical evidence, not full candidate fit. Clearance, location, and HR terms are excluded from this lane.')
+  if (isGithubLane) notes.push('GitHub signals public technical evidence, not full candidate fit. Clearance, location, and HR terms are excluded from this lane.')
 
   out.sort((a, b) => a.rank - b.rank)
   const CAP = 28
@@ -239,14 +272,12 @@ export function getSearchAssistSuggestions(
   }
 }
 
-/** Group suggestions by kind for the dropdown UI, preserving rank order. */
 export function groupSuggestions(suggestions: Suggestion[]): { kind: SuggestionKind; label: string; items: Suggestion[] }[] {
   const LABELS: Record<SuggestionKind, string> = {
-    title: 'Titles', skill: 'Skills', tool: 'Tools', clearance: 'Clearance',
-    location: 'Locations / markets', company: 'Companies', 'source-lane': 'Source lanes',
-    exclusion: 'Exclusions', operator: 'Operators', related: 'Related terms',
+    title: 'Titles', skill: 'Skills', tool: 'Tools', credential: 'Credentials', industry: 'Industries', clearance: 'Clearance',
+    location: 'Locations / markets', company: 'Companies', 'source-lane': 'Source lanes', exclusion: 'Exclusions', operator: 'Operators', related: 'Related terms',
   }
-  const order: SuggestionKind[] = ['title', 'skill', 'tool', 'location', 'clearance', 'company', 'related', 'source-lane', 'exclusion', 'operator']
+  const order: SuggestionKind[] = ['title', 'skill', 'tool', 'credential', 'industry', 'location', 'clearance', 'company', 'related', 'source-lane', 'exclusion', 'operator']
   const groups: { kind: SuggestionKind; label: string; items: Suggestion[] }[] = []
   for (const kind of order) {
     const items = suggestions.filter(s => s.kind === kind)

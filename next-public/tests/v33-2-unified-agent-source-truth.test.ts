@@ -48,8 +48,9 @@ describe('V33.2 unified agent source-truth boundary', () => {
     const route = read('app/api/candidate-db/match-review/route.ts')
     expect(route).toContain('compareSourceProfiles')
     expect(route).not.toContain('scoreIdentityMatch')
-    expect(route).toContain("version: 'v29.2.1-proposal-only'")
+    expect(route).toContain("version: 'v36.10-professional-anchor-review'")
     expect(route).toContain('mergeAuthorized: false')
+    expect(route).toContain('reviewRequired: true')
   })
 
   it('creates automatic identity proposals only from deterministic anchors and never links profiles', () => {
@@ -75,7 +76,8 @@ describe('V33.2 unified agent source-truth boundary', () => {
   it('moves an explicitly saved canonical candidate into the active role review slate', () => {
     const panel = read('components/RoleAgenticSearchPanel.tsx')
     expect(panel).toContain('const { roles, mode, updateRole } = useRoleWorkspaces()')
-    expect(panel).toContain('workspace.candidates.some(candidate => candidate.candidateId === candidateId)')
+    expect(panel).toContain('function linkSavedCandidateToRole')
+    expect(panel).toContain('workspace.candidates.some(candidate => candidate.candidateId === params.candidateId)')
     expect(panel).toContain("source: 'candidate_database'")
     expect(panel).toContain("stage: 'needs_review'")
     expect(panel).toContain("fitDecision: 'unreviewed'")

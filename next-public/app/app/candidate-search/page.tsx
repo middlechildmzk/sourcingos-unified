@@ -1,10 +1,11 @@
 import { RoleScopedCandidateSearch } from '@/components/RoleScopedCandidateSearch'
 import Link from 'next/link'
+import './universal-people-search.css'
 
 export const metadata = {
-  title: 'Candidate Search — SourcingOS Workbench',
+  title: 'People & Candidate Search — SourcingOS Workbench',
   description:
-    'Role intake, active role context, search strategy, open-web discovery, and Candidate 360 in one recruiter-controlled workbench.',
+    'Universal people search, role-scoped sourcing, provider discovery, public-web evidence, contact resolution, and Candidate 360 in one recruiter-controlled workbench.',
   robots: { index: false, follow: false },
 }
 
@@ -18,25 +19,33 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
   return (
     <main className="wrap">
       <div className="eyebrow">SourcingOS Workbench — Private beta</div>
-      <h1>Candidate Search</h1>
+      <h1>People & Candidate Search</h1>
       <p className="lead">
-        Role intake → search strategy → open-web discovery → Candidate 360 → role review queue. One recruiter-controlled workflow. Powered by Candidate Graph under the hood.
+        Search the external Talent Universe or work inside your saved Candidate Database without confusing the two. External discovery uses only configured professional-data providers; imported LinkedIn connections and previously saved candidates remain in My Database / Workbench. When a person is saved, SourcingOS can resolve the observations into one recruiter-controlled Candidate 360.
       </p>
 
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', margin: '16px 0 24px' }}>
         <span style={{ fontSize: '12px', color: 'var(--muted)', lineHeight: 1.6 }}>
+          Provider retrieval ≠ qualification ·
+          Source provenance stays visible ·
           No auto-merge at any confidence level ·
-          Contact signals are unverified by default ·
+          Contact ownership ≠ outreach permission ·
           Open-to-work is a signal, not a verified claim ·
-          Public clearance mentions are unverified breadcrumbs
+          Public clearance mentions remain unverified breadcrumbs
         </span>
       </div>
 
       <RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />
 
       <div className="card" style={{ marginTop: '32px' }}>
-        <span className="kicker">Also in the connected workflow</span>
+        <span className="kicker">Connected workflow</span>
         <div className="grid two" style={{ marginTop: '12px' }}>
+          <Link href="/app/agentic-sourcing" style={{ color: 'inherit' }}>
+            <strong>Agentic Sourcing</strong>
+            <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
+              Start from a role and let Role Brain build distinct research hypotheses, source tasks, search memory, and recruiter-controlled continuation.
+            </p>
+          </Link>
           <Link href="/app/roles" style={{ color: 'inherit' }}>
             <strong>Role Workspaces</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
@@ -46,13 +55,13 @@ export default async function CandidateSearchPage({ searchParams }: { searchPara
           <Link href="/app/candidate-database" style={{ color: 'inherit' }}>
             <strong>Candidate Database</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
-              Import resumes and CSV, normalize candidates, review identity matches, confirm merges, and add records to a role.
+              Search existing imports and saved candidates, import resumes/CSV, review identity matches, confirm merges, and add records to a role.
             </p>
           </Link>
-          <Link href="/sources" style={{ color: 'inherit' }}>
-            <strong>Source Connector Search</strong>
+          <Link href="/app/candidate-graph" style={{ color: 'inherit' }}>
+            <strong>Candidate Graph</strong>
             <p className="muted" style={{ fontSize: '14px', margin: '4px 0 0' }}>
-              Full multi-source search with identity match scoring and candidate graph save.
+              Inspect canonical people, source observations, evidence, contact signals, and unresolved cross-source identity proposals.
             </p>
           </Link>
         </div>

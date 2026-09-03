@@ -1,0 +1,129 @@
+/* V36.9 route-scoped responsive polish for Universal People Search.
+   Kept local to Candidate Search so legacy workbench surfaces are unaffected.
+   Final preview marker keeps the complete page + responsive tree together. */
+
+section[aria-label='Universal people search'] input {
+  font: inherit;
+  color: var(--text);
+  background: #07182b;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+
+section[aria-label='Universal people search'] input:focus {
+  outline: none;
+  border-color: rgba(72,217,255,.62);
+  box-shadow: 0 0 0 3px rgba(72,217,255,.10);
+  background: #081c31;
+}
+
+section[aria-label='Universal people search'] .agentic-result-card {
+  min-width: 0;
+}
+
+section[aria-label='Universal people search'] .agentic-result-card h4,
+section[aria-label='Universal people search'] .agentic-result-card p,
+section[aria-label='Universal people search'] .agentic-result-evidence span {
+  overflow-wrap: anywhere;
+}
+
+section[aria-label='Universal people search'] .agentic-result-foot {
+  flex-wrap: wrap;
+}
+
+section[aria-label='Universal people search'] .agentic-source-status-row {
+  align-items: center;
+}
+
+@media (max-width: 820px) {
+  section[aria-label='Universal people search'] > .product-panel-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px;
+  }
+
+  section[aria-label='Universal people search'] > .product-panel-head > div:last-child {
+    min-width: 0 !important;
+    text-align: left !important;
+  }
+
+  section[aria-label='Universal people search'] > .product-panel-head + div {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  section[aria-label='Universal people search'] > .product-panel-head + div > div {
+    min-width: 0;
+  }
+
+  section[aria-label='Universal people search'] > .product-panel-head + div input {
+    min-height: 50px !important;
+    padding-right: 14px !important;
+    font-size: 16px;
+  }
+
+  section[aria-label='Universal people search'] > .product-panel-head + div .status-pill.active {
+    position: static !important;
+    margin-top: 8px;
+    max-width: 100%;
+  }
+
+  section[aria-label='Universal people search'] .grid.two {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  section[aria-label='Universal people search'] .agentic-result-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 560px) {
+  section[aria-label='Universal people search'] {
+    border-radius: 18px;
+  }
+
+  section[aria-label='Universal people search'] .agentic-run-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  section[aria-label='Universal people search'] .agentic-run-metrics span {
+    min-width: 0;
+    padding: 10px 7px;
+  }
+
+  section[aria-label='Universal people search'] .agentic-run-metrics b {
+    font-size: 20px;
+  }
+
+  section[aria-label='Universal people search'] .agentic-run-metrics small {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  section[aria-label='Universal people search'] .agentic-source-status-row {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  section[aria-label='Universal people search'] .agentic-source-status-row .status-pill {
+    flex: 0 0 auto;
+  }
+
+  section[aria-label='Universal people search'] .button-row {
+    align-items: stretch;
+  }
+
+  section[aria-label='Universal people search'] .agentic-result-card .button-row .btn,
+  section[aria-label='Universal people search'] .agentic-result-card .button-row a.btn,
+  section[aria-label='Universal people search'] > .product-panel-head + div > button.btn {
+    width: 100%;
+  }
+
+  section[aria-label='Universal people search'] .cta {
+    overflow-wrap: anywhere;
+  }
+}

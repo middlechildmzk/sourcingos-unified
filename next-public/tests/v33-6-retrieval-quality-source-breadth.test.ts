@@ -42,16 +42,17 @@ describe('V33.6 retrieval quality and source breadth', () => {
     expect(adjacency).not.toMatch(/Elementary Principal|School Administrator|Superintendent|Education Administrator/i)
   })
 
-  it('treats RHEL/Linux administration as technical across multiple executable search lanes', () => {
+  it('routes RHEL/Linux administration across infrastructure evidence lanes without defaulting to DEV', () => {
     const brief = interpretRoleBrief(rhelRequest)
     const enriched = enrichRoleIntakeWithOnet(brief.intake, badEducationMatch)
     const plan = buildCanonicalAgenticSearchPlan(enriched)
 
+    expect(plan.jobFamilyRouting.primaryFamily).toBe('infrastructure')
     for (const lane of plan.lanes.filter(item => ['exact_title', 'adjacent_title', 'skill_cluster', 'evidence_first'].includes(item.id))) {
       const connectors = lane.tasks.flatMap(task => task.connectorKeys || [])
       expect(connectors).toContain('github')
       expect(connectors).toContain('stackoverflow')
-      expect(connectors).toContain('devto')
+      expect(connectors).not.toContain('devto')
     }
   })
 

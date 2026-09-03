@@ -1,5 +1,6 @@
 import 'server-only'
 import { buildEvidenceLedger, type EvidenceLedgerSnapshot, type LegacyCandidateDbSnapshot } from './evidence-ledger'
+import { candidateIdentityFamiliesV36_10, resolveCanonicalCandidateIdV36_10 } from './candidate-identity-redirects-v36-10'
 import { createServerSupabaseClient, isSupabaseConfigured } from './supabase/server'
 
 type Row = Record<string, unknown>
@@ -56,11 +57,22 @@ function rows(value: unknown): Row[] {
 
 export async function listEvidenceLedgerFromSupabase(
   ownerId: string,
-  candidateId?: string,
+  requestedCandidateId?: string,
 ): Promise<EvidenceLedgerReadResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: 'Supabase is not configured.' }
   const sb = createServerSupabaseClient()
   if (!sb) return { ok: false, error: 'Failed to create the server database client.' }
+
+  let candidateId = requestedCandidateId
+  let familyCandidateIds: string[] = candidateId ? [candidateId] : []
+  if (candidateId) {
+    const canonical = await resolveCanonicalCandidateIdV36_10({ sb, ownerId, candidateId })
+    candidateId = canonical.candidateId
+    const families = await candidateIdentityFamiliesV36_10({ sb, ownerId, candidateIds: [candidateId] })
+    familyCandidateIds = families.canonicalToFamily.get(candidateId) || [candidateId]
+  }
+  const familySet = new Set(familyCandidateIds)
+  const canonicalizeCandidateId = (value?: string) => value && candidateId && familySet.has(value) ? candidateId : value
 
   let candidateQuery = sb
     .from('candidates')
@@ -107,9 +119,10 @@ export async function listEvidenceLedgerFromSupabase(
 
   if (candidateId) {
     candidateQuery = candidateQuery.eq('id', candidateId)
-    sourceProfileQuery = sourceProfileQuery.eq('candidate_id', candidateId)
+    sourceProfileQuery = sourceProfileQuery.in('candidate_id', familyCandidateIds)
     // Evidence/contact rows may be linked through source_profile_id while candidate_id is null.
-    // Keep all reads owner-scoped, then let buildEvidenceLedger resolve and filter those relationships.
+    // Keep these reads owner-scoped, then resolve source-profile ownership and confirmed
+    // identity-family aliases inside the server-side snapshot before filtering.
   }
 
   const [candidateResult, sourceProfileResult, evidenceResult, contactResult, availabilityResult, reviewResult] = await Promise.all([
@@ -136,7 +149,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const sourceProfiles = rows(sourceProfileResult.data).map(row => ({
     id: stringValue(row, 'id'),
-    candidateId: optionalString(row, 'candidate_id'),
+    candidateId: canonicalizeCandidateId(optionalString(row, 'candidate_id')),
     source: stringValue(row, 'source', 'unknown'),
     profileUrl: optionalString(row, 'profile_url'),
     rawText: optionalString(row, 'raw_text'),
@@ -144,7 +157,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const evidenceItems = rows(evidenceResult.data).map(row => ({
     id: stringValue(row, 'id'),
-    candidateId: optionalString(row, 'candidate_id'),
+    candidateId: canonicalizeCandidateId(optionalString(row, 'candidate_id')),
     sourceProfileId: optionalString(row, 'source_profile_id'),
     source: stringValue(row, 'source', 'unknown'),
     label: stringValue(row, 'label', 'Evidence claim'),
@@ -160,7 +173,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const contactSignals = rows(contactResult.data).map(row => ({
     id: stringValue(row, 'id'),
-    candidateId: optionalString(row, 'candidate_id'),
+    candidateId: canonicalizeCandidateId(optionalString(row, 'candidate_id')),
     sourceProfileId: optionalString(row, 'source_profile_id'),
     type: stringValue(row, 'type', 'other'),
     value: stringValue(row, 'value'),
@@ -173,7 +186,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const openToWorkSignals = rows(availabilityResult.data).map(row => ({
     id: stringValue(row, 'id'),
-    candidateId: optionalString(row, 'candidate_id'),
+    candidateId: canonicalizeCandidateId(optionalString(row, 'candidate_id')),
     sourceProfileId: optionalString(row, 'source_profile_id'),
     source: stringValue(row, 'source', 'unknown'),
     label: stringValue(row, 'label', 'Availability signal'),
@@ -185,7 +198,7 @@ export async function listEvidenceLedgerFromSupabase(
 
   const matchReviews = rows(reviewResult.data).map(row => ({
     id: stringValue(row, 'id'),
-    candidateId: optionalString(row, 'candidate_id'),
+    candidateId: canonicalizeCandidateId(optionalString(row, 'candidate_id')),
     sourceProfileIds: stringArray(row, 'source_profile_ids'),
     proposedCanonicalName: 'Candidate identity review',
     score: numberValue(row, 'match_score'),

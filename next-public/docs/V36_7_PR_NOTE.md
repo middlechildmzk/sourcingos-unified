@@ -1,0 +1,1 @@
+V36.7 is stacked on V36.6 and remains draft-only until CI and recruiter UAT pass.

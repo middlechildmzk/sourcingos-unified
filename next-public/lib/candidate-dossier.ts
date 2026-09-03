@@ -1,3 +1,5 @@
+import type { Candidate360ResolvedProfileV35 } from './candidate-field-resolution-v35'
+
 export type CandidateDossierCandidate = {
   id?: string
   canonicalName?: string
@@ -25,6 +27,7 @@ export type CandidateDossierEvidence = {
 export type CandidateDossierProfile = {
   id: string
   source?: string
+  sourceProfileId?: string
   displayName?: string
   headline?: string
   location?: string
@@ -32,15 +35,21 @@ export type CandidateDossierProfile = {
   profileUrl?: string
   matchReasons?: string[]
   status?: string
+  lastSeenAt?: string
 }
 
 export type CandidateDossierContact = {
   id: string
   type?: string
+  contactKind?: string
   value?: string
   source?: string
   confidence?: string
+  ownershipConfidence?: string
+  deliverability?: string
+  providerStatusRaw?: string
   permissionStatus?: string
+  observedAt?: string
   score?: number
 }
 
@@ -60,6 +69,7 @@ export type CandidateDossierMatchReview = {
 
 export type CandidateDossier = {
   candidate: CandidateDossierCandidate
+  resolvedProfile?: Candidate360ResolvedProfileV35
   evidence?: CandidateDossierEvidence[]
   sourceProfiles?: CandidateDossierProfile[]
   contacts?: CandidateDossierContact[]

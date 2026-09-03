@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { getCandidateDb, type CandidateDbSnapshot } from '@/lib/candidate-db-v18'
+import { fuseCandidateIdentityV34 } from '@/lib/candidate-identity-fusion-v34'
+import { resolveCandidate360FieldsV35 } from '@/lib/candidate-field-resolution-v35'
 import { buildEvidenceLedger } from '@/lib/evidence-ledger'
 import { buildRequirementAssessments, requirementAssessmentTally } from '@/lib/requirement-assessment-v32'
+import { buildRoleCandidateIntelligenceV35 } from '@/lib/entity-intelligence/role-candidate-intelligence-v35'
+import { normalizeRoleSearchIntelligenceV35 } from '@/lib/entity-intelligence/search-approval-v35'
 import type { RoleCandidate, RoleIntake } from '@/lib/role-workspace'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 
@@ -15,23 +19,7 @@ type CandidateInput = Pick<RoleCandidate, 'candidateId' | 'name' | 'headline' | 
 type RequestBody = {
   intake?: RoleIntake
   candidates?: CandidateInput[]
-}
-
-type PublicIdentity = {
-  profiles: Array<{
-    source: string
-    sourceProfileId: string
-    displayName: string
-    profileUrl?: string
-    headline?: string
-  }>
-  contacts: Array<{
-    type: string
-    value: string
-    source: string
-    verified: boolean
-    permissionStatus: string
-  }>
+  searchIntelligence?: unknown
 }
 
 function compactText(value: unknown, max = 500): string {
@@ -43,15 +31,8 @@ function textArray(value: unknown, max = 50): string[] {
   return Array.from(new Set(value.map(item => compactText(item, 300)).filter(Boolean))).slice(0, max)
 }
 
-function safePublicUrl(value: unknown): string | undefined {
-  const raw = compactText(value, 1200)
-  if (!raw) return undefined
-  try {
-    const parsed = new URL(raw)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.toString() : undefined
-  } catch {
-    return undefined
-  }
+function sameText(a: unknown, b: unknown): boolean {
+  return compactText(a, 1000).toLowerCase() === compactText(b, 1000).toLowerCase()
 }
 
 function validIntake(value: unknown): RoleIntake | null {
@@ -240,37 +221,6 @@ function roleCandidateContext(candidate: CandidateInput): RoleCandidate {
   }
 }
 
-function publicIdentityForCandidate(snapshot: CandidateDbSnapshot, candidateId: string): PublicIdentity {
-  const linkedProfiles = snapshot.sourceProfiles.filter(profile => profile.candidateId === candidateId)
-  const profileIds = new Set(linkedProfiles.map(profile => profile.id))
-  const profiles = linkedProfiles.map(profile => ({
-    source: String(profile.source || 'public_source'),
-    sourceProfileId: String(profile.sourceProfileId || ''),
-    displayName: String(profile.displayName || profile.sourceProfileId || profile.source || 'Public profile'),
-    profileUrl: safePublicUrl(profile.profileUrl),
-    headline: profile.headline ? String(profile.headline) : undefined,
-  })).filter(profile => profile.sourceProfileId || profile.profileUrl).slice(0, 12)
-
-  // Only expose contact signals attached to one of the candidate's linked source
-  // profiles. Recruiter-owned/manual contact data is intentionally not surfaced
-  // here as if it came from public-source discovery.
-  const contacts = snapshot.contactSignals
-    .filter(signal => Boolean(signal.sourceProfileId && profileIds.has(signal.sourceProfileId)))
-    .filter(signal => ['public_email', 'website', 'profile_url'].includes(String(signal.type)))
-    .filter(signal => String(signal.permissionStatus || 'unknown') !== 'blocked')
-    .map(signal => ({
-      type: String(signal.type),
-      value: String(signal.value || '').trim(),
-      source: String(signal.source || 'public_source'),
-      verified: Boolean(signal.verified),
-      permissionStatus: String(signal.permissionStatus || 'unknown'),
-    }))
-    .filter(signal => signal.value)
-
-  const uniqueContacts = Array.from(new Map(contacts.map(signal => [`${signal.type}:${signal.value.toLowerCase()}`, signal])).values()).slice(0, 12)
-  return { profiles, contacts: uniqueContacts }
-}
-
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -285,6 +235,7 @@ export async function POST(req: NextRequest) {
   }
 
   const intake = validIntake(body.intake)
+  const searchIntelligence = normalizeRoleSearchIntelligenceV35(body.searchIntelligence)
   const candidates = (Array.isArray(body.candidates) ? body.candidates : []).map(validCandidate).filter((candidate): candidate is CandidateInput => Boolean(candidate)).slice(0, 50)
   if (!intake) return NextResponse.json({ ok: false, error: 'A valid role intake is required.' }, { status: 400 })
   if (!candidates.length) return NextResponse.json({ ok: true, candidates: [], mode: isSupabaseConfigured() ? 'supabase' : 'preview' })
@@ -300,11 +251,13 @@ export async function POST(req: NextRequest) {
     const assessments = candidates.map(candidate => {
       const candidateId = candidate.candidateId!
       const claims = ledger.claims.filter(claim => claim.candidateId === candidateId)
-      const requirements = buildRequirementAssessments(intake, claims, roleCandidateContext(candidate))
+      const candidateContext = roleCandidateContext(candidate)
+      const requirements = buildRequirementAssessments(intake, claims, candidateContext)
       const tally = requirementAssessmentTally(requirements)
       const mustHaves = requirements.filter(requirement => requirement.tier === 'must_have')
       const mustHaveTally = requirementAssessmentTally(mustHaves)
       const graphCandidate = graphCandidates.get(candidateId)
+      const resolvedProfile = resolveCandidate360FieldsV35(snapshot, ledger, candidateId)
       const state = mustHaveTally.contradicted > 0
         ? 'conflicting'
         : mustHaveTally.needsVerification > 0
@@ -314,6 +267,13 @@ export async function POST(req: NextRequest) {
             : mustHaveTally.total > 0
               ? 'evidence_ready'
               : 'no_requirements'
+      const matchExplanation = buildRoleCandidateIntelligenceV35(
+        intake,
+        candidateContext,
+        requirements,
+        claims,
+        searchIntelligence,
+      )
 
       return {
         candidateId,
@@ -323,7 +283,25 @@ export async function POST(req: NextRequest) {
         tally,
         mustHaveTally,
         claimCount: claims.length,
-        publicIdentity: publicIdentityForCandidate(snapshot, candidateId),
+        publicIdentity: fuseCandidateIdentityV34(snapshot, candidateId),
+        // V35.3 role-specific explanation: supported / missing / verification-gated /
+        // contradicted / search-only. Role-scoped, never a candidate fact.
+        matchExplanation,
+        // V35 shadow projection. Existing scalar fields remain compatibility output;
+        // no Candidate Graph row or canonical scalar is mutated by this resolver.
+        resolvedProfile,
+        profileResolutionShadow: {
+          legacyVsResolved: {
+            nameChanged: Boolean(resolvedProfile.name.value && !sameText(graphCandidate?.canonicalName || candidate.name, resolvedProfile.name.value)),
+            headlineChanged: Boolean(resolvedProfile.headline.value && !sameText(graphCandidate?.headline || candidate.headline, resolvedProfile.headline.value)),
+            companyChanged: Boolean(resolvedProfile.currentCompany.value && !sameText(graphCandidate?.currentCompany || candidate.company, resolvedProfile.currentCompany.value)),
+            titleChanged: Boolean(resolvedProfile.currentTitle.value && !sameText(graphCandidate?.currentTitle || candidate.headline, resolvedProfile.currentTitle.value)),
+            locationChanged: Boolean(resolvedProfile.location.value && !sameText(graphCandidate?.location || candidate.location, resolvedProfile.location.value)),
+          },
+          conflictCount: resolvedProfile.conflictCount,
+          reviewCount: resolvedProfile.reviewCount,
+          shadowOnly: true,
+        },
         requirements: requirements.map(requirement => ({
           requirementId: requirement.requirementId,
           requirementText: requirement.requirementText,
@@ -355,6 +333,8 @@ export async function POST(req: NextRequest) {
         decision: 'This is an evidence review slate, not a fit score, ranking, rejection, or hiring recommendation.',
         unknown: 'Missing evidence remains unknown and never becomes a negative finding.',
         sensitive: 'Clearance, credentials, disqualifiers, and other sensitive requirements remain verification-gated.',
+        discovery: 'Recruiter-approved search expansions may explain why a person surfaced but cannot satisfy a requirement by themselves.',
+        resolution: 'V35 resolved profile fields are a read-only shadow projection over attached observations. Conflicts remain visible and no scalar value is silently overwritten.',
       },
     })
   } catch (error) {
