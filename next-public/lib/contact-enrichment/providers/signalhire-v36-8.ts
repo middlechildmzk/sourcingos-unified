@@ -1,5 +1,5 @@
 import 'server-only'
-import type { ContactEnrichmentRequest, ContactEnrichmentResult, ContactSignalType, ResolvedProfessionalPerson, ResolvedProfessionalProfileUrl } from '../types'
+import type { ContactChannelKind, ContactEnrichmentRequest, ContactEnrichmentResult, ContactSignalType, ResolvedProfessionalPerson, ResolvedProfessionalProfileUrl } from '../types'
 import { enrichmentFieldsUsed, makeContactSignal } from '../types'
 
 const PROVIDER = 'signalhire' as const
@@ -64,6 +64,23 @@ function contactType(value: string): ContactSignalType {
   if (value === 'email') return 'email'
   if (value === 'phone') return 'phone'
   if (value === 'link') return 'social_url'
+  return 'unknown'
+}
+
+function contactKind(type: ContactSignalType, subType: unknown): ContactChannelKind {
+  const subtype = String(subType || '').toLowerCase()
+  if (type === 'email') {
+    if (/work|professional|business/.test(subtype)) return 'work_email'
+    if (/personal|private/.test(subtype)) return 'personal_email'
+    return 'other_email'
+  }
+  if (type === 'phone') {
+    if (/mobile|cell/.test(subtype)) return 'mobile_phone'
+    if (/work|office|business/.test(subtype)) return 'work_phone'
+    if (/home|residential/.test(subtype)) return 'home_phone'
+    return 'other_phone'
+  }
+  if (type === 'social_url' || type === 'profile_url') return 'professional_profile'
   return 'unknown'
 }
 
@@ -144,8 +161,10 @@ export async function enrichWithSignalHireV36_8(request: ContactEnrichmentReques
       const type = contactType(typeRaw)
       if (type === 'unknown') continue
       const rating = typeof row.rating === 'number' ? row.rating : Number(row.rating)
+      const kind = contactKind(type, row.subType)
       signals.push(makeContactSignal({
         type,
+        channelKind: kind,
         value,
         sourceProvider: PROVIDER,
         confidence: Number.isFinite(rating) && rating >= 100 ? 'high' : Number.isFinite(rating) && rating >= 70 ? 'medium' : 'low',
@@ -158,8 +177,10 @@ export async function enrichWithSignalHireV36_8(request: ContactEnrichmentReques
     }
 
     for (const profile of socialProfileUrls(candidate)) {
+      const type = profile.kind === 'github' || profile.kind === 'stackoverflow' ? 'profile_url' : 'social_url'
       signals.push(makeContactSignal({
-        type: profile.kind === 'github' || profile.kind === 'stackoverflow' ? 'profile_url' : 'social_url',
+        type,
+        channelKind: 'professional_profile',
         value: profile.url,
         sourceProvider: PROVIDER,
         confidence: 'medium',
