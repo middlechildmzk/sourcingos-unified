@@ -9,13 +9,16 @@ type Candidate = { id: string; canonicalName: string; headline?: string; current
 type Command = { label: string; detail: string; href: string; shortcut?: string }
 
 const commands: Command[] = [
+  { label: 'People Search', detail: 'Find a person by name, email, phone, profile URL, or professional criteria', href: '/app/people-search', shortcut: 'G P' },
+  { label: 'AI Sourcing', detail: 'Run natural-language, JD, Boolean, and role-based candidate discovery', href: '/app/agentic-sourcing', shortcut: 'G S' },
+  { label: 'Talent Insights', detail: 'Analyze observed market breadth, search difficulty, and sourcing strategy', href: '/app/talent-insights', shortcut: 'G I' },
   { label: 'Open Today', detail: 'Approvals, candidate reviews, briefs, and agent work', href: '/app/agent-os', shortcut: 'G T' },
   { label: 'Create a role', detail: 'Open the role portfolio and start a calibrated intake', href: '/app/roles?new=1', shortcut: 'N R' },
   { label: 'Open AutoSource', detail: 'Review discovery campaigns and ambiguous identities', href: '/app/autosource', shortcut: 'G A' },
-  { label: 'Search Candidate Graph', detail: 'Find known candidates and evidence', href: '/app/candidate-database', shortcut: 'G C' },
+  { label: 'Search Talent', detail: 'Find known canonical candidates, evidence, and saved profile links', href: '/app/candidate-database', shortcut: 'G C' },
   { label: 'Open Evidence Ledger', detail: 'Review provenance, conflicts, and freshness', href: '/app/evidence-ledger' },
   { label: 'Open Network Vault', detail: 'Find relationship context and warm paths', href: '/app/network' },
-  { label: 'Open Acquisition', detail: 'Review sources, enrichment, and graph growth', href: '/app/acquisition' },
+  { label: 'Open Source Operations', detail: 'Review sources, enrichment, and graph growth', href: '/app/acquisition' },
 ]
 
 export function CommandPalette({ triggerClassName = 'app-command-trigger', hotkey = true }: { triggerClassName?: string; hotkey?: boolean }) {
