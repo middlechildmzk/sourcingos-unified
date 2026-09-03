@@ -4,7 +4,7 @@ import { resolveStoredEntityKind } from '@/lib/entity-classification'
 import type { EntityKind } from '@/lib/source-types'
 import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 import { searchCandidateGraphIdsV36_10 } from '@/lib/candidate-graph-search-v36-10'
-import { candidateIdentityRedirectStateV36_10 } from '@/lib/candidate-identity-redirects-v36-10'
+import { candidateIdentityFamiliesV36_10, candidateIdentityRedirectStateV36_10 } from '@/lib/candidate-identity-redirects-v36-10'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
@@ -102,42 +102,47 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   if (graphSearchActive) rows.sort((a, b) => (graphOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (graphOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER))
 
   const candidateIds = rows.map(row => row.id)
+  const identityFamilies = await candidateIdentityFamiliesV36_10({ sb, ownerId, candidateIds })
+  const relationshipCandidateIds = Array.from(identityFamilies.familyToCanonical.keys())
+  const relatedCandidateIds = relationshipCandidateIds.length ? relationshipCandidateIds : candidateIds
   const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
-  const [profiles, evidence, contacts, openSignals, roleCandidates] = candidateIds.length ? await Promise.all([
-    sb.from('source_profiles').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('evidence_items').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('candidate_contacts').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
-    sb.from('open_to_work_signals').select('*').eq('owner_id', ownerId).in('candidate_id', candidateIds),
+  const [profiles, evidence, contacts, openSignals, roleCandidates] = relatedCandidateIds.length ? await Promise.all([
+    sb.from('source_profiles').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('evidence_items').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('candidate_contacts').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
+    sb.from('open_to_work_signals').select('*').eq('owner_id', ownerId).in('candidate_id', relatedCandidateIds),
     sb.from('role_candidates')
       .select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at')
       .eq('owner_id', ownerId)
-      .in('candidate_id', candidateIds),
+      .in('candidate_id', relatedCandidateIds),
   ]) : [emptyRelated, emptyRelated, emptyRelated, emptyRelated, emptyRelated]
 
   const relatedError = profiles.error || evidence.error || contacts.error || openSignals.error || roleCandidates.error
   if (relatedError) throw new Error(relatedError.message)
 
-  const byCandidate = <T extends { candidate_id?: string | null }>(items: T[]) => {
+  const byCanonicalCandidate = <T extends { candidate_id?: string | null }>(items: T[]) => {
     const map = new Map<string, T[]>()
     for (const item of items) {
       if (!item.candidate_id) continue
-      const current = map.get(item.candidate_id) || []
+      const canonicalId = identityFamilies.familyToCanonical.get(item.candidate_id) || item.candidate_id
+      const current = map.get(canonicalId) || []
       current.push(item)
-      map.set(item.candidate_id, current)
+      map.set(canonicalId, current)
     }
     return map
   }
 
-  const profileMap = byCandidate(profiles.data || [])
-  const evidenceMap = byCandidate(evidence.data || [])
-  const contactMap = byCandidate(contacts.data || [])
-  const openMap = byCandidate(openSignals.data || [])
-  const roleCandidateMap = byCandidate(roleCandidates.data || [])
+  const profileMap = byCanonicalCandidate(profiles.data || [])
+  const evidenceMap = byCanonicalCandidate(evidence.data || [])
+  const contactMap = byCanonicalCandidate(contacts.data || [])
+  const openMap = byCanonicalCandidate(openSignals.data || [])
+  const roleCandidateMap = byCanonicalCandidate(roleCandidates.data || [])
 
   const candidates = rows.map(row => {
     const candidateProfiles = profileMap.get(row.id) || []
     const candidateEvidence = evidenceMap.get(row.id) || []
     const candidateRoleHistory = roleCandidateMap.get(row.id) || []
+    const identityFamilyIds = identityFamilies.canonicalToFamily.get(row.id) || [row.id]
     return {
       id: row.id,
       canonicalName: row.canonical_name,
@@ -157,6 +162,8 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       openToWorkSignalIds: (openMap.get(row.id) || []).map(item => item.id),
       mergeStatus: row.merge_status || 'pending',
       searchRank: graphSearchActive ? graphSearch?.ranks.get(row.id) || 0 : undefined,
+      identityFamilyIds,
+      absorbedIdentityCount: Math.max(0, identityFamilyIds.length - 1),
       universe: buildCandidateUniverseProjectionV36({
         candidateId: row.id,
         profiles: candidateProfiles,
@@ -178,13 +185,18 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       ? Math.max(0, (candidateResult.count || 0) - (fetchedRows.length - rows.length))
       : activeCandidateCount
 
+  const canonicalCandidateId = (candidateId: string | null | undefined) => candidateId
+    ? identityFamilies.familyToCanonical.get(candidateId) || candidateId
+    : undefined
+
   return {
     ok: true,
     persistence_mode: 'supabase' as const,
     candidates,
     sourceProfiles: (profiles.data || []).map(row => ({
       id: row.id,
-      candidateId: row.candidate_id || undefined,
+      candidateId: canonicalCandidateId(row.candidate_id),
+      historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined,
       source: row.source,
       sourceProfileId: row.source_profile_id,
       profileUrl: row.profile_url || undefined,
@@ -199,9 +211,9 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       lastSeenAt: row.last_seen_at,
       createdAt: row.created_at,
     })),
-    evidenceItems: (evidence.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, url: row.url || undefined, createdAt: row.created_at })),
-    contactSignals: (contacts.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, type: row.type, value: row.value, source: row.source, confidence: row.confidence, verified: false, permissionStatus: row.permission_status, createdAt: row.created_at })),
-    openToWorkSignals: (openSignals.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, requiresReview: true, createdAt: row.created_at })),
+    evidenceItems: (evidence.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, url: row.url || undefined, createdAt: row.created_at })),
+    contactSignals: (contacts.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, type: row.type, value: row.value, source: row.source, confidence: row.confidence, verified: false, permissionStatus: row.permission_status, createdAt: row.created_at })),
+    openToWorkSignals: (openSignals.data || []).map(row => ({ id: row.id, candidateId: canonicalCandidateId(row.candidate_id), historicalCandidateId: row.candidate_id && canonicalCandidateId(row.candidate_id) !== row.candidate_id ? row.candidate_id : undefined, sourceProfileId: row.source_profile_id || undefined, source: row.source, label: row.label, detail: row.detail, confidence: row.confidence, requiresReview: true, createdAt: row.created_at })),
     matchReviews: (matchReviews.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileIds: Array.isArray(row.source_profile_ids) ? row.source_profile_ids : [], proposedCanonicalName: relationCandidateName(row.candidates) || 'Potential identity match', score: row.match_score || 0, reasons: Array.isArray(row.match_reasons) ? row.match_reasons : [], conflicts: Array.isArray(row.conflicts) ? row.conflicts : [], decision: row.decision, decidedBy: row.decided_by || undefined, decidedAt: row.decided_at || undefined, createdAt: row.created_at })),
     importBatches: (importBatches.data || []).map(row => ({ id: row.id, importType: row.import_type, fileName: row.file_name || undefined, rowsSeen: row.rows_seen, recordsCreated: row.records_created, warnings: Array.isArray(row.warnings) ? row.warnings : [], createdAt: row.created_at })),
     counts: {
