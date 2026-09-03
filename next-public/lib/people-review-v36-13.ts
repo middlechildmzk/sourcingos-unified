@@ -30,6 +30,13 @@ export type PeopleEvidenceCoverageV36_13 = {
   mustHaveTotal: number
 }
 
+export type ExplicitPeopleFiltersV36_13 = {
+  company?: string
+  title?: string
+  location?: string
+  skills?: string
+}
+
 export type ContactSignalForReviewV36_13 = {
   type: string
   channelKind?: string
@@ -76,14 +83,15 @@ function containsPhrase(haystack: string, needle: string): boolean {
   return tokens.length > 1 && tokens.every(token => h.includes(token))
 }
 
-function observationText(observation: PeopleReviewObservationV36_13): string {
+function candidateEvidenceText(observation: PeopleReviewObservationV36_13): string {
+  // Deliberately excludes providerExplanation/provider retrieval rationale. Retrieval
+  // context can explain why a source returned a record, but it is not candidate evidence.
   return [
     observation.currentTitle,
     observation.headline,
     observation.currentEmployer,
     observation.location,
     ...(observation.skills || []),
-    observation.providerExplanation,
   ].filter(Boolean).join(' · ')
 }
 
@@ -118,29 +126,68 @@ function criterionObserved(
   const employer = clean(observation.currentEmployer)
   const location = clean(observation.location)
   const skills = (observation.skills || []).join(' · ')
-  const full = observationText(observation)
+  const full = candidateEvidenceText(observation)
   const stripped = label.replace(/^Current or relevant (?:title|employer):\s*/i, '')
 
   if (kind === 'title') return { observed: containsPhrase(title, stripped), evidence: title || undefined }
   if (kind === 'company') return { observed: containsPhrase(employer, stripped), evidence: employer || undefined }
   if (kind === 'location') return { observed: containsPhrase(location, label), evidence: location || undefined }
   if (kind === 'skill') return { observed: containsPhrase([skills, title].join(' · '), label), evidence: skills || title || undefined }
-  if (kind === 'clearance') return { observed: clearanceObserved(label, full), evidence: full || undefined }
+  if (kind === 'clearance') {
+    const clearanceEvidence = [title, skills].filter(Boolean).join(' · ')
+    const observed = clearanceObserved(label, clearanceEvidence)
+    return { observed, evidence: observed ? clearanceEvidence : undefined }
+  }
   if (kind === 'experience') {
-    // Search observations do not currently carry normalized work-history dates.
-    // Never infer years of experience from a title or provider retrieval score.
-    return { observed: containsPhrase(full, label), evidence: containsPhrase(full, label) ? full : undefined }
+    // Thin search observations do not carry normalized employment chronology/dates.
+    // Never infer years of experience from title, skills, or provider retrieval rationale.
+    return { observed: false }
   }
   return { observed: containsPhrase(full, label), evidence: full || undefined }
+}
+
+function semanticCriterionKey(label: string): string {
+  return normalized(label.replace(/^Current or relevant (?:title|employer):\s*/i, ''))
 }
 
 function pushCriterion(
   target: Array<{ label: string; kind: PeopleEvidenceCriterionV36_13['kind']; mustHave: boolean }>,
   item: { label: string; kind: PeopleEvidenceCriterionV36_13['kind']; mustHave: boolean },
 ) {
-  const key = `${item.kind}:${normalized(item.label)}`
-  if (!item.label || target.some(existing => `${existing.kind}:${normalized(existing.label)}` === key)) return
+  const key = semanticCriterionKey(item.label)
+  if (!item.label || !key) return
+  const existing = target.find(candidate => semanticCriterionKey(candidate.label) === key)
+  if (existing) {
+    // Keep the first, more semantically specific parser classification but never
+    // lose a must-have boundary when the same criterion is repeated elsewhere.
+    existing.mustHave = existing.mustHave || item.mustHave
+    return
+  }
   target.push(item)
+}
+
+function splitFilterValues(value?: string): string[] {
+  return clean(value).split(/[,;|]+/).map(item => item.trim()).filter(Boolean)
+}
+
+export function observationPassesExplicitFiltersV36_13(
+  observation: PeopleReviewObservationV36_13,
+  filters: ExplicitPeopleFiltersV36_13 = {},
+): boolean {
+  const company = clean(filters.company)
+  const title = clean(filters.title)
+  const location = clean(filters.location)
+  const skills = splitFilterValues(filters.skills)
+
+  if (company && !containsPhrase(observation.currentEmployer || '', company)) return false
+  if (title && !containsPhrase([observation.currentTitle, observation.headline].filter(Boolean).join(' · '), title)) return false
+  // Explicit recruiter location is a constraint. Missing location does not pass.
+  if (location && !containsPhrase(observation.location || '', location)) return false
+  if (skills.length) {
+    const skillEvidence = [(observation.skills || []).join(' · '), observation.currentTitle, observation.headline].filter(Boolean).join(' · ')
+    if (!skills.every(skill => containsPhrase(skillEvidence, skill))) return false
+  }
+  return true
 }
 
 export function evidenceCoverageForObservationV36_13(
@@ -161,7 +208,7 @@ export function evidenceCoverageForObservationV36_13(
   const criteria = drafts.slice(0, 18).map((draft, index) => {
     const result = criterionObserved(observation, draft.kind, draft.label)
     return {
-      id: `${draft.kind}-${index}-${normalized(draft.label).replace(/\s+/g, '-')}`,
+      id: `${draft.kind}-${index}-${semanticCriterionKey(draft.label).replace(/\s+/g, '-')}`,
       label: draft.label,
       kind: draft.kind,
       mustHave: draft.mustHave,
