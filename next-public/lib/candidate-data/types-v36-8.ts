@@ -64,6 +64,53 @@ export type CandidateProviderContactAvailabilityV36_8 = {
   phone: boolean | 'unknown'
 }
 
+export type CandidateProviderExperienceV36_14 = {
+  title?: string
+  company?: string
+  location?: string
+  startDate?: string
+  endDate?: string
+  current?: boolean
+  description?: string
+}
+
+export type CandidateProviderEducationV36_14 = {
+  school?: string
+  degree?: string
+  field?: string
+  startDate?: string
+  endDate?: string
+  description?: string
+}
+
+export type CandidateProviderCertificationV36_14 = {
+  name: string
+  issuer?: string
+  issuedAt?: string
+  expiresAt?: string
+  credentialUrl?: string
+}
+
+export type CandidateProviderProjectV36_14 = {
+  name: string
+  description?: string
+  url?: string
+  technologies?: string[]
+}
+
+/**
+ * Optional structured professional history carried exactly as provider-observed
+ * fields. Missing fields stay missing. SourcingOS must not synthesize chronology,
+ * tenure, degrees, certifications, or project claims that a source did not return.
+ */
+export type CandidateProviderRichProfileV36_14 = {
+  summary?: string
+  experience?: CandidateProviderExperienceV36_14[]
+  education?: CandidateProviderEducationV36_14[]
+  certifications?: CandidateProviderCertificationV36_14[]
+  projects?: CandidateProviderProjectV36_14[]
+}
+
 /**
  * A provider observation is retrieval input, not SourcingOS qualification truth.
  * Provider scores are preserved only as provider-native retrieval metadata.
@@ -79,6 +126,8 @@ export type CandidateProviderObservationV36_8 = {
   skills: string[]
   profileUrls: CandidateProviderProfileUrlV36_8[]
   contactAvailability: CandidateProviderContactAvailabilityV36_8
+  /** Structured provider-observed career/profile fields; optional and provenance-bound. */
+  richProfile?: CandidateProviderRichProfileV36_14
   providerRetrievalScore?: number
   providerScoreScale?: string
   providerExplanation?: string
