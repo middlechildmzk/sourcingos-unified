@@ -77,7 +77,7 @@ function suppressLinkedInCrossLinkAuthority(
   }
 }
 
-function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
+export function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
   const rawBase = compareSourceProfiles(existing, incoming)
   const base = suppressLinkedInCrossLinkAuthority(rawBase, existing, incoming)
   const professional = sharedProfessionalProfileAnchorsV36_10(existing, incoming)
