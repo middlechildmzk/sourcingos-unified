@@ -2,13 +2,25 @@ import 'server-only'
 import { rateLimit } from '@/lib/rate-limit'
 import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
-import { getCandidateDb } from '@/lib/candidate-db-v18'
+import { getCandidateDb, type CandidateDbSnapshot } from '@/lib/candidate-db-v18'
 import { buildCandidate360, scoreContactSignal, scoreOpenToWorkSignal, staleStatus } from '@/lib/candidate-intelligence-v18'
 import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
+import { buildEvidenceLedger } from '@/lib/evidence-ledger'
+import { resolveCandidate360FieldsV35 } from '@/lib/candidate-field-resolution-v35'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 
 export const dynamic = 'force-dynamic'
+
+function conflictText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    if (typeof record.explanation === 'string') return record.explanation
+    if (typeof record.type === 'string') return record.type
+  }
+  return 'Identity evidence conflict requires review.'
+}
 
 function buildDossierFromSupabase(
   candidate: Record<string, unknown>,
@@ -38,6 +50,7 @@ function buildDossierFromSupabase(
     id: p.id, source: p.source, sourceProfileId: p.source_profile_id,
     displayName: p.display_name, headline: p.headline, location: p.location,
     organization: p.organization, profileUrl: p.profile_url,
+    rawText: typeof p.raw_text === 'string' ? p.raw_text : undefined,
     matchReasons: p.match_reasons || [], status: p.status || 'pending',
     matchScore: p.match_score || 0, lastSeenAt: p.last_seen_at,
     createdAt: p.created_at, candidateId: p.candidate_id,
@@ -46,6 +59,10 @@ function buildDossierFromSupabase(
   const evidenceItems = evidence.map((e: any) => ({
     id: e.id, source: e.source, label: e.label, detail: e.detail,
     confidence: e.confidence || 'medium', url: e.url,
+    spanStart: typeof e.span_start === 'number' ? e.span_start : undefined,
+    spanEnd: typeof e.span_end === 'number' ? e.span_end : undefined,
+    spanText: typeof e.span_text === 'string' ? e.span_text : undefined,
+    sourceTextRef: typeof e.source_text_ref === 'string' ? e.source_text_ref : undefined,
     candidateId: e.candidate_id, sourceProfileId: e.source_profile_id, createdAt: e.created_at,
   }))
 
@@ -53,7 +70,7 @@ function buildDossierFromSupabase(
     id: ct.id, type: ct.type, value: ct.value, source: ct.source,
     confidence: ct.confidence || 'medium', verified: false as const,
     permissionStatus: ct.permission_status || 'unknown',
-    candidateId: ct.candidate_id, createdAt: ct.created_at,
+    candidateId: ct.candidate_id, sourceProfileId: ct.source_profile_id, createdAt: ct.created_at,
   }))
 
   const otwSignals = openToWorkSignals.map((s: any) => ({
@@ -66,9 +83,22 @@ function buildDossierFromSupabase(
     id: r.id, candidateId: r.candidate_id, sourceProfileIds: r.source_profile_ids || [],
     proposedCanonicalName: candidate.canonical_name as string,
     score: r.match_score || 0, reasons: r.match_reasons || [],
-    conflicts: r.conflicts || [], decision: r.decision || 'pending',
+    conflicts: Array.isArray(r.conflicts) ? r.conflicts.map(conflictText) : [], decision: r.decision || 'pending',
     decidedBy: r.decided_by, decidedAt: r.decided_at, createdAt: r.created_at,
   }))
+
+  const candidateId = String(candidate.id || '')
+  const resolutionSnapshot = {
+    candidates: [cand],
+    sourceProfiles: profiles,
+    evidenceItems,
+    contactSignals: mappedContacts,
+    openToWorkSignals: otwSignals,
+    matchReviews: reviews,
+    importBatches: [],
+  } as unknown as CandidateDbSnapshot
+  const ledger = buildEvidenceLedger(resolutionSnapshot, { candidateId })
+  const resolvedProfile = resolveCandidate360FieldsV35(resolutionSnapshot, ledger, candidateId)
 
   const freshness = staleStatus(cand as any, profiles as any)
   const contactsWithScore = mappedContacts.map(ct => ({ ...ct, score: scoreContactSignal(ct as any) }))
@@ -80,6 +110,9 @@ function buildDossierFromSupabase(
     'Verify contact information through an approved workflow before outreach.',
     'Treat open-to-work signals as signals to review, not verified job-seeking claims.',
   ]
+  if (resolvedProfile.reviewCount > 0 || resolvedProfile.conflictCount > 0) {
+    verifyNext.unshift('Resolve competing Candidate 360 field observations before treating the canonical profile as current.')
+  }
   if (mappedContacts.some(c => c.type === 'email')) {
     verifyNext.push('Email contact found — verify permission status before sending outreach.')
   }
@@ -91,7 +124,7 @@ function buildDossierFromSupabase(
   }
 
   const universe = buildCandidateUniverseProjectionV36({
-    candidateId: String(candidate.id || ''),
+    candidateId,
     profiles: sourceProfiles as any[],
     evidenceItems: evidence as any[],
     roleCandidates: roleCandidates as any[],
@@ -100,7 +133,7 @@ function buildDossierFromSupabase(
   })
 
   return {
-    candidate: cand, sourceProfiles: profiles, evidence: evidenceItems,
+    candidate: cand, resolvedProfile, sourceProfiles: profiles, evidence: evidenceItems,
     contacts: contactsWithScore, openToWorkSignals: otwWithScore, matchReviews: reviews,
     projectCandidates, universe, freshness, verifyNext, mode: 'supabase' as const,
   }
@@ -184,6 +217,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const previewCandidate = db.candidates.find(candidate => candidate.id === candidateId)
   const previewProfiles = db.sourceProfiles.filter(profile => profile.candidateId === candidateId)
   const previewEvidence = db.evidenceItems.filter(item => item.candidateId === candidateId)
+  const ledger = buildEvidenceLedger(db, { candidateId })
+  const resolvedProfile = resolveCandidate360FieldsV35(db, ledger, candidateId)
   const universe = buildCandidateUniverseProjectionV36({
     candidateId,
     profiles: previewProfiles.map(profile => ({
@@ -204,5 +239,5 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     candidateUpdatedAt: previewCandidate?.updatedAt,
   })
 
-  return NextResponse.json({ ok: true, dossier: { ...dossier, universe, mode: 'preview' } })
+  return NextResponse.json({ ok: true, dossier: { ...dossier, resolvedProfile, universe, mode: 'preview' } })
 }
