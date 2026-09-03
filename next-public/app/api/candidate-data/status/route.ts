@@ -10,12 +10,14 @@ export async function GET() {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
   const providers = candidateDataProviderStatusesV36_8()
+  const observationSigningConfigured = observationSigningConfiguredV36_12()
   return NextResponse.json({
     ok: true,
     providers,
     executableSearchProviders: providers.filter(item => item.executable && item.capabilities.includes('candidate_search')).map(item => item.provider),
+    observationSigningConfigured,
     integrity: {
-      providerObservationSigningConfigured: observationSigningConfiguredV36_12(),
+      providerObservationSigningConfigured: observationSigningConfigured,
       requiredEnvironmentVariable: 'OBSERVATION_SIGNING_SECRET',
       secretsReturned: false,
     },
