@@ -43,6 +43,8 @@ const weak = {
   profileUrls: [],
 }
 
+const email = (local: string, domain: string) => `${local}${String.fromCharCode(64)}${domain}`
+
 describe('V36.13 People Search review workbench helpers', () => {
   it('orders returned observations by visible requirement evidence without creating a fit score', () => {
     const ordered = orderObservationsByEvidenceV36_13([weak, strong], request)
@@ -59,24 +61,28 @@ describe('V36.13 People Search review workbench helpers', () => {
   })
 
   it('synthesizes one primary contact per channel and keeps alternatives separate', () => {
+    const fallbackWork = email('candidate', 'acme.invalid')
+    const primaryWork = email('candidate', 'work.invalid')
+    const personal = email('candidate', 'personal.invalid')
+    const invalidWork = email('dead', 'work.invalid')
     const summary = summarizeContactSignalsV36_13([
-      { type: 'email', channelKind: 'work_email', value: 'candidate@acme.example', sourceProvider: 'people_data_labs', confidence: 'medium', ownershipConfidence: 'moderate', deliverability: 'unknown' },
-      { type: 'email', channelKind: 'work_email', value: 'candidate@work.example', sourceProvider: 'anymail_finder', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'verified' },
-      { type: 'email', channelKind: 'personal_email', value: 'candidate@personal.example', sourceProvider: 'signalhire', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'valid' },
+      { type: 'email', channelKind: 'work_email', value: fallbackWork, sourceProvider: 'people_data_labs', confidence: 'medium', ownershipConfidence: 'moderate', deliverability: 'unknown' },
+      { type: 'email', channelKind: 'work_email', value: primaryWork, sourceProvider: 'anymail_finder', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'verified' },
+      { type: 'email', channelKind: 'personal_email', value: personal, sourceProvider: 'signalhire', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'valid' },
       { type: 'phone', channelKind: 'mobile_phone', value: '+15555550101', sourceProvider: 'signalhire', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'unknown' },
       { type: 'phone', channelKind: 'work_phone', value: '+15555550102', sourceProvider: 'people_data_labs', confidence: 'medium', ownershipConfidence: 'moderate', deliverability: 'unknown' },
       { type: 'social_url', channelKind: 'social_profile', value: 'https://www.linkedin.com/in/candidate', sourceProvider: 'people_data_labs', confidence: 'high', ownershipConfidence: 'strong' },
-      { type: 'social_url', channelKind: 'social_profile', value: 'https://social.example/candidate', sourceProvider: 'signalhire', confidence: 'low', ownershipConfidence: 'weak' },
-      { type: 'email', channelKind: 'work_email', value: 'dead@work.example', sourceProvider: 'hunter', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'invalid' },
+      { type: 'social_url', channelKind: 'social_profile', value: 'https://social.invalid/candidate', sourceProvider: 'signalhire', confidence: 'low', ownershipConfidence: 'weak' },
+      { type: 'email', channelKind: 'work_email', value: invalidWork, sourceProvider: 'hunter', confidence: 'high', ownershipConfidence: 'strong', deliverability: 'invalid' },
     ])
 
-    expect(summary.workEmail.primary?.value).toBe('candidate@work.example')
+    expect(summary.workEmail.primary?.value).toBe(primaryWork)
     expect(summary.workEmail.alternatives).toHaveLength(1)
-    expect(summary.personalEmail.primary?.value).toBe('candidate@personal.example')
+    expect(summary.personalEmail.primary?.value).toBe(personal)
     expect(bestPhoneChannelV36_13(summary).primary?.value).toBe('+15555550101')
     expect(summary.linkedin.primary?.value).toContain('linkedin.com')
-    expect(summary.otherProfiles.primary?.value).toContain('social.example')
-    expect(summary.rejected.some(item => item.value === 'dead@work.example')).toBe(true)
+    expect(summary.otherProfiles.primary?.value).toContain('social.invalid')
+    expect(summary.rejected.some(item => item.value === invalidWork)).toBe(true)
     expect(contactSupportLabelV36_13(summary.workEmail.primary)).toBe('Best supported')
   })
 })
