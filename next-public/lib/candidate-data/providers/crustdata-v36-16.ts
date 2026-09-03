@@ -30,14 +30,14 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function idString(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return str(value)
+}
+
 function bounded(value: unknown, max = 1200): string | undefined {
   const out = str(value)
   return out ? out.replace(/\s+/g, ' ').trim().slice(0, max) : undefined
-}
-
-function numberValue(value: unknown): number | undefined {
-  const n = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(n) ? n : undefined
 }
 
 function unique(values: Array<string | undefined>, max = 50): string[] {
@@ -78,6 +78,11 @@ function normalized(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+/**
+ * Crustdata lets SourcingOS enforce structured recruiter constraints as filters
+ * while using hybrid semantic search only to rank inside that constrained set.
+ * Provider `fit` remains retrieval metadata, never qualification truth.
+ */
 export function buildCrustdataPersonSearchBodyV36_16(request: CandidateDataSearchRequestV36_8) {
   const conditions: Array<FilterCondition | FilterGroup> = []
   const names = values(request.names, 10)
@@ -87,30 +92,40 @@ export function buildCrustdataPersonSearchBodyV36_16(request: CandidateDataSearc
   const locations = values(request.locations, 20)
   const hardRequirements = new Set((request.requirements || []).filter(item => item.mustHave).map(item => normalized(item.text)))
 
-  const nameCondition = orGroup('basic_profile.name', names)
+  const nameCondition = orGroup('basic_profile.name', names, '=')
   if (nameCondition) conditions.push(nameCondition)
   const titleCondition = orGroup('experience.employment_details.current.title', titles)
   if (titleCondition) conditions.push(titleCondition)
-  const companyCondition = orGroup('experience.employment_details.current.name', companies)
+  const companyCondition = orGroup('experience.employment_details.current.company_name', companies)
   if (companyCondition) conditions.push(companyCondition)
-  const locationCondition = orGroup('basic_profile.location.raw', locations)
+  const locationCondition = orGroup('basic_profile.location.full_location', locations)
   if (locationCondition) conditions.push(locationCondition)
 
+  // Only skills explicitly marked must-have become hard provider filters.
+  // Soft/discovery skills remain semantic ranking context below.
   const hardSkills = skills.filter(skill => hardRequirements.has(normalized(skill)))
-  const softSkills = skills.filter(skill => !hardRequirements.has(normalized(skill)))
   for (const skill of hardSkills) conditions.push({ field: 'skills.professional_network_skills', type: '(.)', value: skill })
-  const softSkillCondition = orGroup('skills.professional_network_skills', softSkills)
-  if (softSkillCondition) conditions.push(softSkillCondition)
 
-  if (!conditions.length) {
-    const fallback = request.query.replace(/^find(?:\s+me)?\s+/i, '').trim().slice(0, 220)
-    if (fallback) conditions.push({ field: 'basic_profile.headline', type: '(.)', value: fallback })
-  }
+  const semanticParts = unique([
+    ...titles,
+    ...skills.filter(skill => !hardSkills.includes(skill)),
+    ...((request.requirements || []).filter(item => !item.mustHave).map(item => item.text)),
+  ], 50)
+  const semanticQuery = (semanticParts.length ? semanticParts.join(' ') : request.query)
+    .replace(/^find(?:\s+me)?\s+/i, '')
+    .trim()
+    .slice(0, 1000)
 
-  return {
-    filters: conditions.length === 1 ? conditions[0] : { op: 'and', conditions },
+  const body: Record<string, unknown> = {
     limit: safeCandidateSearchLimitV36_8(request.limit),
+    fields: ['crustdata_person_id', 'fit', 'basic_profile', 'social_handles', 'experience', 'education', 'skills'],
   }
+  if (conditions.length) {
+    body.filters = conditions.length === 1 ? conditions[0] : { op: 'and', conditions }
+    body.mode = 'exact'
+  }
+  if (semanticQuery) body.search = { query: semanticQuery, mode: 'hybrid' }
+  return body
 }
 
 function locationText(value: unknown): string | undefined {
@@ -132,19 +147,14 @@ function safeUrl(value: unknown): string | undefined {
 }
 
 function profileUrls(profile: JsonRecord): CandidateProviderProfileUrlV36_8[] {
-  const basic = record(profile.basic_profile)
-  const professionalNetwork = record(profile.professional_network)
   const social = record(profile.social_handles)
-  const dev = rows(profile.dev_platform_profiles)
+  const professionalIdentifier = record(social.professional_network_identifier)
+  const developerIdentifier = record(social.dev_platform_identifier)
   const candidates: unknown[] = [
-    profile.professional_network_profile_url,
+    professionalIdentifier.profile_url,
+    developerIdentifier.profile_url,
     profile.linkedin_url,
     profile.profile_url,
-    basic.professional_network_profile_url,
-    professionalNetwork.profile_url,
-    professionalNetwork.url,
-    record(social.dev_platform_identifier).profile_url,
-    ...dev.flatMap(item => [item.profile_url, item.url]),
   ]
   const out: CandidateProviderProfileUrlV36_8[] = []
   for (const candidate of candidates) {
@@ -169,13 +179,10 @@ function richProfile(profile: JsonRecord): CandidateProviderRichProfileV36_14 | 
   const employment = record(experience.employment_details)
   const current = rows(employment.current)
   const past = rows(employment.past)
-  const experienceRows = [...current, ...past]
   const education = record(profile.education)
   const schools = rows(education.schools)
-  const certificationRows = rows(profile.certifications)
-  const devRows = rows(profile.dev_platform_profiles)
 
-  const mappedExperience = experienceRows.slice(0, 30).map(item => {
+  const mappedExperience = [...current, ...past].slice(0, 30).map((item, index) => {
     const endDate = bounded(item.end_date ?? item.end_at ?? item.endDate, 80)
     return {
       title: nestedText(item.title, 'name', 'value'),
@@ -183,7 +190,7 @@ function richProfile(profile: JsonRecord): CandidateProviderRichProfileV36_14 | 
       location: locationText(item.location),
       startDate: bounded(item.start_date ?? item.start_at ?? item.startDate, 80),
       endDate,
-      current: current.includes(item) || item.current === true || item.is_current === true,
+      current: index < current.length || item.current === true || item.is_current === true,
       description: bounded(item.description ?? item.summary, 1400),
     }
   }).filter(item => item.title || item.company || item.description)
@@ -197,29 +204,12 @@ function richProfile(profile: JsonRecord): CandidateProviderRichProfileV36_14 | 
     description: bounded(item.description, 900),
   })).filter(item => item.school || item.degree || item.field)
 
-  const certifications = certificationRows.slice(0, 20).map(item => ({
-    name: nestedText(item.name ?? item.title, 'name') || '',
-    issuer: nestedText(item.issuing_organization ?? item.issuer, 'name', 'value'),
-    issuedAt: bounded(item.issued_at ?? item.issue_date, 80),
-    expiresAt: bounded(item.expires_at ?? item.expiration_date, 80),
-    credentialUrl: safeUrl(item.credential_url ?? item.url),
-  })).filter(item => item.name)
-
-  const projects = devRows.slice(0, 16).map(item => ({
-    name: nestedText(item.name ?? item.platform ?? item.username, 'name') || '',
-    description: bounded(item.description ?? item.bio, 1000),
-    url: safeUrl(item.profile_url ?? item.url),
-    technologies: stringList(item.languages ?? item.skills, 16),
-  })).filter(item => item.name)
-
   const summary = bounded(basic.summary ?? basic.about ?? profile.summary, 1800)
-  if (!summary && !mappedExperience.length && !mappedEducation.length && !certifications.length && !projects.length) return undefined
+  if (!summary && !mappedExperience.length && !mappedEducation.length) return undefined
   return {
     ...(summary ? { summary } : {}),
     ...(mappedExperience.length ? { experience: mappedExperience } : {}),
     ...(mappedEducation.length ? { education: mappedEducation } : {}),
-    ...(certifications.length ? { certifications } : {}),
-    ...(projects.length ? { projects } : {}),
   }
 }
 
@@ -229,9 +219,9 @@ function toObservation(profile: JsonRecord): CandidateProviderObservationV36_8 |
   const employment = record(experience.employment_details)
   const current = rows(employment.current)[0] || {}
   const urls = profileUrls(profile)
-  const providerPersonId = str(profile.crustdata_person_id)
-    || str(profile.person_id)
-    || str(profile.id)
+  const providerPersonId = idString(profile.crustdata_person_id)
+    || idString(profile.person_id)
+    || idString(profile.id)
     || urls.find(item => item.kind === 'linkedin')?.url
   const displayName = str(basic.name) || str(profile.full_name) || str(profile.name)
   if (!providerPersonId || !displayName) return undefined
@@ -244,6 +234,7 @@ function toObservation(profile: JsonRecord): CandidateProviderObservationV36_8 |
   const currentTitle = str(basic.current_title) || nestedText(current.title, 'name', 'value')
   const currentEmployer = nestedText(current.company_name ?? current.name ?? current.company, 'name', 'value')
   const location = locationText(basic.location) || locationText(profile.location)
+  const fit = str(profile.fit)
 
   return {
     provider: PROVIDER,
@@ -257,10 +248,8 @@ function toObservation(profile: JsonRecord): CandidateProviderObservationV36_8 |
     profileUrls: urls,
     contactAvailability: { email: 'unknown', phone: 'unknown' },
     richProfile: richProfile(profile),
-    providerRetrievalScore: numberValue(profile.score ?? profile._score ?? profile.relevance_score),
-    providerScoreScale: numberValue(profile.score ?? profile._score ?? profile.relevance_score) === undefined ? undefined : 'provider_native',
-    refreshedAt: str(basic.last_updated) || str(profile.last_updated) || str(profile.updated_at),
-    providerExplanation: 'Crustdata indexed Person Search discovery. Contact values are not revealed during search; fresh/live profile retrieval remains a separate explicit operation.',
+    providerScoreScale: fit ? `crustdata_fit:${fit}` : undefined,
+    providerExplanation: `Crustdata indexed Person Search discovery${fit ? `; provider retrieval tier: ${fit}` : ''}. Structured recruiter filters are enforced before hybrid semantic ranking. Contact values and live refresh remain separate explicit operations.`,
     observedAt: new Date().toISOString(),
   }
 }
@@ -297,8 +286,7 @@ export async function searchCrustdataV36_16(request: CandidateDataSearchRequestV
     const payload = record(await response.json())
     const profiles = Array.isArray(payload.profiles) ? payload.profiles.map(record) : []
     const observations = profiles.map(toObservation).filter(Boolean) as CandidateProviderObservationV36_8[]
-    const limit = safeCandidateSearchLimitV36_8(request.limit)
-    const limited = observations.slice(0, limit)
+    const limited = observations.slice(0, safeCandidateSearchLimitV36_8(request.limit))
     const warnings: string[] = []
     if (request.offset) warnings.push('Crustdata uses cursor pagination; the universal numeric offset is not forwarded in this first adapter slice.')
     if (request.highFreshness) warnings.push('This Crustdata adapter uses indexed Person Search. Live/fresh retrieval is a separate plan-gated tool and was not silently substituted.')
@@ -311,7 +299,7 @@ export async function searchCrustdataV36_16(request: CandidateDataSearchRequestV
         discovered: limited.length,
         latencyMs: Date.now() - started,
         estimatedCredits: Number((limited.length * 0.03).toFixed(2)),
-        message: 'Crustdata indexed Person Search executed. Provider records remain observations and its retrieval metadata is not a qualification score.',
+        message: 'Crustdata indexed Person Search executed with structured filters plus semantic ranking. Provider fit is retrieval metadata, not a qualification score.',
       },
       nextOffset: Math.max(0, Math.trunc(request.offset || 0)) + limited.length,
       warnings,
