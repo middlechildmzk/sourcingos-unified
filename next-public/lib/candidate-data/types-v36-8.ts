@@ -36,6 +36,8 @@ export type CandidateSearchRequirementV36_8 = {
 export type CandidateDataSearchRequestV36_8 = {
   query: string
   requirements?: CandidateSearchRequirementV36_8[]
+  /** Explicit person-name anchors from Universal People Search. */
+  names?: string[]
   /** Recruiter-approved title terms from Role Brain; provider must not expand silently. */
   titles?: string[]
   /** Recruiter-approved capability terms from Role Brain. */
