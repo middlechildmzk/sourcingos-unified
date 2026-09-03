@@ -4,6 +4,7 @@ import { resolveStoredEntityKind } from '@/lib/entity-classification'
 import type { EntityKind } from '@/lib/source-types'
 import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 import { searchCandidateGraphIdsV36_10 } from '@/lib/candidate-graph-search-v36-10'
+import { candidateIdentityRedirectStateV36_10 } from '@/lib/candidate-identity-redirects-v36-10'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
@@ -91,8 +92,15 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   if (fatal) throw new Error(fatal.message)
 
   const graphOrder = new Map((graphSearch?.candidateIds || []).map((id, index) => [id, index]))
-  const rows = [...(candidateResult.data || [])]
+  const fetchedRows = [...(candidateResult.data || [])]
+  const redirectState = await candidateIdentityRedirectStateV36_10({
+    sb,
+    ownerId,
+    candidateIds: fetchedRows.map(row => row.id),
+  })
+  const rows = fetchedRows.filter(row => !redirectState.redirectedIds.has(row.id))
   if (graphSearchActive) rows.sort((a, b) => (graphOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (graphOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER))
+
   const candidateIds = rows.map(row => row.id)
   const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
   const [profiles, evidence, contacts, openSignals, roleCandidates] = candidateIds.length ? await Promise.all([
@@ -163,7 +171,12 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
 
   const personCandidatesOnPage = candidates.filter(candidate => candidate.entityKind === 'person').length
   const nonPersonCandidatesOnPage = candidates.length - personCandidatesOnPage
-  const filteredCandidates = graphSearchActive ? graphSearch?.total || 0 : candidateResult.count || 0
+  const activeCandidateCount = Math.max(0, (totalCandidates.count || 0) - (redirectState.migrationReady ? redirectState.totalRedirects : 0))
+  const filteredCandidates = graphSearchActive
+    ? graphSearch?.total || 0
+    : search
+      ? Math.max(0, (candidateResult.count || 0) - (fetchedRows.length - rows.length))
+      : activeCandidateCount
 
   return {
     ok: true,
@@ -192,7 +205,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
     matchReviews: (matchReviews.data || []).map(row => ({ id: row.id, candidateId: row.candidate_id || undefined, sourceProfileIds: Array.isArray(row.source_profile_ids) ? row.source_profile_ids : [], proposedCanonicalName: relationCandidateName(row.candidates) || 'Potential identity match', score: row.match_score || 0, reasons: Array.isArray(row.match_reasons) ? row.match_reasons : [], conflicts: Array.isArray(row.conflicts) ? row.conflicts : [], decision: row.decision, decidedBy: row.decided_by || undefined, decidedAt: row.decided_at || undefined, createdAt: row.created_at })),
     importBatches: (importBatches.data || []).map(row => ({ id: row.id, importType: row.import_type, fileName: row.file_name || undefined, rowsSeen: row.rows_seen, recordsCreated: row.records_created, warnings: Array.isArray(row.warnings) ? row.warnings : [], createdAt: row.created_at })),
     counts: {
-      candidates: totalCandidates.count || 0,
+      candidates: activeCandidateCount,
       filteredCandidates,
       personCandidatesOnPage,
       nonPersonCandidatesOnPage,
@@ -202,7 +215,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       openToWorkSignals: openCount.count || 0,
       pendingMatchReviews: pendingReviewCount.count || 0,
     },
-    page: { limit, offset, hasMore: offset + rows.length < filteredCandidates },
+    page: { limit, offset, hasMore: offset + fetchedRows.length < filteredCandidates },
     search,
     searchMode: search ? graphSearchActive ? 'candidate_graph' : 'legacy_scalar' : 'none',
     activeRoleId: activeRoleId || null,
