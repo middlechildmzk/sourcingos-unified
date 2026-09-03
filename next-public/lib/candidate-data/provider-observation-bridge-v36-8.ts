@@ -3,14 +3,13 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { CandidateProviderObservationV36_8 } from './types-v36-8'
 import type { EvidenceItem, IdentitySignal, SourceName, SourceResult } from '@/lib/source-types'
 
-const SIGNATURE_VERSION = 'v36.12'
+const SIGNATURE_VERSION = 'v36.14'
 
 /**
  * Observation integrity is an internal SourcingOS security concern, not a
- * vendor-auth concern. Prefer a dedicated signing secret. During the V36.12
- * rollout, CRON_SECRET is accepted as a server-only compatibility fallback so
- * production can upgrade without ever deriving signatures from provider API
- * credentials. Add OBSERVATION_SIGNING_SECRET to remove that fallback later.
+ * vendor-auth concern. Prefer a dedicated signing secret. During rollout,
+ * CRON_SECRET is accepted as a server-only compatibility fallback so production
+ * can upgrade without ever deriving signatures from provider API credentials.
  */
 function signingKey(): string | undefined {
   const dedicated = process.env.OBSERVATION_SIGNING_SECRET?.trim()
@@ -32,6 +31,7 @@ function stableObservationPayload(observation: CandidateProviderObservationV36_8
     skills: [...observation.skills],
     profileUrls: observation.profileUrls.map(item => ({ kind: item.kind, url: item.url })),
     contactAvailability: observation.contactAvailability,
+    richProfile: observation.richProfile || null,
     providerRetrievalScore: observation.providerRetrievalScore ?? null,
     providerScoreScale: observation.providerScoreScale || '',
     providerExplanation: observation.providerExplanation || '',
@@ -110,7 +110,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
     identitySignals,
     refreshedAt: observation.refreshedAt || observation.observedAt,
     raw: {
-      resolver: 'candidate_data_provider_v36_8',
+      resolver: 'candidate_data_provider_v36_14',
       provider: observation.provider,
       providerPersonId: observation.providerPersonId,
       providerRetrievalScore: observation.providerRetrievalScore,
@@ -118,7 +118,8 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
       providerExplanation: observation.providerExplanation,
       contactAvailability: observation.contactAvailability,
       observedProfileUrls: observation.profileUrls,
-      observationNote: 'Commercial/provider-index observation; recruiter verification remains required for qualification and cross-source identity claims.',
+      richProfile: observation.richProfile,
+      observationNote: 'Commercial/provider-index observation. Structured professional history remains provider-observed provenance; recruiter verification is required for qualification and cross-source identity claims.',
     },
   }
 }
