@@ -117,4 +117,4 @@ revoke all on function public.search_candidate_graph_v36_10(uuid, text, integer,
 grant execute on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) to service_role;
 
 comment on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) is
-  'V36.10 owner-scoped canonical talent database search across candidates, attached source profiles, evidence and allowed stored contact signals. Absorbed candidate aliases are excluded so each canonical person is returned once; no identity links are created here.';
+  'V36.10 owner-scoped canonical talent database search across candidates, attached source profiles, evidence and allowed stored contact signals. Absorbed identity aliases are excluded so a person returns once; the function does not create identity links.';
