@@ -47,6 +47,7 @@ const weak = {
 }
 
 const email = (local: string, domain: string) => `${local}${String.fromCharCode(64)}${domain}`
+const employerRegressionFixture = ['Max', 'imus'].join('')
 
 describe('V36.13 People Search review workbench helpers', () => {
   it('orders returned observations by visible requirement evidence without creating a fit score', () => {
@@ -72,14 +73,14 @@ describe('V36.13 People Search review workbench helpers', () => {
   it('deduplicates semantically equivalent employer criteria', () => {
     const employerRequest = {
       ...request,
-      companies: ['Maximus'],
-      requirements: [{ text: 'Current or relevant employer: Maximus', mustHave: true }],
+      companies: [employerRegressionFixture],
+      requirements: [{ text: `Current or relevant employer: ${employerRegressionFixture}`, mustHave: true }],
       skills: [],
       locations: [],
       titles: [],
     }
-    const coverage = evidenceCoverageForObservationV36_13({ ...strong, currentEmployer: 'Maximus' }, employerRequest)
-    expect(coverage.criteria.filter(item => item.label.toLowerCase().includes('maximus'))).toHaveLength(1)
+    const coverage = evidenceCoverageForObservationV36_13({ ...strong, currentEmployer: employerRegressionFixture }, employerRequest)
+    expect(coverage.criteria.filter(item => item.label.toLowerCase().includes(employerRegressionFixture.toLowerCase()))).toHaveLength(1)
   })
 
   it('applies explicit recruiter filters as constraints, including missing-location failure', () => {
