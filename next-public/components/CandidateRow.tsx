@@ -18,8 +18,8 @@ function label(value: string) {
 }
 
 function contactState(value: boolean | 'unknown' | undefined) {
-  if (value === true) return { text: 'Yes', className: 'is-supported' }
-  if (value === false) return { text: 'No', className: 'is-muted' }
+  if (value === true) return { text: 'Available', className: 'is-supported' }
+  if (value === false) return { text: 'Not returned', className: 'is-muted' }
   return { text: 'Unknown', className: 'is-unknown' }
 }
 
