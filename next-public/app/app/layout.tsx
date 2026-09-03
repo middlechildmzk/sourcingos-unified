@@ -8,6 +8,9 @@ import './v26.css'
 import './v26-candidate-review.css'
 import './import-center.css'
 import './v30-uiux.css'
+import './tokens.css'
+import './product-surface.css'
+import './search-workspace.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
