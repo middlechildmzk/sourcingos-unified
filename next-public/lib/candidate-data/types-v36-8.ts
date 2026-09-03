@@ -7,6 +7,8 @@ export type CandidateDataProviderV36_8 =
   | 'signalhire'
   | 'linkup'
   | 'exa'
+  | 'crustdata'
+  | 'apollo'
   | 'openweb_ninja'
 
 export type CandidateDataCapabilityV36_8 =
