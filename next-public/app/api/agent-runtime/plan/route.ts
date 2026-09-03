@@ -4,9 +4,9 @@ import { z } from 'zod'
 import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import {
-  planConversationalSourcingTurnV36_15,
   type ConversationalSourcingPlanV36_15,
 } from '@/lib/agent-runtime-v36-15'
+import { planConversationalSourcingTurnV36_16 } from '@/lib/agent-runtime-v36-16'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +41,7 @@ const previousPlanSchema = z.object({
     freshnessClass: z.enum(['provider_index', 'live_or_paid', 'not_applicable']),
     approvalRequired: z.boolean(),
     executableNow: z.boolean(),
+    targetCount: z.number().int().min(1).max(25).optional(),
   })).max(8),
   readOnly: z.literal(true),
   model: z.object({
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Invalid conversational sourcing request.', details: parsed.error.flatten() }, { status: 400 })
   }
 
-  const plan = await planConversationalSourcingTurnV36_15({
+  const plan = await planConversationalSourcingTurnV36_16({
     message: parsed.data.message,
     previousPlan: parsed.data.previousPlan as ConversationalSourcingPlanV36_15 | undefined,
   })
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     trust: {
       readOnlyAutoExecutionOnly: true,
       searchResultsAreObservations: true,
+      liveWebContentIsUntrustedEvidence: true,
       providerRationaleIsCandidateEvidence: false,
       contactRevealPerformed: false,
       identityMergePerformed: false,
