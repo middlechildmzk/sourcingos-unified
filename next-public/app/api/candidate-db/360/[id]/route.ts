@@ -23,6 +23,18 @@ function conflictText(value: unknown): string {
   return 'Identity evidence conflict requires review.'
 }
 
+function canonicalizeFamilyRows(rows: Record<string, unknown>[], canonicalCandidateId: string) {
+  return rows.map(row => {
+    const historicalCandidateId = typeof row.candidate_id === 'string' ? row.candidate_id : ''
+    if (!historicalCandidateId || historicalCandidateId === canonicalCandidateId) return row
+    return {
+      ...row,
+      candidate_id: canonicalCandidateId,
+      historical_candidate_id: historicalCandidateId,
+    }
+  })
+}
+
 function buildDossierFromSupabase(
   candidate: Record<string, unknown>,
   sourceProfiles: Record<string, unknown>[],
@@ -55,6 +67,7 @@ function buildDossierFromSupabase(
     matchReasons: p.match_reasons || [], status: p.status || 'pending',
     matchScore: p.match_score || 0, lastSeenAt: p.last_seen_at,
     createdAt: p.created_at, candidateId: p.candidate_id,
+    historicalCandidateId: p.historical_candidate_id || undefined,
   }))
 
   const evidenceItems = evidence.map((e: any) => ({
@@ -64,24 +77,28 @@ function buildDossierFromSupabase(
     spanEnd: typeof e.span_end === 'number' ? e.span_end : undefined,
     spanText: typeof e.span_text === 'string' ? e.span_text : undefined,
     sourceTextRef: typeof e.source_text_ref === 'string' ? e.source_text_ref : undefined,
-    candidateId: e.candidate_id, sourceProfileId: e.source_profile_id, createdAt: e.created_at,
+    candidateId: e.candidate_id, historicalCandidateId: e.historical_candidate_id || undefined,
+    sourceProfileId: e.source_profile_id, createdAt: e.created_at,
   }))
 
   const mappedContacts = contacts.map((ct: any) => ({
     id: ct.id, type: ct.type, value: ct.value, source: ct.source,
     confidence: ct.confidence || 'medium', verified: false as const,
     permissionStatus: ct.permission_status || 'unknown',
-    candidateId: ct.candidate_id, sourceProfileId: ct.source_profile_id, createdAt: ct.created_at,
+    candidateId: ct.candidate_id, historicalCandidateId: ct.historical_candidate_id || undefined,
+    sourceProfileId: ct.source_profile_id, createdAt: ct.created_at,
   }))
 
   const otwSignals = openToWorkSignals.map((s: any) => ({
     id: s.id, source: s.source, label: s.label, detail: s.detail,
     confidence: s.confidence || 'medium', requiresReview: true as const,
-    candidateId: s.candidate_id, sourceProfileId: s.source_profile_id, createdAt: s.created_at,
+    candidateId: s.candidate_id, historicalCandidateId: s.historical_candidate_id || undefined,
+    sourceProfileId: s.source_profile_id, createdAt: s.created_at,
   }))
 
   const reviews = matchReviews.map((r: any) => ({
-    id: r.id, candidateId: r.candidate_id, sourceProfileIds: r.source_profile_ids || [],
+    id: r.id, candidateId: r.candidate_id, historicalCandidateId: r.historical_candidate_id || undefined,
+    sourceProfileIds: r.source_profile_ids || [],
     proposedCanonicalName: candidate.canonical_name as string,
     score: r.match_score || 0, reasons: r.match_reasons || [],
     conflicts: Array.isArray(r.conflicts) ? r.conflicts.map(conflictText) : [], decision: r.decision || 'pending',
@@ -206,8 +223,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const dossier = buildDossierFromSupabase(
-      candRes.data, spRes.data || [], evRes.data || [], ctRes.data || [],
-      otwRes.data || [], mrRes.data || [], pcRes.data || [], rcRes.data || [],
+      candRes.data,
+      canonicalizeFamilyRows(spRes.data || [], candidateId),
+      canonicalizeFamilyRows(evRes.data || [], candidateId),
+      canonicalizeFamilyRows(ctRes.data || [], candidateId),
+      canonicalizeFamilyRows(otwRes.data || [], candidateId),
+      canonicalizeFamilyRows(mrRes.data || [], candidateId),
+      pcRes.data || [],
+      rcRes.data || [],
     )
     return NextResponse.json({
       ok: true,
