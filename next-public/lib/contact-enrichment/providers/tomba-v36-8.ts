@@ -115,6 +115,7 @@ export async function enrichWithTombaV36_8(request: ContactEnrichmentRequest, pu
     const score = typeof data.score === 'number' ? data.score : typeof emailRecord.score === 'number' ? emailRecord.score : undefined
     const signal = makeContactSignal({
       type: 'email',
+      channelKind: isVerify ? 'other_email' : 'work_email',
       value: email,
       sourceProvider: PROVIDER,
       confidence: deliverability === 'valid' ? 'high' : score !== undefined && score >= 70 ? 'medium' : 'low',
@@ -128,7 +129,7 @@ export async function enrichWithTombaV36_8(request: ContactEnrichmentRequest, pu
     return {
       provider: PROVIDER,
       providerConfigured: true,
-      message: isVerify ? `Tomba verification status: ${rawStatus}.` : 'Tomba returned a professional email signal.',
+      message: isVerify ? `Tomba verification status: ${rawStatus}.` : 'Tomba returned a professional work-email signal.',
       signals: [signal],
       match: {
         matchState: isVerify ? 'unknown' : linkedin(request) ? 'exact_anchor' : 'strong',
