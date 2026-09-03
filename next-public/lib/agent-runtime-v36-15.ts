@@ -14,6 +14,7 @@ export type AgentToolPlanV36_15 = {
   freshnessClass: 'provider_index' | 'live_or_paid' | 'not_applicable'
   approvalRequired: boolean
   executableNow: boolean
+  targetCount?: number
 }
 
 export type ConversationalSourcingPlanV36_15 = {
@@ -127,9 +128,8 @@ const CONVERSATIONAL_ROLE_HINT = /^(?:administrators?|admins?|engineers?|develop
 
 /**
  * Universal People Search intentionally keeps its deterministic parser small.
- * The chat surface additionally has to understand common counted/plural prompts
- * such as `Find 25 backend engineers ...`. This fallback only extracts a title
- * phrase; it does not invent synonyms, qualifications, or candidate evidence.
+ * The chat surface additionally understands counted/plural prompts as a fallback.
+ * This only extracts a title phrase; it does not invent synonyms or evidence.
  */
 function fallbackConversationalTitle(message: string): string | undefined {
   const stripped = message
@@ -138,7 +138,10 @@ function fallbackConversationalTitle(message: string): string | undefined {
     .replace(/^(?:an?|the)\s+/i, '')
     .trim()
   if (!stripped) return undefined
-  const boundary = stripped.search(/\b(?:with|who|that|in\s+or\s+near|in\s+or\s+around|near|around|located|based|at)\b/i)
+  const locationBoundary = stripped.search(/\b(?:in\s+or\s+near|in\s+or\s+around|located\s+in|based\s+in|near|around|in)\s+[A-Za-z][A-Za-z .’'\-]{1,60},\s*[A-Z]{2}\b/i)
+  const semanticBoundary = stripped.search(/\b(?:with|who|that|at)\b/i)
+  const boundaries = [locationBoundary, semanticBoundary].filter(index => index >= 0)
+  const boundary = boundaries.length ? Math.min(...boundaries) : -1
   const candidate = clean(boundary > 0 ? stripped.slice(0, boundary) : stripped, 100)
   if (!candidate) return undefined
   const tokens = candidate.split(/\s+/).map(token => token.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean)
@@ -150,19 +153,35 @@ function looseRefinementLocation(message: string): string | undefined {
   return clean(match?.[1], 120)
 }
 
+function refinementPreference(message: string): { text: string; mustHave: boolean } | undefined {
+  const match = message.match(/\b(?:prioritize|prefer|favor|favour|weight)\s+(?:people\s+)?(?:with|who\s+have|for)?\s*([^.;]{3,140}?)(?=\s+(?:and\s+(?:move|search|look|find|stay|keep)|but\b)|[.;]|$)/i)
+  const value = clean(match?.[1], 180)
+  if (!value) return undefined
+  return { text: `Preference: ${value.replace(/^(?:people\s+)?with\s+/i, '')}`, mustHave: false }
+}
+
+function requestedTargetCount(message: string, fallback = 1): number {
+  const top = message.match(/\btop\s+(\d{1,2})\b/i)
+  if (top?.[1]) return Math.max(1, Math.min(25, Number(top[1])))
+  const count = message.match(/\b(?:these|the)\s+(\d{1,2})\b/i)
+  if (count?.[1]) return Math.max(1, Math.min(25, Number(count[1])))
+  return fallback
+}
+
 function requestedApprovalAction(message: string): AgentToolPlanV36_15 | undefined {
   const value = message.toLowerCase()
   if (/\b(?:send|email|message|outreach|sequence|campaign)\b/.test(value)) {
-    return { tool: 'engage', rationale: 'Sending or preparing an outbound engagement workflow requires explicit recruiter approval and is outside the read-only demo.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
+    return { tool: 'engage', rationale: 'Outbound engagement changes external state. SourcingOS will prepare the action but requires explicit recruiter approval before execution.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
   }
   if (/\b(?:sync|push)\b.*\b(?:ats|avature|greenhouse|lever|workday|icims)\b/.test(value)) {
-    return { tool: 'sync_ats', rationale: 'ATS writes are consequential and require a separately approved integration workflow.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
+    return { tool: 'sync_ats', rationale: 'ATS writes are consequential. SourcingOS will require an explicit recruiter approval checkpoint before any write.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
   }
   if (/\b(?:save|add)\b.*\b(?:candidate|role|project|sourcingos|shortlist)\b/.test(value)) {
-    return { tool: 'save_candidate', rationale: 'Saving or changing recruiting workflow state requires an explicit recruiter action outside this read-only search turn.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
+    return { tool: 'save_candidate', rationale: 'Saving candidates changes recruiting workflow state and therefore requires explicit recruiter approval.', costClass: 'consequential', freshnessClass: 'not_applicable', approvalRequired: true, executableNow: false }
   }
   if (/\b(?:find|reveal|get|enrich)\b.*\b(?:email|phone|contact|mobile)\b/.test(value)) {
-    return { tool: 'find_contacts', rationale: 'Contact enrichment can consume paid credits and is intentionally opt-in after candidate review.', costClass: 'paid_enrichment', freshnessClass: 'live_or_paid', approvalRequired: true, executableNow: false }
+    const targetCount = requestedTargetCount(message)
+    return { tool: 'find_contacts', rationale: `Run the SourcingOS contact waterfall for ${targetCount} selected candidate${targetCount === 1 ? '' : 's'}. This can consume paid provider credits, so execution requires recruiter approval.`, costClass: 'paid_enrichment', freshnessClass: 'live_or_paid', approvalRequired: true, executableNow: false, targetCount }
   }
   return undefined
 }
@@ -181,9 +200,13 @@ function deterministicPlan(message: string, previousPlan?: ConversationalSourcin
 
   const previous = previousPlan.providerRequest
   const refinementLocation = looseRefinementLocation(message)
+  const preference = refinementPreference(message)
   return {
     query: `${previous.query} · Recruiter refinement: ${message}`.slice(0, 3000),
-    requirements: unionRequirements(previous.requirements || [], parsed.requirements || []),
+    requirements: unionRequirements(previous.requirements || [], [
+      ...(parsed.requirements || []),
+      ...(preference ? [preference] : []),
+    ]),
     names: parsed.names?.length ? parsed.names : previous.names,
     titles: union(previous.titles || [], parsed.titles || [], 20),
     skills: union(previous.skills || [], parsed.skills || [], 40),
@@ -195,7 +218,7 @@ function deterministicPlan(message: string, previousPlan?: ConversationalSourcin
 }
 
 function modelPrompt(message: string, deterministic: UniversalPeopleProviderRequestV36_9, previousPlan?: ConversationalSourcingPlanV36_15): string {
-  return `You are the read-only recruiter search planner inside SourcingOS. Return one JSON object only.\n\nYour job is to translate the recruiter's CURRENT TURN into bounded professional people-search criteria. SourcingOS, not you, executes tools and determines evidence. Never invent candidate facts, qualifications, years, clearance, identity, contact information, or provider results.\n\nThis release may auto-run only search_people. If the recruiter requests saving, contact reveal/enrichment, outreach, ATS writes, or other consequential actions, set action to \"approval_required\".\n\nWhen this is a refinement, preserve useful prior criteria unless the recruiter explicitly changes them. Do not silently remove must-haves.\n\nReturn keys exactly like this shape:\n{\n  \"action\": \"search_people\" | \"approval_required\",\n  \"assistantSummary\": string,\n  \"query\": string,\n  \"titles\": string[],\n  \"skills\": string[],\n  \"companies\": string[],\n  \"locations\": string[],\n  \"requirements\": [{\"text\": string, \"mustHave\": boolean}],\n  \"limit\": number,\n  \"highFreshness\": false,\n  \"assumptions\": string[]\n}\n\nCURRENT TURN:\n${JSON.stringify(message)}\n\nDETERMINISTIC SourcingOS PARSE:\n${JSON.stringify(deterministic)}\n\nPREVIOUS PLAN (if any):\n${JSON.stringify(previousPlan ? previousPlan.providerRequest : null)}\n\nImportant: retrieval expansion is not qualification evidence. Keep highFreshness false in this read-only breadth-search release.`
+  return `You are the recruiter search planner inside SourcingOS. Return one JSON object only.\n\nYour job is to translate the recruiter's CURRENT TURN into bounded professional people-search criteria. SourcingOS, not you, executes tools and determines evidence. Never invent candidate facts, qualifications, years, clearance, identity, contact information, or provider results.\n\nSearch_people may auto-run. Paid reads such as contact enrichment and consequential writes require explicit recruiter approval before SourcingOS executes them. If the recruiter requests one of those actions, set action to \"approval_required\".\n\nWhen this is a refinement, preserve useful prior criteria unless the recruiter explicitly changes them. Do not silently remove must-haves. Distinguish a preference such as \"prioritize production Kubernetes\" from a mandatory requirement.\n\nReturn keys exactly like this shape:\n{\n  \"action\": \"search_people\" | \"approval_required\",\n  \"assistantSummary\": string,\n  \"query\": string,\n  \"titles\": string[],\n  \"skills\": string[],\n  \"companies\": string[],\n  \"locations\": string[],\n  \"requirements\": [{\"text\": string, \"mustHave\": boolean}],\n  \"limit\": number,\n  \"highFreshness\": false,\n  \"assumptions\": string[]\n}\n\nCURRENT TURN:\n${JSON.stringify(message)}\n\nDETERMINISTIC SourcingOS PARSE:\n${JSON.stringify(deterministic)}\n\nPREVIOUS PLAN (if any):\n${JSON.stringify(previousPlan ? previousPlan.providerRequest : null)}\n\nImportant: retrieval expansion is not qualification evidence. Keep highFreshness false in this breadth-search release.`
 }
 
 function sanitizeModelPlan(model: ModelPlan, fallback: UniversalPeopleProviderRequestV36_9): UniversalPeopleProviderRequestV36_9 {
@@ -242,7 +265,18 @@ function defaultSummary(request: UniversalPeopleProviderRequestV36_9, isRefineme
     request.skills?.length ? `${request.skills.slice(0, 4).join(', ')}` : '',
     request.locations?.length ? `near ${request.locations.join(' / ')}` : '',
   ].filter(Boolean)
-  return `${isRefinement ? 'I refined the search' : 'I translated that into a read-only people search'}${parts.length ? ` for ${parts.join(' · ')}` : ''}. I can search configured professional sources, but I will not save, contact, merge, or advance anyone in this turn.`
+  return `${isRefinement ? 'I refined the search' : 'I translated that into a people search'}${parts.length ? ` for ${parts.join(' · ')}` : ''}. Search can run automatically; paid enrichment and external writes remain recruiter-controlled.`
+}
+
+function approvalSummary(tool: AgentToolPlanV36_15): string {
+  if (tool.tool === 'find_contacts') {
+    const count = tool.targetCount || 1
+    return `I can run contact enrichment for the top ${count} candidate${count === 1 ? '' : 's'}. Because that can consume paid provider credits, I prepared the action and am waiting for your approval before running it.`
+  }
+  if (tool.tool === 'save_candidate') return 'I prepared the save action. It changes SourcingOS recruiting state, so I am waiting for your approval before executing it.'
+  if (tool.tool === 'engage') return 'I prepared the engagement action. Nothing will be sent until you explicitly approve it.'
+  if (tool.tool === 'sync_ats') return 'I prepared the ATS action. No external recruiting record will be changed until you explicitly approve it.'
+  return 'I prepared the requested action and am waiting for recruiter approval before execution.'
 }
 
 export async function planConversationalSourcingTurnV36_15(
@@ -272,20 +306,22 @@ export async function planConversationalSourcingTurnV36_15(
       warnings.push('The configured reasoning model was unavailable for this turn; SourcingOS used its deterministic people-search parser instead.')
     }
   } else {
-    warnings.push('No reasoning-model credential is configured; SourcingOS used its deterministic people-search parser. Search execution is still real and provider-backed.')
+    warnings.push('No reasoning-model credential is configured; SourcingOS used its deterministic people-search parser. Provider-backed tool execution remains real.')
   }
 
   const approvalTool = explicitApprovalAction || (action === 'approval_required'
-    ? { tool: 'save_candidate' as const, rationale: 'The requested next action is outside the read-only auto-execution boundary.', costClass: 'consequential' as const, freshnessClass: 'not_applicable' as const, approvalRequired: true, executableNow: false }
+    ? { tool: 'save_candidate' as const, rationale: 'The requested next action sits outside automatic execution and requires recruiter approval.', costClass: 'consequential' as const, freshnessClass: 'not_applicable' as const, approvalRequired: true, executableNow: false }
     : undefined)
 
   const toolPlan = action === 'search_people' ? [searchToolPlan(request)] : [approvalTool!]
-  if (action === 'approval_required') warnings.unshift('This turn requests a paid or consequential action. V36.15 will not auto-execute it.')
+  if (action === 'approval_required') warnings.unshift('This action will not execute until the recruiter explicitly approves it.')
 
   return {
     version: 'v36.15',
     action,
-    assistantSummary: modelSummary || defaultSummary(request, Boolean(input.previousPlan)),
+    assistantSummary: action === 'approval_required' && approvalTool
+      ? approvalSummary(approvalTool)
+      : modelSummary || defaultSummary(request, Boolean(input.previousPlan)),
     providerRequest: request,
     criteria: criteria(request),
     toolPlan,
