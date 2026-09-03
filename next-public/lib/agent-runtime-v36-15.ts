@@ -123,6 +123,28 @@ function looksLikeNewSearch(message: string): boolean {
   return /^(?:please\s+)?(?:find|search|source|show|look\s+for|looking\s+for|i\s+need|need)\b/i.test(message.trim())
 }
 
+const CONVERSATIONAL_ROLE_HINT = /^(?:administrators?|admins?|engineers?|developers?|architects?|managers?|directors?|recruiters?|sourcers?|analysts?|specialists?|technicians?|consultants?|scientists?|researchers?|designers?|nurses?|physicians?|doctors?|attorneys?|accountants?)$/i
+
+/**
+ * Universal People Search intentionally keeps its deterministic parser small.
+ * The chat surface additionally has to understand common counted/plural prompts
+ * such as `Find 25 backend engineers ...`. This fallback only extracts a title
+ * phrase; it does not invent synonyms, qualifications, or candidate evidence.
+ */
+function fallbackConversationalTitle(message: string): string | undefined {
+  const stripped = message
+    .replace(/^(?:please\s+)?(?:find(?:\s+me)?|show(?:\s+me)?|source|search\s+for|look\s+for|looking\s+for|i\s+need|need)\s+/i, '')
+    .replace(/^\d{1,3}\s+/, '')
+    .replace(/^(?:an?|the)\s+/i, '')
+    .trim()
+  if (!stripped) return undefined
+  const boundary = stripped.search(/\b(?:with|who|that|in\s+or\s+near|in\s+or\s+around|near|around|located|based|at)\b/i)
+  const candidate = clean(boundary > 0 ? stripped.slice(0, boundary) : stripped, 100)
+  if (!candidate) return undefined
+  const tokens = candidate.split(/\s+/).map(token => token.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean)
+  return tokens.some(token => CONVERSATIONAL_ROLE_HINT.test(token)) ? candidate : undefined
+}
+
 function looseRefinementLocation(message: string): string | undefined {
   const match = message.match(/\b(?:closer\s+to|near|around|within\s+\d+\s+miles?\s+of)\s+([A-Za-z][A-Za-z .’'\-]{1,60}(?:,\s*[A-Z]{2})?)(?=\s+(?:and|with|but|while|who|that)\b|[.;]|$)/i)
   return clean(match?.[1], 120)
@@ -146,7 +168,15 @@ function requestedApprovalAction(message: string): AgentToolPlanV36_15 | undefin
 }
 
 function deterministicPlan(message: string, previousPlan?: ConversationalSourcingPlanV36_15): UniversalPeopleProviderRequestV36_9 {
-  const parsed = buildUniversalPeopleProviderRequestV36_9({ query: message, limit: previousPlan?.criteria.limit || 25 })
+  const baseParsed = buildUniversalPeopleProviderRequestV36_9({ query: message, limit: previousPlan?.criteria.limit || 25 })
+  const fallbackTitle = !baseParsed.titles?.length ? fallbackConversationalTitle(message) : undefined
+  const parsed: UniversalPeopleProviderRequestV36_9 = fallbackTitle
+    ? {
+        ...baseParsed,
+        titles: [fallbackTitle],
+        requirements: unionRequirements(baseParsed.requirements || [], [{ text: `Current or relevant title: ${fallbackTitle}`, mustHave: false }]),
+      }
+    : baseParsed
   if (!previousPlan || looksLikeNewSearch(message)) return parsed
 
   const previous = previousPlan.providerRequest
