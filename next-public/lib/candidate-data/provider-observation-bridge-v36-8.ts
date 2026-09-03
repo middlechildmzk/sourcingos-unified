@@ -9,7 +9,7 @@ function signingKey(provider: CandidateDataProviderV36_8): string | undefined {
   if (provider === 'pearch') return process.env.PEARCH_API_KEY
   if (provider === 'data_vertex') return process.env.DATAVERTEX_API_KEY
   if (provider === 'contactout') return process.env.CONTACTOUT_API_KEY
-  if (provider === 'people_data_labs') return process.env.PDL_API_KEY
+  if (provider === 'people_data_labs') return process.env.PDL_API_KEY || process.env.PEOPLE_DATA_LABS_API_KEY
   if (provider === 'coresignal') return process.env.CORESIGNAL_API_KEY
   if (provider === 'signalhire') return process.env.SIGNALHIRE_API_KEY
   if (provider === 'linkup') return process.env.LINKUP_API_KEY
@@ -73,9 +73,14 @@ function evidenceForObservation(observation: CandidateProviderObservationV36_8):
 export function providerObservationToSourceResultV36_8(observation: CandidateProviderObservationV36_8): SourceResult {
   const source = observation.provider as SourceName
   const profileUrl = observation.profileUrls[0]?.url
+
+  // A commercial/provider-index row may report third-party professional URLs
+  // such as LinkedIn or GitHub. Preserve those URLs as observed profile links,
+  // but do not promote whichever URL happens to be first into a weight-1
+  // `source_url` identity signal. Cross-source identity authority is governed by
+  // the explicit identity-anchor policy and recruiter review, not array order.
   const identitySignals: IdentitySignal[] = [
     { type: 'name', value: observation.displayName, weight: 0.5, source },
-    ...(profileUrl ? [{ type: 'source_url' as const, value: profileUrl, weight: 1, source }] : []),
     ...(observation.location ? [{ type: 'location' as const, value: observation.location, weight: 0.2, source }] : []),
     ...(observation.currentEmployer ? [{ type: 'organization' as const, value: observation.currentEmployer, weight: 0.2, source }] : []),
   ]
@@ -97,7 +102,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
       value: item.url,
       source,
       verified: false as const,
-      note: `Provider-observed ${item.kind} profile URL. This is an identity/link signal, not outreach permission.`,
+      note: `Provider-observed ${item.kind} profile URL. This is a provenance/identity-review signal, not deterministic merge authority or outreach permission.`,
     })),
     identitySignals,
     refreshedAt: observation.refreshedAt || observation.observedAt,
@@ -109,7 +114,7 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
       providerScoreScale: observation.providerScoreScale,
       providerExplanation: observation.providerExplanation,
       contactAvailability: observation.contactAvailability,
-      observationNote: 'Commercial/provider-index observation; recruiter verification remains required for qualification claims.',
+      observationNote: 'Commercial/provider-index observation; recruiter verification remains required for qualification and cross-source identity claims.',
     },
   }
 }
