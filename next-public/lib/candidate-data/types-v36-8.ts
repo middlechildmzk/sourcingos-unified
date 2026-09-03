@@ -9,6 +9,7 @@ export type CandidateDataProviderV36_8 =
   | 'exa'
   | 'crustdata'
   | 'apollo'
+  | 'serper'
   | 'openweb_ninja'
 
 export type CandidateDataCapabilityV36_8 =
