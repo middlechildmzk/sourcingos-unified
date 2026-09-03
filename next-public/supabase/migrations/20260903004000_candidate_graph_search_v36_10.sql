@@ -1,0 +1,114 @@
+-- SourcingOS V36.10 — canonical Candidate Graph search.
+-- Search attached observations/evidence/contact values while returning canonical
+-- candidate IDs once. Service-role only; owner_id is always supplied from the
+-- authenticated application session.
+
+create or replace function public.search_candidate_graph_v36_10(
+  p_owner_id uuid,
+  p_query text,
+  p_limit integer default 50,
+  p_offset integer default 0
+)
+returns table (
+  candidate_id uuid,
+  rank real,
+  total_count bigint
+)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  with search_input as (
+    select
+      nullif(trim(coalesce(p_query, '')), '') as raw_query,
+      websearch_to_tsquery('simple', trim(coalesce(p_query, ''))) as ts_query
+  ),
+  documents as (
+    select
+      c.id as candidate_id,
+      (
+        setweight(to_tsvector('simple', concat_ws(' ',
+          c.canonical_name,
+          c.headline,
+          c.current_title,
+          c.current_company,
+          c.location,
+          array_to_string(coalesce(c.skills, '{}'::text[]), ' ')
+        )), 'A')
+        || setweight(to_tsvector('simple', coalesce(sp.source_text, '')), 'B')
+        || setweight(to_tsvector('simple', coalesce(ev.evidence_text, '')), 'B')
+        || setweight(to_tsvector('simple', coalesce(ct.contact_text, '')), 'C')
+      ) as document,
+      lower(concat_ws(' ',
+        c.canonical_name,
+        c.headline,
+        c.current_title,
+        c.current_company,
+        c.location,
+        array_to_string(coalesce(c.skills, '{}'::text[]), ' '),
+        sp.source_text,
+        ev.evidence_text,
+        ct.contact_text
+      )) as raw_document
+    from public.candidates c
+    left join lateral (
+      select string_agg(concat_ws(' ',
+        source,
+        source_profile_id,
+        display_name,
+        headline,
+        organization,
+        location,
+        profile_url
+      ), ' ') as source_text
+      from public.source_profiles
+      where owner_id = p_owner_id
+        and candidate_id = c.id
+        and status <> 'rejected'
+    ) sp on true
+    left join lateral (
+      select string_agg(concat_ws(' ', source, label, detail, url), ' ') as evidence_text
+      from public.evidence_items
+      where owner_id = p_owner_id
+        and candidate_id = c.id
+    ) ev on true
+    left join lateral (
+      select string_agg(concat_ws(' ', type, value, source), ' ') as contact_text
+      from public.candidate_contacts
+      where owner_id = p_owner_id
+        and candidate_id = c.id
+        and permission_status <> 'do_not_contact'
+    ) ct on true
+    where c.owner_id = p_owner_id
+  ),
+  matched as (
+    select
+      d.candidate_id,
+      greatest(
+        ts_rank_cd(d.document, s.ts_query),
+        case when d.raw_document like '%' || lower(s.raw_query) || '%' then 0.25 else 0 end
+      )::real as rank
+    from documents d
+    cross join search_input s
+    where s.raw_query is not null
+      and (
+        d.document @@ s.ts_query
+        or d.raw_document like '%' || lower(s.raw_query) || '%'
+      )
+  )
+  select
+    m.candidate_id,
+    m.rank,
+    count(*) over() as total_count
+  from matched m
+  order by m.rank desc, m.candidate_id
+  limit greatest(1, least(coalesce(p_limit, 50), 200))
+  offset greatest(0, coalesce(p_offset, 0));
+$$;
+
+revoke all on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) from public, anon, authenticated;
+grant execute on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) to service_role;
+
+comment on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) is
+  'V36.10 owner-scoped canonical talent database search across candidates, attached source profiles, evidence and allowed stored contact signals. Returns candidate IDs once; does not create identity links.';
