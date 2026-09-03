@@ -110,6 +110,7 @@ export async function enrichWithHunterV36_8(request: ContactEnrichmentRequest, p
 
     const signal = makeContactSignal({
       type: 'email',
+      channelKind: verify ? 'other_email' : 'work_email',
       value: email,
       sourceProvider: PROVIDER,
       confidence: deliverability === 'valid' || (score !== undefined && score >= 80) ? 'high' : score !== undefined && score >= 60 ? 'medium' : 'low',
@@ -123,7 +124,7 @@ export async function enrichWithHunterV36_8(request: ContactEnrichmentRequest, p
     return {
       provider: PROVIDER,
       providerConfigured: true,
-      message: verify ? `Hunter verification status: ${rawStatus}.` : 'Hunter returned a professional email signal.',
+      message: verify ? `Hunter verification status: ${rawStatus}.` : 'Hunter returned a professional work-email signal.',
       signals: [signal],
       match: {
         matchState: verify ? 'unknown' : linkedinHandle(request) ? 'exact_anchor' : 'strong',
