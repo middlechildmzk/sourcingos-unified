@@ -50,7 +50,6 @@ function splitList(value?: string, max = 30): string[] {
     .slice(0, max)
 }
 
-/** City/state strings commonly contain commas, so locations use newline/semicolon as separators. */
 function splitLocations(value?: string, max = 20): string[] {
   return Array.from(new Set(String(value || '')
     .split(/[\n;]/)
@@ -119,10 +118,8 @@ function inferProfessionalTitle(query: string): string | undefined {
   if (classifyUniversalPeopleSearchV36_9(query) !== 'professional_search') return undefined
   const cleaned = stripSearchLeadIn(query)
   if (!cleaned) return undefined
-
   const boundary = cleaned.search(/\b(?:with|who|that|in\s+or\s+near|near|around|located|based|at)\b/i)
   let candidate = boundary > 0 ? clean(cleaned.slice(0, boundary)) : cleaned
-
   if (boundary < 0) {
     const tokens = cleaned.split(/\s+/)
     const normalized = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
@@ -130,7 +127,6 @@ function inferProfessionalTitle(query: string): string | undefined {
     normalized.forEach((token, index) => { if (PROFESSIONAL_ROLE_HINTS.has(token)) lastRoleHint = index })
     if (lastRoleHint >= 0 && lastRoleHint < tokens.length - 1) candidate = tokens.slice(0, lastRoleHint + 1).join(' ')
   }
-
   candidate = candidate.replace(/^(?:an?|the)\s+/i, '').replace(/[,:;]+$/, '').trim()
   if (!candidate || candidate.length > 100) return undefined
   const hasRoleHint = candidate.split(/\s+/).some(token => PROFESSIONAL_ROLE_HINTS.has(token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')))
@@ -157,7 +153,6 @@ function inferQueryRequirements(query: string): Array<{ text: string; mustHave: 
     const plus = /\d{1,2}\s*\+/.test(years[0]) ? '+' : ''
     requirements.push({ text: `${years[1]}${plus} years relevant experience`, mustHave: true })
   }
-
   const clearance = clean(query).match(/\b(?:TS\s*\/\s*SCI|TS\s+SCI|Top Secret|Secret|Confidential|Public Trust)(?:\s+(?:security\s+)?clearance)?(?:\s+or\s+higher)?\b/i)
   if (clearance) requirements.push({ text: clean(clearance[0]), mustHave: true })
   return requirements
@@ -177,10 +172,8 @@ function inferredSkillMustHave(query: string, skill: string, inferredTitle?: str
 export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeopleSearchIntentV36_9 {
   const query = clean(value)
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(query)) return 'email_lookup'
-
   const digits = query.replace(/\D/g, '')
   if (digits.length >= 7 && digits.length <= 15 && /^[+()\-\.\s\d]+$/.test(query)) return 'phone_lookup'
-
   const url = exactHttpUrl(query)
   if (url) {
     const host = url.hostname.toLowerCase().replace(/^www\./, '')
@@ -188,7 +181,6 @@ export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeop
     if (host === 'github.com' && url.pathname.split('/').filter(Boolean).length >= 1) return 'github_lookup'
     return 'profile_lookup'
   }
-
   const tokens = query.split(/\s+/).filter(Boolean)
   const normalizedTokens = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
   const hasRoleHint = normalizedTokens.some(token => PROFESSIONAL_ROLE_HINTS.has(token))
@@ -222,41 +214,35 @@ export function buildUniversalExactIdentityRequestV36_9(value: string): Universa
   return undefined
 }
 
-/**
- * Conservative person-name/company parsing for Universal People Search.
- * Explicit `at`/comma syntax is authoritative search context. A compact
- * three-token person lookup (e.g. `Jane Doe Acme`) is treated as first+last
- * plus a soft company token so structured providers never receive all three as
- * an exact full name. Raw query is retained for semantic lanes, so the heuristic
- * remains recoverable rather than becoming identity authority.
- */
+function hasProfessionalRoleHint(value: string): boolean {
+  return value.split(/\s+/).some(token => PROFESSIONAL_ROLE_HINTS.has(token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')))
+}
+
+/** Explicit syntax is parsed before intent classification so `Jane Doe at Acme`
+ * can never be demoted into an arbitrary professional-text query. */
 function inferPersonSearchAnchors(query: string, explicitCompany?: string): { names: string[]; companies: string[] } {
   const value = clean(query)
   const companies = explicitCompany ? [clean(explicitCompany)] : []
-  if (!value || classifyUniversalPeopleSearchV36_9(value) !== 'person_lookup') return { names: [], companies }
+  if (!value) return { names: [], companies }
 
   const atMatch = value.match(/^(.+?)\s+at\s+(.+)$/i)
-  if (atMatch) return { names: [clean(atMatch[1])], companies: companies.length ? companies : [clean(atMatch[2])] }
-
+  if (atMatch && !hasProfessionalRoleHint(atMatch[1])) {
+    return { names: [clean(atMatch[1])], companies: companies.length ? companies : [clean(atMatch[2])] }
+  }
   const commaMatch = value.match(/^([^,]+),\s*(.+)$/)
-  if (commaMatch) return { names: [clean(commaMatch[1])], companies: companies.length ? companies : [clean(commaMatch[2])] }
+  if (commaMatch && !hasProfessionalRoleHint(commaMatch[1])) {
+    return { names: [clean(commaMatch[1])], companies: companies.length ? companies : [clean(commaMatch[2])] }
+  }
 
+  const intent = classifyUniversalPeopleSearchV36_9(value)
+  if (intent !== 'person_lookup') return { names: [], companies }
   const tokens = value.split(/\s+/).filter(Boolean)
   if (companies.length) return { names: [value], companies }
   if (tokens.length === 2) return { names: [value], companies: [] }
   if (tokens.length === 3) return { names: [tokens.slice(0, 2).join(' ')], companies: [tokens[2]] }
-
-  // Three-plus-part real names are ambiguous without an explicit company. Keep
-  // them out of exact structured full-name matching rather than guessing.
   return { names: [], companies: [] }
 }
 
-/**
- * The universal box is a control surface, not provider query syntax. Explicit
- * filters remain authoritative. For professional free text we deterministically
- * extract only narrow search structure so structured-only providers can
- * participate without receiving arbitrary recruiter prose as provider syntax.
- */
 export function buildUniversalPeopleProviderRequestV36_9(
   draft: UniversalPeopleSearchDraftV36_9,
 ): UniversalPeopleProviderRequestV36_9 {
@@ -279,7 +265,7 @@ export function buildUniversalPeopleProviderRequestV36_9(
   const locations = Array.from(new Set([...explicitLocations, ...(inferredLocation ? [inferredLocation] : [])])).slice(0, 20)
   const companies = Array.from(new Set(personAnchors.companies.filter(Boolean))).slice(0, 20)
   const names = Array.from(new Set(personAnchors.names.filter(Boolean))).slice(0, 20)
-  const context = [query, explicitCompany && !companies.includes(explicitCompany) ? `company ${explicitCompany}` : ''].filter(Boolean).join(' · ').slice(0, 3000)
+  const context = [query, explicitCompany ? `company ${explicitCompany}` : ''].filter(Boolean).join(' · ').slice(0, 3000)
   const requirements = [
     ...titles.map(text => ({ text: `Current or relevant title: ${text}`, mustHave: false })),
     ...companies.map(text => ({ text: `Current or relevant employer: ${text}`, mustHave: false })),
