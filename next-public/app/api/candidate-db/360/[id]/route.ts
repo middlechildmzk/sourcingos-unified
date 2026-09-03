@@ -7,6 +7,7 @@ import { buildCandidate360, scoreContactSignal, scoreOpenToWorkSignal, staleStat
 import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
 import { buildEvidenceLedger } from '@/lib/evidence-ledger'
 import { resolveCandidate360FieldsV35 } from '@/lib/candidate-field-resolution-v35'
+import { candidateIdentityFamiliesV36_10, resolveCanonicalCandidateIdV36_10 } from '@/lib/candidate-identity-redirects-v36-10'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
 
@@ -145,7 +146,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const rl = await rateLimit(_req, 'workbench', gate.userId)
   if (!rl.ok) return rl.response
 
-  const { id: candidateId } = await params
+  const { id: requestedCandidateId } = await params
 
   // ── Supabase mode ──────────────────────────────────────────────────────────
   if (isSupabaseConfigured()) {
@@ -158,17 +159,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!sb) return NextResponse.json({ ok: false, error: 'Supabase client unavailable.' }, { status: 500 })
 
     const ownerId = session.userId!
+    const canonical = await resolveCanonicalCandidateIdV36_10({ sb, ownerId, candidateId: requestedCandidateId })
+    const candidateId = canonical.candidateId
+    const identityFamilies = await candidateIdentityFamiliesV36_10({ sb, ownerId, candidateIds: [candidateId] })
+    const familyCandidateIds = identityFamilies.canonicalToFamily.get(candidateId) || [candidateId]
 
-    // Fetch all related tables in parallel, scoped to owner_id.
+    // Candidate-level historical rows may remain on an absorbed audit ID when
+    // they were never source-profile-backed. Read the confirmed identity family
+    // together, but keep the canonical candidate row as the one person record.
     const [candRes, spRes, evRes, ctRes, otwRes, mrRes, pcRes, rcRes] = await Promise.all([
       sb.from('candidates').select('*').eq('id', candidateId).eq('owner_id', ownerId).single(),
-      sb.from('source_profiles').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
-      sb.from('evidence_items').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
-      sb.from('candidate_contacts').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId),
-      sb.from('open_to_work_signals').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId),
-      sb.from('identity_match_reviews').select('*').eq('candidate_id', candidateId).eq('owner_id', ownerId).order('created_at', { ascending: false }),
-      sb.from('project_candidates').select('id,project_id,stage,fit_score,fit_evidence,fit_missing,fit_confidence,added_at,updated_at').eq('candidate_id', candidateId).eq('owner_id', ownerId),
-      sb.from('role_candidates').select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at').eq('candidate_id', candidateId).eq('owner_id', ownerId),
+      sb.from('source_profiles').select('*').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId).order('created_at', { ascending: false }),
+      sb.from('evidence_items').select('*').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId).order('created_at', { ascending: false }),
+      sb.from('candidate_contacts').select('*').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId),
+      sb.from('open_to_work_signals').select('*').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId),
+      sb.from('identity_match_reviews').select('*').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId).order('created_at', { ascending: false }),
+      sb.from('project_candidates').select('id,candidate_id,project_id,stage,fit_score,fit_evidence,fit_missing,fit_confidence,added_at,updated_at').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId),
+      sb.from('role_candidates').select('candidate_id,role_id,stage,fit_decision,fit_reasons,concerns,added_at,updated_at').in('candidate_id', familyCandidateIds).eq('owner_id', ownerId),
     ])
 
     if (candRes.error || !candRes.data) {
@@ -202,10 +209,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       candRes.data, spRes.data || [], evRes.data || [], ctRes.data || [],
       otwRes.data || [], mrRes.data || [], pcRes.data || [], rcRes.data || [],
     )
-    return NextResponse.json({ ok: true, dossier })
+    return NextResponse.json({
+      ok: true,
+      dossier: {
+        ...dossier,
+        identity: {
+          canonicalCandidateId: candidateId,
+          requestedCandidateId,
+          redirected: canonical.redirected,
+          familyCandidateIds,
+          absorbedCandidateIds: familyCandidateIds.filter(id => id !== candidateId),
+          migrationReady: canonical.migrationReady && identityFamilies.migrationReady,
+          trustBoundary: 'Identity family membership exists only after recruiter-authorized source-profile reassignment. Historical candidate IDs remain audit references, not separate active people.',
+        },
+      },
+    })
   }
 
   // ── Preview fallback — in-memory, clearly labelled ─────────────────────────
+  const candidateId = requestedCandidateId
   const db = getCandidateDb()
   const dossier = buildCandidate360(db, candidateId)
   if (!dossier) {
