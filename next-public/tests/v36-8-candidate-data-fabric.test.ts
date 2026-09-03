@@ -40,7 +40,7 @@ describe('V36.8 Candidate Data Fabric', () => {
     expect(body).not.toHaveProperty('query')
   })
 
-  it('builds PDL Elasticsearch only from safe structured professional fields and no legacy offset transport', () => {
+  it('builds PDL Elasticsearch only from supported bounded professional fields', () => {
     const body = buildPeopleDataLabsSearchBodyV36_8(request)
     expect(body).toMatchObject({ size: 20, dataset: 'resume', titlecase: true })
     expect(body).not.toHaveProperty('from')
@@ -50,29 +50,30 @@ describe('V36.8 Candidate Data Fabric', () => {
           { bool: { should: [
             { match_phrase: { job_title: 'rhel administrator' } },
             { match_phrase: { job_title: 'linux administrator' } },
-          ], minimum_should_match: 1 } },
+          ] } },
           { bool: { should: [
             { match_phrase: { skills: 'rhel' } },
             { match_phrase: { skills: 'red hat enterprise linux' } },
             { match_phrase: { skills: 'linux' } },
-          ], minimum_should_match: 1 } },
+          ] } },
           { bool: { should: [
             { match_phrase: { location_name: 'annapolis junction, md' } },
             { match_phrase: { location_name: 'washington, dc' } },
-          ], minimum_should_match: 1 } },
+          ] } },
         ],
       },
     })
+    expect(JSON.stringify(body)).not.toContain('minimum_should_match')
     expect(JSON.stringify(body)).not.toContain(request.query)
   })
 
-  it('turns a plain person name into an explicit PDL full-name lookup instead of skipping the provider', () => {
+  it('turns a plain person name into an exact PDL full-name keyword lookup instead of skipping the provider', () => {
     const body = buildPeopleDataLabsSearchBodyV36_8({ query: 'Avery Example', limit: 10 })
     expect(body).toMatchObject({ size: 10, dataset: 'resume', titlecase: true })
     expect(body.query).toEqual({
       bool: {
         must: [
-          { bool: { should: [{ match_phrase: { full_name: 'avery example' } }], minimum_should_match: 1 } },
+          { term: { full_name: 'avery example' } },
         ],
       },
     })
@@ -114,8 +115,8 @@ describe('V36.8 Candidate Data Fabric', () => {
     const body = buildSignalHireSearchBodyV36_8(request)
     expect(body).toEqual({
       size: 20,
-      currentTitle: '"RHEL Administrator" OR "Linux Administrator"',
-      keywords: '"RHEL" OR "Red Hat Enterprise Linux" OR "Linux"',
+      currentTitle: '\"RHEL Administrator\" OR \"Linux Administrator\"',
+      keywords: '\"RHEL\" OR \"Red Hat Enterprise Linux\" OR \"Linux\"',
       location: ['Annapolis Junction, MD', 'Washington, DC'],
       yearsOfCurrentPastExperienceFrom: 5,
     })
