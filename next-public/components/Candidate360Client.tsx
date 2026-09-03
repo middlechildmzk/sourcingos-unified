@@ -89,7 +89,7 @@ function EvidenceProvenance({
   return <details className="advanced-disclosure product-panel">
     <summary>Evidence & source provenance ({evidence.length} evidence · {profiles.length} profiles)</summary>
     <p className="muted" style={{ fontSize: 11, lineHeight: 1.55 }}>
-      This is the audit layer behind the recruiter-facing profile. Exact duplicate display observations can be coalesced while all contributing sources remain attached; raw observations are not discarded.
+      <strong>Professional evidence audit layer.</strong> Exact duplicate display observations can be coalesced while all contributing sources remain attached; raw observations are not discarded.
     </p>
 
     <div className="product-panel-head" style={{ marginTop: 14 }}><div><span className="kicker">Source profiles</span><h3 style={{ margin: '3px 0 0' }}>{profiles.length} attached</h3></div></div>
@@ -204,7 +204,7 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
       @media(max-width:850px){.candidate-profile-hero{grid-template-columns:auto 1fr}.candidate-profile-hero .product-page-actions{grid-column:1/-1}.candidate-profile-side{order:2}}
     `}</style>
 
-    <section className="product-panel">
+    <section className="product-panel candidate-profile-identity">
       <div className="candidate-profile-hero">
         <div className="candidate-avatar" aria-hidden="true">{initials(c.canonicalName)}</div>
         <div style={{ minWidth: 0 }}>
@@ -279,7 +279,7 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
         </section>}
 
         <section className="product-panel candidate-profile-section">
-          <div className="product-panel-head"><div><span className="kicker">Contact intelligence</span><h2>Best available contact paths</h2></div><span>{contacts.length} total signals</span></div>
+          <div className="product-panel-head"><div><span className="kicker">Contact research</span><h2>Best available contact paths</h2></div><span>{contacts.length} total signals</span></div>
           <div className="cta"><b>Research state.</b> Best available does not mean ownership, deliverability, permission, or currentness has been conclusively verified.</div>
           {primaryContacts.length ? <div className="product-list">{primaryContacts.map(contact => <div className="product-row" key={contact.id}><div className="product-row-main"><div className="product-row-title">{words(contact.contactKind || contact.type || 'contact')}</div><div style={{ fontSize: 14, fontWeight: 750, marginTop: 3, wordBreak: 'break-word' }}>{contact.value}</div><div className="product-row-meta">{providerLabel(contact.source)} · permission {contact.permissionStatus || 'unknown'} · support {contact.score ?? 0}/100</div></div><ConfidenceBadge confidence={contact.confidence} /></div>)}</div> : <p className="muted">No saved contact path yet.</p>}
           <div className="button-row" style={{ marginTop: 12 }}><FindContactButton isAuthenticated={true} source={{ candidateId, displayName: c.canonicalName, headline: c.headline, organization: c.currentCompany, location: c.location, source: 'github' }} /></div>
@@ -302,7 +302,7 @@ export function Candidate360Client({ candidateId, roleId }: { candidateId: strin
         <section className="product-panel"><div className="product-panel-head"><div><span className="kicker">Trust checklist</span><h2>Verify next</h2></div><span>Before outreach / submit</span></div><div className="product-list">{(dossier.verifyNext || []).map((item, index) => <div className="product-row" key={`${item}-${index}`}><div className="product-row-main"><div className="product-row-meta" style={{ whiteSpace: 'normal', lineHeight: 1.5 }}>{item}</div></div></div>)}</div></section>
 
         <section className="product-panel">
-          <div className="product-panel-head"><div><span className="kicker">Profile coverage</span><h2>What SourcingOS knows</h2></div></div>
+          <div className="product-panel-head"><div><span className="kicker">Profile coverage</span><h2>What SourcingOS knows</h2></div><span className="muted">Coverage, not a fit score</span></div>
           <div className="product-list">
             <div className="product-row"><div className="product-row-main"><div className="product-row-title">Structured sources</div><div className="product-row-meta">{professional.structuredSourceCount} of {profiles.length || professional.sourceCount || 0} attached profiles currently carry normalized chronology/profile sections.</div></div></div>
             <div className="product-row"><div className="product-row-main"><div className="product-row-title">Profile sections</div><div className="product-row-meta">{totalProfileSections} experience / education / certification / project observations available for recruiter review.</div></div></div>
