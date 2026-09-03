@@ -183,7 +183,17 @@ function regexpEscape(value: string): string {
 function inferredSkillMustHave(query: string, skill: string, inferredTitle?: string): boolean {
   const skillPattern = regexpEscape(skill).replace(/\\ /g, '\\s+')
   if (inferredTitle && new RegExp(`(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i').test(inferredTitle)) return true
-  const hardCue = new RegExp(`\\b(?:must\\s+have|required|requires?|requiring|mandatory|with)\\b[^,.;]{0,80}(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i')
+
+  // A conjunction introduced by "with" is treated as a hard recruiter constraint,
+  // but alternatives remain discovery options: "with AWS or Azure" must not become
+  // an accidental AWS AND Azure requirement.
+  const withClause = clean(query).match(/\bwith\b([^,.;]{0,140})/i)?.[1] || ''
+  if (withClause && new RegExp(`(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i').test(withClause)) {
+    if (/\bor\b/i.test(withClause)) return false
+    return true
+  }
+
+  const hardCue = new RegExp(`\\b(?:must\\s+have|required|requires?|requiring|mandatory)\\b[^,.;]{0,80}(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i')
   return hardCue.test(query)
 }
 
@@ -235,15 +245,13 @@ function hasProfessionalRoleHint(value: string): boolean {
   return value.split(/\s+/).some(isProfessionalRoleHint)
 }
 
-/** Explicit syntax is parsed before intent classification so `Jane Doe at Acme`
- * can never be demoted into an arbitrary professional-text query. */
+/** Explicit syntax is parsed before generic intent classification so `Jane Doe at Acme`
+ * and `Jane Doe, Acme` remain deterministic identity anchors. Professional queries are
+ * protected by the role-hint guard, including plural role nouns. */
 function inferPersonSearchAnchors(query: string, explicitCompany?: string): { names: string[]; companies: string[] } {
   const value = clean(query)
   const companies = explicitCompany ? [clean(explicitCompany)] : []
   if (!value) return { names: [], companies }
-
-  const intent = classifyUniversalPeopleSearchV36_9(value)
-  if (intent === 'professional_search') return { names: [], companies }
 
   const atMatch = value.match(/^(.+?)\s+at\s+(.+)$/i)
   if (atMatch && !hasProfessionalRoleHint(atMatch[1])) {
@@ -254,6 +262,7 @@ function inferPersonSearchAnchors(query: string, explicitCompany?: string): { na
     return { names: [clean(commaMatch[1])], companies: companies.length ? companies : [clean(commaMatch[2])] }
   }
 
+  const intent = classifyUniversalPeopleSearchV36_9(value)
   if (intent !== 'person_lookup') return { names: [], companies }
   const tokens = value.split(/\s+/).filter(Boolean)
   if (companies.length) return { names: [value], companies }
