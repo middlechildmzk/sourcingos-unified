@@ -201,7 +201,8 @@ export function inferOpenToWorkSignals(text: string, source: CandidateSourceName
   const add = (label: string, detail: string, confidence: EvidenceConfidence) => signals.push({ id: uid('otw'), source, sourceProfileId, label, detail, confidence, requiresReview: true, createdAt: nowIso() })
   if (lower.includes('open to work') || lower.includes('#opentowork')) add('Public open-to-work wording', 'Text includes open-to-work language. Treat as a reviewable signal, not a claim.', 'high')
   if (lower.includes('available for contract') || lower.includes('available for freelance') || lower.includes('available for consulting')) add('Availability language', 'Text includes contract/freelance/consulting availability language.', 'medium')
-  if (lower.includes('resume') || lower.includes('curriculum vitae') || lower.includes('cv')) add('Resume/CV context', 'A public or uploaded resume/CV is present. This may indicate job-market visibility.', 'medium')
+  // A resume/CV existing is historical/self-reported context, not evidence of
+  // present availability. Do not infer open-to-work from the document type.
   return signals
 }
 
@@ -285,10 +286,11 @@ export function contactsFromText(text: string, source: CandidateSourceName, sour
   return contacts
 }
 
-export function buildCandidateSummary(sourceProfile: SourceProfileRecord, evidence: EvidenceItemRecord[] = []) {
-  const evidenceText = evidence.map(item => `${item.label}: ${item.detail}`).join(' ')
-  const rawText = [sourceProfile.rawText, evidenceText].filter(Boolean).join(' ')
-  const skills = splitSkills(rawText)
+export function buildCandidateSummary(sourceProfile: SourceProfileRecord, _evidence: EvidenceItemRecord[] = []) {
+  // Candidate scalar skills must derive from the underlying source observation,
+  // never from evidence generated from that same observation. Feeding generated
+  // evidence back into splitSkills creates a self-confirming extraction loop.
+  const skills = splitSkills(sourceProfile.rawText || '')
   const headline = sourceProfile.headline || sourceProfile.organization || 'Imported candidate'
   const summaryParts = [
     sourceProfile.displayName ? `Imported profile for ${sourceProfile.displayName}.` : 'Imported profile.',
