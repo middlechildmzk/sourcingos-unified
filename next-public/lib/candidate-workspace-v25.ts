@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { resolveStoredEntityKind } from '@/lib/entity-classification'
 import type { EntityKind } from '@/lib/source-types'
 import { buildCandidateUniverseProjectionV36 } from '@/lib/candidate-universe-v36'
+import { searchCandidateGraphIdsV36_10 } from '@/lib/candidate-graph-search-v36-10'
 
 export type CandidateWorkspaceQuery = {
   limit?: number
@@ -12,7 +13,7 @@ export type CandidateWorkspaceQuery = {
 }
 
 function safeSearch(value = '') {
-  return value.trim().replace(/[^a-zA-Z0-9 ._@+\-]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
+  return value.trim().replace(/[^a-zA-Z0-9 ._@+\-/:]/g, ' ').replace(/\s+/g, ' ').slice(0, 100)
 }
 
 function safeRoleId(value = '') {
@@ -48,21 +49,34 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const offset = Math.max(0, Number(query.offset) || 0)
   const search = safeSearch(query.search)
   const activeRoleId = safeRoleId(query.roleId)
+  const graphSearch = search
+    ? await searchCandidateGraphIdsV36_10({ sb, ownerId, query: search, limit, offset })
+    : null
+  const graphSearchActive = Boolean(search && graphSearch?.migrationReady)
 
-  let candidateQuery = sb
-    .from('candidates')
-    .select('*', { count: 'exact' })
-    .eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+  let candidatePromise: PromiseLike<any>
+  if (graphSearchActive) {
+    const ids = graphSearch?.candidateIds || []
+    candidatePromise = ids.length
+      ? sb.from('candidates').select('*', { count: 'exact' }).eq('owner_id', ownerId).in('id', ids)
+      : Promise.resolve({ data: [], error: null, count: 0 })
+  } else {
+    let candidateQuery = sb
+      .from('candidates')
+      .select('*', { count: 'exact' })
+      .eq('owner_id', ownerId)
+      .order('updated_at', { ascending: false })
+      .range(offset, offset + limit - 1)
 
-  if (search) {
-    const pattern = `%${search}%`
-    candidateQuery = candidateQuery.or(`canonical_name.ilike.${pattern},headline.ilike.${pattern},current_company.ilike.${pattern},location.ilike.${pattern}`)
+    if (search) {
+      const pattern = `%${search}%`
+      candidateQuery = candidateQuery.or(`canonical_name.ilike.${pattern},headline.ilike.${pattern},current_title.ilike.${pattern},current_company.ilike.${pattern},location.ilike.${pattern}`)
+    }
+    candidatePromise = candidateQuery
   }
 
   const [candidateResult, totalCandidates, sourceCount, evidenceCount, contactCount, openCount, pendingReviewCount, matchReviews, importBatches] = await Promise.all([
-    candidateQuery,
+    candidatePromise,
     sb.from('candidates').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
     sb.from('source_profiles').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
     sb.from('evidence_items').select('id', { count: 'exact', head: true }).eq('owner_id', ownerId),
@@ -76,7 +90,9 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
   const fatal = candidateResult.error || totalCandidates.error || sourceCount.error || evidenceCount.error || contactCount.error || openCount.error || pendingReviewCount.error || matchReviews.error || importBatches.error
   if (fatal) throw new Error(fatal.message)
 
-  const rows = candidateResult.data || []
+  const graphOrder = new Map((graphSearch?.candidateIds || []).map((id, index) => [id, index]))
+  const rows = [...(candidateResult.data || [])]
+  if (graphSearchActive) rows.sort((a, b) => (graphOrder.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (graphOrder.get(b.id) ?? Number.MAX_SAFE_INTEGER))
   const candidateIds = rows.map(row => row.id)
   const emptyRelated = { data: [] as any[], error: null as null | { message: string } }
   const [profiles, evidence, contacts, openSignals, roleCandidates] = candidateIds.length ? await Promise.all([
@@ -132,6 +148,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
       openToWorkSignalIds: (openMap.get(row.id) || []).map(item => item.id),
       mergeStatus: row.merge_status || 'pending',
+      searchRank: graphSearchActive ? graphSearch?.ranks.get(row.id) || 0 : undefined,
       universe: buildCandidateUniverseProjectionV36({
         candidateId: row.id,
         profiles: candidateProfiles,
@@ -146,6 +163,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
 
   const personCandidatesOnPage = candidates.filter(candidate => candidate.entityKind === 'person').length
   const nonPersonCandidatesOnPage = candidates.length - personCandidatesOnPage
+  const filteredCandidates = graphSearchActive ? graphSearch?.total || 0 : candidateResult.count || 0
 
   return {
     ok: true,
@@ -175,7 +193,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
     importBatches: (importBatches.data || []).map(row => ({ id: row.id, importType: row.import_type, fileName: row.file_name || undefined, rowsSeen: row.rows_seen, recordsCreated: row.records_created, warnings: Array.isArray(row.warnings) ? row.warnings : [], createdAt: row.created_at })),
     counts: {
       candidates: totalCandidates.count || 0,
-      filteredCandidates: candidateResult.count || 0,
+      filteredCandidates,
       personCandidatesOnPage,
       nonPersonCandidatesOnPage,
       sourceProfiles: sourceCount.count || 0,
@@ -184,8 +202,9 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       openToWorkSignals: openCount.count || 0,
       pendingMatchReviews: pendingReviewCount.count || 0,
     },
-    page: { limit, offset, hasMore: offset + rows.length < (candidateResult.count || 0) },
+    page: { limit, offset, hasMore: offset + rows.length < filteredCandidates },
     search,
+    searchMode: search ? graphSearchActive ? 'candidate_graph' : 'legacy_scalar' : 'none',
     activeRoleId: activeRoleId || null,
   }
 }
