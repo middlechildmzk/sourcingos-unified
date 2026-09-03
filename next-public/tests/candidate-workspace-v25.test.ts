@@ -29,6 +29,7 @@ describe('V25 Candidate Graph workspace', () => {
     expect(workspace).toContain('Math.min(200')
     expect(workspace).toContain('.range(offset, offset + limit - 1)')
     expect(workspace).toContain('canonical_name.ilike')
+    expect(workspace).toContain('searchCandidateGraphIdsV36_10')
     expect(listRoute).toContain("req.nextUrl.searchParams.get('q')")
   })
 
@@ -47,12 +48,15 @@ describe('V25 Candidate Graph workspace', () => {
     expect(csvImport).toContain('maximumRows = 1000')
   })
 
-  it('makes search and candidate review primary while hiding imports', () => {
-    expect(client).toContain('Search name, title, company, or location')
+  it('makes graph-wide canonical-person search and candidate review primary while hiding imports', () => {
+    expect(client).toContain('Search John Doe, RHEL, Acme, email, LinkedIn/GitHub URL')
+    expect(client).toContain('Search graph')
+    expect(client).toContain('Graph-wide search')
     expect(client).toContain('Import authorized candidate data')
     expect(client).toContain('<details')
     expect(client).toContain('Open 360')
     expect(page).toContain('<h1>Candidates</h1>')
+    expect(page).toContain('Identity Review')
     expect(page).not.toContain('SourcingOS V19')
   })
 
@@ -64,6 +68,8 @@ describe('V25 Candidate Graph workspace', () => {
     expect(candidate360).toContain("action: 'extract_graph'")
     expect(candidate360).toContain("action: 'queue_enrichment'")
     expect(candidate360).toContain('AddToRoleButton')
+    expect(candidate360Page).toContain('CandidateFieldResolutionV36_10')
+    expect(candidate360Page).toContain('CandidateArtifactsV36_10')
     expect(candidate360Page).not.toContain('CandidateRoleHandoff')
     expect(candidate360Page).not.toContain('Preview mode:')
   })
