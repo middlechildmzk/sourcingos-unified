@@ -42,6 +42,8 @@ export type CandidateDataSearchRequestV36_8 = {
   titles?: string[]
   /** Recruiter-approved capability terms from Role Brain. */
   skills?: string[]
+  /** Explicit employer/company context. This is professional search context, never identity authority. */
+  companies?: string[]
   locations?: string[]
   limit?: number
   offset?: number
