@@ -1,0 +1,86 @@
+:root{
+  --sos-canvas:#07101c;
+  --sos-sidebar:#09131f;
+  --sos-surface:#0d1826;
+  --sos-surface-raised:#111e2e;
+  --sos-surface-soft:rgba(255,255,255,.025);
+  --sos-border:rgba(148,169,198,.16);
+  --sos-border-strong:rgba(148,169,198,.26);
+  --sos-text:#edf4fb;
+  --sos-text-muted:#8ea0b5;
+  --sos-text-faint:#687b90;
+  --sos-accent:#73d8ee;
+  --sos-accent-soft:rgba(115,216,238,.10);
+  --sos-success:#77dfaa;
+  --sos-success-soft:rgba(119,223,170,.10);
+  --sos-warning:#f0c86d;
+  --sos-warning-soft:rgba(240,200,109,.10);
+  --sos-danger:#ef7f86;
+  --sos-danger-soft:rgba(239,127,134,.10);
+  --sos-info:#9da7ff;
+  --sos-info-soft:rgba(157,167,255,.10);
+
+  --sos-space-1:4px;
+  --sos-space-2:8px;
+  --sos-space-3:12px;
+  --sos-space-4:16px;
+  --sos-space-5:24px;
+  --sos-space-6:32px;
+  --sos-space-7:48px;
+
+  --sos-radius-sm:6px;
+  --sos-radius-md:10px;
+  --sos-radius-lg:14px;
+  --sos-radius-xl:20px;
+
+  --sos-font-xs:11px;
+  --sos-font-sm:12px;
+  --sos-font-md:14px;
+  --sos-font-lg:16px;
+  --sos-font-xl:20px;
+  --sos-font-2xl:28px;
+  --sos-font-3xl:36px;
+
+  --sos-shadow-1:0 8px 24px rgba(0,0,0,.12);
+  --sos-shadow-2:0 18px 50px rgba(0,0,0,.22);
+
+  --sos-sidebar-width:224px;
+  --sos-topbar-height:54px;
+
+  /* Compatibility bridge while V37 retires versioned CSS incrementally. */
+  --app-sidebar:var(--sos-sidebar-width);
+  --app-bg:var(--sos-canvas);
+  --app-surface:var(--sos-surface);
+  --app-surface-2:var(--sos-surface-raised);
+  --app-border:var(--sos-border);
+  --app-text:var(--sos-text);
+  --app-muted:var(--sos-text-muted);
+  --app-accent:var(--sos-accent);
+  --app-success:var(--sos-success);
+  --app-warning:var(--sos-warning);
+}
+
+html[data-theme='light'],body[data-theme='light']{
+  --sos-canvas:#f4f7fb;
+  --sos-sidebar:#ffffff;
+  --sos-surface:#ffffff;
+  --sos-surface-raised:#f8fafc;
+  --sos-surface-soft:rgba(15,23,42,.025);
+  --sos-border:rgba(51,65,85,.14);
+  --sos-border-strong:rgba(51,65,85,.24);
+  --sos-text:#142033;
+  --sos-text-muted:#617086;
+  --sos-text-faint:#8190a3;
+  --sos-accent:#0f7f9d;
+  --sos-accent-soft:rgba(15,127,157,.09);
+  --sos-success:#1d8b5a;
+  --sos-success-soft:rgba(29,139,90,.09);
+  --sos-warning:#9b6b13;
+  --sos-warning-soft:rgba(155,107,19,.09);
+  --sos-danger:#b84952;
+  --sos-danger-soft:rgba(184,73,82,.09);
+  --sos-info:#5967cc;
+  --sos-info-soft:rgba(89,103,204,.09);
+  --sos-shadow-1:0 8px 24px rgba(31,41,55,.08);
+  --sos-shadow-2:0 18px 50px rgba(31,41,55,.12);
+}
