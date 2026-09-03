@@ -23,10 +23,10 @@ describe('V36.12 provider contact subtype truth', () => {
         full_name: 'Alex Example',
         job_title: 'Systems Engineer',
         job_company_name: 'ExampleCo',
-        work_email: 'alex@example.com',
-        recommended_personal_email: 'alex.personal@example.net',
+        work_email: 'alex.work@example.com',
+        recommended_personal_email: 'alex.personal@example.com',
         mobile_phone: '+1 555 010 1000',
-        emails: [{ address: 'alex@example.com', type: 'work' }],
+        emails: [{ address: 'alex.work@example.com', type: 'work' }],
         phone_numbers: [{ number: '+1 555 010 1000', type: 'mobile' }],
       },
       likelihood: 9,
@@ -35,11 +35,11 @@ describe('V36.12 provider contact subtype truth', () => {
 
     const result = await enrichWithPeopleDataLabs({ fullName: 'Alex Example', currentCompany: 'ExampleCo' })
     expect(result.signals).toEqual(expect.arrayContaining([
-      expect.objectContaining({ type: 'email', channelKind: 'work_email', value: 'alex@example.com', permissionStatus: 'unknown', verified: false }),
-      expect.objectContaining({ type: 'email', channelKind: 'personal_email', value: 'alex.personal@example.net', permissionStatus: 'unknown', verified: false }),
+      expect.objectContaining({ type: 'email', channelKind: 'work_email', value: 'alex.work@example.com', permissionStatus: 'unknown', verified: false }),
+      expect.objectContaining({ type: 'email', channelKind: 'personal_email', value: 'alex.personal@example.com', permissionStatus: 'unknown', verified: false }),
       expect.objectContaining({ type: 'phone', channelKind: 'mobile_phone', value: '+1 555 010 1000', permissionStatus: 'unknown', verified: false }),
     ]))
-    expect(result.signals.filter(signal => signal.value === 'alex@example.com')).toHaveLength(1)
+    expect(result.signals.filter(signal => signal.value === 'alex.work@example.com')).toHaveLength(1)
     expect(result.signals.filter(signal => signal.value === '+1 555 010 1000')).toHaveLength(1)
   })
 
@@ -51,8 +51,8 @@ describe('V36.12 provider contact subtype truth', () => {
         uid: 'signalhire-test-person',
         fullName: 'Alex Example',
         contacts: [
-          { type: 'email', subType: 'work', value: 'alex@example.com', rating: 100 },
-          { type: 'email', subType: 'personal', value: 'alex.private@example.net', rating: 90 },
+          { type: 'email', subType: 'work', value: 'alex.work@example.com', rating: 100 },
+          { type: 'email', subType: 'personal', value: 'alex.private@example.com', rating: 90 },
           { type: 'phone', subType: 'mobile', value: '+1 555 010 1000', rating: 90 },
         ],
       },
