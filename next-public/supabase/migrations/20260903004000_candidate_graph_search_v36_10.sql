@@ -81,6 +81,12 @@ as $$
         and permission_status <> 'do_not_contact'
     ) ct on true
     where c.owner_id = p_owner_id
+      and not exists (
+        select 1
+          from public.candidate_identity_redirects cir
+         where cir.owner_id = p_owner_id
+           and cir.from_candidate_id = c.id
+      )
   ),
   matched as (
     select
@@ -111,4 +117,4 @@ revoke all on function public.search_candidate_graph_v36_10(uuid, text, integer,
 grant execute on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) to service_role;
 
 comment on function public.search_candidate_graph_v36_10(uuid, text, integer, integer) is
-  'V36.10 owner-scoped canonical talent database search across candidates, attached source profiles, evidence and allowed stored contact signals. Returns candidate IDs once; does not create identity links.';
+  'V36.10 owner-scoped canonical talent database search across candidates, attached source profiles, evidence and allowed stored contact signals. Absorbed candidate aliases are excluded so each canonical person is returned once; no identity links are created here.';
