@@ -1,21 +1,18 @@
 import 'server-only'
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { CandidateDataProviderV36_8, CandidateProviderObservationV36_8 } from './types-v36-8'
+import type { CandidateProviderObservationV36_8 } from './types-v36-8'
 import type { EvidenceItem, IdentitySignal, SourceName, SourceResult } from '@/lib/source-types'
 
-const SIGNATURE_VERSION = 'v36.8'
+const SIGNATURE_VERSION = 'v36.12'
 
-function signingKey(provider: CandidateDataProviderV36_8): string | undefined {
-  if (provider === 'pearch') return process.env.PEARCH_API_KEY
-  if (provider === 'data_vertex') return process.env.DATAVERTEX_API_KEY
-  if (provider === 'contactout') return process.env.CONTACTOUT_API_KEY
-  if (provider === 'people_data_labs') return process.env.PDL_API_KEY || process.env.PEOPLE_DATA_LABS_API_KEY
-  if (provider === 'coresignal') return process.env.CORESIGNAL_API_KEY
-  if (provider === 'signalhire') return process.env.SIGNALHIRE_API_KEY
-  if (provider === 'linkup') return process.env.LINKUP_API_KEY
-  if (provider === 'exa') return process.env.EXA_API_KEY
-  if (provider === 'openweb_ninja') return process.env.OPENWEBNINJA_API_KEY
-  return undefined
+/**
+ * Observation integrity is an internal SourcingOS security concern, not a
+ * vendor-auth concern. Never reuse/derive this HMAC key from provider API keys:
+ * rotating a search vendor credential must not invalidate saved review payloads.
+ */
+function signingKey(): string | undefined {
+  const value = process.env.OBSERVATION_SIGNING_SECRET?.trim()
+  return value && value.length >= 32 ? value : undefined
 }
 
 function stableObservationPayload(observation: CandidateProviderObservationV36_8): string {
@@ -39,8 +36,12 @@ function stableObservationPayload(observation: CandidateProviderObservationV36_8
   })
 }
 
+export function observationSigningConfiguredV36_12(): boolean {
+  return Boolean(signingKey())
+}
+
 export function signProviderObservationV36_8(observation: CandidateProviderObservationV36_8): string | undefined {
-  const key = signingKey(observation.provider)
+  const key = signingKey()
   if (!key) return undefined
   return createHmac('sha256', key).update(stableObservationPayload(observation)).digest('base64url')
 }
@@ -77,8 +78,6 @@ export function providerObservationToSourceResultV36_8(observation: CandidatePro
   // Those links belong to the observed person, not to the provider source row
   // itself. Preserve them as profile_url signals and evidence citations, but do
   // not assign them to SourceResult.profileUrl or source_url identity authority.
-  // This prevents a LinkedIn/GitHub URL returned by a vendor from being treated
-  // as a source-native profile link by older identity-resolution code.
   const identitySignals: IdentitySignal[] = [
     { type: 'name', value: observation.displayName, weight: 0.5, source },
     ...(observation.location ? [{ type: 'location' as const, value: observation.location, weight: 0.2, source }] : []),
