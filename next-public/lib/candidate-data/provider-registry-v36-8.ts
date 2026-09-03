@@ -5,7 +5,7 @@ function configured(key: string | undefined): boolean { return Boolean(key && ke
 
 export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatusV36_8[] {
   const pe = configured(process.env.PEARCH_API_KEY)
-  const pdl = configured(process.env.PDL_API_KEY)
+  const pdl = configured(process.env.PDL_API_KEY || process.env.PEOPLE_DATA_LABS_API_KEY)
   const cs = configured(process.env.CORESIGNAL_API_KEY)
   const dv = configured(process.env.DATAVERTEX_API_KEY)
   const co = configured(process.env.CONTACTOUT_API_KEY)
@@ -23,7 +23,7 @@ export function candidateDataProviderStatusesV36_8(): CandidateDataProviderStatu
     {
       provider: 'people_data_labs', label: 'People Data Labs', state: pdl ? 'configured' : 'missing_key', executable: pdl,
       capabilities: ['candidate_search', 'profile_enrichment', 'contact_enrichment'],
-      message: pdl ? 'PDL Person Search and identity enrichment are wired and configured.' : 'PDL Person Search and enrichment are wired; PDL_API_KEY is not configured.',
+      message: pdl ? 'PDL Person Search and identity enrichment are wired and configured.' : 'PDL Person Search and enrichment are wired; PDL_API_KEY (or PEOPLE_DATA_LABS_API_KEY) is not configured.',
     },
     {
       provider: 'coresignal', label: 'Coresignal', state: cs ? 'configured' : 'missing_key', executable: cs,
