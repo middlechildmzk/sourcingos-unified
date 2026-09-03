@@ -6,6 +6,12 @@ function missingRedirectTable(error: any) {
   return code === '42P01' || code === 'PGRST205' || /candidate_identity_redirects|relation .* does not exist/i.test(message)
 }
 
+function missingIdentityFunction(error: any, functionName: string) {
+  const code = String(error?.code || '')
+  const message = String(error?.message || '')
+  return code === '42883' || code === 'PGRST202' || message.includes(functionName) || /function .* does not exist/i.test(message)
+}
+
 export async function candidateIdentityRedirectStateV36_10(input: {
   sb: any
   ownerId: string
@@ -65,9 +71,7 @@ export async function resolveCanonicalCandidateIdV36_10(input: {
   })
 
   if (error) {
-    const code = String(error.code || '')
-    const message = String(error.message || '')
-    if (code === '42883' || code === 'PGRST202' || /resolve_candidate_identity_v36_10|function .* does not exist/i.test(message)) {
+    if (missingIdentityFunction(error, 'resolve_candidate_identity_v36_10')) {
       return { candidateId: input.candidateId, redirected: false, migrationReady: false }
     }
     throw new Error(`Canonical candidate resolution failed: ${error.message}`)
@@ -75,4 +79,55 @@ export async function resolveCanonicalCandidateIdV36_10(input: {
 
   const resolved = typeof data === 'string' && data ? data : input.candidateId
   return { candidateId: resolved, redirected: resolved !== input.candidateId, migrationReady: true }
+}
+
+export async function candidateIdentityFamiliesV36_10(input: {
+  sb: any
+  ownerId: string
+  candidateIds: string[]
+}): Promise<{
+  migrationReady: boolean
+  canonicalToFamily: Map<string, string[]>
+  familyToCanonical: Map<string, string>
+}> {
+  const requested = Array.from(new Set(input.candidateIds.filter(Boolean))).slice(0, 500)
+  const fallback = () => {
+    const canonicalToFamily = new Map<string, string[]>()
+    const familyToCanonical = new Map<string, string>()
+    for (const id of requested) {
+      canonicalToFamily.set(id, [id])
+      familyToCanonical.set(id, id)
+    }
+    return { migrationReady: false, canonicalToFamily, familyToCanonical }
+  }
+  if (!requested.length) return fallback()
+
+  const { data, error } = await input.sb.rpc('candidate_identity_families_v36_10', {
+    p_owner_id: input.ownerId,
+    p_candidate_ids: requested,
+  })
+
+  if (error) {
+    if (missingIdentityFunction(error, 'candidate_identity_families_v36_10')) return fallback()
+    throw new Error(`Candidate identity family lookup failed: ${error.message}`)
+  }
+
+  const canonicalToFamily = new Map<string, string[]>()
+  const familyToCanonical = new Map<string, string>()
+  for (const row of Array.isArray(data) ? data : []) {
+    const canonicalId = String(row?.canonical_candidate_id || '')
+    const familyId = String(row?.family_candidate_id || '')
+    if (!canonicalId || !familyId) continue
+    const family = canonicalToFamily.get(canonicalId) || []
+    if (!family.includes(familyId)) family.push(familyId)
+    canonicalToFamily.set(canonicalId, family)
+    familyToCanonical.set(familyId, canonicalId)
+  }
+
+  for (const id of requested) {
+    if (!canonicalToFamily.has(id)) canonicalToFamily.set(id, [id])
+    if (!familyToCanonical.has(id)) familyToCanonical.set(id, id)
+  }
+
+  return { migrationReady: true, canonicalToFamily, familyToCanonical }
 }
