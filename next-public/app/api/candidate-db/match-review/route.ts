@@ -4,6 +4,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { NextRequest, NextResponse } from 'next/server'
 import { getCandidateDb, nowIso, uid } from '@/lib/candidate-db-v18'
 import { compareSourceProfiles } from '@/lib/candidate-graph'
+import { sharedProfessionalProfileAnchorsV36_10 } from '@/lib/identity-anchors-v36-10'
 import { classifySourceResult } from '@/lib/entity-classification'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { getRouteSession } from '@/lib/supabase/route-session'
@@ -78,7 +79,55 @@ function compareStoredProfiles(a: any, b: any) {
   const profileA = sourceResultFromStoredProfile(a)
   const profileB = sourceResultFromStoredProfile(b)
   if (!profileA || !profileB) return null
-  return { profileA, profileB, comparison: compareSourceProfiles(profileA, profileB) }
+  const base = compareSourceProfiles(profileA, profileB)
+  const professional = sharedProfessionalProfileAnchorsV36_10(profileA, profileB)
+  return {
+    profileA,
+    profileB,
+    comparison: {
+      ...base,
+      score: Math.min(100, base.score + (professional.matched ? 40 : 0)),
+      reasons: Array.from(new Set([...base.reasons, ...professional.reasons])),
+      deterministicRules: [
+        ...base.deterministicRules,
+        {
+          ruleId: 'shared_canonical_professional_profile',
+          passed: professional.matched,
+          evidence: professional.matched
+            ? professional.reasons.join(' · ')
+            : 'No shared canonical professional profile URL',
+        },
+      ],
+      deterministicAnchor: base.deterministicAnchor || professional.matched,
+    },
+  }
+}
+
+function profileForReview(row: any) {
+  return {
+    id: String(row.id || ''),
+    candidateId: row.candidate_id || row.candidateId || undefined,
+    source: String(row.source || ''),
+    sourceProfileId: String(row.source_profile_id || row.sourceProfileId || ''),
+    displayName: String(row.display_name || row.displayName || ''),
+    headline: row.headline || undefined,
+    organization: row.organization || undefined,
+    location: row.location || undefined,
+    profileUrl: row.profile_url || row.profileUrl || undefined,
+    status: row.status || 'pending',
+    lastSeenAt: row.last_seen_at || row.lastSeenAt || undefined,
+  }
+}
+
+function candidateForReview(row: any) {
+  return {
+    id: String(row.id || ''),
+    canonicalName: String(row.canonical_name || row.canonicalName || 'Unconfirmed identity'),
+    headline: row.headline || row.current_title || row.currentTitle || undefined,
+    currentCompany: row.current_company || row.currentCompany || undefined,
+    location: row.location || undefined,
+    mergeStatus: row.merge_status || row.mergeStatus || 'pending',
+  }
 }
 
 export async function GET() {
@@ -92,19 +141,53 @@ export async function GET() {
     if (!session.authenticated) return NextResponse.json({ ok: false, error: 'Authentication required.' }, { status: 401 })
 
     const sb = createServerSupabaseClient()
+    const ownerId = session.userId!
     const { data, error } = await sb!
       .from('identity_match_reviews')
       .select('*')
-      .eq('owner_id', session.userId!)
+      .eq('owner_id', ownerId)
       .order('created_at', { ascending: false })
       .limit(100)
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true, mode: 'supabase', reviews: data || [] })
+    const reviews = data || []
+    const sourceProfileIds = Array.from(new Set(reviews.flatMap((review: any) => Array.isArray(review.source_profile_ids) ? review.source_profile_ids : []).filter(Boolean)))
+    const candidateIds = Array.from(new Set(reviews.map((review: any) => review.candidate_id).filter(Boolean)))
+
+    const [profileResult, candidateResult] = await Promise.all([
+      sourceProfileIds.length
+        ? sb!.from('source_profiles').select('*').eq('owner_id', ownerId).in('id', sourceProfileIds)
+        : Promise.resolve({ data: [], error: null }),
+      candidateIds.length
+        ? sb!.from('candidates').select('id,canonical_name,headline,current_title,current_company,location,merge_status').eq('owner_id', ownerId).in('id', candidateIds)
+        : Promise.resolve({ data: [], error: null }),
+    ])
+
+    if (profileResult.error || candidateResult.error) {
+      return NextResponse.json({ ok: false, error: profileResult.error?.message || candidateResult.error?.message || 'Identity review context could not be loaded.' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      ok: true,
+      mode: 'supabase',
+      reviews,
+      profiles: (profileResult.data || []).map(profileForReview),
+      candidates: (candidateResult.data || []).map(candidateForReview),
+      pendingCount: reviews.filter((review: any) => review.decision === 'pending').length,
+    })
   }
 
   const db = getCandidateDb()
-  return NextResponse.json({ ok: true, mode: 'preview', reviews: db.matchReviews })
+  const reviewProfileIds = new Set(db.matchReviews.flatMap(review => review.sourceProfileIds))
+  const reviewCandidateIds = new Set(db.matchReviews.map(review => review.candidateId).filter(Boolean) as string[])
+  return NextResponse.json({
+    ok: true,
+    mode: 'preview',
+    reviews: db.matchReviews,
+    profiles: db.sourceProfiles.filter(profile => reviewProfileIds.has(profile.id)).map(profileForReview),
+    candidates: db.candidates.filter(candidate => reviewCandidateIds.has(candidate.id)).map(candidateForReview),
+    pendingCount: db.matchReviews.filter(review => review.decision === 'pending').length,
+  })
 }
 
 export async function POST(req: NextRequest) {
@@ -176,7 +259,7 @@ export async function POST(req: NextRequest) {
         review,
         profiles,
         resolver: {
-          version: 'v29.2.1-proposal-only',
+          version: 'v36.10-professional-anchor-review',
           deterministicAnchor: comparison.deterministicAnchor,
           deterministicRules: comparison.deterministicRules,
           conflicts: comparison.conflicts,
@@ -217,7 +300,7 @@ export async function POST(req: NextRequest) {
       review,
       profiles: memProfiles,
       resolver: {
-        version: 'v29.2.1-proposal-only',
+        version: 'v36.10-professional-anchor-review',
         deterministicAnchor: comparison.deterministicAnchor,
         deterministicRules: comparison.deterministicRules,
         conflicts: comparison.conflicts,
