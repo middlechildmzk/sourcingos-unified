@@ -82,6 +82,20 @@ const PROFESSIONAL_ROLE_HINTS = new Set([
   'software', 'hardware', 'systems', 'system', 'network', 'data', 'cloud', 'cyber', 'cybersecurity', 'clearance',
 ])
 
+function normalizedRoleToken(value: string): string {
+  return value.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+}
+
+function isProfessionalRoleHint(value: string): boolean {
+  const token = normalizedRoleToken(value)
+  if (!token) return false
+  if (PROFESSIONAL_ROLE_HINTS.has(token)) return true
+  if (token.endsWith('ies') && PROFESSIONAL_ROLE_HINTS.has(`${token.slice(0, -3)}y`)) return true
+  if (token.endsWith('es') && PROFESSIONAL_ROLE_HINTS.has(token.slice(0, -2))) return true
+  if (token.endsWith('s') && PROFESSIONAL_ROLE_HINTS.has(token.slice(0, -1))) return true
+  return false
+}
+
 const EXPLICIT_SKILL_PATTERNS: Array<[string, RegExp]> = [
   ['RHEL', /\bRHEL\b/i],
   ['Red Hat Enterprise Linux', /\bRed Hat Enterprise Linux\b/i],
@@ -111,6 +125,7 @@ const EXPLICIT_SKILL_PATTERNS: Array<[string, RegExp]> = [
 function stripSearchLeadIn(value: string): string {
   return clean(value)
     .replace(/^(?:please\s+)?(?:find(?:\s+me)?|show(?:\s+me)?|source|search\s+for|look\s+for|looking\s+for|i\s+need|need)\s+/i, '')
+    .replace(/^\d{1,3}\s+/, '')
     .replace(/^(?:an?|the)\s+/i, '')
 }
 
@@ -118,19 +133,22 @@ function inferProfessionalTitle(query: string): string | undefined {
   if (classifyUniversalPeopleSearchV36_9(query) !== 'professional_search') return undefined
   const cleaned = stripSearchLeadIn(query)
   if (!cleaned) return undefined
-  const boundary = cleaned.search(/\b(?:with|who|that|in\s+or\s+near|near|around|located|based|at)\b/i)
+
+  const locationBoundary = cleaned.search(/\b(?:in\s+or\s+near|in\s+or\s+around|located\s+in|based\s+in|near|around|in)\s+[A-Za-z][A-Za-z .’'\-]{1,60},\s*[A-Z]{2}\b/i)
+  const semanticBoundary = cleaned.search(/\b(?:with|who|that|at)\b/i)
+  const boundaries = [locationBoundary, semanticBoundary].filter(index => index >= 0)
+  const boundary = boundaries.length ? Math.min(...boundaries) : -1
+
   let candidate = boundary > 0 ? clean(cleaned.slice(0, boundary)) : cleaned
   if (boundary < 0) {
     const tokens = cleaned.split(/\s+/)
-    const normalized = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
     let lastRoleHint = -1
-    normalized.forEach((token, index) => { if (PROFESSIONAL_ROLE_HINTS.has(token)) lastRoleHint = index })
+    tokens.forEach((token, index) => { if (isProfessionalRoleHint(token)) lastRoleHint = index })
     if (lastRoleHint >= 0 && lastRoleHint < tokens.length - 1) candidate = tokens.slice(0, lastRoleHint + 1).join(' ')
   }
   candidate = candidate.replace(/^(?:an?|the)\s+/i, '').replace(/[,:;]+$/, '').trim()
   if (!candidate || candidate.length > 100) return undefined
-  const hasRoleHint = candidate.split(/\s+/).some(token => PROFESSIONAL_ROLE_HINTS.has(token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')))
-  return hasRoleHint ? candidate : undefined
+  return candidate.split(/\s+/).some(isProfessionalRoleHint) ? candidate : undefined
 }
 
 function inferProfessionalLocation(query: string): string | undefined {
@@ -165,7 +183,7 @@ function regexpEscape(value: string): string {
 function inferredSkillMustHave(query: string, skill: string, inferredTitle?: string): boolean {
   const skillPattern = regexpEscape(skill).replace(/\\ /g, '\\s+')
   if (inferredTitle && new RegExp(`(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i').test(inferredTitle)) return true
-  const hardCue = new RegExp(`\\b(?:must\\s+have|required|requires?|requiring|mandatory)\\b[^,.;]{0,80}(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i')
+  const hardCue = new RegExp(`\\b(?:must\\s+have|required|requires?|requiring|mandatory|with)\\b[^,.;]{0,80}(?:^|\\b)${skillPattern}(?:\\b|$)`, 'i')
   return hardCue.test(query)
 }
 
@@ -182,8 +200,7 @@ export function classifyUniversalPeopleSearchV36_9(value: string): UniversalPeop
     return 'profile_lookup'
   }
   const tokens = query.split(/\s+/).filter(Boolean)
-  const normalizedTokens = tokens.map(token => token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''))
-  const hasRoleHint = normalizedTokens.some(token => PROFESSIONAL_ROLE_HINTS.has(token))
+  const hasRoleHint = tokens.some(isProfessionalRoleHint)
   const nameLike = !hasRoleHint
     && tokens.length >= 2
     && tokens.length <= 4
@@ -215,7 +232,7 @@ export function buildUniversalExactIdentityRequestV36_9(value: string): Universa
 }
 
 function hasProfessionalRoleHint(value: string): boolean {
-  return value.split(/\s+/).some(token => PROFESSIONAL_ROLE_HINTS.has(token.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')))
+  return value.split(/\s+/).some(isProfessionalRoleHint)
 }
 
 /** Explicit syntax is parsed before intent classification so `Jane Doe at Acme`
@@ -224,6 +241,9 @@ function inferPersonSearchAnchors(query: string, explicitCompany?: string): { na
   const value = clean(query)
   const companies = explicitCompany ? [clean(explicitCompany)] : []
   if (!value) return { names: [], companies }
+
+  const intent = classifyUniversalPeopleSearchV36_9(value)
+  if (intent === 'professional_search') return { names: [], companies }
 
   const atMatch = value.match(/^(.+?)\s+at\s+(.+)$/i)
   if (atMatch && !hasProfessionalRoleHint(atMatch[1])) {
@@ -234,7 +254,6 @@ function inferPersonSearchAnchors(query: string, explicitCompany?: string): { na
     return { names: [clean(commaMatch[1])], companies: companies.length ? companies : [clean(commaMatch[2])] }
   }
 
-  const intent = classifyUniversalPeopleSearchV36_9(value)
   if (intent !== 'person_lookup') return { names: [], companies }
   const tokens = value.split(/\s+/).filter(Boolean)
   if (companies.length) return { names: [value], companies }
