@@ -36,17 +36,19 @@ function validHttpUrl(value: unknown): string | undefined {
 }
 
 /**
- * LinkUp currently exposes one string each for title and location, so V36.8
+ * LinkUp exposes one string each for title, company and location, so SourcingOS
  * sends the first recruiter-approved value rather than inventing provider-side
  * expansion. Remaining capability terms are carried in the keyword field.
  */
 export function buildLinkUpSearchBodyV36_8(request: CandidateDataSearchRequestV36_8) {
   const title = request.titles?.map(item => item.trim()).find(Boolean)
+  const company = request.companies?.map(item => item.trim()).find(Boolean)
   const location = request.locations?.map(item => item.trim()).find(Boolean)
   const keyword = Array.from(new Set((request.skills || []).map(item => item.trim()).filter(Boolean))).slice(0, 8).join(' ')
   return {
     ...(keyword ? { keyword } : {}),
     ...(title ? { job_title: title } : {}),
+    ...(company ? { current_company: company } : {}),
     ...(location ? { location } : {}),
     total_results: safeCandidateSearchLimitV36_8(request.limit),
   }
@@ -62,9 +64,6 @@ function observation(record: Record<string, unknown>, observedAt: string): Candi
     ? record.social_profiles as Record<string, unknown>
     : {}
   const linkedin = validHttpUrl(social.linkedin)
-  // LinkUp's public response example does not expose a provider-native person id.
-  // Require its returned LinkedIn URL so the observation has a deterministic
-  // professional identity anchor instead of synthesizing identity from name text.
   if (!displayName || !linkedin) return undefined
   const company = record.company && typeof record.company === 'object' ? record.company as Record<string, unknown> : {}
   const profileUrls: CandidateProviderProfileUrlV36_8[] = [{ kind: 'linkedin', url: linkedin }]
@@ -78,10 +77,8 @@ function observation(record: Record<string, unknown>, observedAt: string): Candi
     location: str(record.location),
     skills: strings(record.skills).slice(0, 30),
     profileUrls,
-    // The endpoint can return contact data, but SourcingOS deliberately ignores
-    // it during discovery. Contact reveal remains a separate explicit action.
     contactAvailability: { email: 'unknown', phone: 'unknown' },
-    providerExplanation: 'LinkUp professional-profile observation anchored to the provider-returned LinkedIn URL. Contact fields were not admitted during candidate discovery.',
+    providerExplanation: 'LinkUp professional-profile observation includes a provider-returned LinkedIn link for recruiter context. Contact fields were not admitted during candidate discovery and the third-party LinkedIn URL is not automatic merge authority.',
     observedAt,
   }
 }
@@ -105,10 +102,21 @@ export async function searchLinkUpV36_8(request: CandidateDataSearchRequestV36_8
       cache: 'no-store',
     })
     if (!response.ok) {
+      const authRejected = response.status === 401 || response.status === 403
       return {
         observations: [],
-        telemetry: { provider: PROVIDER, status: 'failed', discovered: 0, latencyMs: Date.now() - started, message: `LinkUp returned HTTP ${response.status}.` },
-        warnings: [`LinkUp People Search failed with status ${response.status}.`],
+        telemetry: {
+          provider: PROVIDER,
+          status: 'failed',
+          discovered: 0,
+          latencyMs: Date.now() - started,
+          message: authRejected
+            ? `LinkUp authentication/entitlement rejected the request with HTTP ${response.status}.`
+            : `LinkUp returned HTTP ${response.status}.`,
+        },
+        warnings: [authRejected
+          ? 'LinkUp credential or account entitlement was rejected. This is not a zero-result search.'
+          : `LinkUp People Search failed with status ${response.status}.`],
       }
     }
 
@@ -127,10 +135,10 @@ export async function searchLinkUpV36_8(request: CandidateDataSearchRequestV36_8
         discovered: observations.length,
         latencyMs: Date.now() - started,
         ...(credits !== undefined ? { estimatedCredits: credits } : {}),
-        message: 'LinkUp discovery retained professional profile fields and LinkedIn identity anchors only; endpoint contact fields are deliberately ignored during search.',
+        message: 'LinkUp discovery retained professional profile fields only; endpoint contact fields are deliberately ignored during search.',
       },
       warnings: records.length > observations.length
-        ? [`${records.length - observations.length} LinkUp result${records.length - observations.length === 1 ? '' : 's'} lacked a deterministic LinkedIn identity anchor and were held out of Candidate Graph admission.`]
+        ? [`${records.length - observations.length} LinkUp result${records.length - observations.length === 1 ? '' : 's'} lacked a usable returned LinkedIn profile reference and were held out of Candidate Graph admission.`]
         : [],
     }
   } catch {
