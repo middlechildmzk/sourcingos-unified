@@ -41,10 +41,15 @@ export type CandidateDossierProfile = {
 export type CandidateDossierContact = {
   id: string
   type?: string
+  contactKind?: string
   value?: string
   source?: string
   confidence?: string
+  ownershipConfidence?: string
+  deliverability?: string
+  providerStatusRaw?: string
   permissionStatus?: string
+  observedAt?: string
   score?: number
 }
 
