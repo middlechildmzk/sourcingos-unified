@@ -30,17 +30,14 @@ function normalizeTerms(values: string[] | undefined, max: number): string[] {
 function simplePersonName(value: string): string | undefined {
   const cleaned = value.replace(/\s+/g, ' ').trim()
   const tokens = cleaned.split(' ').filter(Boolean)
-  if (tokens.length < 2 || tokens.length > 4) return undefined
+  // Only infer a raw-query name when it is unambiguously first + last. Three-
+  // token inputs such as `Jane Doe Acme` must be structured by People Search so
+  // employer context cannot silently become part of an exact PDL full_name.
+  if (tokens.length !== 2) return undefined
   if (!tokens.every(token => /^[\p{L}][\p{L}'’.\-]*$/u.test(token))) return undefined
   return cleaned.toLowerCase()
 }
 
-/**
- * PDL supports bool/should, but its restricted Person Search parser does not
- * accept every optional Elasticsearch bool parameter. A bool containing only
- * should clauses already requires one match by Elasticsearch default, so do
- * not send `minimum_should_match` here.
- */
 function oneOfMatch(field: string, values: string[]) {
   return {
     bool: {
@@ -57,20 +54,23 @@ function exactKeywordMatch(field: string, values: string[]) {
 
 /**
  * PDL Search executes Elasticsearch directly against its dataset with no query
- * cleaning. SourcingOS therefore sends only bounded structured fields. A plain
- * 2-4 token person name maps to PDL's documented keyword `full_name` field.
+ * cleaning. SourcingOS sends only bounded structured fields. Person names and
+ * company context are separate; company is professional filtering context and
+ * never identity authority.
  */
 export function buildPeopleDataLabsSearchBodyV36_8(request: CandidateDataSearchRequestV36_8) {
   const names = normalizeTerms(request.names, 20)
   const inferredName = !names.length ? simplePersonName(request.query) : undefined
   const titles = normalizeTerms(request.titles, 30)
   const skills = normalizeTerms(request.skills, 40)
+  const companies = normalizeTerms(request.companies, 30)
   const locations = normalizeTerms(request.locations, 30)
   const must: Record<string, unknown>[] = []
 
   if (names.length || inferredName) must.push(exactKeywordMatch('full_name', names.length ? names : [inferredName!]))
   if (titles.length) must.push(oneOfMatch('job_title', titles))
   if (skills.length) must.push(oneOfMatch('skills', skills))
+  if (companies.length) must.push(oneOfMatch('job_company_name', companies))
   if (locations.length) must.push(oneOfMatch('location_name', locations))
 
   const query = must.length
@@ -166,14 +166,12 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
   if ('match_none' in body.query) {
     return {
       observations: [],
-      telemetry: { provider: PROVIDER, status: 'skipped', discovered: 0, latencyMs: 0, message: 'PDL Search skipped because no safe person-name, title, skill, or location anchor was supplied.' },
+      telemetry: { provider: PROVIDER, status: 'skipped', discovered: 0, latencyMs: 0, message: 'PDL Search skipped because no safe person-name, title, skill, company, or location anchor was supplied.' },
       warnings: ['PDL Search needs a person name or structured professional fields; arbitrary recruiter prose is not forwarded as Elasticsearch syntax.'],
     }
   }
 
   try {
-    // PDL supports GET and POST for Person Search. GET keeps this bounded query
-    // explicit and easy to inspect while the API key remains header-only.
     const url = new URL(ENDPOINT)
     url.searchParams.set('query', JSON.stringify(body.query))
     url.searchParams.set('size', String(body.size))
@@ -188,6 +186,14 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
     if (!response.ok) {
       const payload = await response.json().catch(() => undefined)
       const reason = safeProviderError(payload)
+      const explicitNoMatch = response.status === 404 && Boolean(reason && /no records were found|no records found|no match/i.test(reason))
+      if (explicitNoMatch) {
+        return {
+          observations: [],
+          telemetry: { provider: PROVIDER, status: 'completed', discovered: 0, latencyMs: Date.now() - started, message: `People Data Labs completed with no matching records. ${reason}`.trim() },
+          warnings: [],
+        }
+      }
       const suffix = reason ? ` ${reason}` : ''
       return {
         observations: [],
