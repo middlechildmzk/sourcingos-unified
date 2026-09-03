@@ -3,6 +3,7 @@ import {
   bestPhoneChannelV36_13,
   contactSupportLabelV36_13,
   evidenceCoverageForObservationV36_13,
+  observationPassesExplicitFiltersV36_13,
   orderObservationsByEvidenceV36_13,
   summarizeContactSignalsV36_13,
 } from '../lib/people-review-v36-13'
@@ -27,10 +28,11 @@ const strong = {
   providerPersonId: 'a',
   displayName: 'Candidate A',
   currentTitle: 'Red Hat Enterprise Linux (RHEL) Administrator',
+  currentEmployer: 'Acme Systems',
   location: 'Annapolis Junction, MD',
-  skills: ['RHEL', 'Linux', 'Ansible'],
+  skills: ['RHEL', 'Linux', 'Ansible', 'Secret clearance'],
   profileUrls: [],
-  providerExplanation: 'Public professional evidence references an active Secret clearance.',
+  providerExplanation: 'Retrieval rationale can mention anything but is not candidate evidence.',
 }
 
 const weak = {
@@ -38,6 +40,7 @@ const weak = {
   providerPersonId: 'b',
   displayName: 'Candidate B',
   currentTitle: 'Research Assistant',
+  currentEmployer: 'Example Research',
   location: 'Remote',
   skills: ['Research', 'Budget Planning'],
   profileUrls: [],
@@ -54,10 +57,36 @@ describe('V36.13 People Search review workbench helpers', () => {
     expect(coverage.criteria.some(item => item.kind === 'experience' && item.status === 'not_evidenced')).toBe(true)
   })
 
-  it('treats higher clearances as evidence for a Secret-or-higher requirement', () => {
-    const coverage = evidenceCoverageForObservationV36_13({ ...strong, providerExplanation: 'TS/SCI clearance' }, request)
+  it('treats higher clearances in normalized candidate fields as evidence for a Secret-or-higher requirement', () => {
+    const coverage = evidenceCoverageForObservationV36_13({ ...strong, skills: ['RHEL', 'Linux', 'TS/SCI'] }, request)
     const clearance = coverage.criteria.find(item => item.kind === 'clearance')
     expect(clearance?.status).toBe('observed')
+  })
+
+  it('never upgrades provider retrieval rationale into candidate clearance evidence', () => {
+    const coverage = evidenceCoverageForObservationV36_13({ ...weak, providerExplanation: 'Strong match: active TS/SCI clearance.' }, request)
+    const clearance = coverage.criteria.find(item => item.kind === 'clearance')
+    expect(clearance?.status).toBe('not_evidenced')
+  })
+
+  it('deduplicates semantically equivalent employer criteria', () => {
+    const employerRequest = {
+      ...request,
+      companies: ['Maximus'],
+      requirements: [{ text: 'Current or relevant employer: Maximus', mustHave: true }],
+      skills: [],
+      locations: [],
+      titles: [],
+    }
+    const coverage = evidenceCoverageForObservationV36_13({ ...strong, currentEmployer: 'Maximus' }, employerRequest)
+    expect(coverage.criteria.filter(item => item.label.toLowerCase().includes('maximus'))).toHaveLength(1)
+  })
+
+  it('applies explicit recruiter filters as constraints, including missing-location failure', () => {
+    expect(observationPassesExplicitFiltersV36_13(strong, { location: 'Annapolis Junction, MD', skills: 'RHEL, Linux' })).toBe(true)
+    expect(observationPassesExplicitFiltersV36_13(weak, { location: 'Annapolis Junction, MD' })).toBe(false)
+    expect(observationPassesExplicitFiltersV36_13({ ...strong, location: undefined }, { location: 'Annapolis Junction, MD' })).toBe(false)
+    expect(observationPassesExplicitFiltersV36_13(strong, { company: 'Acme', title: 'RHEL' })).toBe(true)
   })
 
   it('synthesizes one primary contact per channel and keeps alternatives separate', () => {
