@@ -16,18 +16,20 @@ describe('V36.9 candidate search source-scope UX', () => {
     expect(source).toContain('<CandidateProviderReadinessV36_9 />')
   })
 
-  it('makes zero-provider readiness explicit instead of silently falling back to imports', () => {
+  it('makes provider runtime visibility prominent instead of silently falling back to imports', () => {
     const source = read('components/CandidateProviderReadinessV36_9.tsx')
-    expect(source).toContain('External Talent Universe is not active in this environment.')
-    expect(source).toContain('does <b>not</b> silently fall back to your imported LinkedIn connections or Candidate Database')
-    expect(source).toContain('Zero professional people-search providers have executable credentials present.')
+    expect(source).toContain('Provider connections:')
+    expect(source).toContain('professional search provider')
+    expect(source).toContain('does <b>not</b> silently fall back to imported LinkedIn connections or Candidate Database records')
+    expect(source).toContain('Missing from this runtime:')
+    expect(source).toContain('CORESIGNAL_API_KEY')
   })
 
   it('distinguishes configured provider credentials from successful live vendor verification', () => {
     const source = read('components/CandidateProviderReadinessV36_9.tsx')
-    expect(source).toContain('provider key')
     expect(source).toContain('key present')
-    expect(source).toContain('does not prove vendor authentication or API compatibility')
-    expect(source).toContain('live-verified only after a real search returns successful telemetry')
+    expect(source).toContain('does not prove vendor authentication')
+    expect(source).toContain('live-verified only after a real search succeeds')
+    expect(source).toContain('even if they exist elsewhere in Vercel')
   })
 })
