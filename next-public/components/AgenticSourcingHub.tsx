@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { AgenticSourcingChatV36_15 } from '@/components/AgenticSourcingChatV36_15'
+import { AgentProviderStatusV36_16 } from '@/components/AgentProviderStatusV36_16'
 import { roleMetrics } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
@@ -28,12 +29,13 @@ export function AgenticSourcingHub() {
       </div>
     </section>
 
+    <AgentProviderStatusV36_16 />
     <AgenticSourcingChatV36_15 />
 
     <div className="product-summary-grid">
       <div className="product-stat"><small>Active roles</small><b>{activeRoles.length}</b><span>Available to source</span></div>
       <div className="product-stat"><small>Agentic loop</small><b>5</b><span>Brief → Strategy → Slate → Review → Learned</span></div>
-      <div className="product-stat"><small>Auto-execution</small><b>Read</b><span>People search only in V36.15</span></div>
+      <div className="product-stat"><small>Auto-execution</small><b>Read</b><span>People search; paid reads remain approval gated</span></div>
       <div className="product-stat"><small>Hiring actions</small><b>Human</b><span>No autonomous outreach, merge, or ATS write</span></div>
     </div>
 
