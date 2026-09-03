@@ -9,16 +9,14 @@ type Candidate = { id: string; canonicalName: string; headline?: string; current
 type Command = { label: string; detail: string; href: string; shortcut?: string }
 
 const commands: Command[] = [
-  { label: 'People Search', detail: 'Find a person by name, email, phone, profile URL, or professional criteria', href: '/app/people-search', shortcut: 'G P' },
-  { label: 'AI Sourcing', detail: 'Run natural-language, JD, Boolean, and role-based candidate discovery', href: '/app/agentic-sourcing', shortcut: 'G S' },
-  { label: 'Talent Insights', detail: 'Analyze observed market breadth, search difficulty, and sourcing strategy', href: '/app/talent-insights', shortcut: 'G I' },
-  { label: 'Open Today', detail: 'Approvals, candidate reviews, briefs, and agent work', href: '/app/agent-os', shortcut: 'G T' },
-  { label: 'Create a role', detail: 'Open the role portfolio and start a calibrated intake', href: '/app/roles?new=1', shortcut: 'N R' },
-  { label: 'Open AutoSource', detail: 'Review discovery campaigns and ambiguous identities', href: '/app/autosource', shortcut: 'G A' },
-  { label: 'Search Talent', detail: 'Find known canonical candidates, evidence, and saved profile links', href: '/app/candidate-database', shortcut: 'G C' },
-  { label: 'Open Evidence Ledger', detail: 'Review provenance, conflicts, and freshness', href: '/app/evidence-ledger' },
-  { label: 'Open Network Vault', detail: 'Find relationship context and warm paths', href: '/app/network' },
-  { label: 'Open Source Operations', detail: 'Review sources, enrichment, and graph growth', href: '/app/acquisition' },
+  { label: 'Search', detail: 'Find and refine talent with conversational Search Brain, provider execution, and evidence review', href: '/app/search', shortcut: 'G S' },
+  { label: 'Today', detail: 'Resume recruiter decisions, approvals, briefs, and active work', href: '/app/today', shortcut: 'G T' },
+  { label: 'Roles', detail: 'Open role workspaces, candidate slates, and calibration', href: '/app/roles', shortcut: 'G R' },
+  { label: 'Create a role', detail: 'Start from a hiring need and create a calibrated workspace', href: '/app/roles?new=1', shortcut: 'N R' },
+  { label: 'Talent', detail: 'Rediscover known candidates and inspect Candidate Graph records', href: '/app/candidate-database', shortcut: 'G C' },
+  { label: 'Sources', detail: 'Inspect connections, provenance, evidence, and source operations', href: '/app/sources', shortcut: 'G D' },
+  { label: 'Evidence ledger', detail: 'Audit candidate claim provenance, conflicts, and freshness', href: '/app/evidence-ledger' },
+  { label: 'Import talent', detail: 'Bring authorized candidate data into SourcingOS', href: '/app/import' },
 ]
 
 export function CommandPalette({ triggerClassName = 'app-command-trigger', hotkey = true }: { triggerClassName?: string; hotkey?: boolean }) {
@@ -112,9 +110,9 @@ export function CommandPalette({ triggerClassName = 'app-command-trigger', hotke
         <div className="command-palette-search"><span>⌕</span><input ref={inputRef} value={query} onChange={event => setQuery(event.target.value)} placeholder="Search roles, candidates, or actions…" aria-label="Search SourcingOS" /><kbd>Esc</kbd></div>
         <div className="command-palette-results">
           {!!filteredRoles.length && <div className="command-group"><div className="command-group-label">Roles</div>{filteredRoles.map(role => <button key={role.id} onClick={() => navigate(`/app/roles/${role.id}`)}><span><b>{role.intake.title}</b><small>{[role.intake.location, role.status, `${role.candidates.length} candidates`].filter(Boolean).join(' · ')}</small></span><em>Role</em></button>)}</div>}
-          {(loadingCandidates || candidates.length > 0) && <div className="command-group"><div className="command-group-label">Candidates</div>{loadingCandidates && <div className="command-loading">Searching Candidate Graph…</div>}{candidates.map(candidate => <button key={candidate.id} onClick={() => navigate(`/app/candidate/${candidate.id}`)}><span><b>{candidate.canonicalName}</b><small>{[candidate.headline, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate intelligence record'}</small></span><em>Candidate</em></button>)}</div>}
-          {!!filteredCommands.length && <div className="command-group"><div className="command-group-label">Actions and destinations</div>{filteredCommands.map(command => <button key={command.href} onClick={() => navigate(command.href)}><span><b>{command.label}</b><small>{command.detail}</small></span>{command.shortcut ? <kbd>{command.shortcut}</kbd> : <em>Open</em>}</button>)}</div>}
-          {query.trim().length >= 2 && !loadingCandidates && !candidates.length && !filteredRoles.length && !filteredCommands.length && <div className="command-empty"><b>No exact matches</b><span>Search the full Candidate Graph for “{query.trim()}”.</span><button className="btn" onClick={() => navigate(`/app/candidate-database?q=${encodeURIComponent(query.trim())}`)}>Search candidates</button></div>}
+          {(loadingCandidates || candidates.length > 0) && <div className="command-group"><div className="command-group-label">Talent</div>{loadingCandidates && <div className="command-loading">Searching Candidate Graph…</div>}{candidates.map(candidate => <button key={candidate.id} onClick={() => navigate(`/app/candidate/${candidate.id}`)}><span><b>{candidate.canonicalName}</b><small>{[candidate.headline, candidate.currentCompany, candidate.location].filter(Boolean).join(' · ') || 'Candidate intelligence record'}</small></span><em>Person</em></button>)}</div>}
+          {!!filteredCommands.length && <div className="command-group"><div className="command-group-label">Workflows and actions</div>{filteredCommands.map(command => <button key={command.href} onClick={() => navigate(command.href)}><span><b>{command.label}</b><small>{command.detail}</small></span>{command.shortcut ? <kbd>{command.shortcut}</kbd> : <em>Open</em>}</button>)}</div>}
+          {query.trim().length >= 2 && !loadingCandidates && !candidates.length && !filteredRoles.length && !filteredCommands.length && <div className="command-empty"><b>No exact matches</b><span>Search the full Candidate Graph for “{query.trim()}”.</span><button className="btn" onClick={() => navigate(`/app/candidate-database?q=${encodeURIComponent(query.trim())}`)}>Search talent</button></div>}
         </div>
       </section>
     </div>}
