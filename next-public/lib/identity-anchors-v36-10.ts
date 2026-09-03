@@ -32,6 +32,10 @@ export function canonicalProfessionalProfileUrlV36_10(value: unknown): Professio
   const parts = path.split('/').filter(Boolean)
   const observedUrl = parsed.toString()
 
+  // LinkedIn is normalized so the product can display/dedupe the observed URL,
+  // but V36.11 deliberately excludes it from deterministic cross-source
+  // identity authority. Commercial providers may report the same LinkedIn URL;
+  // that observation is useful context, not permission to link identities.
   if (host === 'linkedin.com' && parts.length === 2 && ['in', 'pub'].includes(parts[0].toLowerCase())) {
     return { network: 'linkedin', canonicalUrl: `https://linkedin.com/${parts[0].toLowerCase()}/${parts[1].toLowerCase()}`, observedUrl }
   }
@@ -86,9 +90,19 @@ export function professionalProfileAnchorsV36_10(result: SourceResult): Professi
   return Array.from(new Map(anchors.map(anchor => [`${anchor.network}:${anchor.canonicalUrl}`, anchor])).values())
 }
 
+function deterministicProfessionalAnchorV36_11(anchor: ProfessionalProfileAnchorV36_10): boolean {
+  return anchor.network !== 'linkedin'
+}
+
+/**
+ * Returns only professional-profile overlaps that are strong enough to create
+ * an identity-review proposal. LinkedIn overlap is intentionally omitted here:
+ * it remains visible provenance and a lookup anchor, but never deterministic
+ * cross-provider identity authority.
+ */
 export function sharedProfessionalProfileAnchorsV36_10(a: SourceResult, b: SourceResult) {
-  const anchorsA = professionalProfileAnchorsV36_10(a)
-  const anchorsB = professionalProfileAnchorsV36_10(b)
+  const anchorsA = professionalProfileAnchorsV36_10(a).filter(deterministicProfessionalAnchorV36_11)
+  const anchorsB = professionalProfileAnchorsV36_10(b).filter(deterministicProfessionalAnchorV36_11)
   const keysB = new Map(anchorsB.map(anchor => [`${anchor.network}:${anchor.canonicalUrl}`, anchor]))
   const shared = anchorsA.flatMap(anchor => {
     const other = keysB.get(`${anchor.network}:${anchor.canonicalUrl}`)
