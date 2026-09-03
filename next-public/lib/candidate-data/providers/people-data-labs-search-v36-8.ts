@@ -4,6 +4,7 @@ import type {
   CandidateDataSearchResultV36_8,
   CandidateProviderObservationV36_8,
   CandidateProviderProfileUrlV36_8,
+  CandidateProviderRichProfileV36_14,
 } from '../types-v36-8'
 import { safeCandidateSearchLimitV36_8 } from '../types-v36-8'
 
@@ -14,6 +15,11 @@ function str(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+function bounded(value: unknown, max = 1200): string | undefined {
+  const valueString = str(value)
+  return valueString ? valueString.replace(/\s+/g, ' ').trim().slice(0, max) : undefined
+}
+
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -21,6 +27,26 @@ function record(value: unknown): Record<string, unknown> {
 function strings(value: unknown, max = 40): string[] {
   if (!Array.isArray(value)) return []
   return Array.from(new Set(value.map(str).filter(Boolean) as string[])).slice(0, max)
+}
+
+function nestedText(value: unknown, ...keys: string[]): string | undefined {
+  const direct = bounded(value, 240)
+  if (direct) return direct
+  const row = record(value)
+  for (const key of keys) {
+    const candidate = bounded(row[key], 240)
+    if (candidate) return candidate
+  }
+  return undefined
+}
+
+function firstArrayText(value: unknown, maxItems = 6): string | undefined {
+  if (!Array.isArray(value)) return nestedText(value, 'name', 'display_name')
+  const values = value.slice(0, maxItems).flatMap(item => {
+    const text = nestedText(item, 'name', 'display_name', 'value')
+    return text ? [text] : []
+  })
+  return values.length ? Array.from(new Set(values)).join(', ') : undefined
 }
 
 function normalizeTerms(values: string[] | undefined, max: number): string[] {
@@ -116,6 +142,70 @@ function profileUrls(row: Record<string, unknown>): CandidateProviderProfileUrlV
   return candidates.slice(0, 12)
 }
 
+function safeUrl(value: unknown): string | undefined {
+  const raw = str(value)
+  if (!raw) return undefined
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, '')}`)
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : undefined
+  } catch { return undefined }
+}
+
+function pdlRichProfile(row: Record<string, unknown>): CandidateProviderRichProfileV36_14 | undefined {
+  const experienceRows = Array.isArray(row.experience) ? row.experience.map(record) : []
+  const educationRows = Array.isArray(row.education) ? row.education.map(record) : []
+  const rawCertifications = Array.isArray(row.certifications) ? row.certifications : []
+
+  const experience = experienceRows.slice(0, 30).map(item => {
+    const title = record(item.title)
+    const company = record(item.company)
+    const endDate = bounded(item.end_date ?? item.endDate, 80)
+    const locations = firstArrayText(item.location_names) || nestedText(item.location, 'name', 'display_name')
+    return {
+      title: nestedText(title, 'name', 'title') || nestedText(item.title_name, 'name'),
+      company: nestedText(company, 'name', 'display_name') || nestedText(item.company_name, 'name'),
+      location: locations,
+      startDate: bounded(item.start_date ?? item.startDate, 80),
+      endDate,
+      current: item.is_primary === true || item.current === true || (!endDate && Boolean(item.start_date ?? item.startDate)),
+      description: bounded(item.summary ?? item.description, 1200),
+    }
+  }).filter(item => item.title || item.company || item.description)
+
+  const education = educationRows.slice(0, 20).map(item => {
+    const school = record(item.school)
+    return {
+      school: nestedText(school, 'name', 'display_name') || nestedText(item.school_name, 'name'),
+      degree: firstArrayText(item.degrees) || nestedText(item.degree, 'name', 'display_name'),
+      field: firstArrayText(item.majors) || firstArrayText(item.fields_of_study) || nestedText(item.field, 'name', 'display_name'),
+      startDate: bounded(item.start_date ?? item.startDate, 80),
+      endDate: bounded(item.end_date ?? item.endDate, 80),
+      description: bounded(item.summary ?? item.description, 800),
+    }
+  }).filter(item => item.school || item.degree || item.field)
+
+  const certifications = rawCertifications.slice(0, 20).map(item => {
+    const cert = record(item)
+    const name = nestedText(item, 'name', 'title') || nestedText(cert.name, 'name') || ''
+    return {
+      name,
+      issuer: nestedText(cert.issuer, 'name', 'display_name') || nestedText(cert.organization, 'name'),
+      issuedAt: bounded(cert.issue_date ?? cert.issued_at ?? cert.issuedAt, 80),
+      expiresAt: bounded(cert.expiration_date ?? cert.expires_at ?? cert.expiresAt, 80),
+      credentialUrl: safeUrl(cert.url ?? cert.credential_url ?? cert.credentialUrl),
+    }
+  }).filter(item => item.name)
+
+  const summary = bounded(row.summary ?? row.bio ?? row.interests, 1800)
+  if (!summary && !experience.length && !education.length && !certifications.length) return undefined
+  return {
+    ...(summary ? { summary } : {}),
+    ...(experience.length ? { experience } : {}),
+    ...(education.length ? { education } : {}),
+    ...(certifications.length ? { certifications } : {}),
+  }
+}
+
 function toObservation(row: Record<string, unknown>): CandidateProviderObservationV36_8 | undefined {
   const providerPersonId = str(row.id)
   const displayName = str(row.full_name)
@@ -137,6 +227,7 @@ function toObservation(row: Record<string, unknown>): CandidateProviderObservati
     skills: strings(row.skills),
     profileUrls: profileUrls(row),
     contactAvailability: { email: emailAvailable, phone: phoneAvailable },
+    richProfile: pdlRichProfile(row),
     refreshedAt: str(row.job_last_verified) || str(row.location_last_updated),
     observedAt: new Date().toISOString(),
   }
@@ -214,7 +305,7 @@ export async function searchPeopleDataLabsV36_8(request: CandidateDataSearchRequ
         discovered: observations.length,
         latencyMs: Date.now() - started,
         estimatedCredits: observations.length,
-        message: 'PDL Person Search completed. Results are retrieval observations, not qualification decisions.',
+        message: 'PDL resume search completed. Structured experience/education/certification fields are preserved when returned; results remain provider observations, not qualification decisions.',
       },
       ...(scrollToken ? { threadId: scrollToken } : {}),
       warnings: request.offset && request.offset > 0 ? ['PDL uses scroll_token cursor pagination; legacy numeric offset is intentionally not forwarded.'] : [],
