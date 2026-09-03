@@ -38,7 +38,7 @@ describe('V36.16 async contact enrichment', () => {
       data: {
         emails: [
           { email: 'work@example.com', email_type: 'work', email_status: 'valid' },
-          { email: 'person@gmail.com', email_type: 'personal', email_status: 'risky' },
+          { email: 'personal@example.com', email_type: 'personal', email_status: 'risky' },
         ],
         phones: [{ number: '+1 202 555 0101', type: 'mobile' }],
         credits: { api_credits: { total: 9 } },
@@ -55,7 +55,7 @@ describe('V36.16 async contact enrichment', () => {
       data: [{
         contact_info: {
           work_emails: [{ email: 'work@example.com', status: 'DELIVERABLE' }],
-          personal_emails: [{ email: 'person@gmail.com', status: 'DELIVERABLE' }],
+          personal_emails: [{ email: 'personal@example.com', status: 'DELIVERABLE' }],
           phones: [{ number: '+12025550102', region: 'US' }],
         },
       }],
