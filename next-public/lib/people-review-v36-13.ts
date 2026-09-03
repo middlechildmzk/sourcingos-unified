@@ -253,6 +253,9 @@ function host(value: string): string {
 }
 
 function channelForSignal(signal: ContactSignalForReviewV36_13): keyof Omit<ContactReviewSummaryV36_13, 'rejected'> | 'rejected' {
+  // Permission and deliverability are orthogonal. Preserve a DNC observation in
+  // provenance/rejected signals, but never promote it to a recruiter-usable primary.
+  if (signal.permissionStatus === 'do_not_contact') return 'rejected'
   if (signal.deliverability === 'invalid' || signal.deliverability === 'disconnected') return 'rejected'
   if (signal.type === 'email') {
     if (signal.channelKind === 'work_email') return 'workEmail'
@@ -312,6 +315,7 @@ export function bestPhoneChannelV36_13(summary: ContactReviewSummaryV36_13): Con
 
 export function contactSupportLabelV36_13(signal?: ContactSignalForReviewV36_13): string {
   if (!signal) return 'Not found'
+  if (signal.permissionStatus === 'do_not_contact') return 'Do not contact'
   if (signal.verified || (signal.deliverability === 'verified' && ['deterministic', 'strong'].includes(signal.ownershipConfidence || ''))) return 'Best supported'
   if (signal.deliverability === 'verified' || signal.deliverability === 'valid') return 'Deliverability supported'
   if (signal.ownershipConfidence === 'deterministic' || signal.ownershipConfidence === 'strong') return 'Ownership supported'
