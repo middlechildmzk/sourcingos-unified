@@ -67,12 +67,12 @@ describe('V36.8 Candidate Data Fabric', () => {
   })
 
   it('turns a plain person name into an explicit PDL full-name lookup instead of skipping the provider', () => {
-    const body = buildPeopleDataLabsSearchBodyV36_8({ query: 'Dan Larson', limit: 10 })
+    const body = buildPeopleDataLabsSearchBodyV36_8({ query: 'Avery Example', limit: 10 })
     expect(body).toMatchObject({ size: 10, dataset: 'resume', titlecase: true })
     expect(body.query).toEqual({
       bool: {
         must: [
-          { bool: { should: [{ match_phrase: { full_name: 'dan larson' } }], minimum_should_match: 1 } },
+          { bool: { should: [{ match_phrase: { full_name: 'avery example' } }], minimum_should_match: 1 } },
         ],
       },
     })
