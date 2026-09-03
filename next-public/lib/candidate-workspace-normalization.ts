@@ -36,6 +36,7 @@ export type CandidateWorkspaceCandidate = {
   openToWorkSignalIds: string[]
   mergeStatus: string
   updatedAt?: string
+  searchRank?: number
   universe?: CandidateWorkspaceUniverse
 }
 
@@ -70,6 +71,8 @@ export type CandidateWorkspaceCounts = {
   pendingMatchReviews: number
 }
 
+export type CandidateWorkspaceSearchMode = 'none' | 'candidate_graph' | 'legacy_scalar'
+
 export type CandidateWorkspaceSnapshot = {
   ok: boolean
   persistence_mode: 'preview' | 'supabase'
@@ -83,6 +86,7 @@ export type CandidateWorkspaceSnapshot = {
   counts: CandidateWorkspaceCounts
   page: { limit: number; offset: number; hasMore: boolean }
   search: string
+  searchMode: CandidateWorkspaceSearchMode
   activeRoleId?: string
 }
 
@@ -109,6 +113,7 @@ export const EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT: CandidateWorkspaceSnapshot = {
   },
   page: { limit: 50, offset: 0, hasMore: false },
   search: '',
+  searchMode: 'none',
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -139,6 +144,11 @@ function count(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback
 }
 
+function optionalNumber(value: unknown): number | undefined {
+  const parsed = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
 function bounded(value: unknown, fallback: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, count(value, fallback)))
 }
@@ -152,6 +162,10 @@ function entityKind(value: unknown): EntityKind {
     || value === 'unknown'
     ? value
     : 'unknown'
+}
+
+function searchMode(value: unknown): CandidateWorkspaceSearchMode {
+  return value === 'candidate_graph' || value === 'legacy_scalar' ? value : 'none'
 }
 
 function objectRows(value: unknown): Record<string, unknown>[] {
@@ -235,6 +249,7 @@ function normalizeCandidate(value: unknown, index: number): CandidateWorkspaceCa
   if (!candidate) return null
   const id = text(candidate.id, `candidate-${index}`, 200)
   const canonicalName = text(candidate.canonicalName ?? candidate.canonical_name, 'Unconfirmed profile', 300)
+  const searchRank = optionalNumber(candidate.searchRank ?? candidate.search_rank)
   return {
     id,
     canonicalName,
@@ -251,6 +266,7 @@ function normalizeCandidate(value: unknown, index: number): CandidateWorkspaceCa
     openToWorkSignalIds: textArray(candidate.openToWorkSignalIds ?? candidate.open_to_work_signal_ids, 500, 200),
     mergeStatus: text(candidate.mergeStatus ?? candidate.merge_status, 'pending', 80),
     updatedAt: optionalText(candidate.updatedAt ?? candidate.updated_at, 100),
+    ...(searchRank !== undefined ? { searchRank } : {}),
     universe: normalizeUniverse(candidate.universe),
   }
 }
@@ -332,6 +348,7 @@ export function normalizeCandidateWorkspaceSnapshot(value: unknown): CandidateWo
       hasMore: rawPage.hasMore === true,
     },
     search: text(snapshot.search, '', 200),
+    searchMode: searchMode(snapshot.searchMode ?? snapshot.search_mode),
     activeRoleId: optionalText(snapshot.activeRoleId ?? snapshot.active_role_id, 100),
   }
 }
