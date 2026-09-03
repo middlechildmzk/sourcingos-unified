@@ -68,6 +68,7 @@ export async function enrichWithAnyMailFinderV36_8(request: ContactEnrichmentReq
     const valid = status === 'valid'
     const signals = [makeContactSignal({
       type: 'email',
+      channelKind: 'work_email',
       value: email,
       sourceProvider: PROVIDER,
       confidence: valid ? 'high' : 'medium',
@@ -75,13 +76,13 @@ export async function enrichWithAnyMailFinderV36_8(request: ContactEnrichmentReq
       deliverability: valid ? 'valid' : status === 'risky' ? 'risky' : 'unknown',
       providerStatusRaw: status,
       rawSource: 'anymailfinder:person_email',
-      notes: `Real-time AnyMail Finder result. credits_charged=${String(data.credits_charged ?? 'unknown')}; contact permission remains unknown.`,
+      notes: `Real-time AnyMail Finder work-email result. credits_charged=${String(data.credits_charged ?? 'unknown')}; contact permission remains unknown.`,
     })]
 
     return {
       provider: PROVIDER,
       providerConfigured: true,
-      message: valid ? 'Found a provider-validated email.' : 'Found an email with non-final provider status.',
+      message: valid ? 'Found a provider-validated work email.' : 'Found a work email with non-final provider status.',
       signals,
       match: {
         matchState: linkedin(request) ? 'exact_anchor' : 'strong',
