@@ -7,12 +7,16 @@ const SIGNATURE_VERSION = 'v36.12'
 
 /**
  * Observation integrity is an internal SourcingOS security concern, not a
- * vendor-auth concern. Never reuse/derive this HMAC key from provider API keys:
- * rotating a search vendor credential must not invalidate saved review payloads.
+ * vendor-auth concern. Prefer a dedicated signing secret. During the V36.12
+ * rollout, CRON_SECRET is accepted as a server-only compatibility fallback so
+ * production can upgrade without ever deriving signatures from provider API
+ * credentials. Add OBSERVATION_SIGNING_SECRET to remove that fallback later.
  */
 function signingKey(): string | undefined {
-  const value = process.env.OBSERVATION_SIGNING_SECRET?.trim()
-  return value && value.length >= 32 ? value : undefined
+  const dedicated = process.env.OBSERVATION_SIGNING_SECRET?.trim()
+  if (dedicated && dedicated.length >= 32) return dedicated
+  const compatibility = process.env.CRON_SECRET?.trim()
+  return compatibility && compatibility.length >= 32 ? compatibility : undefined
 }
 
 function stableObservationPayload(observation: CandidateProviderObservationV36_8): string {
