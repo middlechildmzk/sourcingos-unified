@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
+import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
@@ -14,7 +15,8 @@ import { searchContactOutV36_8 } from '@/lib/candidate-data/providers/contactout
 import { searchSignalHireV36_8 } from '@/lib/candidate-data/providers/signalhire-v36-8'
 import { searchLinkUpV36_8 } from '@/lib/candidate-data/providers/linkup-v36-8'
 import { searchExaPeopleV36_8 } from '@/lib/candidate-data/providers/exa-v36-8'
-import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8 } from '@/lib/candidate-data/types-v36-8'
+import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8, CandidateDataSearchRequestV36_8 } from '@/lib/candidate-data/types-v36-8'
+import { buildSearchQualitySnapshotV36_12 } from '@/lib/search-quality-v36-12'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,8 +24,10 @@ const providerEnum = z.enum(['pearch', 'people_data_labs', 'coresignal', 'data_v
 const bodySchema = z.object({
   query: z.string().trim().min(2).max(3000),
   requirements: z.array(z.object({ text: z.string().trim().min(1).max(300), mustHave: z.boolean() })).max(30).optional(),
+  names: z.array(z.string().trim().min(1).max(180)).max(20).optional(),
   titles: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
   skills: z.array(z.string().trim().min(1).max(160)).max(50).optional(),
+  companies: z.array(z.string().trim().min(1).max(180)).max(30).optional(),
   locations: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   limit: z.number().int().min(1).max(50).default(20),
   offset: z.number().int().min(0).max(100000).default(0),
@@ -61,20 +65,52 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, code: 'candidate_provider_not_configured', error: 'No implemented candidate-search provider is configured for this request.', providerStatus: configured }, { status: 503 })
   }
 
-  const result = await runCandidateDataSearchV36_8({
+  const searchRequest: CandidateDataSearchRequestV36_8 = {
     query: parsed.data.query,
     requirements: parsed.data.requirements,
+    names: parsed.data.names,
     titles: parsed.data.titles,
     skills: parsed.data.skills,
+    companies: parsed.data.companies,
     locations: parsed.data.locations,
     limit: parsed.data.limit,
     offset: parsed.data.offset,
     providerPersonBlacklist: parsed.data.providerPersonBlacklist,
     highFreshness: parsed.data.highFreshness,
     revealContact: false,
-  }, adapters, parsed.data.limit)
+  }
 
+  const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit)
   const reviewObservations = result.observations.map(signedProviderObservationV36_8).filter(Boolean)
+  const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
+
+  // Persist recruiter-owned measurement before later provider repairs. This is
+  // the baseline ledger for Provider Lift; it is not a candidate-data store.
+  if (!gate.preview && isSupabaseConfigured()) {
+    const sb = createServerSupabaseClient()
+    if (sb) {
+      try {
+        await sb.from('search_quality_runs').insert({
+          owner_id: gate.userId,
+          canonical_role_key: searchQuality.canonicalRoleKey || null,
+          query: searchRequest.query,
+          requirements: searchRequest.requirements || [],
+          structured_request: {
+            names: searchRequest.names || [],
+            titles: searchRequest.titles || [],
+            skills: searchRequest.skills || [],
+            companies: searchRequest.companies || [],
+            locations: searchRequest.locations || [],
+            providers: Array.from(requested),
+          },
+          metrics: searchQuality,
+          provider_telemetry: result.telemetry,
+        })
+      } catch {
+        // Search success must never depend on analytics persistence.
+      }
+    }
+  }
 
   return NextResponse.json({
     ok: true,
@@ -86,6 +122,7 @@ export async function POST(req: NextRequest) {
     discoveredBeforeCap: result.discoveredBeforeCap,
     returnedAfterCap: result.returnedAfterCap,
     contributingProviders: result.contributingProviders,
+    searchQuality,
     warnings: result.warnings,
     trust: {
       providerObservationsAreCandidateFacts: false,
