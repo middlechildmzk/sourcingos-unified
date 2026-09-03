@@ -30,15 +30,63 @@ function pairKey(a: string, b: string): string {
   return [a, b].sort().join('|')
 }
 
+function isLinkedInProfileUrl(value?: string): boolean {
+  const raw = String(value || '').trim()
+  if (!raw) return false
+  try {
+    const parsed = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`)
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, '')
+    return host === 'linkedin.com' && /^\/(?:in|pub)\//i.test(parsed.pathname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The legacy explicit-cross-profile rule predates commercial provider rows. A
+ * provider-reported LinkedIn URL must not become deterministic identity
+ * authority merely because another observation exposes the same URL. Preserve
+ * the comparison as ordinary review evidence, but remove its deterministic
+ * weight when the linked target is a LinkedIn profile.
+ */
+function suppressLinkedInCrossLinkAuthority(
+  base: ReturnType<typeof compareSourceProfiles>,
+  existing: SourceResult,
+  incoming: SourceResult,
+) {
+  const crossLink = base.deterministicRules.find(rule => rule.ruleId === 'explicit_cross_profile_link')
+  const restrictedTarget = isLinkedInProfileUrl(existing.profileUrl) || isLinkedInProfileUrl(incoming.profileUrl)
+  if (!crossLink?.passed || !restrictedTarget) return base
+
+  const deterministicRules = base.deterministicRules.map(rule => rule.ruleId === 'explicit_cross_profile_link'
+    ? {
+        ...rule,
+        passed: false,
+        evidence: 'LinkedIn profile overlap is preserved for review but is not deterministic cross-source identity authority',
+      }
+    : rule)
+  const reasons = base.reasons.filter(reason => reason !== 'One profile explicitly links to the other')
+  const deterministicAnchor = deterministicRules.some(rule => rule.passed && rule.ruleId !== 'same_source_stable_id')
+
+  return {
+    ...base,
+    score: Math.max(0, base.score - 30),
+    reasons,
+    deterministicRules,
+    deterministicAnchor,
+  }
+}
+
 function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
-  const base = compareSourceProfiles(existing, incoming)
+  const rawBase = compareSourceProfiles(existing, incoming)
+  const base = suppressLinkedInCrossLinkAuthority(rawBase, existing, incoming)
   const professional = sharedProfessionalProfileAnchorsV36_10(existing, incoming)
   const professionalRule = {
     ruleId: 'shared_canonical_professional_profile',
     passed: professional.matched,
     evidence: professional.matched
       ? professional.reasons.join(' · ')
-      : 'No shared canonical LinkedIn, GitHub, Stack Overflow, Hugging Face, DEV, Kaggle, or ORCID profile URL',
+      : 'No shared deterministic GitHub, Stack Overflow, Hugging Face, DEV, Kaggle, or ORCID profile URL',
   }
 
   return {
@@ -55,10 +103,11 @@ function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult
  *
  * Automatic proposal creation is intentionally stricter than manual identity
  * review: at least one deterministic cross-source anchor is required (shared
- * observed public email, personal domain, explicit profile cross-link, or the
- * same canonical professional profile URL observed independently by two
- * sources). Names, locations, organizations, and topic overlap may rank a
- * proposal but can never cause one to be created on their own.
+ * observed public email, personal domain, explicit source-native cross-link,
+ * or the same approved public professional profile observed independently by
+ * two sources). LinkedIn overlap is review context only and cannot satisfy this
+ * deterministic gate. Names, locations, organizations, and topic overlap may
+ * rank a proposal but can never cause one to be created on their own.
  *
  * This function never links source profiles and never changes candidate IDs.
  */
