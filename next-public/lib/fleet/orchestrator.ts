@@ -91,8 +91,13 @@ export async function runFleetLaneV40(input: {
 
   for (const result of results) {
     creditsSpent += result.creditsSpent
-    errors += result.report.apiErrors + (result.haltReason === 'source_error' ? 1 : 0)
+    const sourceScoutErrors = result.report.apiErrors + (result.haltReason === 'source_error' ? 1 : 0)
+    let sourcePersisted = 0
+    let sourceProposals = 0
+    let sourceCaptureErrors = 0
+    errors += sourceScoutErrors
     warnings.push(...result.report.warnings)
+
     for (const dossier of result.dossiers) {
       const captured = await captureSourceResultV40(
         sb,
@@ -102,20 +107,25 @@ export async function runFleetLaneV40(input: {
       )
       if (captured.ok) {
         persisted += 1
-        proposals += Number(captured.identityReviewProposalsCreated || 0)
+        sourcePersisted += 1
+        const created = Number(captured.identityReviewProposalsCreated || 0)
+        proposals += created
+        sourceProposals += created
       } else {
         errors += 1
+        sourceCaptureErrors += 1
         warnings.push(`${dossier.source}:${dossier.person.sourceProfileId} capture failed (${captured.errorCode || 'unknown'}).`)
       }
     }
+
     await writeFleetTelemetryV40(sb, {
       ownerId: lane.owner_id,
       runId: lane.run_id,
       source: result.source,
       found: result.dossiers.length,
-      persisted: result.dossiers.length,
-      proposals: 0,
-      errors: result.report.apiErrors,
+      persisted: sourcePersisted,
+      proposals: sourceProposals,
+      errors: sourceScoutErrors + sourceCaptureErrors,
       credits: result.creditsSpent,
       warnings: result.report.warnings,
     })
