@@ -1,0 +1,48 @@
+name: V39.1C AI SDK lockfile
+
+on:
+  push:
+    branches:
+      - v39-1c-ai-sdk-gateway-runtime
+    paths:
+      - .github/workflows/v39-1c-lockfile.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate-lockfile:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: next-public
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: v39-1c-ai-sdk-gateway-runtime
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: next-public/package-lock.json
+
+      - name: Add Vercel AI SDK dependencies and regenerate lockfile
+        run: npm install ai @ai-sdk/gateway --save --package-lock-only --ignore-scripts
+
+      - name: Verify lockfile resolves reproducibly
+        run: npm ci --ignore-scripts
+
+      - name: Commit package manifest and lockfile
+        working-directory: .
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add next-public/package.json next-public/package-lock.json
+          git diff --cached --quiet && exit 0
+          git commit -m "V39.1C add Vercel AI SDK dependencies"
+          git push origin HEAD:v39-1c-ai-sdk-gateway-runtime
