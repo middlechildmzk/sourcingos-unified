@@ -7,6 +7,7 @@ export type AiGatewayStatusV39_1 = {
   authMode: AiGatewayAuthModeV39_1
   model: string
   transport: 'vercel_ai_gateway'
+  gatewayRequestRuntimeIntegrated: boolean
   aiSdkRuntimeIntegrated: boolean
   secretMaterialExposed: false
   note: string
@@ -18,9 +19,9 @@ function present(value: string | undefined): boolean {
 
 /**
  * Runtime configuration only. Never return or log the gateway key/OIDC token.
- * Vercel-hosted deployments can authenticate to AI Gateway with the deployment
- * OIDC token; an explicit AI_GATEWAY_API_KEY remains useful for local execution
- * and key-scoped spend controls.
+ * V40 routes the existing SourcingOS reasoning abstraction through AI Gateway's
+ * OpenAI-compatible Responses endpoint without adding another package. The
+ * first-party AI SDK tool-runtime remains a subsequent atomic dependency step.
  */
 export function aiGatewayStatusV39_1(): AiGatewayStatusV39_1 {
   const authMode: AiGatewayAuthModeV39_1 = present(process.env.AI_GATEWAY_API_KEY)
@@ -32,15 +33,13 @@ export function aiGatewayStatusV39_1(): AiGatewayStatusV39_1 {
   return {
     configured: authMode !== 'not_configured',
     authMode,
-    model: process.env.AI_GATEWAY_MODEL?.trim() || 'openai/gpt-5.6-sol',
+    model: process.env.AI_GATEWAY_MODEL?.trim() || process.env.AI_PROVIDER_MODEL?.trim() || 'openai/gpt-5.6-sol',
     transport: 'vercel_ai_gateway',
-    // The repository does not yet include the Vercel AI SDK dependency. Keep
-    // this false until package.json + package-lock are upgraded atomically and
-    // the real structured/tool-calling path passes CI and Preview.
+    gatewayRequestRuntimeIntegrated: true,
     aiSdkRuntimeIntegrated: false,
     secretMaterialExposed: false,
     note: authMode === 'not_configured'
-      ? 'AI Gateway credentials were not detected in this runtime.'
-      : 'Vercel AI Gateway authentication is available; AI SDK execution is gated on the atomic dependency/lockfile integration step.',
+      ? 'AI Gateway credentials were not detected in this runtime; direct provider fallback may still be configured.'
+      : 'Vercel AI Gateway is now an active SourcingOS reasoning transport. First-party AI SDK tool execution remains gated on the atomic dependency/lockfile tranche.',
   }
 }
