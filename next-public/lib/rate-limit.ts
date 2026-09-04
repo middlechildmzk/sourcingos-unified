@@ -5,11 +5,10 @@
 //   1. Upstash Redis REST (preferred on Vercel) when both
 //      UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set.
 //   2. For critical public fan-out/end-user intake endpoints, a shared Supabase RPC fallback.
-//   3. In-memory Map as the final best-effort fallback only.
+//   3. In-memory Map as the final best-effort fallback only for policies that permit it.
 //
-// The jobs-search, auth-bootstrap, contact and public-intake policies intentionally
-// use the shared Supabase fallback when Upstash is not available so one serverless
-// instance cannot bypass another.
+// Authentication bootstrap fails closed in production if no shared limiter can
+// be reached, preventing distributed brute-force attempts across instances.
 // SERVER-ONLY.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
@@ -17,23 +16,24 @@ import { NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 export type RatePolicy =
-  | 'ai'              // AI copilot generation
-  | 'enrichment'      // contact enrichment, per-minute
-  | 'enrichmentDaily' // contact enrichment, per-day cap
-  | 'workbench'       // workbench + candidate-db + projects
-  | 'sources'         // source connector search
-  | 'waitlist'        // public waitlist signup
-  | 'contact'         // public privacy/security/product contact intake
-  | 'submit'          // public job submission
-  | 'authBootstrap'   // one-time beta password bootstrap attempts
-  | 'public'          // low-cost public read endpoints
-  | 'jobsSearch'      // public jobs search; fans out to upstream job sources
-  | 'analytics'       // public analytics events
+  | 'ai'
+  | 'enrichment'
+  | 'enrichmentDaily'
+  | 'workbench'
+  | 'sources'
+  | 'waitlist'
+  | 'contact'
+  | 'submit'
+  | 'authBootstrap'
+  | 'public'
+  | 'jobsSearch'
+  | 'analytics'
 
 interface PolicyDef {
   limit: number
   windowSec: number
   sharedFallback?: boolean
+  failClosed?: boolean
 }
 
 const POLICIES: Record<RatePolicy, PolicyDef> = {
@@ -45,7 +45,7 @@ const POLICIES: Record<RatePolicy, PolicyDef> = {
   waitlist:        { limit: 3,  windowSec: 3_600, sharedFallback: true },
   contact:         { limit: 5,  windowSec: 3_600, sharedFallback: true },
   submit:          { limit: 5,  windowSec: 3_600, sharedFallback: true },
-  authBootstrap:   { limit: 8,  windowSec: 900, sharedFallback: true },
+  authBootstrap:   { limit: 8,  windowSec: 900, sharedFallback: true, failClosed: true },
   public:          { limit: 30, windowSec: 60 },
   jobsSearch:      { limit: 20, windowSec: 60, sharedFallback: true },
   analytics:       { limit: 60, windowSec: 60 },
@@ -55,8 +55,6 @@ export interface RateOk { ok: true; remaining: number }
 export interface RateFail { ok: false; response: NextResponse }
 export type RateResult = RateOk | RateFail
 
-// ── Identifier ────────────────────────────────────────────────────────────────
-/** Prefer the authenticated userId; fall back to client IP; then 'anon'. */
 export function rateIdentifier(req: Request | null | undefined, userId?: string | null): string {
   if (userId) return `u:${userId}`
   const fwd = req?.headers?.get('x-forwarded-for')
@@ -64,7 +62,6 @@ export function rateIdentifier(req: Request | null | undefined, userId?: string 
   return ip ? `ip:${ip}` : 'anon'
 }
 
-// ── Upstash REST backend ──────────────────────────────────────────────────────
 function upstashConfigured(): boolean {
   return Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
 }
@@ -91,7 +88,6 @@ async function upstashHit(key: string, windowSec: number): Promise<number | null
   }
 }
 
-// ── Shared Supabase fallback ──────────────────────────────────────────────────
 async function supabaseHit(key: string, windowSec: number): Promise<number | null> {
   const sb = createServerSupabaseClient()
   if (!sb) return null
@@ -109,7 +105,6 @@ async function supabaseHit(key: string, windowSec: number): Promise<number | nul
   }
 }
 
-// ── In-memory fallback ────────────────────────────────────────────────────────
 const memory = new Map<string, { count: number; resetAt: number }>()
 let warnedSharedFallback = false
 let warnedMemoryFallback = false
@@ -135,17 +130,16 @@ function limited(windowSec: number): RateFail {
   }
 }
 
-/**
- * Apply a rate-limit policy.
- *
- * Upstash is preferred. Critical fan-out/end-user intake endpoints can opt
- * into the shared Supabase fallback. Memory remains a final availability
- * fallback so a Redis or database incident does not automatically make a
- * public route unavailable.
- *
- * RATE_LIMIT_DISABLED is honored only outside production so a stray production
- * environment variable cannot silently remove abuse protection.
- */
+function limiterUnavailable(): RateFail {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { ok: false, code: 'rate_limit_unavailable', error: 'This protected action is temporarily unavailable. Please try again shortly.' },
+      { status: 503, headers: { 'Retry-After': '60' } }
+    ),
+  }
+}
+
 export async function rateLimit(
   req: Request | null | undefined,
   policy: RatePolicy,
@@ -163,9 +157,7 @@ export async function rateLimit(
 
   let count: number | null = null
 
-  if (upstashConfigured()) {
-    count = await upstashHit(upstashKey, def.windowSec)
-  }
+  if (upstashConfigured()) count = await upstashHit(upstashKey, def.windowSec)
 
   if (count === null && def.sharedFallback) {
     count = await supabaseHit(baseKey, def.windowSec)
@@ -173,6 +165,11 @@ export async function rateLimit(
       console.warn('[rate-limit] Upstash unavailable or unconfigured — using shared Supabase fallback for critical endpoint.')
       warnedSharedFallback = true
     }
+  }
+
+  if (count === null && def.failClosed && process.env.NODE_ENV === 'production') {
+    console.error(`[rate-limit] Shared limiter unavailable for fail-closed policy: ${policy}`)
+    return limiterUnavailable()
   }
 
   if (count === null) {
