@@ -2,14 +2,11 @@ import 'server-only'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/rate-limit'
+import { resolveMcpPrincipalV38_5 } from '@/lib/mcp/sourcingos-mcp-v38-5'
 import {
-  explainCandidateV38_5,
-  getCandidateV38_5,
-  getKnownContactsV38_5,
-  lookupPersonV38_5,
-  resolveMcpPrincipalV38_5,
-  searchOwnedPeopleV38_5,
-} from '@/lib/mcp/sourcingos-mcp-v38-5'
+  executeSourcingOsToolV39_1,
+  mcpToolSpecsV39_1,
+} from '@/lib/intelligence-fabric/tool-contracts-v39-1'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -24,68 +21,6 @@ type RpcRequest = {
   method?: string
   params?: Record<string, any>
 }
-
-const tools = [
-  {
-    name: 'search_people',
-    description: 'Search the recruiter-owned durable SourcingOS Candidate Graph. This does not trigger live provider fan-out or paid enrichment.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'Name, title, company, location, or other canonical candidate text.' },
-        limit: { type: 'integer', minimum: 1, maximum: 25, default: 10 },
-      },
-      required: ['query'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'lookup_person',
-    description: 'Resolve a known person already present in the Candidate Graph by name, professional URL, email, or phone. It never silently merges identities.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        identifier: { type: 'string', description: 'Person name, professional profile URL, observed email, or observed phone.' },
-        company: { type: 'string', description: 'Optional company disambiguator for name lookup.' },
-      },
-      required: ['identifier'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'get_candidate',
-    description: 'Load a canonical Candidate Graph dossier with source profiles, evidence, known contacts, and role membership.',
-    inputSchema: {
-      type: 'object',
-      properties: { candidateId: { type: 'string' } },
-      required: ['candidateId'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'explain_candidate',
-    description: 'Return the evidence and provenance behind a candidate without turning missing evidence into a rejection or provider scores into hiring decisions.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        candidateId: { type: 'string' },
-        limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
-      },
-      required: ['candidateId'],
-      additionalProperties: false,
-    },
-  },
-  {
-    name: 'get_known_contacts',
-    description: 'Read already-observed contact signals for a candidate. This tool never triggers paid contact enrichment and never sends outreach.',
-    inputSchema: {
-      type: 'object',
-      properties: { candidateId: { type: 'string' } },
-      required: ['candidateId'],
-      additionalProperties: false,
-    },
-  },
-]
 
 function rpcResult(id: RpcId | undefined, result: unknown) {
   return NextResponse.json({ jsonrpc: '2.0', id: id ?? null, result }, {
@@ -109,15 +44,6 @@ function textContent(payload: unknown) {
     structuredContent: payload,
     isError: false,
   }
-}
-
-async function callTool(userId: string, name: string, args: Record<string, unknown>) {
-  if (name === 'search_people') return searchOwnedPeopleV38_5(userId, args)
-  if (name === 'lookup_person') return lookupPersonV38_5(userId, args)
-  if (name === 'get_candidate') return getCandidateV38_5(userId, args)
-  if (name === 'explain_candidate') return explainCandidateV38_5(userId, args)
-  if (name === 'get_known_contacts') return getKnownContactsV38_5(userId, args)
-  throw new Error(`Unknown tool: ${name}`)
 }
 
 export async function POST(req: NextRequest) {
@@ -162,9 +88,9 @@ export async function POST(req: NextRequest) {
       serverInfo: {
         name: 'sourcingos',
         title: 'SourcingOS Recruiter Intelligence',
-        version: '38.5.0',
+        version: '39.1.0',
       },
-      instructions: 'Evidence-first recruiter intelligence over the canonical SourcingOS Candidate Graph. Retrieval is not qualification. Identity merges, paid enrichment, outreach, rejection, and hiring decisions require explicit recruiter-controlled workflows outside this read-heavy MCP surface.',
+      instructions: 'Evidence-first recruiter intelligence over the canonical SourcingOS Candidate Graph. MCP and embedded AI share the same governed tool contracts. Retrieval is not qualification. Identity merges, paid enrichment, outreach, rejection, and hiring decisions require explicit recruiter-controlled workflows outside this read-heavy surface.',
     })
     return notification ? new NextResponse(null, { status: 202 }) : response
   }
@@ -172,7 +98,7 @@ export async function POST(req: NextRequest) {
   if (notification) return new NextResponse(null, { status: 202 })
 
   if (body.method === 'ping') return rpcResult(body.id, {})
-  if (body.method === 'tools/list') return rpcResult(body.id, { tools })
+  if (body.method === 'tools/list') return rpcResult(body.id, { tools: mcpToolSpecsV39_1() })
 
   if (body.method === 'tools/call') {
     const name = String(body.params?.name || '')
@@ -180,7 +106,7 @@ export async function POST(req: NextRequest) {
       ? body.params.arguments as Record<string, unknown>
       : {}
     try {
-      const result = await callTool(principal.userId, name, args)
+      const result = await executeSourcingOsToolV39_1(principal.userId, name, args)
       return rpcResult(body.id, textContent(result))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Tool execution failed.'
