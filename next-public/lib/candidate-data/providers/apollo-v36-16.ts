@@ -52,9 +52,12 @@ export function buildApolloPeopleSearchUrlV36_16(request: CandidateDataSearchReq
   for (const location of unique(request.locations || [], 25)) params.append('person_locations[]', location)
   if (request.names?.length === 1) params.set('q_person_name', request.names[0])
 
+  // Apollo q_keywords is a retrieval filter over words. Recruiter qualification
+  // prose such as tenure or clearance belongs in evidence review, not in this
+  // provider filter; requiring those exact words can erase otherwise relevant
+  // people whose provider record simply does not expose that evidence.
   const keywordParts = unique([
     ...(request.skills || []),
-    ...(request.requirements || []).filter(item => item.mustHave).map(item => item.text),
     ...(request.companies || []),
   ], 40)
   if (keywordParts.length) params.set('q_keywords', keywordParts.join(' '))
