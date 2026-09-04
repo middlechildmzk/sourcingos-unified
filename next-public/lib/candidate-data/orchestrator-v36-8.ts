@@ -6,18 +6,21 @@ import type {
 } from './types-v36-8'
 import { candidateObservationKeyV36_8 } from './types-v36-8'
 import { candidateObservationMatchExplanationV36_9 } from './observation-match-explanation-v36-9'
+import { passesRetrievalRelevanceGateV37 } from './retrieval-relevance-v37'
 
 export type CandidateDataOrchestrationV36_8 = {
   observations: CandidateProviderObservationV36_8[]
   telemetry: CandidateDataProviderTelemetryV36_8[]
   warnings: string[]
-  /** Raw discoveries returned by each provider before global capping. */
+  /** Raw discoveries returned by each provider before relevance admission/global capping. */
   providerMix: Record<string, number>
-  /** Provider composition of the retained, interleaved slate after capping. */
+  /** Provider composition of the retained, interleaved slate after relevance admission and capping. */
   retainedProviderMix: Record<string, number>
   discoveredBeforeCap: number
   returnedAfterCap: number
   contributingProviders: number
+  /** Observations excluded before diversity because they lacked minimum retrieval relevance. */
+  relevanceRejected: number
 }
 
 /**
@@ -59,9 +62,21 @@ export async function runCandidateDataSearchV36_8(
   const discoveredBeforeCap = Object.values(providerMix).reduce((sum, count) => sum + count, 0)
   const contributingProviders = Object.values(providerMix).filter(count => count > 0).length
 
+  // A provider-neutral minimum retrieval floor runs before diversity/interleaving.
+  // This is not candidate fit or qualification. It prevents an obviously
+  // unrelated fast source from consuming the visible slate while preserving
+  // unknown/missing candidate evidence as unknown rather than negative evidence.
+  let relevanceRejected = 0
+  const admitted = settled.map(item => item.observations.filter(observation => {
+    const keep = passesRetrievalRelevanceGateV37(request, observation)
+    if (!keep) relevanceRejected += 1
+    return keep
+  }))
+  if (relevanceRejected > 0) warnings.push(`${relevanceRejected} provider observation${relevanceRejected === 1 ? '' : 's'} excluded by the minimum retrieval-relevance gate before source diversity.`)
+
   // Attach a SourcingOS explanation derived only from normalized provider fields
   // and recruiter-entered search criteria. This is transparency, not ranking.
-  const queues = settled.map(item => item.observations.map(observation => ({
+  const queues = admitted.map(items => items.map(observation => ({
     ...observation,
     providerExplanation: [
       observation.providerExplanation,
@@ -69,7 +84,8 @@ export async function runCandidateDataSearchV36_8(
     ].filter(Boolean).join(' '),
   })))
 
-  // Interleave provider results to avoid an early provider monopolizing the slate.
+  // Interleave only admitted provider observations so diversity cannot promote a
+  // weak/unrelated observation above stronger candidate-like evidence.
   const observations: CandidateProviderObservationV36_8[] = []
   const seenProviderIds = new Set<string>()
   const cap = Math.max(1, Math.min(100, globalLimit))
@@ -100,5 +116,6 @@ export async function runCandidateDataSearchV36_8(
     discoveredBeforeCap,
     returnedAfterCap: observations.length,
     contributingProviders,
+    relevanceRejected,
   }
 }
