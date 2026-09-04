@@ -12,16 +12,18 @@ const canonicalSearch = read('components/RoleCanonicalSearchActions.tsx')
 const pasteBack = read('components/RolePasteBackV33.tsx')
 const layout = read('app/app/layout.tsx')
 const ui = read('app/app/v30-uiux.css')
+const v37 = read('app/app/search-workspace.css')
 
 describe('V30 product experience release gate on the canonical V33 role loop', () => {
-  it('keeps the primary navigation focused on the recruiter workflow', () => {
+  it('keeps the primary navigation focused on the V37 recruiter workflow', () => {
     expect(shell).toContain("label: 'Today'")
     expect(shell).toContain("label: 'Roles'")
+    expect(shell).toContain("label: 'Search'")
     expect(shell).toContain("label: 'Talent'")
-    expect(shell).toContain('Research & data')
-    expect(shell).toContain("label: 'Search Lab'")
-    expect(shell).toContain("label: 'AutoSource'")
-    expect(shell).toContain('Human approval stays in the loop.')
+    expect(shell).toContain("label: 'Sources'")
+    expect(shell).not.toContain("label: 'Search Lab'")
+    expect(shell).not.toContain("label: 'AutoSource'")
+    expect(shell).toContain('Evidence visible. Decisions stay human.')
   })
 
   it('turns Today into a focus dashboard with resumable role work', () => {
@@ -59,12 +61,14 @@ describe('V30 product experience release gate on the canonical V33 role loop', (
     expect(pasteBack).toContain('Preserve canonical hypothesis and Search Plan revision')
   })
 
-  it('loads the V30 design layer after legacy product styles', () => {
-    expect(layout).toMatch(/import '\.\/import-center\.css'\s+import '\.\/v30-uiux\.css'/)
+  it('keeps legacy V30 styles while loading the V37 workbench layer centrally', () => {
+    expect(layout).toContain("import './v30-uiux.css'")
+    expect(layout).toContain("import './tokens.css'")
+    expect(layout).toContain("import './search-workspace.css'")
     expect(ui).toContain('.app-desktop-topbar')
     expect(ui).toContain('.today-workspace-grid')
-    expect(ui).toContain('.role-card-v30')
-    expect(ui).toContain('.role-search-studio')
-    expect(ui).toContain(':focus-visible')
+    expect(v37).toContain('.search-workspace')
+    expect(v37).toContain('.candidate-row')
+    expect(v37).toContain('.candidate-inspector')
   })
 })

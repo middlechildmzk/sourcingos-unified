@@ -6,10 +6,8 @@ function read(path: string) {
 }
 
 describe('V33.4 multi-model product intelligence synthesis', () => {
-  it('makes the Roles surface answer attention, changes, and approved learning without AI fit ranking', () => {
-    const portfolio = read('components/RoleWorkspaceClient.tsx')
+  it('keeps portfolio intelligence free of opaque AI fit ranking', () => {
     const desk = read('components/RolePortfolioIntelligenceV33_4.tsx')
-    expect(portfolio).toContain('RolePortfolioIntelligenceV33_4')
     expect(desk).toContain('What needs your attention')
     expect(desk).toContain('What changed')
     expect(desk).toContain('Approved learning')
@@ -20,10 +18,16 @@ describe('V33.4 multi-model product intelligence synthesis', () => {
     expect(desk).not.toContain('market size')
   })
 
-  it('surfaces proposed calibration in the primary role flow but keeps search changes approval-gated', () => {
+  it('keeps proposed search changes reviewable in V37 while preserving calibration approval safety', () => {
     const page = read('app/app/roles/[id]/page.tsx')
+    const workspace = read('components/RoleWorkspaceV37.tsx')
+    const advanced = read('app/app/roles/[id]/advanced/page.tsx')
     const preview = read('components/RoleCalibrationPreviewV33_4.tsx')
-    expect(page).toContain('<RoleCalibrationPreviewV33_4 roleId={id} />')
+    expect(page).toContain('<RoleWorkspaceV37 roleId={id} />')
+    expect(workspace).toContain('proposedLanes')
+    expect(workspace).toContain('Needs review')
+    expect(workspace).toContain('/advanced')
+    expect(advanced).toContain('<RoleDetailClient roleId={id} initialTab="strategy" />')
     expect(preview).toContain('SourcingOS noticed a pattern')
     expect(preview).toContain('applyInsightAction')
     expect(preview).toContain('recommendLaneChanges')

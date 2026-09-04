@@ -5,7 +5,7 @@ import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
-import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
+import { runCandidateDataSearchV36_8, type CandidateDataOrchestrationV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { observationSigningConfiguredV36_12, signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
@@ -55,6 +55,93 @@ function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapt
   return undefined
 }
 
+async function finalizeCandidateSearchPayloadV37({
+  ownerId,
+  preview,
+  searchRequest,
+  result,
+  requestedProviders,
+}: {
+  ownerId: string
+  preview: boolean
+  searchRequest: CandidateDataSearchRequestV36_8
+  result: CandidateDataOrchestrationV36_8
+  requestedProviders: CandidateDataProviderV36_8[]
+}) {
+  const signingConfigured = observationSigningConfiguredV36_12()
+  const reviewObservations = signingConfigured ? result.observations.map(signedProviderObservationV36_8).filter(Boolean) : []
+  const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
+  const sourceHealthEvents = sourceHealthEventsForSearchV36_12(result.telemetry, result.retainedProviderMix)
+
+  if (!preview && isSupabaseConfigured()) {
+    const sb = createServerSupabaseClient()
+    if (sb) {
+      try {
+        const { data: run } = await sb.from('search_quality_runs').insert({
+          owner_id: ownerId,
+          canonical_role_key: searchQuality.canonicalRoleKey || null,
+          query: searchRequest.query,
+          requirements: searchRequest.requirements || [],
+          structured_request: {
+            names: searchRequest.names || [],
+            titles: searchRequest.titles || [],
+            skills: searchRequest.skills || [],
+            companies: searchRequest.companies || [],
+            locations: searchRequest.locations || [],
+            providers: requestedProviders,
+          },
+          metrics: searchQuality,
+          provider_telemetry: result.telemetry,
+        }).select('id').single()
+
+        await sb.from('source_health_events').insert(sourceHealthEvents.map(event => ({
+          owner_id: ownerId,
+          search_quality_run_id: run?.id || null,
+          canonical_role_key: searchQuality.canonicalRoleKey || null,
+          provider: event.provider,
+          status: event.status,
+          outcome: event.outcome,
+          discovered: event.discovered,
+          retained: event.retained,
+          latency_ms: event.latencyMs,
+          estimated_credits: event.estimatedCredits,
+          message: event.message || null,
+        })))
+      } catch {
+        // Search success must never depend on analytics/health persistence.
+      }
+    }
+  }
+
+  const warnings = [...result.warnings]
+  if (!signingConfigured) warnings.unshift('Provider review observations cannot be saved until OBSERVATION_SIGNING_SECRET is configured for this environment.')
+
+  return {
+    ok: true,
+    observations: result.observations,
+    reviewObservations,
+    telemetry: result.telemetry,
+    sourceHealth: sourceHealthEvents,
+    providerMix: result.providerMix,
+    retainedProviderMix: result.retainedProviderMix,
+    discoveredBeforeCap: result.discoveredBeforeCap,
+    returnedAfterCap: result.returnedAfterCap,
+    contributingProviders: result.contributingProviders,
+    relevanceRejected: result.relevanceRejected,
+    searchQuality,
+    warnings,
+    trust: {
+      providerObservationsAreCandidateFacts: false,
+      providerScoresAreQualificationScores: false,
+      contactRevealDuringSearch: false,
+      identityMergePerformed: false,
+      recruiterDecisionPerformed: false,
+      providerReviewObservationsSignedServerSide: signingConfigured,
+      providerDatabaseCountsAreNotUniquePeopleCounts: true,
+    },
+  }
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireSession()
   if (!gate.ok) return gate.response
@@ -86,77 +173,42 @@ export async function POST(req: NextRequest) {
     highFreshness: parsed.data.highFreshness,
     revealContact: false,
   }
+  const requestedProviders = Array.from(requested) as CandidateDataProviderV36_8[]
 
-  const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit)
-  const signingConfigured = observationSigningConfiguredV36_12()
-  const reviewObservations = signingConfigured ? result.observations.map(signedProviderObservationV36_8).filter(Boolean) : []
-  const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
-  const sourceHealthEvents = sourceHealthEventsForSearchV36_12(result.telemetry, result.retainedProviderMix)
-
-  if (!gate.preview && isSupabaseConfigured()) {
-    const sb = createServerSupabaseClient()
-    if (sb) {
-      try {
-        const { data: run } = await sb.from('search_quality_runs').insert({
-          owner_id: gate.userId,
-          canonical_role_key: searchQuality.canonicalRoleKey || null,
-          query: searchRequest.query,
-          requirements: searchRequest.requirements || [],
-          structured_request: {
-            names: searchRequest.names || [],
-            titles: searchRequest.titles || [],
-            skills: searchRequest.skills || [],
-            companies: searchRequest.companies || [],
-            locations: searchRequest.locations || [],
-            providers: Array.from(requested),
-          },
-          metrics: searchQuality,
-          provider_telemetry: result.telemetry,
-        }).select('id').single()
-
-        await sb.from('source_health_events').insert(sourceHealthEvents.map(event => ({
-          owner_id: gate.userId,
-          search_quality_run_id: run?.id || null,
-          canonical_role_key: searchQuality.canonicalRoleKey || null,
-          provider: event.provider,
-          status: event.status,
-          outcome: event.outcome,
-          discovered: event.discovered,
-          retained: event.retained,
-          latency_ms: event.latencyMs,
-          estimated_credits: event.estimatedCredits,
-          message: event.message || null,
-        })))
-      } catch {
-        // Search success must never depend on analytics/health persistence.
-      }
-    }
+  if (req.nextUrl.searchParams.get('stream') === '1') {
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const write = (event: unknown) => {
+          try { controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`)) } catch { /* client disconnected */ }
+        }
+        write({ type: 'start', providers: adapters.map(item => item.provider) })
+        void (async () => {
+          try {
+            const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit, providerResult => {
+              write({ type: 'provider', telemetry: providerResult.telemetry })
+            })
+            const payload = await finalizeCandidateSearchPayloadV37({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
+            write({ type: 'final', payload })
+          } catch {
+            write({ type: 'error', error: 'Candidate search failed before a final retained slate was produced.' })
+          } finally {
+            try { controller.close() } catch { /* client disconnected */ }
+          }
+        })()
+      },
+    })
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'content-type': 'application/x-ndjson; charset=utf-8',
+        'cache-control': 'no-cache, no-store, no-transform',
+        'x-accel-buffering': 'no',
+      },
+    })
   }
 
-  const warnings = [...result.warnings]
-  if (!signingConfigured) warnings.unshift('Provider review observations cannot be saved until OBSERVATION_SIGNING_SECRET is configured for this environment.')
-
-  return NextResponse.json({
-    ok: true,
-    observations: result.observations,
-    reviewObservations,
-    telemetry: result.telemetry,
-    sourceHealth: sourceHealthEvents,
-    providerMix: result.providerMix,
-    retainedProviderMix: result.retainedProviderMix,
-    discoveredBeforeCap: result.discoveredBeforeCap,
-    returnedAfterCap: result.returnedAfterCap,
-    contributingProviders: result.contributingProviders,
-    searchQuality,
-    warnings,
-    trust: {
-      providerObservationsAreCandidateFacts: false,
-      providerScoresAreQualificationScores: false,
-      contactRevealDuringSearch: false,
-      identityMergePerformed: false,
-      recruiterDecisionPerformed: false,
-      providerReviewObservationsSignedServerSide: signingConfigured,
-      providerDatabaseCountsAreNotUniquePeopleCounts: true,
-    },
-  })
+  const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit)
+  const payload = await finalizeCandidateSearchPayloadV37({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
+  return NextResponse.json(payload)
 }

@@ -1,4 +1,4 @@
-import { TodayInboxClient } from '@/components/TodayInboxClient'
+import { TodayWorkspaceV37 } from '@/components/TodayWorkspaceV37'
 
 export const metadata = {
   title: 'Today | SourcingOS',
@@ -6,9 +6,5 @@ export const metadata = {
 }
 
 export default function TodayPage() {
-  return (
-    <main className="wrap">
-      <TodayInboxClient />
-    </main>
-  )
+  return <TodayWorkspaceV37 />
 }

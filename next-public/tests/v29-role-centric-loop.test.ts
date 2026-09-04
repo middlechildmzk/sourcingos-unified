@@ -131,21 +131,18 @@ describe('V29 role-centric sourcing loop', () => {
     expect(invalidName.workspace).toBe(base)
   })
 
-  it('launches Candidate Search with URL-driven role and lane context', () => {
+  it('redirects legacy Candidate Search into canonical Search while preserving role and lane context', () => {
     const actions = read('components/RoleSearchActions.tsx')
     const page = read('app/app/candidate-search/page.tsx')
-    const scoped = read('components/RoleScopedCandidateSearch.tsx')
 
     expect(actions).toContain('/app/candidate-search?roleId=')
     expect(actions).toContain('&laneId=')
-    // Next 15+ async searchParams: resolved into `sp` before roleId/laneId are read.
     expect(page).toContain('const sp = (await searchParams)')
-    expect(page).toContain('sp.roleId')
-    expect(page).toContain('sp.laneId')
-    expect(page).toContain('<RoleScopedCandidateSearch roleId={roleId} laneId={laneId} />')
-    expect(scoped).toContain("item.status === 'approved'")
-    expect(scoped).toContain("mustHaves: lane?.query || role.intake.mustHaves.join(', ')")
-    expect(scoped).not.toContain('document.querySelector')
+    expect(page).toContain("params.set('roleId', sp.roleId.trim())")
+    expect(page).toContain("params.set('laneId', sp.laneId.trim())")
+    expect(page).toContain("new URLSearchParams({ from: 'candidate-search' })")
+    expect(page).toContain('redirect(`/app/search?${params.toString()}`)')
+    expect(page).not.toContain('<RoleScopedCandidateSearch')
   })
 
   it('dispatches one canonical save event and carries the exact role into Candidate 360', () => {
@@ -157,7 +154,6 @@ describe('V29 role-centric sourcing loop', () => {
     expect(drawer).toContain('window.dispatchEvent(new CustomEvent')
     expect(drawer.match(/if \(!canSaveCandidate\)/g)).toHaveLength(1)
     expect(drawer).toContain('?roleId=')
-    // Next 15+ async searchParams: resolved into `sp` before the roleId is read.
     expect(candidatePage).toContain('const sp = (await searchParams)')
     expect(candidatePage).toContain('sp.roleId')
     expect(candidate360).toContain('Back to role queue')

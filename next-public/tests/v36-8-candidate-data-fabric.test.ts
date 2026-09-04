@@ -123,20 +123,21 @@ describe('V36.8 Candidate Data Fabric', () => {
     expect(body).not.toHaveProperty('revealContacts')
   })
 
-  it('interleaves providers before the global result cap', async () => {
+  it('applies relevance admission before interleaving providers into the global result cap', async () => {
     const adapters: CandidateDataSearchAdapterV36_8[] = [
       {
         provider: 'pearch',
-        search: async () => ({ observations: [1, 2, 3].map(index => ({ provider: 'pearch' as const, providerPersonId: `p${index}`, displayName: `P ${index}`, skills: [], profileUrls: [], contactAvailability: { email: 'unknown' as const, phone: 'unknown' as const }, observedAt: '2026-09-02T20:00:00.000Z' })), telemetry: { provider: 'pearch', status: 'completed', discovered: 3, latencyMs: 1 }, warnings: [] }),
+        search: async () => ({ observations: [1, 2, 3].map(index => ({ provider: 'pearch' as const, providerPersonId: `p${index}`, displayName: `P ${index}`, currentTitle: 'RHEL Administrator', skills: ['RHEL'], profileUrls: [], contactAvailability: { email: 'unknown' as const, phone: 'unknown' as const }, observedAt: '2026-09-02T20:00:00.000Z' })), telemetry: { provider: 'pearch', status: 'completed', discovered: 3, latencyMs: 1 }, warnings: [] }),
       },
       {
         provider: 'data_vertex',
-        search: async () => ({ observations: [1, 2, 3].map(index => ({ provider: 'data_vertex' as const, providerPersonId: `d${index}`, displayName: `D ${index}`, skills: [], profileUrls: [], contactAvailability: { email: 'unknown' as const, phone: 'unknown' as const }, observedAt: '2026-09-02T20:00:00.000Z' })), telemetry: { provider: 'data_vertex', status: 'completed', discovered: 3, latencyMs: 1 }, warnings: [] }),
+        search: async () => ({ observations: [1, 2, 3].map(index => ({ provider: 'data_vertex' as const, providerPersonId: `d${index}`, displayName: `D ${index}`, currentTitle: 'Linux Administrator', skills: ['Linux'], profileUrls: [], contactAvailability: { email: 'unknown' as const, phone: 'unknown' as const }, observedAt: '2026-09-02T20:00:00.000Z' })), telemetry: { provider: 'data_vertex', status: 'completed', discovered: 3, latencyMs: 1 }, warnings: [] }),
       },
     ]
     const result = await runCandidateDataSearchV36_8(request, adapters, 4)
     expect(result.observations.map(item => `${item.provider}:${item.providerPersonId}`)).toEqual(['pearch:p1', 'data_vertex:d1', 'pearch:p2', 'data_vertex:d2'])
     expect(result.providerMix).toEqual({ pearch: 3, data_vertex: 3 })
+    expect(result.relevanceRejected).toBe(0)
   })
 
   it('requires a deterministic DataVertex lookup anchor and keeps enrichment explicit', () => {

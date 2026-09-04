@@ -85,10 +85,11 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(panel).toContain('Save + add to role review')
   })
 
-  it('keeps the source-linked pre-shortlist evidence contract in the V33.4 unified workbench', () => {
+  it('keeps the source-linked pre-shortlist evidence contract while V37 owns the primary role route', () => {
     const route = read('app/api/role-candidate-assessment/route.ts')
     const workbench = read('components/RoleUnifiedWorkbenchV33_4.tsx')
     const page = read('app/app/roles/[id]/page.tsx')
+    const v37 = read('components/RoleWorkspaceV37.tsx')
     expect(route).toContain('buildEvidenceLedger')
     expect(route).toContain('buildRequirementAssessments')
     expect(route).toContain('Missing evidence remains unknown and never becomes a negative finding.')
@@ -100,7 +101,10 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(workbench).toContain('No opaque fit score')
     expect(workbench).toContain('Missing evidence is not a red X.')
     expect(workbench).toContain('Needs verification')
-    expect(page).toContain('<RoleUnifiedWorkbenchV33_4 roleId={id} />')
+    expect(page).toContain('<RoleWorkspaceV37 roleId={id} />')
+    expect(page).not.toContain('<RoleUnifiedWorkbenchV33_4 roleId={id} />')
+    expect(v37).toContain('Unknown is not a rejection.')
+    expect(v37).toContain('This state describes evidence quality, not candidate qualification.')
   })
 
   it('admits Stack Overflow skills only from observed top-answerer tags', () => {

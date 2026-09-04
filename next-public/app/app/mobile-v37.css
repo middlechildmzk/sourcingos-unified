@@ -1,0 +1,81 @@
+/* V37 mobile/tablet interaction hardening.
+   Desktop keeps the three-pane recruiter workstation. Narrow layouts prioritize
+   the slate and move inspectors into document flow so candidate review is never
+   covered by an always-open fixed panel. */
+
+@media(max-width:1000px){
+  .role-workspace-v37-grid{grid-template-columns:250px minmax(0,1fr);overflow:auto}
+  .role-workspace-v37-inspector{
+    position:static;
+    width:auto;
+    inset:auto;
+    grid-column:1/-1;
+    border-left:0;
+    border-top:1px solid var(--sos-border);
+    box-shadow:none;
+    max-height:none;
+  }
+  .role-inspector-empty-v37{min-height:180px}
+  .candidate-inspector-nav{position:static}
+
+  .today-workspace-v37,.talent-workspace-v37,.roles-portfolio-v37,.sources-workspace-v37{min-width:0}
+  .today-v37-grid,.talent-v37-grid,.sources-v37-grid{grid-template-columns:minmax(0,1fr)}
+  .sources-v37-side{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
+@media(max-width:760px){
+  .v37-shell .app-main-content{min-height:calc(100vh - 54px)}
+
+  .search-workspace-left{padding-bottom:10px}
+  .search-pane-head h1{font-size:18px}
+  .search-composer textarea{min-height:88px;font-size:16px}
+  .search-brief{margin-top:12px;padding-top:12px}
+  .search-results-head h2{font-size:17px}
+  .provider-progress{padding:9px;margin-bottom:10px}
+  .provider-progress-list{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .provider-progress-list::-webkit-scrollbar{display:none}
+  .provider-progress-item{flex:0 0 auto}
+  .candidate-row{min-height:82px;padding:10px}
+  .candidate-row-name-line strong{font-size:13px}
+  .candidate-row-role{font-size:11px;white-space:normal;line-height:1.35}
+  .candidate-row-location{font-size:10px}
+  .candidate-row-side{margin-top:3px}
+  .search-zero-state{min-height:300px;padding:20px 10px}
+  .search-zero-state p{font-size:12px}
+
+  .search-workspace-right{position:static;width:auto;inset:auto;transform:none!important;box-shadow:none;border-left:0;border-top:1px solid var(--sos-border)}
+  .search-workspace-right:not(.has-selection){display:none}
+  .candidate-inspector{min-height:0}
+  .candidate-inspector-actions{position:sticky;bottom:0;z-index:3}
+
+  .role-workspace-v37-header{gap:9px}
+  .role-workspace-v37-heading{width:100%;align-items:flex-start}
+  .role-workspace-v37-heading h1{font-size:17px;line-height:1.2}
+  .role-workspace-v37-heading p{white-space:normal;line-height:1.4}
+  .role-workspace-v37-actions{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
+  .role-workspace-v37-actions>*{flex:0 0 auto}
+  .role-workspace-v37-brief{padding-bottom:10px}
+  .role-brief-block:nth-of-type(n+4){display:none}
+  .role-slate-controls-v37{display:grid;grid-template-columns:minmax(0,1fr) 132px}
+  .role-slate-controls-v37 select{min-width:0;width:100%}
+  .role-candidate-row-v37{min-height:76px;padding:10px}
+  .role-candidate-copy-v37 strong{font-size:12px}
+  .role-candidate-copy-v37>small{font-size:10px;white-space:normal;line-height:1.35}
+  .role-candidate-reason-v37{display:none}
+  .role-workspace-v37-inspector{border-top:1px solid var(--sos-border)}
+  .role-inspector-identity-v37,.role-inspector-section-v37{padding:12px}
+  .role-inspector-actions-v37{position:sticky;bottom:0;z-index:3}
+
+  .today-workspace-v37,.talent-workspace-v37,.roles-portfolio-v37,.sources-workspace-v37{padding:12px!important}
+  .today-v37-header h1,.talent-v37-header h1,.roles-v37-header h1,.sources-v37-header h1{font-size:21px!important}
+  .today-v37-grid,.talent-v37-grid,.sources-v37-grid{gap:10px!important}
+  .today-v37-side,.sources-v37-side{grid-template-columns:minmax(0,1fr)!important}
+  .talent-v37-inspector{position:static;width:auto;inset:auto;box-shadow:none;border-top:1px solid var(--sos-border)}
+  .talent-v37-inspector:has(.talent-v37-inspector-empty){display:none}
+  .talent-inspector-v37-actions{position:sticky;bottom:0;z-index:3}
+
+  .roles-v37-header-actions,.talent-v37-header-actions,.sources-v37-header-actions,.today-v37-actions{width:100%;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}
+  .roles-v37-header-actions>*,.talent-v37-header-actions>*,.sources-v37-header-actions>*,.today-v37-actions>*{flex:0 0 auto}
+
+  .app-command-trigger-mobile span{display:none}
+}

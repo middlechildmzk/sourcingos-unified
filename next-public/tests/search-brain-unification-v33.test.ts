@@ -43,12 +43,16 @@ describe('V33 one Role Brain and one Search Brain', () => {
     }
   })
 
-  it('routes the live role page through canonical guided actions and V33 paste-back', () => {
+  it('routes the live role page through the V37 Role Brain and canonical Search Workspace', () => {
     const page = read('app/app/roles/[id]/page.tsx')
-    expect(page).toContain('RoleCanonicalSearchActions')
-    expect(page).toContain('RolePasteBackV33')
-    expect(page).not.toContain("from '@/components/RoleSearchActions'")
-    expect(page).not.toContain('<RoleSearchActions roleId={id} />')
+    const workspace = read('components/RoleWorkspaceV37.tsx')
+    expect(page).toContain('RoleWorkspaceV37')
+    expect(page).toContain('<RoleWorkspaceV37 roleId={id} />')
+    expect(page).not.toContain('RoleCanonicalSearchActions')
+    expect(page).not.toContain('RolePasteBackV33')
+    expect(workspace).toContain('Role Brain')
+    expect(workspace).toContain('Search strategy')
+    expect(workspace).toContain('/app/search?roleId=')
   })
 
   it('derives recruiter-run source queries from the canonical agentic plan', () => {
@@ -79,17 +83,16 @@ describe('V33 one Role Brain and one Search Brain', () => {
     expect(wizard).toContain('do not become hidden requirements')
   })
 
-  it('makes V33.4 a prompt-first natural-language role creation experience', () => {
-    const portfolio = read('components/RoleWorkspaceClient.tsx')
+  it('makes V37 Roles a prompt-first natural-language role creation experience', () => {
+    const portfolio = read('components/RolesPortfolioV37.tsx')
     const wizard = read('components/RoleIntakeWizardV33_4.tsx')
     expect(portfolio).toContain('RoleIntakeWizardV33_4')
-    expect(portfolio).toContain('useState(true)')
-    expect(portfolio).toContain('router.push(`/app/roles/${role.id}?start=1`)')
+    expect(portfolio).toContain('setCreateOpen(true)')
+    expect(portfolio).toContain('router.push(`/app/roles/${encodeURIComponent(role.id)}`)')
     expect(wizard).toContain('Who are you looking for?')
     expect(wizard).toContain('Here’s what I’m looking for.')
     expect(wizard).toContain('Start sourcing →')
     expect(wizard).toContain('initializeApprovedRoleBrief')
-    expect(portfolio).not.toContain('<RoleIntakeWizard ')
   })
 
   it('keeps recruiter-run paste-back provenance attached to the canonical lane and revision', () => {
