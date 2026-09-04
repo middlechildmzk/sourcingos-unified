@@ -96,7 +96,7 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
       // and search connected sources without asking Role Brain to reinterpret it.
       const response = await fetch('/api/candidate-data/search', {
         method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ query: value, names: [value], limit: 12, revealContact: false, highFreshness: false }),
+        body: JSON.stringify({ query: value, limit: 12, highFreshness: false }),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok || !json.ok) throw new Error(json.error || 'Live person lookup failed.')
