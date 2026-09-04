@@ -95,6 +95,53 @@ jobs:
           PY
           python .integration/apply.py
 
+          # V40.2 intentionally completes the hardening gate that kept V22/V33
+          # cron disabled. Update those regressions to protect the new contract:
+          # scheduled fleet route only, header-secret auth, and recruiter review.
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_required(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'test marker missing in {path}: {old!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_required(
+              'next-public/tests/autosource-v22.test.ts',
+              "  it('does not schedule unattended autosource while trust hardening is in progress', () => {\n    expect(vercel).toContain('\\\"crons\\\": []')\n    expect(vercel).not.toContain('/api/cron/autosource')\n  })",
+              "  it('schedules only the hardened V40.2 fleet endpoint for unattended discovery', () => {\n    const fleetCron = read('app/api/cron/fleet/route.ts')\n    expect(vercel).toContain('/api/cron/fleet')\n    expect(vercel).toContain('*/30 * * * *')\n    expect(vercel).not.toContain('/api/cron/autosource')\n    expect(fleetCron).toContain('authorizeCronRequest')\n    expect(fleetCron).toContain('runStandingFleetTick')\n  })",
+          )
+
+          replace_required(
+              'next-public/tests/v33-2-unified-agent-source-truth.test.ts',
+              "    expect(vercel).toContain('\\\"crons\\\": []')\n",
+              "    const fleetCron = read('app/api/cron/fleet/route.ts')\n    expect(vercel).toContain('/api/cron/fleet')\n    expect(vercel).toContain('*/30 * * * *')\n    expect(vercel).not.toContain('/api/cron/autosource')\n    expect(fleetCron).toContain('authorizeCronRequest')\n",
+          )
+          replace_required(
+              'next-public/tests/v33-2-unified-agent-source-truth.test.ts',
+              "  it('keeps unattended acquisition discovery-only until recruiter review', () => {",
+              "  it('keeps scheduled unattended acquisition discovery-only until recruiter review', () => {",
+          )
+
+          p = Path('next-public/tests/v40-agentic-foundation.test.ts')
+          text = p.read_text()
+          marker = "const capture = read('lib/candidate-data/auto-capture-v40.ts')\n"
+          if marker not in text:
+              raise SystemExit('V40 capture test marker missing')
+          text = text.replace(
+              marker,
+              marker + "const captureStore = read('lib/candidate-data/capture-source-result-v40.ts')\n",
+              1,
+          )
+          text = text.replace("    expect(capture).toContain(\"status: 'pending'\")", "    expect(captureStore).toContain(\"status: 'pending'\")", 1)
+          text = text.replace("    expect(capture).toContain(\"merge_status: 'pending'\")", "    expect(captureStore).toContain(\"merge_status: 'pending'\")", 1)
+          text = text.replace("    expect(capture).toContain('Automatically captured provider observation')", "    expect(captureStore).toContain('Automatically captured provider observation')", 1)
+          text = text.replace("    expect(capture).toContain('createDeterministicIdentityProposals')", "    expect(captureStore).toContain('createDeterministicIdentityProposals')", 1)
+          p.write_text(text)
+          PY
+
       - name: Install locked dependencies
         working-directory: next-public
         run: npm ci
@@ -105,7 +152,7 @@ jobs:
 
       - name: Targeted V40.2 fleet tests
         working-directory: next-public
-        run: npx vitest run tests/fleet-nppes-scout.test.ts tests/fleet-stack-network.test.ts tests/fleet-orcid-scout.test.ts tests/fleet-standing-fleet.test.ts tests/v40-2-autonomous-fleet-integration.test.ts
+        run: npx vitest run tests/fleet-nppes-scout.test.ts tests/fleet-stack-network.test.ts tests/fleet-orcid-scout.test.ts tests/fleet-standing-fleet.test.ts tests/v40-2-autonomous-fleet-integration.test.ts tests/autosource-v22.test.ts tests/v33-2-unified-agent-source-truth.test.ts tests/v40-agentic-foundation.test.ts
 
       - name: Full deterministic suite
         working-directory: next-public
