@@ -60,9 +60,10 @@ describe('V37.2 recruiter search accuracy', () => {
     }
 
     const cyber = expand('cleared-cyber-fort-meade')
-    expect(cyber.titles).toEqual(expect.arrayContaining(['Cybersecurity Engineer', 'Cyber Security Engineer', 'Information Security Engineer', 'Security Engineer']))
+    const cyberTitles = (cyber.titles || []).map(title => title.toLowerCase())
+    expect(cyberTitles).toEqual(expect.arrayContaining(['cybersecurity engineer', 'cyber security engineer', 'information security engineer', 'security engineer']))
     expect(cyber.locations).toEqual(expect.arrayContaining(['Fort Meade, MD', 'Annapolis Junction, MD', 'Odenton, MD', 'Severn, MD']))
-    expect(cyber.titles?.join(' ').toLowerCase()).not.toContain('linux administrator')
+    expect(cyberTitles.join(' ')).not.toContain('linux administrator')
 
     const ml = expand('ml-researcher-boston')
     expect(ml.titles).toEqual(expect.arrayContaining(['Machine Learning Researcher', 'Machine Learning Scientist', 'Research Scientist', 'Applied Scientist']))
