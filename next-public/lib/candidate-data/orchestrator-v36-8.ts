@@ -27,6 +27,31 @@ export type CandidateDataOrchestrationV36_8 = {
 
 export type CandidateProviderProgressCallbackV37 = (result: CandidateDataSearchResultV36_8) => void | Promise<void>
 
+export const DEFAULT_CANDIDATE_PROVIDER_TIMEOUT_MS_V39_1 = 25_000
+
+class CandidateProviderTimeoutErrorV39_1 extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Provider timed out after ${timeoutMs}ms.`)
+    this.name = 'CandidateProviderTimeoutErrorV39_1'
+  }
+}
+
+/**
+ * A single slow vendor must never hold the entire recruiter slate open forever.
+ * This deadline terminalizes only that provider lane. It does not turn a timeout
+ * into zero results and it does not cancel or reinterpret other providers.
+ */
+async function withProviderDeadlineV39_1<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new CandidateProviderTimeoutErrorV39_1(timeoutMs)), timeoutMs)
+    promise.then(
+      value => { clearTimeout(timer); resolve(value) },
+      error => { clearTimeout(timer); reject(error) },
+    )
+  })
+}
+
 function expansionSummary(
   original: CandidateDataSearchRequestV36_8,
   expanded: CandidateDataSearchRequestV36_8,
@@ -65,23 +90,29 @@ export async function runCandidateDataSearchV36_8(
   adapters: CandidateDataSearchAdapterV36_8[],
   globalLimit = 50,
   onProviderSettled?: CandidateProviderProgressCallbackV37,
+  providerTimeoutMs = DEFAULT_CANDIDATE_PROVIDER_TIMEOUT_MS_V39_1,
 ): Promise<CandidateDataOrchestrationV36_8> {
   const effectiveRequest = applySearchDiscoveryExpansionV37_2(request)
   const settled = await Promise.all(adapters.map(async adapter => {
     let result: CandidateDataSearchResultV36_8
     try {
-      result = await adapter.search(effectiveRequest)
-    } catch {
+      result = await withProviderDeadlineV39_1(adapter.search(effectiveRequest), providerTimeoutMs)
+    } catch (error) {
+      const timedOut = error instanceof CandidateProviderTimeoutErrorV39_1
       result = {
         observations: [],
         telemetry: {
           provider: adapter.provider,
           status: 'failed' as const,
           discovered: 0,
-          latencyMs: 0,
-          message: 'Provider adapter failed before returning a normalized result.',
+          latencyMs: timedOut ? error.timeoutMs : 0,
+          message: timedOut
+            ? `Provider timed out after ${error.timeoutMs}ms; other provider results were allowed to complete.`
+            : 'Provider adapter failed before returning a normalized result.',
         },
-        warnings: [`${adapter.provider} adapter failed.`],
+        warnings: [timedOut
+          ? `${adapter.provider} timed out after ${error.timeoutMs}ms; the search continued with other sources.`
+          : `${adapter.provider} adapter failed.`],
       }
     }
     try {
