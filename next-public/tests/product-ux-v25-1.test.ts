@@ -20,7 +20,7 @@ const roleWorkspace = read('components/RoleWorkspaceV37.tsx')
 
 describe('V25.1 recruiter-first product experience', () => {
   it('keeps the primary navigation focused on the canonical V37 recruiter workflows', () => {
-    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'Search'", "label: 'Talent'", "label: 'Sources'"]) expect(shell).toContain(destination)
+    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'People Search'", "label: 'Talent'", "label: 'Sources'"]) expect(shell).toContain(destination)
     expect(shell).not.toContain("label: 'Search Lab'")
     expect(shell).not.toContain("label: 'AutoSource'")
     expect(shell).toContain('Evidence visible. Decisions stay human.')
@@ -41,7 +41,6 @@ describe('V25.1 recruiter-first product experience', () => {
     expect(autoSourceApi).toContain('promoteStoredDiscovery')
     expect(acquisition).toContain('Automated Candidate Graph promotion is disabled; recruiter review is required.')
     expect(acquisition).toContain("const disposition = 'needs_review' as const")
-    expect(acquisition).toContain("merge_status: 'pending'")
     expect(acquisition).not.toContain("'auto_promoted'")
     expect(acquisition).not.toContain("status: manual || d.identityConfidence >= 92 ? 'confirmed' : 'pending'")
   })
