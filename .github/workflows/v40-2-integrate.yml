@@ -1,0 +1,68 @@
+name: V40.2 Integration Gate
+
+on:
+  push:
+    branches:
+      - v40-2-autonomous-fleet-integration
+    paths:
+      - '.v40-2/**'
+      - '.github/workflows/v40-2-integrate.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v40-2-autonomous-fleet-integration
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: next-public/package-lock.json
+
+      - name: Reconstruct reviewed staging archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .v40-2/chunk* > /tmp/v40-stage.b64
+          base64 -d /tmp/v40-stage.b64 > /tmp/v40-stage.tgz
+          test "$(sha256sum /tmp/v40-stage.tgz | cut -d' ' -f1)" = "206de6bc2ec9059e46704edc6785b62fc8a18c7a7effb8f17951461d623ce0b7"
+          tar -xzf /tmp/v40-stage.tgz -C .
+          python .integration/apply.py
+
+      - name: Install locked dependencies
+        working-directory: next-public
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: next-public
+        run: npm run typecheck
+
+      - name: Targeted V40.2 fleet tests
+        working-directory: next-public
+        run: npx vitest run tests/fleet-nppes-scout.test.ts tests/fleet-stack-network.test.ts tests/fleet-orcid-scout.test.ts tests/fleet-standing-fleet.test.ts tests/v40-2-autonomous-fleet-integration.test.ts
+
+      - name: Full deterministic suite
+        working-directory: next-public
+        run: npm test
+
+      - name: Commit integrated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .integration .v40-2
+          rm -f .github/workflows/v40-2-integrate.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "$(printf 'github-actions[bot]%susers.noreply.github.com' '@')"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "V40.2: integrate autonomous public-source fleet"
+          git push origin HEAD:v40-2-autonomous-fleet-integration
