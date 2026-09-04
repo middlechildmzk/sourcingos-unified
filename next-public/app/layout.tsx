@@ -12,6 +12,7 @@ import './public-v37-1.css'
 import './public-mobile-v37-3.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
+import { SourcingOSOrganizationJsonLd, SourcingOSWebsiteJsonLd } from '@/components/SiteStructuredData'
 import { siteUrl } from '@/lib/site'
 
 const themeBootScript = `(()=>{try{const k='sourcingos.theme';let p=localStorage.getItem(k);if(p!=='light'&&p!=='dark'&&p!=='system')p='system';const r=p==='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):p;const d=document.documentElement;d.dataset.themePreference=p;d.dataset.theme=r;d.style.colorScheme=r}catch{}})();`
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
     template: '%s',
   },
   description:
-    'Build source packs, run open-web searches, and turn candidate evidence into recruiter-confirmed Candidate 360 profiles. Free sourcing tools for technical, cleared, healthcare, and AI roles.',
+    'AI-native, recruiter-controlled sourcing for role intake, People Search, multi-source discovery, evidence review, Candidate 360, and talent intelligence.',
   // Do not define a site-wide canonical or Open Graph URL here. Route-level
   // metadata owns page identity so hubs and articles never inherit the homepage URL.
 }
@@ -33,6 +34,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <SourcingOSOrganizationJsonLd />
+        <SourcingOSWebsiteJsonLd />
         {/* Public legacy families remain available; V37.1 recruiter surfaces use Manrope + IBM Plex Mono. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
