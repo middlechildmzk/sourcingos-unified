@@ -101,7 +101,6 @@ export async function GET(req: NextRequest) {
       admitted: decisions.filter(row => row.decision.admitted).length,
       rejected: decisions.filter(row => !row.decision.admitted).length,
       examples: decisions.slice(0, 5).map(row => ({
-        currentTitle: undefined,
         title: row.item.currentTitle || row.item.headline,
         employer: row.item.currentEmployer,
         location: row.item.location,
