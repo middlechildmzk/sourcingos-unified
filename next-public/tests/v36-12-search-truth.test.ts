@@ -79,6 +79,7 @@ describe('V36.12 Search Quality harness', () => {
         discoveredBeforeCap: 3,
         returnedAfterCap: 2,
         contributingProviders: 2,
+        relevanceRejected: 0,
       },
     )
 
