@@ -12,7 +12,7 @@ vi.mock('@supabase/ssr', () => ({
   createServerClient: () => ({ auth: { getUser: getUserMock } }),
 }))
 
-import { middleware } from '@/middleware'
+import { proxy } from '@/proxy'
 
 const ENV_KEYS = [
   'VERCEL_ENV',
@@ -88,10 +88,10 @@ describe('shared Supabase configuration contract', () => {
   })
 })
 
-describe('middleware uses the shared fail-closed rule', () => {
+describe('proxy uses the shared fail-closed rule', () => {
   it('allows explicit isolated preview bypass', async () => {
     process.env.ALLOW_PREVIEW_BYPASS = 'true'
-    const response = await middleware(new NextRequest('https://preview.vercel.app/app'))
+    const response = await proxy(new NextRequest('https://preview.vercel.app/app'))
     expect(response.status).toBe(200)
     expect(response.headers.get('x-sourcingos-auth-mode')).toBe('preview-bypass')
     expect(getUserMock).not.toHaveBeenCalled()
@@ -100,7 +100,7 @@ describe('middleware uses the shared fail-closed rule', () => {
   it('fails closed when durable persistence exists without an auth key', async () => {
     process.env.ALLOW_PREVIEW_BYPASS = 'true'
     configureDurableOnly()
-    const response = await middleware(new NextRequest('https://preview.vercel.app/app'))
+    const response = await proxy(new NextRequest('https://preview.vercel.app/app'))
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/login')
     expect(getUserMock).not.toHaveBeenCalled()
@@ -109,7 +109,7 @@ describe('middleware uses the shared fail-closed rule', () => {
   it('validates configured sessions with getUser and rejects invalid sessions', async () => {
     configureAuth()
     getUserMock.mockResolvedValue({ data: { user: null }, error: new Error('expired') })
-    const response = await middleware(new NextRequest('https://preview.vercel.app/app'))
+    const response = await proxy(new NextRequest('https://preview.vercel.app/app'))
     expect(getUserMock).toHaveBeenCalledOnce()
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/login')
@@ -118,14 +118,14 @@ describe('middleware uses the shared fail-closed rule', () => {
   it('allows a server-validated user', async () => {
     configureAuth()
     getUserMock.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null })
-    const response = await middleware(new NextRequest('https://preview.vercel.app/app'))
+    const response = await proxy(new NextRequest('https://preview.vercel.app/app'))
     expect(response.status).toBe(200)
   })
 
   it('does not enable preview bypass on the production host', async () => {
     process.env.VERCEL_ENV = 'production'
     process.env.ALLOW_PREVIEW_BYPASS = 'true'
-    const response = await middleware(new NextRequest('https://www.getsourcingos.com/app'))
+    const response = await proxy(new NextRequest('https://www.getsourcingos.com/app'))
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toContain('/login')
   })
