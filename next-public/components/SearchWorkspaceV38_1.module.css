@@ -1,4 +1,4 @@
-@media(min-width:1350px){:global(.search-workspace){grid-template-columns:minmax(240px,280px) minmax(460px,1fr) minmax(390px,460px)}}
+@media(min-width:1350px){:global(.search-workspace){grid-template-columns:minmax(220px,240px) minmax(600px,1fr) minmax(360px,410px)}}
 .modeTabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 0 8px;padding:4px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.015)}
 .modeTabs button{border:0;border-radius:9px;padding:8px 10px;background:transparent;color:var(--muted);font-size:11px;font-weight:800}
 .modeTabs button[data-active='true']{background:rgba(139,140,255,.17);color:var(--text);box-shadow:inset 0 0 0 1px rgba(146,147,255,.25)}
@@ -14,13 +14,13 @@
 .quickActions button{border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);padding:5px 8px;font-size:9px}
 .quickActions button:hover{color:var(--text);border-color:rgba(146,147,255,.45)}
 .nextSteps{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:11px 12px;border:1px solid rgba(146,147,255,.22);border-radius:12px;background:rgba(146,147,255,.055)}
-.nextSteps strong{display:block;font-size:11px}.nextSteps span{display:block;color:var(--muted);font-size:10px;margin-top:2px}
+.nextSteps strong{display:block;font-size:12px}.nextSteps span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
 .bulkActions{display:flex;gap:6px;flex-wrap:wrap}.bulkActions button{border:1px solid var(--line);border-radius:9px;background:#10151d;color:var(--text);padding:6px 9px;font-size:9px;font-weight:750}.bulkActions button:disabled{opacity:.45}
 .inspectorActions{display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
 .inspectorActions button,.inspectorActions a{border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.025);color:var(--text);padding:7px 9px;font-size:9px;font-weight:800}.inspectorActions button[data-primary='true']{background:rgba(146,147,255,.16);border-color:rgba(146,147,255,.35)}
 .reviewActions{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}.reviewActions button{border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--muted);padding:7px 5px;font-size:9px}.reviewActions button:hover{color:var(--text)}
 .profileLinks{display:flex;gap:6px;flex-wrap:wrap}.profileLinks a{border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:9px;color:#c9caff;background:rgba(146,147,255,.06)}
-.timeline{display:grid;gap:9px}.timelineItem{position:relative;padding-left:13px;border-left:1px solid rgba(146,147,255,.25)}.timelineItem:before{content:'';position:absolute;left:-3px;top:5px;width:5px;height:5px;border-radius:50%;background:#9293ff}.timelineItem strong{display:block;font-size:11px}.timelineItem span{display:block;color:var(--muted);font-size:10px;margin-top:2px}.timelineItem p{margin:5px 0 0;color:#b6c0cf;font-size:10px;line-height:1.45}
+.timeline{display:grid;gap:9px}.timelineItem{position:relative;padding-left:13px;border-left:1px solid rgba(146,147,255,.25)}.timelineItem:before{content:'';position:absolute;left:-3px;top:5px;width:5px;height:5px;border-radius:50%;background:#9293ff}.timelineItem strong{display:block;font-size:12px}.timelineItem span{display:block;color:var(--muted);font-size:11px;margin-top:2px}.timelineItem p{margin:5px 0 0;color:#b6c0cf;font-size:11px;line-height:1.45}
 .contactApproval{margin-top:8px;padding:9px;border:1px solid rgba(246,201,107,.35);border-radius:10px;background:rgba(246,201,107,.06)}.contactApproval p{margin:0 0 7px;font-size:9px;color:var(--muted);line-height:1.4}.contactApproval button{border:0;border-radius:8px;background:#f6c96b;color:#211800;padding:7px 9px;font-size:9px;font-weight:850}
 .contactSignals{display:grid;gap:6px;margin-top:8px}.contactSignal{padding:7px 8px;border:1px solid var(--line);border-radius:9px}.contactSignal small{display:block;color:var(--muted);font-size:8px;text-transform:uppercase}.contactSignal b{font-size:10px;word-break:break-all}.statusNote{font-size:9px;color:var(--muted);margin-top:6px;line-height:1.4}
 .exportMenu{display:flex;gap:6px;flex-wrap:wrap}

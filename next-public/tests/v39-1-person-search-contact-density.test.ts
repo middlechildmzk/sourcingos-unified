@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+
+const read = (relative: string) => fs.readFileSync(path.join(process.cwd(), relative), 'utf8')
+
+describe('V39.1 recruiter search regression guard', () => {
+  it('automatically falls through to live sources after a zero-match Candidate Graph lookup', () => {
+    const source = read('components/PersonLookupV38_4.tsx')
+    expect(source).toContain('if (candidates.length === 0) await searchLiveForValue(value)')
+    expect(source).toContain("'Find person'")
+    expect(source).toContain('Live sources are checked automatically.')
+  })
+
+  it('does not render repetitive Email Unknown / Phone Unknown rows when contact has not been checked', () => {
+    const source = read('components/CandidateRow.tsx')
+    expect(source).toContain('Contact not checked')
+    expect(source).toContain("email.text !== 'Unknown'")
+    expect(source).toContain("phone.text !== 'Unknown'")
+  })
+
+  it('gives the candidate list more desktop width and a larger readable type scale', () => {
+    const moduleCss = read('components/SearchWorkspaceV38_1.module.css')
+    const workspaceCss = read('app/app/search-workspace.css')
+    expect(moduleCss).toContain('minmax(600px,1fr)')
+    expect(workspaceCss).toContain('.candidate-row-name-line strong{font-size:14px}')
+    expect(workspaceCss).toContain('grid-template-columns:32px minmax(0,1fr) 118px')
+  })
+})

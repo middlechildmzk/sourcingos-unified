@@ -12,3 +12,24 @@
 @media(max-width:1260px){.search-workspace{grid-template-columns:260px minmax(440px,1fr) 320px}.candidate-row{grid-template-columns:26px minmax(0,1fr) 92px}.candidate-row-skills>span:nth-child(n+5){display:none}}
 @media(max-width:1050px){.search-workspace{grid-template-columns:260px minmax(0,1fr)}.search-workspace-right{position:fixed;right:0;top:var(--sos-topbar-height);bottom:0;width:min(380px,88vw);z-index:40;box-shadow:var(--sos-shadow-2);transform:translateX(102%);transition:transform .16s ease}.search-workspace-right.has-selection{transform:translateX(0)}}
 @media(max-width:760px){.search-workspace{height:auto;min-height:calc(100vh - 54px);display:block;overflow:visible}.search-workspace-left{border-right:0;border-bottom:1px solid var(--sos-border);padding:14px}.search-history{display:none}.search-workspace-center{padding:14px}.search-results-head{position:static;background:none}.search-workspace-right{top:54px}.candidate-row{grid-template-columns:26px minmax(0,1fr)}.candidate-row-side{grid-column:2;display:flex;justify-items:start;justify-content:flex-start;gap:8px;flex-wrap:wrap}.candidate-row-why{display:none}}
+
+
+/* V39.1 recruiter readability hotfix */
+@media(min-width:1350px){
+  .search-workspace-left{padding:20px 15px}
+  .search-workspace-center{padding:20px 20px 48px}
+}
+.candidate-slate{gap:8px}
+.candidate-row{grid-template-columns:32px minmax(0,1fr) 118px;gap:12px;padding:14px 13px;border-radius:12px}
+.candidate-row-rank{width:28px;height:28px;font-size:10px}
+.candidate-row-name-line strong{font-size:14px}
+.candidate-source{font-size:8px;padding:3px 6px}
+.candidate-row-role{font-size:11px;margin-top:3px}
+.candidate-row-location{font-size:10px;margin-top:2px}
+.candidate-row-skills{gap:4px;margin-top:7px}.candidate-row-skills>span{font-size:9px;padding:4px 6px}
+.candidate-row-why{font-size:9px;line-height:1.5;margin-top:7px}.candidate-row-why b{font-size:8px}
+.candidate-row-side{gap:5px}.candidate-evidence-count,.candidate-contact-state,.candidate-open-label{font-size:9px}
+.candidate-inspector-identity,.candidate-inspector-section{padding:16px}
+.candidate-inspector-identity h2{font-size:22px}.candidate-inspector-identity p{font-size:12px;line-height:1.45}.candidate-inspector-identity small{font-size:10px}
+.search-section-title>span{font-size:10.5px}.search-plan-summary{font-size:12px}.search-empty-copy{font-size:11px}
+.inspector-contact-grid small{font-size:9px}.inspector-contact-grid b{font-size:11px}
