@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "migration:replay": "node scripts/migration-replay.js"
   },
   "dependencies": {
     "@next/mdx": "^16.3.3",
