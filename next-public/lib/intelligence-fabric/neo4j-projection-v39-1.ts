@@ -13,6 +13,7 @@ export type Neo4jProjectionStatusV39_1 = {
 export type ProjectionSourceProfileV39_1 = {
   id: string
   source: string
+  status?: string | null
   searchAllowed?: boolean
   retentionUntil?: string | null
   usageScope?: string[]
@@ -24,7 +25,8 @@ export type ProjectionEvidenceV39_1 = {
   label: string
   detail?: string | null
   sourceProfileId?: string | null
-  confidence?: number | null
+  /** Production stores legacy confidence as text; normalize only at this boundary. */
+  confidence?: number | string | null
   url?: string | null
 }
 
@@ -92,6 +94,7 @@ export function neo4jProjectionStatusV39_1(): Neo4jProjectionStatusV39_1 {
 }
 
 function activeForProjection(source: ProjectionSourceProfileV39_1, nowMs: number): boolean {
+  if (source.status?.toLowerCase() === 'rejected') return false
   if (source.searchAllowed === false) return false
   if (source.retentionUntil) {
     const expiry = Date.parse(source.retentionUntil)
@@ -107,6 +110,15 @@ function slug(value: string): string {
 
 function credentialEvidence(evidence: ProjectionEvidenceV39_1): boolean {
   return /certif|credential|license/i.test(evidence.label)
+}
+
+function normalizedConfidence(value: ProjectionEvidenceV39_1['confidence']): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
 }
 
 /**
@@ -166,7 +178,7 @@ export function buildNeo4jProjectionBatchV39_1(
         source: item.source,
         label: item.label,
         detail: item.detail || null,
-        confidence: typeof item.confidence === 'number' ? item.confidence : null,
+        confidence: normalizedConfidence(item.confidence),
         url: item.url || null,
       },
     })
