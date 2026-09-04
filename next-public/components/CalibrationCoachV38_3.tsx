@@ -63,23 +63,27 @@ export function CalibrationCoachV38_3({ roleId }: { roleId?: string }) {
   const query = useMemo(() => role ? calibrationSearchQuery(role) : '', [role])
 
   if (!role) return null
+  const activeRoleId = role.id
 
   function updateReason(candidate: RoleCandidate, reason: string) {
-    updateRole(role.id, workspace => ({
+    const cleanReason = reason.trim()
+    if (!cleanReason) return
+    updateRole(activeRoleId, workspace => ({
       ...workspace,
       candidates: workspace.candidates.map(item => {
         if (item.id !== candidate.id) return item
-        const key = candidate.fitDecision === 'not_fit' ? 'concerns' : 'fitReasons'
-        const values = Array.from(new Set([...(item[key] || []), reason.trim()])).filter(Boolean).slice(0, 20)
-        return { ...item, [key]: values, updatedAt: new Date().toISOString() }
+        if (candidate.fitDecision === 'not_fit') {
+          return { ...item, concerns: Array.from(new Set([...item.concerns, cleanReason])).slice(0, 20), updatedAt: new Date().toISOString() }
+        }
+        return { ...item, fitReasons: Array.from(new Set([...item.fitReasons, cleanReason])).slice(0, 20), updatedAt: new Date().toISOString() }
       }),
-      activity: [{ id: crypto.randomUUID(), type: 'candidate_reviewed' as const, message: `Calibration reason captured for ${candidate.name}: ${reason.trim()}`, createdAt: new Date().toISOString() }, ...workspace.activity],
+      activity: [{ id: crypto.randomUUID(), type: 'candidate_reviewed' as const, message: `Calibration reason captured for ${candidate.name}: ${cleanReason}`, createdAt: new Date().toISOString() }, ...workspace.activity],
       updatedAt: new Date().toISOString(),
     }))
   }
 
   function removeReason(candidate: RoleCandidate, reason: string) {
-    updateRole(role.id, workspace => ({
+    updateRole(activeRoleId, workspace => ({
       ...workspace,
       candidates: workspace.candidates.map(item => item.id !== candidate.id ? item : {
         ...item,
@@ -98,11 +102,11 @@ export function CalibrationCoachV38_3({ roleId }: { roleId?: string }) {
   }
 
   function act(insightId: string, action: 'approve' | 'reject' | 'pause' | 'rollback') {
-    const currentRole = roles.find(item => item.id === role.id)
+    const currentRole = roles.find(item => item.id === activeRoleId)
     if (!currentRole?.calibration) return
     const result = applyInsightAction(currentRole.calibration, insightId, action)
     if (result.error) return
-    updateRole(role.id, workspace => ({ ...workspace, calibration: result.state, updatedAt: new Date().toISOString() }))
+    updateRole(activeRoleId, workspace => ({ ...workspace, calibration: result.state, updatedAt: new Date().toISOString() }))
   }
 
   const reasonChoices = selected?.fitDecision === 'not_fit' ? negativeReasons : positiveReasons
@@ -135,7 +139,7 @@ export function CalibrationCoachV38_3({ roleId }: { roleId?: string }) {
       </article>)}
     </div>}
 
-    {approved.length > 0 && <div className={styles.approvedBar}><div><strong>{approved.length} approved calibration signal{approved.length === 1 ? '' : 's'}</strong><span>Approved learning can be passed transparently into the next retrieval plan; original role requirements remain unchanged.</span></div><Link href={`/app/search?roleId=${encodeURIComponent(role.id)}&q=${encodeURIComponent(query)}&from=calibration`}>Run calibrated search</Link></div>}
+    {approved.length > 0 && <div className={styles.approvedBar}><div><strong>{approved.length} approved calibration signal{approved.length === 1 ? '' : 's'}</strong><span>Approved learning can be passed transparently into the next retrieval plan; original role requirements remain unchanged.</span></div><Link href={`/app/search?roleId=${encodeURIComponent(activeRoleId)}&q=${encodeURIComponent(query)}&from=calibration`}>Run calibrated search</Link></div>}
 
     {laneRecommendations.length > 0 && <div className={styles.lanes}><strong>Search-lane recommendations</strong>{laneRecommendations.slice(0, 4).map(item => <p key={`${item.laneId}:${item.recommendation}`}>{item.laneLabel}: {item.explanation}</p>)}</div>}
   </section>
