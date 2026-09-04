@@ -41,6 +41,7 @@ describe('V40 agentic sourcing foundation', () => {
     expect(workspace).toContain('Capture memory')
     expect(workspace).toContain('Review ready')
     expect(workspace).toContain('capture.persisted')
+    expect(workspace).toContain('Discoveries captured. Review the slate.')
     expect(workspace).toContain('Add all to role')
     expect(workspaceCss).toContain('.agentPipeline')
     expect(workspaceCss).toContain(".search-workspace-right.has-selection")
