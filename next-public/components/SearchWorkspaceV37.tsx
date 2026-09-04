@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { CandidateRow, type CandidateRowPerson } from '@/components/CandidateRow'
+import { SearchHealthV38, type SearchHealthSessionV38 } from '@/components/SearchHealthV38'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
 
 type Requirement = { text: string; mustHave: boolean }
@@ -13,7 +14,7 @@ type WebPlan = { action: 'search_web'; assistantSummary: string; webRequest: { a
 type AgentPlan = PeoplePlan | WebPlan
 type Observation = CandidateRowPerson & { observedAt?: string; sourceUrl?: string }
 type Telemetry = { provider: string; status: string; discovered: number; latencyMs: number; message?: string }
-type SearchResult = { observations: Observation[]; telemetry: Telemetry[]; discoveredBeforeCap: number; returnedAfterCap: number; contributingProviders: number; relevanceRejected?: number; warnings: string[] }
+type SearchResult = { observations: Observation[]; telemetry: Telemetry[]; discoveredBeforeCap: number; returnedAfterCap: number; contributingProviders: number; relevanceRejected?: number; warnings: string[]; searchHealth?: SearchHealthSessionV38 }
 type ProviderStatus = { id: string; label: string; configured: boolean; executableNow: boolean; capabilities: string[]; transports: string[]; costClass: string; freshness: string }
 type WebResearch = { provider: string; transport?: string; tool?: string; text: string; observedAt?: string; freshness?: string }
 type ContactSignal = { type: string; channelKind?: string; value: string; sourceProvider?: string; deliverability?: string; permissionStatus?: string }
@@ -36,6 +37,9 @@ function evidenceCount(person: Observation, plan?: PeoplePlan) { if (!plan) retu
 function identityPayload(person: Observation) { const linkedinUrl = person.profileUrls?.find(item => item.kind === 'linkedin')?.url; return { providerName: person.provider, providerPersonId: person.providerPersonId, fullName: person.displayName, title: person.currentTitle || person.headline, currentCompany: person.currentEmployer, location: person.location, profileUrl: linkedinUrl || person.profileUrls?.[0]?.url, linkedinUrl, sourceContext: 'search_workspace_v37' } }
 function rolePrompt(role: ReturnType<typeof useRoleWorkspaces>['roles'][number]) { return [role.intake.title, role.intake.location !== 'Not specified' ? `in or near ${role.intake.location}` : '', role.intake.clearance !== 'Not specified' ? `${role.intake.clearance} clearance` : '', role.intake.mustHaves.length ? `must have ${role.intake.mustHaves.join(', ')}` : '', role.intake.niceToHaves.length ? `prioritize ${role.intake.niceToHaves.join(', ')}` : ''].filter(Boolean).join(' · ') }
 function normalizeSearchResult(payload: Record<string, unknown>): SearchResult {
+  const quality = payload.searchQuality && typeof payload.searchQuality === 'object'
+    ? (payload.searchQuality as { v38?: SearchHealthSessionV38 }).v38
+    : undefined
   return {
     observations: Array.isArray(payload.observations) ? payload.observations as Observation[] : [],
     telemetry: Array.isArray(payload.telemetry) ? payload.telemetry as Telemetry[] : [],
@@ -44,6 +48,7 @@ function normalizeSearchResult(payload: Record<string, unknown>): SearchResult {
     contributingProviders: Number(payload.contributingProviders || 0),
     relevanceRejected: Number(payload.relevanceRejected || 0),
     warnings: Array.isArray(payload.warnings) ? payload.warnings as string[] : [],
+    searchHealth: quality,
   }
 }
 
@@ -224,6 +229,7 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
       <header className="search-results-head"><div><span className="search-kicker">Candidate slate</span><h2>{working === 'searching' ? 'Researching talent…' : result ? `${observations.length} retained candidates` : web ? 'Live web research' : plan?.action === 'approval_required' ? 'Approval required' : 'Your results will appear here'}</h2></div><div className="search-results-meta">{result && <><span>{result.discoveredBeforeCap || observations.length} discovered</span><span>{result.contributingProviders || 0} sources</span>{Boolean(result.relevanceRejected) && <span>{result.relevanceRejected} relevance filtered</span>}</>}{!!observations.length && <span>J/K review</span>}</div></header>
 
       <section className="provider-progress" aria-label="Source execution status"><div className="search-section-title"><span>Source execution</span><small>{working && working !== 'contacts' ? 'live' : sourceTelemetry.length ? 'latest search' : 'ready'}</small></div>{working && working !== 'contacts' && <div className="provider-progress-bar"><span /></div>}<div className="provider-progress-list">{sourceTelemetry.length ? sourceTelemetry.map(item => <div className={`provider-progress-item ${statusClass(item.status)}`} key={item.provider} title={item.message || ''}><i /><span>{label(item.provider)}</span><b>{item.status === 'eligible' ? 'eligible' : item.status}</b>{item.discovered > 0 && <small>{item.discovered}</small>}</div>) : <span className="search-empty-copy">Provider execution telemetry will appear here. Eligible is not the same as executed.</span>}</div></section>
+      {result?.searchHealth && <SearchHealthV38 quality={result.searchHealth} />}
 
       {working === 'searching' && <div className="candidate-skeleton-list">{Array.from({ length: 6 }).map((_, index) => <div className="candidate-skeleton" key={index}><i /><span /><span /><b /></div>)}</div>}
       {!working && !result && !web && plan?.action !== 'approval_required' && <div className="search-zero-state"><div className="search-zero-mark">⌕</div><h3>Search starts with intent, not filters.</h3><p>Describe the role in recruiter language. SourcingOS separates requirements from discovery expansion and keeps evidence uncertainty visible.</p><div><button type="button" onClick={() => setQuery('Find 25 backend engineers in Minneapolis, MN with AWS + Kubernetes')}>Backend engineers · Minneapolis</button><button type="button" onClick={() => setQuery('Find a RHEL admin near Annapolis Junction, MD with Secret clearance or higher')}>RHEL · Secret+ · Maryland</button></div></div>}

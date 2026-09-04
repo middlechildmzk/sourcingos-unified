@@ -1,0 +1,69 @@
+.search-health-v38 {
+  margin: 0 0 14px;
+  border: 1px solid var(--border-subtle, rgba(255,255,255,.08));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-raised, #151a22) 72%, transparent);
+  overflow: hidden;
+}
+
+.search-health-v38 > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  color: var(--text-primary, #f3f5f8);
+}
+.search-health-v38 > summary::-webkit-details-marker { display: none; }
+.search-health-v38 > summary::after { content: '＋'; color: var(--text-muted, #9aa5b4); font-size: 12px; }
+.search-health-v38[open] > summary::after { content: '−'; }
+.search-health-v38 > summary > span { font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.search-health-summary-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.search-health-summary-badges small { border: 1px solid var(--border-subtle, rgba(255,255,255,.08)); border-radius: 999px; padding: 3px 7px; color: var(--text-muted, #9aa5b4); font-size: 10px; }
+
+.search-health-body { border-top: 1px solid var(--border-subtle, rgba(255,255,255,.08)); padding: 12px; display: grid; gap: 12px; }
+.search-health-funnel { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.search-health-funnel div { min-width: 0; padding: 9px; border-radius: 9px; background: var(--surface, #10141a); }
+.search-health-funnel small { display: block; color: var(--text-muted, #9aa5b4); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.search-health-funnel b { display: block; margin-top: 3px; font-size: 17px; color: var(--text-primary, #f3f5f8); }
+
+.search-health-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); gap: 10px; }
+.search-health-block { min-width: 0; border: 1px solid var(--border-subtle, rgba(255,255,255,.08)); border-radius: 10px; padding: 10px; }
+.search-health-block h4 { margin: 0 0 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-muted, #9aa5b4); }
+.search-health-provider-list { display: grid; gap: 6px; }
+.search-health-provider { display: grid; grid-template-columns: minmax(90px, 1fr) auto auto; align-items: center; gap: 8px; font-size: 11px; }
+.search-health-provider strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
+.search-health-provider span { color: var(--text-muted, #9aa5b4); }
+.search-health-provider code { font: 500 9px/1.2 'IBM Plex Mono', monospace; border-radius: 999px; padding: 3px 6px; background: var(--surface, #10141a); color: var(--text-muted, #9aa5b4); }
+.search-health-provider code[data-state='SUCCESS'] { color: var(--success, #72d6a4); }
+.search-health-provider code[data-state='RATE_LIMITED'],
+.search-health-provider code[data-state='PARTIAL'],
+.search-health-provider code[data-state='TIMEOUT'] { color: #e6bd73; }
+.search-health-provider code[data-state='AUTH_FAILURE'],
+.search-health-provider code[data-state='NOT_ENTITLED'],
+.search-health-provider code[data-state='CREDITS_EXHAUSTED'],
+.search-health-provider code[data-state='PROVIDER_ERROR'],
+.search-health-provider code[data-state='BAD_REQUEST'] { color: #ef8f8f; }
+
+.search-health-expansion { display: flex; flex-wrap: wrap; gap: 5px; }
+.search-health-expansion span { border-radius: 999px; padding: 4px 7px; background: color-mix(in srgb, var(--accent, #8b8cff) 12%, transparent); color: var(--text-primary, #f3f5f8); font-size: 10px; }
+.search-health-expansion-empty { color: var(--text-muted, #9aa5b4); font-size: 11px; }
+
+.search-health-inspector { border-top: 1px solid var(--border-subtle, rgba(255,255,255,.08)); padding-top: 9px; }
+.search-health-inspector > summary { cursor: pointer; color: var(--text-muted, #9aa5b4); font-size: 10px; font-weight: 650; }
+.search-health-request-list { margin-top: 8px; display: grid; gap: 7px; }
+.search-health-request { border-radius: 8px; background: var(--surface, #10141a); padding: 8px; font-size: 10px; }
+.search-health-request header { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.search-health-request header strong { color: var(--text-primary, #f3f5f8); }
+.search-health-request header span { color: var(--text-muted, #9aa5b4); }
+.search-health-request p { margin: 3px 0 0; color: var(--text-muted, #9aa5b4); line-height: 1.45; }
+.search-health-trust { margin: 0; color: var(--text-muted, #9aa5b4); font-size: 10px; line-height: 1.45; }
+
+@media (max-width: 900px) {
+  .search-health-funnel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .search-health-grid { grid-template-columns: 1fr; }
+  .search-health-provider { grid-template-columns: minmax(90px, 1fr) auto; }
+  .search-health-provider > span { display: none; }
+}
