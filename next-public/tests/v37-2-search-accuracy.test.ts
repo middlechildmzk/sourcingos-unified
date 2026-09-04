@@ -3,6 +3,8 @@ import { applySearchDiscoveryExpansionV37_2 } from '../lib/search-discovery-expa
 import { runCandidateDataSearchV36_8 } from '../lib/candidate-data/orchestrator-v36-8'
 import type { CandidateDataSearchAdapterV36_8, CandidateDataSearchRequestV36_8 } from '../lib/candidate-data/types-v36-8'
 import { buildApolloPeopleSearchUrlV36_16 } from '../lib/candidate-data/providers/apollo-v36-16'
+import { buildUniversalPeopleProviderRequestV36_9 } from '../lib/universal-people-search-v36-9'
+import { CANONICAL_SEARCH_ROLES_V36_12 } from '../lib/search-quality-v36-12'
 
 const rhelRequest: CandidateDataSearchRequestV36_8 = {
   query: 'Find me a RHEL admin with 5+ years of experience in or near Annapolis Junction, MD with Secret clearance or higher',
@@ -48,6 +50,33 @@ describe('V37.2 recruiter search accuracy', () => {
       query: 'Find a RHEL admin in Annapolis Junction, MD',
     })
     expect(expanded.locations).toEqual(['Annapolis Junction, MD'])
+  })
+
+  it('keeps canonical discovery expansion bounded to the requested talent family', () => {
+    const role = (key: string) => CANONICAL_SEARCH_ROLES_V36_12.find(item => item.key === key)!
+    const expand = (key: string) => {
+      const query = role(key).query
+      return applySearchDiscoveryExpansionV37_2(buildUniversalPeopleProviderRequestV36_9({ query, limit: 10 }))
+    }
+
+    const cyber = expand('cleared-cyber-fort-meade')
+    expect(cyber.titles).toEqual(expect.arrayContaining(['Cybersecurity Engineer', 'Cyber Security Engineer', 'Information Security Engineer', 'Security Engineer']))
+    expect(cyber.locations).toEqual(expect.arrayContaining(['Fort Meade, MD', 'Annapolis Junction, MD', 'Odenton, MD', 'Severn, MD']))
+    expect(cyber.titles?.join(' ').toLowerCase()).not.toContain('linux administrator')
+
+    const ml = expand('ml-researcher-boston')
+    expect(ml.titles).toEqual(expect.arrayContaining(['Machine Learning Researcher', 'Machine Learning Scientist', 'Research Scientist', 'Applied Scientist']))
+    expect(ml.titles?.join(' ').toLowerCase()).not.toContain('cybersecurity engineer')
+
+    const sourcer = expand('enterprise-gtm-sourcer')
+    expect(sourcer.titles).toEqual(expect.arrayContaining(['Talent Sourcer', 'Senior Talent Sourcer', 'Technical Sourcer', 'Recruiting Sourcer', 'Sourcing Recruiter']))
+    expect(sourcer.titles?.join(' ').toLowerCase()).not.toContain('research scientist')
+
+    const software = expand('software-engineer-remote')
+    const softwareTitles = (software.titles || []).join(' ').toLowerCase()
+    expect(softwareTitles).not.toContain('linux administrator')
+    expect(softwareTitles).not.toContain('cybersecurity engineer')
+    expect(softwareTitles).not.toContain('talent sourcer')
   })
 
   it('admits an adjacent Linux-admin title as discovery while leaving RHEL evidence unknown', async () => {
