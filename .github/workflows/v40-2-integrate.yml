@@ -36,6 +36,12 @@ jobs:
           base64 -d /tmp/v40-stage.b64 > /tmp/v40-stage.tgz
           test "$(sha256sum /tmp/v40-stage.tgz | cut -d' ' -f1)" = "206de6bc2ec9059e46704edc6785b62fc8a18c7a7effb8f17951461d623ce0b7"
           tar -xzf /tmp/v40-stage.tgz -C .
+          echo '--- apply.py ---'
+          sed -n '1,260p' .integration/apply.py
+          echo '--- patch files ---'
+          grep '^diff --git ' .integration/*.patch || true
+          echo '--- candidate/source patch hunks ---'
+          grep -n -E 'candidate-db-v18|source-types|^@@' .integration/claude-stack-npi.patch | head -120 || true
           python .integration/apply.py
 
       - name: Install locked dependencies
