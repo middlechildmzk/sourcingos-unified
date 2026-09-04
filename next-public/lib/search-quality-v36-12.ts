@@ -1,5 +1,6 @@
 import type { CandidateDataOrchestrationV36_8 } from './candidate-data/orchestrator-v36-8'
 import type { CandidateDataSearchRequestV36_8 } from './candidate-data/types-v36-8'
+import { buildSearchQualitySessionV38, type SearchQualitySessionV38 } from './search-quality/session-v38'
 
 export type CanonicalSearchRoleV36_12 = {
   key: string
@@ -8,9 +9,8 @@ export type CanonicalSearchRoleV36_12 = {
 }
 
 /**
- * Canonical regression roles intentionally span different source classes. The
- * RHEL role is the live contract used during the September 2026 provider test.
- * Keep these stable so before/after provider changes remain comparable.
+ * Stable compatibility roles used by pre-V38 trend views. V38 expands the
+ * benchmark corpus separately without changing these keys.
  */
 export const CANONICAL_SEARCH_ROLES_V36_12: CanonicalSearchRoleV36_12[] = [
   {
@@ -66,14 +66,13 @@ export type SearchQualitySnapshotV36_12 = {
   averageProviderLatencyMs: number
   providerMix: Record<string, number>
   retainedProviderMix: Record<string, number>
-  /** Filled once Candidate Graph comparison is available for the run. */
   novelPeople: number | null
-  /** Filled by evidence-aware evaluation; never inferred from retrieval score. */
   evidencedMustHaveObservations: number | null
-  /** Filled after recruiter calibration events exist for this run. */
   recruiterYes: number | null
   recruiterMaybe: number | null
   recruiterNo: number | null
+  /** V38 additive diagnostics; old analytics consumers can ignore this field. */
+  v38: SearchQualitySessionV38
 }
 
 export function buildSearchQualitySnapshotV36_12(
@@ -90,6 +89,7 @@ export function buildSearchQualitySnapshotV36_12(
   const averageProviderLatencyMs = result.telemetry.length
     ? Math.round(result.telemetry.reduce((sum, item) => sum + Math.max(0, item.latencyMs || 0), 0) / result.telemetry.length)
     : 0
+  const requestedProviders = result.telemetry.map(item => item.provider)
 
   return {
     version: 'v36.12',
@@ -115,5 +115,6 @@ export function buildSearchQualitySnapshotV36_12(
     recruiterYes: overrides.recruiterYes ?? null,
     recruiterMaybe: overrides.recruiterMaybe ?? null,
     recruiterNo: overrides.recruiterNo ?? null,
+    v38: buildSearchQualitySessionV38({ request, result, requestedProviders }),
   }
 }
