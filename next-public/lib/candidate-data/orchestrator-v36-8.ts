@@ -8,6 +8,7 @@ import type {
 import { candidateObservationKeyV36_8 } from './types-v36-8'
 import { candidateObservationMatchExplanationV36_9 } from './observation-match-explanation-v36-9'
 import { passesRetrievalRelevanceGateV37 } from './retrieval-relevance-v37'
+import { applySearchDiscoveryExpansionV37_2 } from '../search-discovery-expansion-v37-2'
 
 export type CandidateDataOrchestrationV36_8 = {
   observations: CandidateProviderObservationV36_8[]
@@ -25,6 +26,26 @@ export type CandidateDataOrchestrationV36_8 = {
 }
 
 export type CandidateProviderProgressCallbackV37 = (result: CandidateDataSearchResultV36_8) => void | Promise<void>
+
+function expansionSummary(
+  original: CandidateDataSearchRequestV36_8,
+  expanded: CandidateDataSearchRequestV36_8,
+): string | undefined {
+  const originalTitles = new Set((original.titles || []).map(value => value.toLowerCase()))
+  const originalSkills = new Set((original.skills || []).map(value => value.toLowerCase()))
+  const originalLocations = new Set((original.locations || []).map(value => value.toLowerCase()))
+  const titles = (expanded.titles || []).filter(value => !originalTitles.has(value.toLowerCase()))
+  const skills = (expanded.skills || []).filter(value => !originalSkills.has(value.toLowerCase()))
+  const locations = (expanded.locations || []).filter(value => !originalLocations.has(value.toLowerCase()))
+  const parts = [
+    titles.length ? `title aliases: ${titles.join(', ')}` : '',
+    skills.length ? `skill aliases: ${skills.join(', ')}` : '',
+    locations.length ? `nearby markets: ${locations.join(', ')}` : '',
+  ].filter(Boolean)
+  return parts.length
+    ? `Discovery expansion applied before provider execution (${parts.join(' · ')}). Expansion broadens retrieval only; recruiter requirements and evidence standards are unchanged.`
+    : undefined
+}
 
 /**
  * Execute every configured provider selected for the pass before applying the
@@ -45,10 +66,11 @@ export async function runCandidateDataSearchV36_8(
   globalLimit = 50,
   onProviderSettled?: CandidateProviderProgressCallbackV37,
 ): Promise<CandidateDataOrchestrationV36_8> {
+  const effectiveRequest = applySearchDiscoveryExpansionV37_2(request)
   const settled = await Promise.all(adapters.map(async adapter => {
     let result: CandidateDataSearchResultV36_8
     try {
-      result = await adapter.search(request)
+      result = await adapter.search(effectiveRequest)
     } catch {
       result = {
         observations: [],
@@ -72,6 +94,8 @@ export async function runCandidateDataSearchV36_8(
 
   const telemetry = settled.map(item => item.telemetry)
   const warnings = settled.flatMap(item => item.warnings)
+  const appliedExpansion = expansionSummary(request, effectiveRequest)
+  if (appliedExpansion) warnings.unshift(appliedExpansion)
   const providerMix: Record<string, number> = {}
   for (const item of settled) providerMix[item.telemetry.provider] = item.observations.length
   const discoveredBeforeCap = Object.values(providerMix).reduce((sum, count) => sum + count, 0)
@@ -83,19 +107,20 @@ export async function runCandidateDataSearchV36_8(
   // unknown/missing candidate evidence as unknown rather than negative evidence.
   let relevanceRejected = 0
   const admitted = settled.map(item => item.observations.filter(observation => {
-    const keep = passesRetrievalRelevanceGateV37(request, observation)
+    const keep = passesRetrievalRelevanceGateV37(effectiveRequest, observation)
     if (!keep) relevanceRejected += 1
     return keep
   }))
   if (relevanceRejected > 0) warnings.push(`${relevanceRejected} provider observation${relevanceRejected === 1 ? '' : 's'} excluded by the minimum retrieval-relevance gate before source diversity.`)
 
   // Attach a SourcingOS explanation derived only from normalized provider fields
-  // and recruiter-entered search criteria. This is transparency, not ranking.
+  // and recruiter-entered search criteria plus explicit retrieval expansion.
+  // This is transparency, not ranking or qualification.
   const queues = admitted.map(items => items.map(observation => ({
     ...observation,
     providerExplanation: [
       observation.providerExplanation,
-      candidateObservationMatchExplanationV36_9(request, observation),
+      candidateObservationMatchExplanationV36_9(effectiveRequest, observation),
     ].filter(Boolean).join(' '),
   })))
 
