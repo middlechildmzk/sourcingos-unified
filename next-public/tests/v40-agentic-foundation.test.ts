@@ -9,6 +9,8 @@ const provider = read('lib/ai/provider.ts')
 const gatewayStatus = read('lib/ai/gateway-v39-1.ts')
 const searchRoute = read('app/api/candidate-data/search/route.ts')
 const capture = read('lib/candidate-data/auto-capture-v40.ts')
+const workspace = read('components/SearchWorkspaceV38_1.tsx')
+const workspaceCss = read('components/SearchWorkspaceV38_1.module.css')
 
 describe('V40 agentic sourcing foundation', () => {
   it('routes the reasoning abstraction through Vercel AI Gateway when gateway auth is present', () => {
@@ -29,6 +31,19 @@ describe('V40 agentic sourcing foundation', () => {
     expect(capture).toContain("status: 'pending'")
     expect(capture).toContain("merge_status: 'pending'")
     expect(capture).toContain('Automatically captured provider observation')
+  })
+
+  it('makes agent execution and durable capture visible in the recruiter cockpit', () => {
+    expect(workspace).toContain('AI sourcing copilot')
+    expect(workspace).toContain('Agent activity')
+    expect(workspace).toContain('Understand brief')
+    expect(workspace).toContain('Orchestrate sources')
+    expect(workspace).toContain('Capture memory')
+    expect(workspace).toContain('Review ready')
+    expect(workspace).toContain('capture.persisted')
+    expect(workspace).toContain('Add all to role')
+    expect(workspaceCss).toContain('.agentPipeline')
+    expect(workspaceCss).toContain(".search-workspace-right.has-selection")
   })
 
   it('keeps automatic capture outside contact reveal, identity merge, and recruiter decision authority', () => {
