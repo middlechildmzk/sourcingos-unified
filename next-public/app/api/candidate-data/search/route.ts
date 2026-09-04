@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { requireSession } from '@/lib/auth-gate'
 import { rateLimit } from '@/lib/rate-limit'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
+import { autoCaptureSearchObservationsV40, type AutoCaptureSummaryV40 } from '@/lib/candidate-data/auto-capture-v40'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8, type CandidateDataOrchestrationV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { observationSigningConfiguredV36_12, signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
@@ -56,6 +57,20 @@ function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapt
   return undefined
 }
 
+function disabledCapture(): AutoCaptureSummaryV40 {
+  return {
+    enabled: false,
+    attempted: 0,
+    persisted: 0,
+    created: 0,
+    reused: 0,
+    failed: 0,
+    identityResolutionDeferred: true,
+    contactValuesCaptured: false,
+    results: [],
+  }
+}
+
 async function finalizeCandidateSearchPayloadV38_2({
   ownerId,
   preview,
@@ -71,12 +86,14 @@ async function finalizeCandidateSearchPayloadV38_2({
 }) {
   const signingConfigured = observationSigningConfiguredV36_12()
   // Sign the raw provider observations. The unified display slate is derived on
-  // the server, but durable saves continue to trust only signed source-native
-  // observations. This keeps richer review UX separate from identity authority.
+  // the server, but durable recruiter actions continue to trust only signed
+  // source-native observations. Automatic V40 capture is system memory, not a
+  // recruiter disposition or identity merge.
   const reviewObservations = signingConfigured ? result.observations.map(signedProviderObservationV36_8).filter(Boolean) : []
   const unifiedSlate = buildUnifiedCandidateSlateV38_2(result.observations)
   const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
   const sourceHealthEvents = sourceHealthEventsForSearchV36_12(result.telemetry, result.retainedProviderMix)
+  let autoCapture = disabledCapture()
 
   if (!preview && isSupabaseConfigured()) {
     const sb = createServerSupabaseClient()
@@ -122,6 +139,18 @@ async function finalizeCandidateSearchPayloadV38_2({
       } catch {
         // Search success must never depend on analytics/health persistence.
       }
+
+      try {
+        autoCapture = await autoCaptureSearchObservationsV40(sb, ownerId, result.observations)
+      } catch {
+        // Search success must never depend on background-memory persistence.
+        autoCapture = {
+          ...disabledCapture(),
+          enabled: true,
+          attempted: result.observations.length,
+          failed: result.observations.length,
+        }
+      }
     }
   }
 
@@ -129,12 +158,16 @@ async function finalizeCandidateSearchPayloadV38_2({
   if (unifiedSlate.groupedObservationCount > 0) {
     warnings.push(`${unifiedSlate.groupedObservationCount} duplicate source observation${unifiedSlate.groupedObservationCount === 1 ? '' : 's'} grouped into ${unifiedSlate.unifiedCandidateCount} unified review candidate${unifiedSlate.unifiedCandidateCount === 1 ? '' : 's'} using deterministic public-professional identity anchors. Durable identity remains recruiter-reviewed.`)
   }
+  if (autoCapture.enabled && autoCapture.failed > 0) {
+    warnings.push(`${autoCapture.failed} retained observation${autoCapture.failed === 1 ? '' : 's'} could not be captured into durable SourcingOS memory. Search results remain reviewable.`)
+  }
   if (!signingConfigured) warnings.unshift('Provider review observations cannot be saved until OBSERVATION_SIGNING_SECRET is configured for this environment.')
 
   return {
     ok: true,
     observations: unifiedSlate.observations,
     reviewObservations,
+    autoCapture,
     identityFusion: {
       version: 'v38.2',
       rawObservationCount: unifiedSlate.rawObservationCount,
@@ -158,7 +191,10 @@ async function finalizeCandidateSearchPayloadV38_2({
       providerObservationsAreCandidateFacts: false,
       providerScoresAreQualificationScores: false,
       contactRevealDuringSearch: false,
+      contactValuesCapturedAutomatically: false,
+      retainedObservationsPersistedAutomatically: autoCapture.enabled,
       identityMergePerformed: false,
+      automaticIdentityResolutionDeferred: true,
       provisionalDisplayGroupingPerformed: unifiedSlate.groupedObservationCount > 0,
       recruiterDecisionPerformed: false,
       providerReviewObservationsSignedServerSide: signingConfigured,
