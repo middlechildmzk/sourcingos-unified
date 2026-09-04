@@ -12,6 +12,7 @@ const csvRoute = read('app/api/candidate-db/import-csv/route.ts')
 const page = read('app/app/import/page.tsx')
 const shell = read('components/AppShell.tsx')
 const sourcesPage = read('app/app/sources/page.tsx')
+const sources = read('components/SourcesWorkspaceV37.tsx')
 const styles = read('app/app/import-center.css')
 
 describe('V25.2 Import Center', () => {
@@ -51,8 +52,9 @@ describe('V25.2 Import Center', () => {
     expect(historyRoute).toContain(".eq('owner_id', gate.userId)")
     expect(page).toContain('<ImportCenterClient />')
     expect(shell).toContain("{ href: '/app/sources', label: 'Sources'")
-    expect(sourcesPage).toContain("href: '/app/import'")
-    expect(sourcesPage).toContain('Import center')
+    expect(sourcesPage).toContain('<SourcesWorkspaceV37 />')
+    expect(sources).toContain('href="/app/import"')
+    expect(sources).toContain('Import center')
   })
 
   it('is explicit about the current XLSX boundary and includes responsive workflow styles', () => {
