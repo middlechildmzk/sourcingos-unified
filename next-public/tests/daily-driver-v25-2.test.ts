@@ -7,7 +7,9 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 
 const rolesPage = read('app/app/roles/page.tsx')
 const roleDetailPage = read('app/app/roles/[id]/page.tsx')
-const rolePortfolio = read('components/RoleWorkspaceClient.tsx')
+const advancedRolePage = read('app/app/roles/[id]/advanced/page.tsx')
+const rolesPortfolio = read('components/RolesPortfolioV37.tsx')
+const roleWorkspaceV37 = read('components/RoleWorkspaceV37.tsx')
 const roleWizard = read('components/RoleIntakeWizard.tsx')
 const roleDetail = read('components/RoleDetailClient.tsx')
 const candidateReview = read('components/CandidateReviewPro.tsx')
@@ -20,23 +22,25 @@ const v26Styles = read('app/app/v26.css')
 const candidateReviewStyles = read('app/app/v26-candidate-review.css')
 
 describe('V25.2 daily driver experience', () => {
-  it('uses a prompt-first sourcing entry plus a dedicated role workspace route', () => {
-    expect(rolesPage).toContain('<RoleWorkspaceClient />')
-    expect(rolePortfolio).toContain('href={`/app/roles/${role.id}`}')
-    expect(rolePortfolio).toContain('RoleIntakeWizardV33_4')
-    expect(rolePortfolio).toContain('useState(true)')
-    expect(rolePortfolio).toContain('router.push(`/app/roles/${role.id}?start=1`)')
+  it('uses the V37 Roles portfolio plus one dedicated role workbench route', () => {
+    expect(rolesPage).toContain('<RolesPortfolioV37 />')
+    expect(rolesPortfolio).toContain('href={`/app/roles/${encodeURIComponent(role.id)}`}')
+    expect(rolesPortfolio).toContain('RoleIntakeWizardV33_4')
+    expect(rolesPortfolio).toContain('router.push(`/app/roles/${encodeURIComponent(role.id)}`)')
     expect(roleWizard).toContain('Guided role setup')
     expect(roleDetailPage).toContain('const { id } = await params')
-    expect(roleDetailPage).toContain('<RoleDetailClient roleId={id} initialTab={sp.tab} />')
+    expect(roleDetailPage).toContain('<RoleWorkspaceV37 roleId={id} />')
+    expect(roleWorkspaceV37).toContain('Search for this role')
+    expect(roleWorkspaceV37).toContain('Candidate slate')
   })
 
-  it('keeps role context across overview, candidates, strategy, and activity', () => {
+  it('keeps role context across overview, candidates, strategy, and activity in advanced controls', () => {
     expect(roleDetail).toContain("type Tab = 'overview' | 'candidates' | 'calibration' | 'strategy' | 'activity'")
     expect(roleDetail).toContain('Role workspace')
     expect(roleDetail).toContain('Next best actions')
     expect(roleDetail).toContain('Pipeline board')
     expect(roleDetail).toContain('Approve the search plan')
+    expect(advancedRolePage).toContain('<RoleDetailClient roleId={id} initialTab="strategy" />')
   })
 
   it('reviews candidates in an evidence-aware drawer without losing role context', () => {
@@ -60,11 +64,12 @@ describe('V25.2 daily driver experience', () => {
     expect(roleStore).toContain('versionsFromResponse(json.versions)')
   })
 
-  it('supports version-checked durable role deletion', () => {
+  it('supports version-checked durable role deletion behind advanced controls', () => {
     expect(roleStore).toContain("method: 'DELETE'")
     expect(roleStore).toContain('expectedVersion=${expectedVersion}')
     expect(roleStore).toContain('The local workspace was preserved.')
-    expect(roleDetailPage).toContain('<RoleDeleteControl roleId={id} />')
+    expect(roleDetailPage).not.toContain('<RoleDeleteControl roleId={id} />')
+    expect(advancedRolePage).toContain('<RoleDeleteControl roleId={id} />')
     expect(roleDelete).toContain('Delete this role workspace')
     expect(roleDelete).toContain('window.confirm')
     expect(roleDelete).toContain('await removeRole(roleId)')
