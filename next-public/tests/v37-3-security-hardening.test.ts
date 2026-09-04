@@ -40,6 +40,14 @@ describe('V37.3 production security hardening', () => {
     expect(autosource).not.toMatch(/searchParams|get\(['\"]secret['\"]\)/)
   })
 
+  it('uses the current Next proxy convention for protected application paths', () => {
+    const source = read('proxy.ts')
+    expect(source).toContain("const PROTECTED_PREFIXES = ['/app', '/jobs/admin', '/admin']")
+    expect(source).toContain('export async function proxy(request: NextRequest)')
+    expect(source).toContain("process.env.VERCEL_ENV === 'production'")
+    expect(source).toContain('supabase.auth.getUser()')
+  })
+
   it('enforces a production CSP without unsafe-eval and denies framing', () => {
     const source = read('next.config.mjs')
     const productionStart = source.indexOf('const productionCsp')
@@ -52,6 +60,11 @@ describe('V37.3 production security hardening', () => {
     expect(source).toContain("'Content-Security-Policy'")
     expect(source).toContain("{ key: 'X-Frame-Options', value: 'DENY' }")
     expect(source).toContain('Strict-Transport-Security')
+  })
+
+  it('uses the lockfile for Vercel production dependency installs', () => {
+    const config = JSON.parse(read('vercel.json')) as { installCommand?: string }
+    expect(config.installCommand).toBe('npm ci')
   })
 
   it('keeps the public tool surface recruiter-only with no music utilities', () => {
