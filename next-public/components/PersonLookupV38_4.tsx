@@ -91,22 +91,18 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
     if (!value || status) return
     setError(''); setStatus('live')
     try {
-      const planResponse = await fetch('/api/agent-runtime/plan', {
-        method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ message: `Find this specific person, not a broad candidate population: ${value}. Use the name, employer, email, or professional profile URL as identity lookup context.` }),
-      })
-      const planJson = await planResponse.json().catch(() => ({}))
-      if (!planResponse.ok || !planJson.ok || !planJson.plan) throw new Error(planJson.error || 'SourcingOS could not interpret this person lookup.')
-      const plan = planJson.plan as { action?: string; providerRequest?: Record<string, unknown> }
-      if (plan.action !== 'search_people' || !plan.providerRequest) throw new Error('This lookup did not resolve to a people-search plan. Add a name, company, email, or professional profile URL.')
+      // Known-person lookup is an identity retrieval workflow, not a role-search
+      // planning workflow. Preserve the recruiter-entered identity anchor exactly
+      // and search connected sources without asking Role Brain to reinterpret it.
       const response = await fetch('/api/candidate-data/search', {
         method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ ...plan.providerRequest, query: value, limit: 12 }),
+        body: JSON.stringify({ query: value, names: [value], limit: 12, revealContact: false, highFreshness: false }),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok || !json.ok) throw new Error(json.error || 'Live person lookup failed.')
       setLive(Array.isArray(json.observations) ? json.observations : [])
       setSigned(Array.isArray(json.reviewObservations) ? json.reviewObservations : [])
+      setSearched(true)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Live person lookup failed.')
     } finally { setStatus('') }
