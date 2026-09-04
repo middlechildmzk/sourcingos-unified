@@ -54,8 +54,9 @@ export function CandidateRow({
     </span>
     <span className="candidate-row-side">
       <span className="candidate-evidence-count">{typeof evidenceCount === 'number' ? `${evidenceCount} supported` : 'Evidence open'}</span>
-      <span className={`candidate-contact-state ${email.className}`}>Email {email.text}</span>
-      <span className={`candidate-contact-state ${phone.className}`}>Phone {phone.text}</span>
+      {email.text !== 'Unknown' && <span className={`candidate-contact-state ${email.className}`}>Email {email.text}</span>}
+      {phone.text !== 'Unknown' && <span className={`candidate-contact-state ${phone.className}`}>Phone {phone.text}</span>}
+      {email.text === 'Unknown' && phone.text === 'Unknown' && <span className="candidate-contact-state is-muted">Contact not checked</span>}
       <span className="candidate-open-label">Open →</span>
     </span>
   </button>

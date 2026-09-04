@@ -71,25 +71,8 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
 
   const exactPrompt = useMemo(() => query.trim(), [query])
 
-  async function searchGraph(event?: FormEvent) {
-    event?.preventDefault()
-    const value = query.trim()
-    if (!value || status) return
-    setError(''); setSearched(true); setStatus('graph'); setLive([]); setSigned([])
-    try {
-      const response = await fetch(`/api/candidate-db/list?q=${encodeURIComponent(value)}&limit=20`, { cache: 'no-store', headers: { accept: 'application/json' } })
-      const json = await response.json().catch(() => ({}))
-      if (!response.ok || !json.ok) throw new Error(json.error || 'Candidate Graph lookup failed.')
-      setGraphCandidates(Array.isArray(json.candidates) ? json.candidates.filter((item: GraphCandidate & { entityKind?: string }) => !item.entityKind || item.entityKind === 'person') : [])
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Candidate Graph lookup failed.')
-    } finally { setStatus('') }
-  }
-
-  async function searchLive() {
-    const value = query.trim()
-    if (!value || status) return
-    setError(''); setStatus('live')
+  async function searchLiveForValue(value: string) {
+    setStatus('live')
     try {
       // Known-person lookup is an identity retrieval workflow, not a role-search
       // planning workflow. Preserve the recruiter-entered identity anchor exactly
@@ -103,9 +86,36 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
       setLive(Array.isArray(json.observations) ? json.observations : [])
       setSigned(Array.isArray(json.reviewObservations) ? json.reviewObservations : [])
       setSearched(true)
+      return true
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Live person lookup failed.')
+      return false
+    }
+  }
+
+  async function searchGraph(event?: FormEvent) {
+    event?.preventDefault()
+    const value = query.trim()
+    if (!value || status) return
+    setError(''); setSearched(true); setStatus('graph'); setGraphCandidates([]); setLive([]); setSigned([])
+    try {
+      const response = await fetch(`/api/candidate-db/list?q=${encodeURIComponent(value)}&limit=20`, { cache: 'no-store', headers: { accept: 'application/json' } })
+      const json = await response.json().catch(() => ({}))
+      if (!response.ok || !json.ok) throw new Error(json.error || 'Candidate Graph lookup failed.')
+      const candidates = Array.isArray(json.candidates) ? json.candidates.filter((item: GraphCandidate & { entityKind?: string }) => !item.entityKind || item.entityKind === 'person') : []
+      setGraphCandidates(candidates)
+      if (candidates.length === 0) await searchLiveForValue(value)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Candidate Graph lookup failed.')
     } finally { setStatus('') }
+  }
+
+  async function searchLive() {
+    const value = query.trim()
+    if (!value || status) return
+    setError('')
+    await searchLiveForValue(value)
+    setStatus('')
   }
 
   function signedFor(person: LiveObservation) {
@@ -200,18 +210,18 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
     <section className={styles.hero}>
       <span className={styles.kicker}>Known-person lookup</span>
       <h1>Find one person, resolve the profile, then act.</h1>
-      <p>Start with SourcingOS’s Candidate Graph. If the person is not already there, search live connected sources. Contact enrichment remains an explicit recruiter-approved action.</p>
+      <p>Search once: SourcingOS checks the Candidate Graph first, then automatically searches live connected sources when no stored person matches. Contact enrichment remains an explicit recruiter-approved action.</p>
       {role && <div className={styles.role}>Saving a person will also attach them to <strong>{role.intake.title}</strong>.</div>}
       <form onSubmit={searchGraph} className={styles.searchForm}>
         <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Name · company · email · LinkedIn/GitHub/profile URL" autoFocus />
-        <button type="submit" disabled={!exactPrompt || Boolean(status)}>{status === 'graph' ? 'Searching…' : 'Search Candidate Graph'}</button>
+        <button type="submit" disabled={!exactPrompt || Boolean(status)}>{status === 'graph' ? 'Checking saved graph…' : status === 'live' ? 'Searching live sources…' : 'Find person'}</button>
       </form>
-      <div className={styles.liveRow}><span>Need broader coverage or a fresh identity?</span><button type="button" onClick={searchLive} disabled={!exactPrompt || Boolean(status)}>{status === 'live' ? 'Searching live sources…' : 'Search live sources'}</button></div>
+      <div className={styles.liveRow}><span>Want fresh coverage even when a stored profile exists?</span><button type="button" onClick={searchLive} disabled={!exactPrompt || Boolean(status)}>{status === 'live' ? 'Searching live sources…' : 'Refresh live sources'}</button></div>
       {error && <div className={styles.error}>{error}</div>}
     </section>
 
     {searched && <section className={styles.results}>
-      <div className={styles.sectionHead}><div><span>Candidate Graph</span><strong>{graphCandidates.length} match{graphCandidates.length === 1 ? '' : 'es'}</strong></div>{graphCandidates.length === 0 && <small>No stored person matched this lookup yet.</small>}</div>
+      <div className={styles.sectionHead}><div><span>Candidate Graph</span><strong>{graphCandidates.length} match{graphCandidates.length === 1 ? '' : 'es'}</strong></div>{graphCandidates.length === 0 && <small>No stored match. Live sources are checked automatically.</small>}</div>
       <div className={styles.cards}>{graphCandidates.map(candidate => {
         const key = `graph:${candidate.id}`
         const signals = contactSignals[key] || []
