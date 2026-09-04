@@ -21,13 +21,11 @@ jobs:
         with:
           ref: v40-2-autonomous-fleet-integration
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: next-public/package-lock.json
-
       - name: Reconstruct reviewed staging archive
         shell: bash
         run: |
@@ -36,30 +34,22 @@ jobs:
           base64 -d /tmp/v40-stage.b64 > /tmp/v40-stage.tgz
           test "$(sha256sum /tmp/v40-stage.tgz | cut -d' ' -f1)" = "206de6bc2ec9059e46704edc6785b62fc8a18c7a7effb8f17951461d623ce0b7"
           tar -xzf /tmp/v40-stage.tgz -C .
-          echo '--- apply.py ---'
-          sed -n '1,260p' .integration/apply.py
-          echo '--- patch files ---'
-          grep '^diff --git ' .integration/*.patch || true
-          echo '--- candidate/source patch hunks ---'
-          grep -n -E 'candidate-db-v18|source-types|^@@' .integration/claude-stack-npi.patch | head -120 || true
+          echo '--- candidate/source patch excerpt ---'
+          sed -n '1,35p' .integration/claude-stack-npi.patch
+          sed -n '257,330p' .integration/claude-stack-npi.patch
           python .integration/apply.py
-
       - name: Install locked dependencies
         working-directory: next-public
         run: npm ci
-
       - name: Typecheck
         working-directory: next-public
         run: npm run typecheck
-
       - name: Targeted V40.2 fleet tests
         working-directory: next-public
         run: npx vitest run tests/fleet-nppes-scout.test.ts tests/fleet-stack-network.test.ts tests/fleet-orcid-scout.test.ts tests/fleet-standing-fleet.test.ts tests/v40-2-autonomous-fleet-integration.test.ts
-
       - name: Full deterministic suite
         working-directory: next-public
         run: npm test
-
       - name: Commit integrated implementation
         shell: bash
         run: |
