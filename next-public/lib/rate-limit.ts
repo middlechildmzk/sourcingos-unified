@@ -7,9 +7,9 @@
 //   2. For critical public fan-out/end-user intake endpoints, a shared Supabase RPC fallback.
 //   3. In-memory Map as the final best-effort fallback only.
 //
-// The jobs-search and contact policies intentionally use the shared Supabase
-// fallback when Upstash is not available so one serverless instance cannot
-// bypass another.
+// The jobs-search, auth-bootstrap, contact and public-intake policies intentionally
+// use the shared Supabase fallback when Upstash is not available so one serverless
+// instance cannot bypass another.
 // SERVER-ONLY.
 // ─────────────────────────────────────────────────────────────────────────────
 import 'server-only'
@@ -25,6 +25,7 @@ export type RatePolicy =
   | 'waitlist'        // public waitlist signup
   | 'contact'         // public privacy/security/product contact intake
   | 'submit'          // public job submission
+  | 'authBootstrap'   // one-time beta password bootstrap attempts
   | 'public'          // low-cost public read endpoints
   | 'jobsSearch'      // public jobs search; fans out to upstream job sources
   | 'analytics'       // public analytics events
@@ -41,9 +42,10 @@ const POLICIES: Record<RatePolicy, PolicyDef> = {
   enrichmentDaily: { limit: 50, windowSec: 86_400 },
   workbench:       { limit: 30, windowSec: 60 },
   sources:         { limit: 30, windowSec: 60 },
-  waitlist:        { limit: 3,  windowSec: 3_600 },
+  waitlist:        { limit: 3,  windowSec: 3_600, sharedFallback: true },
   contact:         { limit: 5,  windowSec: 3_600, sharedFallback: true },
-  submit:          { limit: 5,  windowSec: 3_600 },
+  submit:          { limit: 5,  windowSec: 3_600, sharedFallback: true },
+  authBootstrap:   { limit: 8,  windowSec: 900, sharedFallback: true },
   public:          { limit: 30, windowSec: 60 },
   jobsSearch:      { limit: 20, windowSec: 60, sharedFallback: true },
   analytics:       { limit: 60, windowSec: 60 },
@@ -141,14 +143,17 @@ function limited(windowSec: number): RateFail {
  * fallback so a Redis or database incident does not automatically make a
  * public route unavailable.
  *
- * Set RATE_LIMIT_DISABLED=true only in automated tests.
+ * RATE_LIMIT_DISABLED is honored only outside production so a stray production
+ * environment variable cannot silently remove abuse protection.
  */
 export async function rateLimit(
   req: Request | null | undefined,
   policy: RatePolicy,
   userId?: string | null
 ): Promise<RateResult> {
-  if (process.env.RATE_LIMIT_DISABLED === 'true') return { ok: true, remaining: 999 }
+  if (process.env.RATE_LIMIT_DISABLED === 'true' && process.env.NODE_ENV !== 'production') {
+    return { ok: true, remaining: 999 }
+  }
 
   const def = POLICIES[policy]
   const id = rateIdentifier(req, userId)
