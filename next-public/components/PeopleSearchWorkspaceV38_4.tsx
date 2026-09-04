@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { SearchWorkspaceV38_1 } from '@/components/SearchWorkspaceV38_1'
 import { PersonLookupV38_4 } from '@/components/PersonLookupV38_4'
+import { CalibrationCoachV38_3 } from '@/components/CalibrationCoachV38_3'
 import styles from './PeopleSearchWorkspaceV38_4.module.css'
 
 export function PeopleSearchWorkspaceV38_4({ initialQuery = '', roleId, source }: { initialQuery?: string; roleId?: string; source?: string }) {
@@ -19,8 +20,9 @@ export function PeopleSearchWorkspaceV38_4({ initialQuery = '', roleId, source }
         <span>Name, company, email or profile URL</span>
       </button>
     </div>
-    {mode === 'source'
-      ? <SearchWorkspaceV38_1 initialQuery={initialQuery} roleId={roleId} source={source} />
-      : <PersonLookupV38_4 initialQuery={initialQuery} roleId={roleId} />}
+    {mode === 'source' ? <>
+      {roleId && <CalibrationCoachV38_3 roleId={roleId} />}
+      <SearchWorkspaceV38_1 initialQuery={initialQuery} roleId={roleId} source={source} />
+    </> : <PersonLookupV38_4 initialQuery={initialQuery} roleId={roleId} />}
   </div>
 }
