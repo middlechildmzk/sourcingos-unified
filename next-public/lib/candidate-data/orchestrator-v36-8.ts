@@ -2,6 +2,7 @@ import type {
   CandidateDataSearchAdapterV36_8,
   CandidateDataSearchRequestV36_8,
   CandidateDataProviderTelemetryV36_8,
+  CandidateDataSearchResultV36_8,
   CandidateProviderObservationV36_8,
 } from './types-v36-8'
 import { candidateObservationKeyV36_8 } from './types-v36-8'
@@ -23,6 +24,8 @@ export type CandidateDataOrchestrationV36_8 = {
   relevanceRejected: number
 }
 
+export type CandidateProviderProgressCallbackV37 = (result: CandidateDataSearchResultV36_8) => void | Promise<void>
+
 /**
  * Execute every configured provider selected for the pass before applying the
  * global result cap. Provider observations are not identity-merged here.
@@ -31,17 +34,23 @@ export type CandidateDataOrchestrationV36_8 = {
  * Coresignal id 456 are separate observations until Candidate Graph has a
  * deterministic/proposed identity relationship. Incremental canonical reach is
  * measured after identity resolution, not by adding vendor headline counts.
+ *
+ * V37 optionally exposes provider-terminal progress. The callback is telemetry
+ * only: it never bypasses the relevance floor, identity rules, or final
+ * cross-source interleaving used for the retained slate.
  */
 export async function runCandidateDataSearchV36_8(
   request: CandidateDataSearchRequestV36_8,
   adapters: CandidateDataSearchAdapterV36_8[],
   globalLimit = 50,
+  onProviderSettled?: CandidateProviderProgressCallbackV37,
 ): Promise<CandidateDataOrchestrationV36_8> {
   const settled = await Promise.all(adapters.map(async adapter => {
+    let result: CandidateDataSearchResultV36_8
     try {
-      return await adapter.search(request)
+      result = await adapter.search(request)
     } catch {
-      return {
+      result = {
         observations: [],
         telemetry: {
           provider: adapter.provider,
@@ -53,6 +62,12 @@ export async function runCandidateDataSearchV36_8(
         warnings: [`${adapter.provider} adapter failed.`],
       }
     }
+    try {
+      await onProviderSettled?.(result)
+    } catch {
+      // Progress delivery is best-effort and must never change search truth.
+    }
+    return result
   }))
 
   const telemetry = settled.map(item => item.telemetry)
