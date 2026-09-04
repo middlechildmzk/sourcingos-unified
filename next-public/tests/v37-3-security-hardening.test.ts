@@ -14,6 +14,15 @@ describe('V37.3 production security hardening', () => {
     expect(source).toContain("count === null && def.failClosed && process.env.NODE_ENV === 'production'")
   })
 
+  it('keeps the shared database limiter RLS-protected and service-role-only', () => {
+    const migration = read('supabase/migrations/20260825_create_shared_rate_limit_counters.sql')
+    expect(migration).toContain('alter table public.rate_limit_counters enable row level security')
+    expect(migration).toContain('revoke all on table public.rate_limit_counters from anon, authenticated')
+    expect(migration).toContain('grant select, insert, update, delete on table public.rate_limit_counters to service_role')
+    expect(migration).toContain('revoke all on function public.consume_rate_limit(text, integer) from public, anon, authenticated')
+    expect(migration).toContain('grant execute on function public.consume_rate_limit(text, integer) to service_role')
+  })
+
   it('rate limits one-time password bootstrap before token lookup', () => {
     const source = read('app/api/auth/bootstrap-password/route.ts')
     expect(source).toContain("rateLimit(request, 'authBootstrap')")
