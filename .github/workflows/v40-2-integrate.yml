@@ -37,9 +37,6 @@ jobs:
           test "$(sha256sum /tmp/v40-stage.tgz | cut -d' ' -f1)" = "206de6bc2ec9059e46704edc6785b62fc8a18c7a7effb8f17951461d623ce0b7"
           tar -xzf /tmp/v40-stage.tgz -C .
 
-          # Claude's Stack Exchange patch was cut before V40/V40.1 added new
-          # candidate-data sources. Preserve current main and apply only the
-          # additive six-site taxonomy changes by hand.
           python - <<'PY'
           from pathlib import Path
 
@@ -57,34 +54,14 @@ jobs:
 
           source_union = "  | 'rubygems'\n  // Stack Exchange network sites beyond Stack Overflow retain site-level provenance.\n  | 'serverfault'\n  | 'security_se'\n  | 'devops_se'\n  | 'unix_se'\n  | 'dba_se'\n  | 'networkeng_se'\n  | 'resume_xray'"
           add_once('next-public/lib/source-types.ts', "  | 'rubygems'\n  | 'resume_xray'", source_union)
-          add_once(
-              'next-public/lib/source-types.ts',
-              "  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',\n  'resume_xray'",
-              "  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',\n  'serverfault', 'security_se', 'devops_se', 'unix_se', 'dba_se', 'networkeng_se',\n  'resume_xray'",
-          )
-          add_once(
-              'next-public/lib/source-types.ts',
-              "  rubygems: 'RubyGems',\n  resume_xray: 'Public Resume X-Ray',",
-              "  rubygems: 'RubyGems',\n  serverfault: 'Server Fault',\n  security_se: 'Information Security Stack Exchange',\n  devops_se: 'DevOps Stack Exchange',\n  unix_se: 'Unix & Linux Stack Exchange',\n  dba_se: 'Database Administrators Stack Exchange',\n  networkeng_se: 'Network Engineering Stack Exchange',\n  resume_xray: 'Public Resume X-Ray',",
-          )
-          add_once(
-              'next-public/lib/source-types.ts',
-              "  technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],\n  research:",
-              "  technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],\n  infrastructure: ['serverfault', 'unix_se', 'devops_se', 'networkeng_se', 'dba_se', 'github'],\n  security: ['security_se', 'serverfault', 'github', 'stackoverflow'],\n  research:",
-          )
+          add_once('next-public/lib/source-types.ts', "  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',\n  'resume_xray'", "  'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',\n  'serverfault', 'security_se', 'devops_se', 'unix_se', 'dba_se', 'networkeng_se',\n  'resume_xray'")
+          add_once('next-public/lib/source-types.ts', "  rubygems: 'RubyGems',\n  resume_xray: 'Public Resume X-Ray',", "  rubygems: 'RubyGems',\n  serverfault: 'Server Fault',\n  security_se: 'Information Security Stack Exchange',\n  devops_se: 'DevOps Stack Exchange',\n  unix_se: 'Unix & Linux Stack Exchange',\n  dba_se: 'Database Administrators Stack Exchange',\n  networkeng_se: 'Network Engineering Stack Exchange',\n  resume_xray: 'Public Resume X-Ray',")
+          add_once('next-public/lib/source-types.ts', "  technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],\n  research:", "  technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],\n  infrastructure: ['serverfault', 'unix_se', 'devops_se', 'networkeng_se', 'dba_se', 'github'],\n  security: ['security_se', 'serverfault', 'github', 'stackoverflow'],\n  research:")
           PY
 
-          git apply --check \
-            --exclude=next-public/lib/candidate-db-v18.ts \
-            --exclude=next-public/lib/source-types.ts \
-            .integration/claude-stack-npi.patch
-          git apply \
-            --exclude=next-public/lib/candidate-db-v18.ts \
-            --exclude=next-public/lib/source-types.ts \
-            .integration/claude-stack-npi.patch
+          git apply --check --exclude=next-public/lib/candidate-db-v18.ts --exclude=next-public/lib/source-types.ts .integration/claude-stack-npi.patch
+          git apply --exclude=next-public/lib/candidate-db-v18.ts --exclude=next-public/lib/source-types.ts .integration/claude-stack-npi.patch
 
-          # Run the rest of the reviewed integration script without reapplying
-          # the now-reconciled Claude patch.
           python - <<'PY'
           from pathlib import Path
           p = Path('.integration/apply.py')
@@ -95,9 +72,8 @@ jobs:
           PY
           python .integration/apply.py
 
-          # V40.2 intentionally completes the hardening gate that kept V22/V33
-          # cron disabled. Update those regressions to protect the new contract:
-          # scheduled fleet route only, header-secret auth, and recruiter review.
+          # The hardening gate is complete. Regressions now protect the active
+          # fleet schedule plus the same recruiter-review-only safety boundary.
           python - <<'PY'
           from pathlib import Path
 
@@ -110,31 +86,23 @@ jobs:
 
           replace_required(
               'next-public/tests/autosource-v22.test.ts',
-              "  it('does not schedule unattended autosource while trust hardening is in progress', () => {\n    expect(vercel).toContain('\\\"crons\\\": []')\n    expect(vercel).not.toContain('/api/cron/autosource')\n  })",
+              "  it('does not schedule unattended autosource while trust hardening is in progress', () => {\n    expect(vercel).toContain('\"crons\": []')\n    expect(vercel).not.toContain('/api/cron/autosource')\n  })",
               "  it('schedules only the hardened V40.2 fleet endpoint for unattended discovery', () => {\n    const fleetCron = read('app/api/cron/fleet/route.ts')\n    expect(vercel).toContain('/api/cron/fleet')\n    expect(vercel).toContain('*/30 * * * *')\n    expect(vercel).not.toContain('/api/cron/autosource')\n    expect(fleetCron).toContain('authorizeCronRequest')\n    expect(fleetCron).toContain('runStandingFleetTick')\n  })",
           )
 
           replace_required(
               'next-public/tests/v33-2-unified-agent-source-truth.test.ts',
-              "    expect(vercel).toContain('\\\"crons\\\": []')\n",
+              "    expect(vercel).toContain('\"crons\": []')\n",
               "    const fleetCron = read('app/api/cron/fleet/route.ts')\n    expect(vercel).toContain('/api/cron/fleet')\n    expect(vercel).toContain('*/30 * * * *')\n    expect(vercel).not.toContain('/api/cron/autosource')\n    expect(fleetCron).toContain('authorizeCronRequest')\n",
           )
-          replace_required(
-              'next-public/tests/v33-2-unified-agent-source-truth.test.ts',
-              "  it('keeps unattended acquisition discovery-only until recruiter review', () => {",
-              "  it('keeps scheduled unattended acquisition discovery-only until recruiter review', () => {",
-          )
+          replace_required('next-public/tests/v33-2-unified-agent-source-truth.test.ts', "  it('keeps unattended acquisition discovery-only until recruiter review', () => {", "  it('keeps scheduled unattended acquisition discovery-only until recruiter review', () => {")
 
           p = Path('next-public/tests/v40-agentic-foundation.test.ts')
           text = p.read_text()
           marker = "const capture = read('lib/candidate-data/auto-capture-v40.ts')\n"
           if marker not in text:
               raise SystemExit('V40 capture test marker missing')
-          text = text.replace(
-              marker,
-              marker + "const captureStore = read('lib/candidate-data/capture-source-result-v40.ts')\n",
-              1,
-          )
+          text = text.replace(marker, marker + "const captureStore = read('lib/candidate-data/capture-source-result-v40.ts')\n", 1)
           text = text.replace("    expect(capture).toContain(\"status: 'pending'\")", "    expect(captureStore).toContain(\"status: 'pending'\")", 1)
           text = text.replace("    expect(capture).toContain(\"merge_status: 'pending'\")", "    expect(captureStore).toContain(\"merge_status: 'pending'\")", 1)
           text = text.replace("    expect(capture).toContain('Automatically captured provider observation')", "    expect(captureStore).toContain('Automatically captured provider observation')", 1)
