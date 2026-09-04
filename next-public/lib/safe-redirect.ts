@@ -18,14 +18,14 @@
  *   - does not contain ://
  *
  * @example
- *   safeRelativePath('/app/candidate-search') // → '/app/candidate-search'
- *   safeRelativePath('//evil.com')            // → fallback
- *   safeRelativePath('https://evil.com')      // → fallback
- *   safeRelativePath(null)                    // → fallback
+ *   safeRelativePath('/app/search')  // → '/app/search'
+ *   safeRelativePath('//evil.com')   // → fallback
+ *   safeRelativePath('https://evil.com') // → fallback
+ *   safeRelativePath(null)           // → fallback
  */
 export function safeRelativePath(
   value: string | null | undefined,
-  fallback = '/app/candidate-search'
+  fallback = '/app/search'
 ): string {
   if (!value) return fallback
   if (!value.startsWith('/')) return fallback
