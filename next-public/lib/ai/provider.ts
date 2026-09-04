@@ -194,7 +194,8 @@ async function callVercelGatewayJson<T>(prompt: string, key: string, model: stri
   }
 }
 
-export async function callAiJson<T>(prompt: string, maxTokens = 1200): Promise<AiCallResult<T>> {
+/** Call the configured reasoning model with a prompt expecting JSON output. */
+export async function callModelJson<T>(prompt: string, maxTokens = 1200): Promise<AiCallResult<T>> {
   const provider = activeProvider()
   if (!provider) return { ok: false, error: 'not_configured', aiGenerated: false }
   const model = modelFor(provider)
