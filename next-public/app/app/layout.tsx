@@ -12,6 +12,7 @@ import './tokens.css'
 import './product-surface.css'
 import './search-workspace.css'
 import './role-workspace-v37.css'
+import './today-v37.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
