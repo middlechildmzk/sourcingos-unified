@@ -24,7 +24,11 @@ describe('V39.1B Neo4j Query API runtime', () => {
   it('normalizes Aura connection/base URLs to Query API v2 without embedding credentials', () => {
     expect(resolveNeo4jQueryEndpointV39_1B('neo4j+s://abc.databases.neo4j.io', 'neo4j'))
       .toBe('https://abc.databases.neo4j.io/db/neo4j/query/v2')
-    expect(resolveNeo4jQueryEndpointV39_1B('https://user:pass@abc.databases.neo4j.io/db/neo4j/query/v2', 'neo4j'))
+
+    const credentialUrl = new URL('https://abc.databases.neo4j.io/db/neo4j/query/v2')
+    credentialUrl.username = 'user'
+    credentialUrl.password = 'pass'
+    expect(resolveNeo4jQueryEndpointV39_1B(credentialUrl.toString(), 'neo4j'))
       .toBe('https://abc.databases.neo4j.io/db/neo4j/query/v2')
   })
 
