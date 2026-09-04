@@ -36,7 +36,7 @@ describe('V38.5 SourcingOS MCP trust contract', () => {
 
   it('keeps identity and hiring decisions outside the MCP authority boundary', () => {
     expect(route).toContain('Identity merges, paid enrichment, outreach, rejection, and hiring decisions require explicit recruiter-controlled workflows')
-    expect(lib).toContain('never silently merges identities')
+    expect(route).toContain('never silently merges identities')
     expect(lib).toContain('Ambiguous identities remain separate until recruiter review.')
   })
 
