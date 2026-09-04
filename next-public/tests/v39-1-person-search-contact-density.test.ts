@@ -19,11 +19,13 @@ describe('V39.1 recruiter search regression guard', () => {
     expect(source).toContain("phone.text !== 'Unknown'")
   })
 
-  it('gives the candidate list more desktop width and a larger readable type scale', () => {
+  it('keeps the candidate list readable while moving Candidate 360 to a laptop-width slide-over', () => {
     const moduleCss = read('components/SearchWorkspaceV38_1.module.css')
-    const workspaceCss = read('app/app/search-workspace.css')
-    expect(moduleCss).toContain('minmax(600px,1fr)')
-    expect(workspaceCss).toContain('.candidate-row-name-line strong{font-size:14px}')
-    expect(workspaceCss).toContain('grid-template-columns:32px minmax(0,1fr) 118px')
+    expect(moduleCss).toContain('minmax(680px,1fr)')
+    expect(moduleCss).toContain("@media(min-width:901px) and (max-width:1699px)")
+    expect(moduleCss).toContain('grid-template-columns:minmax(280px,320px) minmax(0,1fr)')
+    expect(moduleCss).toContain(':global(.search-workspace-right.has-selection){transform:translateX(0)')
+    expect(moduleCss).toContain(':global(.candidate-row-name-line strong){font-size:14px')
+    expect(moduleCss).toContain(':global(.candidate-row){grid-template-columns:32px minmax(0,1fr) 118px')
   })
 })
