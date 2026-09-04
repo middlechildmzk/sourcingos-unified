@@ -1,6 +1,7 @@
 import 'server-only'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { createDeterministicIdentityProposals } from '@/lib/identity-proposal-service-v33-2'
 import { providerObservationToSourceResultV36_8 } from './provider-observation-bridge-v36-8'
 import type { CandidateProviderObservationV36_8 } from './types-v36-8'
 
@@ -11,6 +12,8 @@ export type AutoCaptureItemV40 = {
   reused: boolean
   candidateId?: string
   sourceProfileId?: string
+  identityReviewProposalsCreated?: number
+  identityProposalWarning?: string
   errorCode?: string
 }
 
@@ -21,6 +24,8 @@ export type AutoCaptureSummaryV40 = {
   created: number
   reused: number
   failed: number
+  identityReviewProposalsCreated: number
+  identityProposalWarnings: number
   identityResolutionDeferred: true
   contactValuesCaptured: false
   results: AutoCaptureItemV40[]
@@ -143,10 +148,34 @@ async function captureOne(
       }
     }
 
+    // Persisting the observation is not permission to fuse it with another
+    // human. After the source identity has its own durable candidate record,
+    // the existing proposal-only resolver may compare it with other owned
+    // source profiles. It creates a recruiter-review row only when independently
+    // observed deterministic anchors exist; it never changes candidate IDs.
+    // Names, companies, locations, skills, and LinkedIn overlap cannot satisfy
+    // that proposal gate on their own.
+    const proposal = await createDeterministicIdentityProposals({
+      sb,
+      ownerId,
+      incomingSourceProfileId: sourceProfileId,
+      incomingCandidateId: candidateId,
+      incomingResult: normalized,
+      maxProposals: 3,
+    })
+
     // Search execution intentionally runs with revealContact=false. Automatic
     // capture persists professional evidence and identity observations only;
     // contact values remain behind the explicit recruiter-approved waterfall.
-    return { ...base, ok: true, reused, candidateId, sourceProfileId }
+    return {
+      ...base,
+      ok: true,
+      reused,
+      candidateId,
+      sourceProfileId,
+      identityReviewProposalsCreated: proposal.created.length,
+      identityProposalWarning: proposal.warning,
+    }
   } catch {
     return { ...base, ok: false, reused: false, errorCode: 'capture_failed' }
   }
@@ -155,7 +184,9 @@ async function captureOne(
 /**
  * Persist every retained source-native observation from an executed search.
  * This is system memory, not a recruiter disposition: candidates remain pending,
- * cross-source identity resolution is deferred, and contact values are excluded.
+ * deterministic cross-source anchors may create inert recruiter-review proposals,
+ * persistent identity fusion remains deferred to explicit recruiter confirmation,
+ * and contact values are excluded.
  */
 export async function autoCaptureSearchObservationsV40(
   sb: SupabaseClient,
@@ -180,6 +211,8 @@ export async function autoCaptureSearchObservationsV40(
     created: persisted - reused,
     reused,
     failed: results.length - persisted,
+    identityReviewProposalsCreated: results.reduce((sum, item) => sum + Number(item.identityReviewProposalsCreated || 0), 0),
+    identityProposalWarnings: results.filter(item => Boolean(item.identityProposalWarning)).length,
     identityResolutionDeferred: true,
     contactValuesCaptured: false,
     results,
