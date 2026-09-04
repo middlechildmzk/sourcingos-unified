@@ -22,6 +22,8 @@ import './mobile-v37.css'
 import './visual-system-v37-1.css'
 /* V37.3 deliberately strengthens only narrow-screen hierarchy and loads last. */
 import './mobile-visual-strength-v37-3.css'
+/* V38 adds progressive Search Health without changing the canonical three-pane layout. */
+import './search-health-v38.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 
