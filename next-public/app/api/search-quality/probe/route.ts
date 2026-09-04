@@ -1,10 +1,15 @@
 import 'server-only'
 import { NextRequest, NextResponse } from 'next/server'
-import { buildUniversalPeopleProviderRequestV36_9 } from '@/lib/universal-people-search-v36-9'
+import { planConversationalSourcingTurnV36_16 } from '@/lib/agent-runtime-v36-16'
 import { CANONICAL_SEARCH_ROLES_V36_12, buildSearchQualitySnapshotV36_12 } from '@/lib/search-quality-v36-12'
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
-import type { CandidateDataSearchAdapterV36_8, CandidateDataProviderV36_8 } from '@/lib/candidate-data/types-v36-8'
+import { retrievalRelevanceDecisionV37 } from '@/lib/candidate-data/retrieval-relevance-v37'
+import type {
+  CandidateDataSearchAdapterV36_8,
+  CandidateDataProviderV36_8,
+  CandidateDataSearchResultV36_8,
+} from '@/lib/candidate-data/types-v36-8'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
 import { searchCoresignalV36_8 } from '@/lib/candidate-data/providers/coresignal-v36-8'
@@ -52,7 +57,7 @@ function safeObservation(item: Awaited<ReturnType<typeof runCandidateDataSearchV
 /**
  * Temporary V37.2 diagnostic endpoint. It is deliberately unavailable outside
  * Vercel Preview, performs only read-only breadth search, never reveals contact
- * values, never persists observations, and runs only one fixed canonical role.
+ * values, never persists observations, and runs only fixed canonical roles.
  * Remove this route before the V37.2 branch is merged.
  */
 export async function GET(req: NextRequest) {
@@ -62,7 +67,12 @@ export async function GET(req: NextRequest) {
   const role = CANONICAL_SEARCH_ROLES_V36_12.find(item => item.key === key)
   if (!role) return NextResponse.json({ ok: false, error: 'Unknown canonical role.' }, { status: 400 })
 
-  const parsed = buildUniversalPeopleProviderRequestV36_9({ query: role.query, limit: 10 })
+  const plan = await planConversationalSourcingTurnV36_16({ message: role.query })
+  if (!('providerRequest' in plan)) {
+    return NextResponse.json({ ok: false, error: `Canonical people-search query planned unexpected action ${plan.action}.` }, { status: 500 })
+  }
+
+  const parsed = { ...plan.providerRequest, limit: 10 }
   const configured = executableCandidateSearchProvidersV36_8()
   const adapters = configured.map(item => adapter(item.provider)).filter(Boolean) as CandidateDataSearchAdapterV36_8[]
   if (!adapters.length) return NextResponse.json({ ok: false, error: 'No executable candidate-search providers configured in Preview.' }, { status: 503 })
@@ -72,15 +82,53 @@ export async function GET(req: NextRequest) {
     offset: 0,
     revealContact: false as const,
   }
-  const result = await runCandidateDataSearchV36_8(request, adapters, 10)
+
+  const rawDiagnostics: Array<{
+    provider: string
+    status: string
+    discovered: number
+    admitted: number
+    rejected: number
+    examples: Array<{ title?: string; employer?: string; location?: string; skills: string[]; admitted: boolean; reasons: string[] }>
+  }> = []
+
+  const onProviderSettled = (settled: CandidateDataSearchResultV36_8) => {
+    const decisions = settled.observations.map(item => ({ item, decision: retrievalRelevanceDecisionV37(request, item) }))
+    rawDiagnostics.push({
+      provider: settled.telemetry.provider,
+      status: settled.telemetry.status,
+      discovered: settled.observations.length,
+      admitted: decisions.filter(row => row.decision.admitted).length,
+      rejected: decisions.filter(row => !row.decision.admitted).length,
+      examples: decisions.slice(0, 5).map(row => ({
+        currentTitle: undefined,
+        title: row.item.currentTitle || row.item.headline,
+        employer: row.item.currentEmployer,
+        location: row.item.location,
+        skills: row.item.skills.slice(0, 8),
+        admitted: row.decision.admitted,
+        reasons: row.decision.reasons,
+      })),
+    })
+  }
+
+  const result = await runCandidateDataSearchV36_8(request, adapters, 10, onProviderSettled)
   const quality = buildSearchQualitySnapshotV36_12(request, result)
 
   return NextResponse.json({
     ok: true,
     role,
+    planner: {
+      action: plan.action,
+      assistantSummary: plan.assistantSummary,
+      model: plan.model,
+      assumptions: plan.assumptions,
+      criteria: 'criteria' in plan ? plan.criteria : undefined,
+    },
     structuredRequest: parsed,
     configuredProviders: configured.map(item => ({ provider: item.provider, label: item.label, capabilities: item.capabilities })),
     telemetry: result.telemetry,
+    rawDiagnostics: rawDiagnostics.sort((a, b) => a.provider.localeCompare(b.provider)),
     providerMix: result.providerMix,
     retainedProviderMix: result.retainedProviderMix,
     discoveredBeforeCap: result.discoveredBeforeCap,
