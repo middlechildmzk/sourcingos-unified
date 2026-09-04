@@ -19,6 +19,8 @@ describe('V40 agentic sourcing foundation', () => {
     expect(provider).toContain('process.env.AI_GATEWAY_API_KEY')
     expect(provider).toContain("return 'vercel_gateway'")
     expect(provider).toContain("'openai/gpt-5.6-sol'")
+    expect(provider).toContain("if (legacyModel?.includes('/')) return legacyModel")
+    expect(provider).not.toContain("process.env.AI_GATEWAY_MODEL?.trim() || process.env.AI_PROVIDER_MODEL?.trim() || 'openai/gpt-5.6-sol'")
     expect(gatewayStatus).toContain('gatewayRequestRuntimeIntegrated: true')
     expect(gatewayStatus).toContain('aiSdkRuntimeIntegrated: false')
   })
