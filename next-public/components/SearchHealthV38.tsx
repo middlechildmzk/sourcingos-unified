@@ -87,7 +87,7 @@ export function SearchHealthV38({ quality }: { quality: SearchHealthSessionV38 }
       </div>
 
       <details className="search-health-inspector">
-        <summary>Inspect sanitized provider requests</summary>
+        <summary>Inspect sanitized provider execution context</summary>
         <div className="search-health-request-list">
           {quality.providerRequests.map(item => <article className="search-health-request" key={item.provider}>
             <header><strong>{label(item.provider)}</strong><span>limit {item.limit}</span></header>
@@ -100,7 +100,7 @@ export function SearchHealthV38({ quality }: { quality: SearchHealthSessionV38 }
         </div>
       </details>
 
-      <p className="search-health-trust">Runtime health explains what the search infrastructure did. It is not candidate qualification. Discovery expansion remains search-only, and missing requirement evidence remains unknown.</p>
+      <p className="search-health-trust">Execution context shows the normalized search inputs available to the adapter; it is not a claim that every vendor received every field verbatim. Runtime health explains what the search infrastructure did. It is not candidate qualification. Discovery expansion remains search-only, and missing requirement evidence remains unknown.</p>
     </div>
   </details>
 }
