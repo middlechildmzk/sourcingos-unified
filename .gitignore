@@ -1,10 +1,15 @@
-
 # SourcingOS build/dependency artifacts
 next-public/.next/
 next-public/node_modules/
 next-public/tsconfig.tsbuildinfo
 
-# local secrets
-.env
-.env.local
-.env.*.local
+# Local/deployment secrets — ignore every environment file except the intentionally
+# blank documented example. Never commit provider credentials or service-role keys.
+.env*
+!next-public/.env.example
+!.env.example
+.vercel/
+*.pem
+*.key
+*.p12
+*.pfx
