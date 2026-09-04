@@ -22,7 +22,7 @@ describe('V39.1 production search regressions', () => {
     const adapters: CandidateDataSearchAdapterV36_8[] = [
       {
         provider: 'pearch',
-        search: async () => new Promise(() => {}),
+        search: async () => new Promise<never>(() => {}),
       },
       {
         provider: 'exa',
