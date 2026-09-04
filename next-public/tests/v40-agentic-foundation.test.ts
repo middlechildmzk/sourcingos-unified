@@ -9,6 +9,10 @@ const provider = read('lib/ai/provider.ts')
 const gatewayStatus = read('lib/ai/gateway-v39-1.ts')
 const searchRoute = read('app/api/candidate-data/search/route.ts')
 const capture = read('lib/candidate-data/auto-capture-v40.ts')
+const identityProposals = read('lib/identity-proposal-service-v33-2.ts')
+const identityReviewRoute = read('app/api/candidate-db/match-review/route.ts')
+const identityDecisionRoute = read('app/api/candidate-db/confirm-merge/route.ts')
+const identityInbox = read('components/IdentityReviewInboxV36_10.tsx')
 const workspace = read('components/SearchWorkspaceV38_1.tsx')
 const workspaceCss = read('components/SearchWorkspaceV38_1.module.css')
 
@@ -35,6 +39,22 @@ describe('V40 agentic sourcing foundation', () => {
     expect(capture).toContain('Automatically captured provider observation')
   })
 
+  it('hands deterministic cross-source anchors to the existing recruiter identity inbox without auto-merging', () => {
+    expect(capture).toContain('createDeterministicIdentityProposals')
+    expect(capture).toContain('identityReviewProposalsCreated')
+    expect(capture).toContain('identityResolutionDeferred: true')
+    expect(identityProposals).toContain('This function never links source profiles')
+    expect(identityProposals).toContain('!comparison.deterministicAnchor')
+    expect(identityProposals).toContain('LinkedIn overlap is review context only')
+    expect(identityReviewRoute).toContain('mergeAuthorized: false')
+    expect(identityReviewRoute).toContain('reviewRequired: true')
+    expect(identityInbox).toContain('Identity confidence is not merge permission.')
+    expect(identityInbox).toContain('Confirm same person')
+    expect(identityInbox).toContain('Keep separate')
+    expect(identityDecisionRoute).toContain("sb.rpc('confirm_identity_match_atomic_v34'")
+    expect(identityDecisionRoute).toContain('recruiter action required for every merge decision')
+  })
+
   it('makes agent execution and durable capture visible in the recruiter cockpit', () => {
     expect(workspace).toContain('AI sourcing copilot')
     expect(workspace).toContain('Agent activity')
@@ -52,7 +72,6 @@ describe('V40 agentic sourcing foundation', () => {
   it('keeps automatic capture outside contact reveal, identity merge, and recruiter decision authority', () => {
     expect(capture).toContain('contactValuesCaptured: false')
     expect(capture).not.toContain("from('candidate_contacts')")
-    expect(capture).not.toContain('createDeterministicIdentityProposals')
     expect(searchRoute).toContain('contactValuesCapturedAutomatically: false')
     expect(searchRoute).toContain('automaticIdentityResolutionDeferred: true')
     expect(searchRoute).toContain('identityMergePerformed: false')
