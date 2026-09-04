@@ -162,6 +162,9 @@ export type TechnicalArtifactType =
   | 'ml_model'
   | 'ml_dataset'
   | 'publication'
+  /** A government or board-issued professional license or registry entry. */
+  | 'professional_license'
+  | 'professional_affiliation'
 
 /**
  * How the person relates to the artifact. These are deliberately distinct.
@@ -224,6 +227,8 @@ export type IdentityAnchorKind =
   | 'orcid'
   | 'explicit_profile_link'
   | 'source_profile_url'
+  /** US National Provider Identifier. Government-issued and nationally unique. */
+  | 'npi_number'
 
 /**
  * `deterministic` anchors may create a recruiter identity-review proposal.

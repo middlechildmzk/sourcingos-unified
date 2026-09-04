@@ -15,6 +15,13 @@ export type SourceName =
   | 'dockerhub'
   | 'crates'
   | 'rubygems'
+  // Stack Exchange network sites beyond Stack Overflow retain site-level provenance.
+  | 'serverfault'
+  | 'security_se'
+  | 'devops_se'
+  | 'unix_se'
+  | 'dba_se'
+  | 'networkeng_se'
   | 'resume_xray'
   | 'pearch'
   | 'people_data_labs'
@@ -62,6 +69,13 @@ export type IdentitySignal = {
   source: SourceName
 }
 
+export type DeterministicIdentityAnchorSignal = {
+  kind: 'npi_number' | 'orcid' | 'github_login' | 'personal_domain' | 'explicit_profile_link'
+  value: string
+  normalized: string
+  source: SourceName
+}
+
 /** Every connector must explicitly identify the subject it returns. */
 export type SourceResult = {
   id: string
@@ -78,6 +92,8 @@ export type SourceResult = {
   evidence: EvidenceItem[]
   contactSignals: ContactSignal[]
   identitySignals: IdentitySignal[]
+  /** Source-native hard anchors may queue identity review; never auto-merge. */
+  deterministicIdentityAnchors?: DeterministicIdentityAnchorSignal[]
   refreshedAt: string
   raw?: unknown
 }
@@ -114,6 +130,7 @@ export const allSourceNames: SourceName[] = [
   'github', 'stackoverflow', 'openalex', 'npi', 'orcid',
   'semantic_scholar', 'arxiv', 'pubmed', 'huggingface', 'npm',
   'pypi', 'kaggle', 'devto', 'dockerhub', 'crates', 'rubygems',
+  'serverfault', 'security_se', 'devops_se', 'unix_se', 'dba_se', 'networkeng_se',
   'resume_xray', 'pearch', 'people_data_labs', 'coresignal', 'data_vertex',
   'contactout', 'signalhire', 'linkup', 'exa', 'openweb_ninja',
 ]
@@ -135,6 +152,12 @@ export const sourceLabels: Record<SourceName, string> = {
   dockerhub: 'Docker Hub',
   crates: 'crates.io',
   rubygems: 'RubyGems',
+  serverfault: 'Server Fault',
+  security_se: 'Information Security Stack Exchange',
+  devops_se: 'DevOps Stack Exchange',
+  unix_se: 'Unix & Linux Stack Exchange',
+  dba_se: 'Database Administrators Stack Exchange',
+  networkeng_se: 'Network Engineering Stack Exchange',
   resume_xray: 'Public Resume X-Ray',
   pearch: 'Pearch',
   people_data_labs: 'People Data Labs',
@@ -149,9 +172,11 @@ export const sourceLabels: Record<SourceName, string> = {
 
 export const sourceGroups: Record<string, SourceName[]> = {
   technical: ['github', 'stackoverflow', 'npm', 'pypi', 'dockerhub', 'crates', 'rubygems', 'devto'],
+  infrastructure: ['serverfault', 'unix_se', 'devops_se', 'networkeng_se', 'dba_se', 'github'],
+  security: ['security_se', 'serverfault', 'github', 'stackoverflow'],
   research: ['openalex', 'orcid', 'semantic_scholar', 'arxiv', 'pubmed'],
   ai: ['github', 'openalex', 'semantic_scholar', 'arxiv', 'huggingface', 'pypi', 'kaggle'],
-  healthcare: ['npi', 'pubmed', 'openalex'],
+  healthcare: ['npi', 'orcid', 'pubmed', 'openalex'],
   people_data: ['pearch', 'people_data_labs', 'coresignal', 'data_vertex', 'contactout', 'signalhire', 'linkup', 'exa'],
   public_web_enrichment: ['openweb_ninja'],
   open_resume: ['resume_xray'],

@@ -77,10 +77,30 @@ function suppressLinkedInCrossLinkAuthority(
   }
 }
 
+function sharedSourceNativeAnchor(existing: SourceResult, incoming: SourceResult) {
+  const approved = new Set(['npi_number', 'orcid', 'github_login', 'personal_domain', 'explicit_profile_link'])
+  const left = existing.deterministicIdentityAnchors || []
+  const right = incoming.deterministicIdentityAnchors || []
+  for (const a of left) {
+    if (!approved.has(a.kind) || !a.normalized) continue
+    const match = right.find(b => b.kind === a.kind && b.normalized === a.normalized && approved.has(b.kind))
+    if (match) return { kind: a.kind, normalized: a.normalized }
+  }
+  return null
+}
+
 export function identityComparisonV36_10(existing: SourceResult, incoming: SourceResult) {
   const rawBase = compareSourceProfiles(existing, incoming)
   const base = suppressLinkedInCrossLinkAuthority(rawBase, existing, incoming)
   const professional = sharedProfessionalProfileAnchorsV36_10(existing, incoming)
+  const sourceNative = sharedSourceNativeAnchor(existing, incoming)
+  const sourceNativeRule = {
+    ruleId: 'shared_source_native_deterministic_anchor',
+    passed: Boolean(sourceNative),
+    evidence: sourceNative
+      ? `Both observations publish the same ${sourceNative.kind} anchor.`
+      : 'No shared approved source-native deterministic anchor',
+  }
   const professionalRule = {
     ruleId: 'shared_canonical_professional_profile',
     passed: professional.matched,
@@ -91,10 +111,14 @@ export function identityComparisonV36_10(existing: SourceResult, incoming: Sourc
 
   return {
     ...base,
-    score: Math.min(100, base.score + (professional.matched ? 40 : 0)),
-    reasons: Array.from(new Set([...base.reasons, ...professional.reasons])),
-    deterministicRules: [...base.deterministicRules, professionalRule],
-    deterministicAnchor: base.deterministicAnchor || professional.matched,
+    score: Math.min(100, base.score + (professional.matched ? 40 : 0) + (sourceNative ? 40 : 0)),
+    reasons: Array.from(new Set([
+      ...base.reasons,
+      ...professional.reasons,
+      ...(sourceNative ? [`Shared deterministic ${sourceNative.kind} anchor`] : []),
+    ])),
+    deterministicRules: [...base.deterministicRules, professionalRule, sourceNativeRule],
+    deterministicAnchor: base.deterministicAnchor || professional.matched || Boolean(sourceNative),
   }
 }
 

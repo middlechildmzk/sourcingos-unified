@@ -1,4 +1,9 @@
 {
   "installCommand": "npm ci",
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/cron/fleet",
+      "schedule": "*/30 * * * *"
+    }
+  ]
 }

@@ -36,6 +36,47 @@ const SOURCE: SourceName = 'stackoverflow'
 const API = 'https://api.stackexchange.com/2.3'
 const SITE = 'stackoverflow'
 
+/**
+ * One site on the Stack Exchange network.
+ *
+ * The network shares one API, one reputation model, and one user account
+ * system, so the same connector serves every site. What it must not share is
+ * provenance: an answer written on Server Fault is evidence about
+ * infrastructure work, not about Stack Overflow, and the dossier says which.
+ */
+export type StackSite = {
+  /** API `site` slug, e.g. `serverfault`. */
+  readonly apiSlug: string
+  /** Public host used to build profile and tag URLs. */
+  readonly host: string
+  readonly source: SourceName
+  readonly label: string
+}
+
+export const STACK_OVERFLOW_SITE: StackSite = {
+  apiSlug: 'stackoverflow',
+  host: 'stackoverflow.com',
+  source: 'stackoverflow',
+  label: 'Stack Overflow',
+}
+
+/**
+ * Network sites carried beyond Stack Overflow.
+ *
+ * Chosen for coverage Stack Overflow does not give: Server Fault and Unix &
+ * Linux are where system administrators answer, which is a different
+ * population from application developers, and the one closest to cleared
+ * infrastructure work.
+ */
+export const STACK_NETWORK_SITES: readonly StackSite[] = [
+  { apiSlug: 'serverfault', host: 'serverfault.com', source: 'serverfault', label: 'Server Fault' },
+  { apiSlug: 'security', host: 'security.stackexchange.com', source: 'security_se', label: 'Information Security Stack Exchange' },
+  { apiSlug: 'devops', host: 'devops.stackexchange.com', source: 'devops_se', label: 'DevOps Stack Exchange' },
+  { apiSlug: 'unix', host: 'unix.stackexchange.com', source: 'unix_se', label: 'Unix & Linux Stack Exchange' },
+  { apiSlug: 'dba', host: 'dba.stackexchange.com', source: 'dba_se', label: 'Database Administrators Stack Exchange' },
+  { apiSlug: 'networkengineering', host: 'networkengineering.stackexchange.com', source: 'networkeng_se', label: 'Network Engineering Stack Exchange' },
+]
+
 export const stackOverflowConnectorMetadata: ConnectorMetadata = {
   sourceKey: SOURCE,
   label: 'Stack Overflow',
@@ -229,6 +270,8 @@ export type StackDossierInput = {
   topAnswerTags?: StackTopAnswerTag[]
   answers?: StackAnswerStat[]
   observedAt?: string
+  /** Defaults to Stack Overflow so every pre-existing caller is unchanged. */
+  site?: StackSite
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
@@ -243,13 +286,14 @@ function epochToIso(value: unknown): string | undefined {
   return new Date(seconds * 1000).toISOString()
 }
 
-function provenance(
+function moduleProvenance(
   sourceField: string,
   sourceRecordId: string,
   observedAt: string,
   url?: string,
+  source: SourceName = SOURCE,
 ): ObservationProvenance {
-  return { source: SOURCE, sourceField, sourceRecordId, basis: 'observed_artifact', url, observedAt }
+  return { source, sourceField, sourceRecordId, basis: 'observed_artifact', url, observedAt }
 }
 
 function normalizeDomainValue(value: string): string {
@@ -295,9 +339,21 @@ export function buildStackOverflowDossier(input: StackDossierInput): TechnicalDo
   if (!userId) return null
   if (input.user.user_type === 'does_not_exist') return null
 
+  const site = input.site || STACK_OVERFLOW_SITE
+  // Shadow the module-level Stack Overflow defaults with this site's values so
+  // every metric, artifact, and provenance record below names the site the
+  // evidence actually came from.
+  const SOURCE = site.source
+  const provenance = (
+    sourceField: string,
+    sourceRecordId: string,
+    observedAtValue: string,
+    url?: string,
+  ): ObservationProvenance => moduleProvenance(sourceField, sourceRecordId, observedAtValue, url, site.source)
+
   const observedAt = input.observedAt || new Date().toISOString()
-  const profileUrl = text(input.user.link) || `https://stackoverflow.com/users/${userId}`
-  const displayName = text(input.user.display_name) || `Stack Overflow user ${userId}`
+  const profileUrl = text(input.user.link) || `https://${site.host}/users/${userId}`
+  const displayName = text(input.user.display_name) || `${site.label} user ${userId}`
 
   const technologies: ObservedTechnology[] = []
   const pushTechnology = (value: string, field: string) => {
@@ -322,7 +378,7 @@ export function buildStackOverflowDossier(input: StackDossierInput): TechnicalDo
       source: SOURCE,
       type: 'qa_answer',
       name: `Top answerer for [${stat.tag}] (${stat.window.replace('_', ' ')})`,
-      url: `https://stackoverflow.com/tags/${encodeURIComponent(stat.tag)}/topusers`,
+      url: `https://${site.host}/tags/${encodeURIComponent(stat.tag)}/topusers`,
       statement: `Stack Exchange returned this account among the top answerers for [${stat.tag}] over the ${stat.window.replace('_', ' ')} window, with ${stat.postCount} answers and an aggregate answer score of ${stat.score}.`,
       relationship: 'author',
       technologies: [
@@ -346,8 +402,8 @@ export function buildStackOverflowDossier(input: StackDossierInput): TechnicalDo
       name: `Answer ${answer.answerId} under [${answer.tag}]`,
       url: answer.url,
       statement: answer.isAccepted
-        ? `Accepted Stack Overflow answer under [${answer.tag}] scoring ${answer.score}.`
-        : `Stack Overflow answer under [${answer.tag}] scoring ${answer.score}.`,
+        ? `Accepted ${site.label} answer under [${answer.tag}] scoring ${answer.score}.`
+        : `${site.label} answer under [${answer.tag}] scoring ${answer.score}.`,
       relationship: 'author',
       technologies: [],
       metrics: [
@@ -469,8 +525,12 @@ type StackEnvelope<T> = {
   has_more?: boolean
 }
 
-function stackUrl(path: string, params: Record<string, string | number> = {}): string {
-  const search = new URLSearchParams({ site: SITE, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) })
+function stackUrl(
+  path: string,
+  params: Record<string, string | number> = {},
+  site: StackSite = STACK_OVERFLOW_SITE,
+): string {
+  const search = new URLSearchParams({ site: site.apiSlug, ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])) })
   const key = process.env.STACK_EXCHANGE_KEY
   if (key) search.set('key', key)
   return `${API}${path}?${search.toString()}`
@@ -539,16 +599,23 @@ export type StackDiscoveryOutcome = {
 
 export async function discoverStackOverflowTalent(
   intent: DiscoveryIntent,
-  options: { ledger: ConnectorRequestLedger; observedAt?: string; maxPeople?: number },
+  options: {
+    ledger: ConnectorRequestLedger
+    observedAt?: string
+    maxPeople?: number
+    /** Defaults to Stack Overflow, so every pre-existing caller is unchanged. */
+    site?: StackSite
+  },
 ): Promise<StackDiscoveryOutcome> {
   const { ledger } = options
+  const site = options.site || STACK_OVERFLOW_SITE
   const observedAt = options.observedAt || new Date().toISOString()
   const plan = planStackOverflowTags(intent)
   const strategies = planStackOverflowStrategies(intent)
   const maxPeople = Math.max(1, Math.min(options.maxPeople ?? intent.limit, 25))
 
   if (!strategies.length) {
-    ledger.warn('No usable Stack Overflow tags could be derived from this retrieval intent.')
+    ledger.warn(`No usable ${site.label} tags could be derived from this retrieval intent.`)
     return { dossiers: [], strategies, plan }
   }
 
@@ -562,7 +629,7 @@ export async function discoverStackOverflowTalent(
         stackUrl(`/tags/${encodeURIComponent(strategy.tag)}/top-answerers/${strategy.window}`, {
           pagesize: 20,
           filter: 'default',
-        }),
+        }, site),
       )
       for (const row of payload.items || []) {
         const user = row?.user || {}
@@ -610,7 +677,7 @@ export async function discoverStackOverflowTalent(
     const detail = await stackJson<StackUserPayload>(
       ledger,
       `so:users:${ids.join(',')}`,
-      stackUrl(`/users/${ids.join(';')}`, { pagesize: ids.length, filter: 'default' }),
+      stackUrl(`/users/${ids.join(';')}`, { pagesize: ids.length, filter: 'default' }, site),
     )
     for (const user of detail.items || []) {
       const entry = ranked.find(item => item.userId === text(String(user.user_id ?? '')))
@@ -627,7 +694,7 @@ export async function discoverStackOverflowTalent(
     const payload = await stackJson<{ user_id?: number; tag_name?: string; answer_count?: number; answer_score?: number }>(
       ledger,
       `so:top-answer-tags:${ids.join(',')}`,
-      stackUrl(`/users/${ids.join(';')}/top-answer-tags`, { pagesize: 100, filter: 'default' }),
+      stackUrl(`/users/${ids.join(';')}/top-answer-tags`, { pagesize: 100, filter: 'default' }, site),
     )
     for (const row of payload.items || []) {
       const userId = text(String(row?.user_id ?? ''))
@@ -655,6 +722,7 @@ export async function discoverStackOverflowTalent(
       tagStats: entry.tagStats,
       topAnswerTags: relevantTags,
       observedAt,
+      site,
     })
     if (dossier) dossiers.push(dossier)
   }
