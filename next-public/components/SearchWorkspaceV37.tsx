@@ -13,12 +13,18 @@ type WebPlan = { action: 'search_web'; assistantSummary: string; webRequest: { a
 type AgentPlan = PeoplePlan | WebPlan
 type Observation = CandidateRowPerson & { observedAt?: string; sourceUrl?: string }
 type Telemetry = { provider: string; status: string; discovered: number; latencyMs: number; message?: string }
-type SearchResult = { observations: Observation[]; telemetry: Telemetry[]; discoveredBeforeCap: number; returnedAfterCap: number; contributingProviders: number; warnings: string[] }
+type SearchResult = { observations: Observation[]; telemetry: Telemetry[]; discoveredBeforeCap: number; returnedAfterCap: number; contributingProviders: number; relevanceRejected?: number; warnings: string[] }
 type ProviderStatus = { id: string; label: string; configured: boolean; executableNow: boolean; capabilities: string[]; transports: string[]; costClass: string; freshness: string }
 type WebResearch = { provider: string; transport?: string; tool?: string; text: string; observedAt?: string; freshness?: string }
 type ContactSignal = { type: string; channelKind?: string; value: string; sourceProvider?: string; deliverability?: string; permissionStatus?: string }
 type ContactOutcome = { person: Observation; signals: ContactSignal[]; message: string; error?: string }
 type Turn = { id: string; query: string; summary: string; plan: AgentPlan; count?: number }
+
+type SearchStreamEvent =
+  | { type: 'start'; providers: string[] }
+  | { type: 'provider'; telemetry: Telemetry }
+  | { type: 'final'; payload: Record<string, unknown> }
+  | { type: 'error'; error: string }
 
 function label(value: string) { return value.split('_').map(part => part ? part[0].toUpperCase() + part.slice(1) : '').join(' ') }
 function phrases(text: string) { return text.replace(/^Preference:\s*/i, '').split(/\s+(?:or|and\/or)\s+|\/|\||,/i).map(value => value.trim().toLowerCase()).filter(value => value.length >= 3 && !/^\d+\+?\s*(?:years?|yrs?)/i.test(value)) }
@@ -29,6 +35,17 @@ function why(person: Observation, plan?: PeoplePlan) { const skills = new Set((p
 function evidenceCount(person: Observation, plan?: PeoplePlan) { if (!plan) return 0; return Array.from(new Set([...plan.criteria.requirements.filter(item => item.mustHave).map(item => item.text), ...plan.criteria.skills])).filter(value => observed(person, value)).length }
 function identityPayload(person: Observation) { const linkedinUrl = person.profileUrls?.find(item => item.kind === 'linkedin')?.url; return { providerName: person.provider, providerPersonId: person.providerPersonId, fullName: person.displayName, title: person.currentTitle || person.headline, currentCompany: person.currentEmployer, location: person.location, profileUrl: linkedinUrl || person.profileUrls?.[0]?.url, linkedinUrl, sourceContext: 'search_workspace_v37' } }
 function rolePrompt(role: ReturnType<typeof useRoleWorkspaces>['roles'][number]) { return [role.intake.title, role.intake.location !== 'Not specified' ? `in or near ${role.intake.location}` : '', role.intake.clearance !== 'Not specified' ? `${role.intake.clearance} clearance` : '', role.intake.mustHaves.length ? `must have ${role.intake.mustHaves.join(', ')}` : '', role.intake.niceToHaves.length ? `prioritize ${role.intake.niceToHaves.join(', ')}` : ''].filter(Boolean).join(' · ') }
+function normalizeSearchResult(payload: Record<string, unknown>): SearchResult {
+  return {
+    observations: Array.isArray(payload.observations) ? payload.observations as Observation[] : [],
+    telemetry: Array.isArray(payload.telemetry) ? payload.telemetry as Telemetry[] : [],
+    discoveredBeforeCap: Number(payload.discoveredBeforeCap || 0),
+    returnedAfterCap: Number(payload.returnedAfterCap || 0),
+    contributingProviders: Number(payload.contributingProviders || 0),
+    relevanceRejected: Number(payload.relevanceRejected || 0),
+    warnings: Array.isArray(payload.warnings) ? payload.warnings as string[] : [],
+  }
+}
 
 export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { initialQuery?: string; roleId?: string; source?: string }) {
   const { roles } = useRoleWorkspaces()
@@ -44,6 +61,7 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
   const [working, setWorking] = useState<'planning' | 'searching' | 'web' | 'contacts' | ''>('')
   const [error, setError] = useState('')
   const [contacts, setContacts] = useState<ContactOutcome[]>([])
+  const [liveTelemetry, setLiveTelemetry] = useState<Telemetry[]>([])
   const prefilledRole = useRef(false)
   const composerRef = useRef<HTMLTextAreaElement>(null)
 
@@ -79,16 +97,27 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
 
   const sourceTelemetry = useMemo(() => {
     if (result?.telemetry?.length) return result.telemetry
+    if (liveTelemetry.length) return liveTelemetry
     if (!working || working === 'contacts') return []
     const capability = working === 'web' ? 'search_web' : 'search_people'
     return providers.filter(provider => provider.configured && provider.executableNow && provider.capabilities.includes(capability)).slice(0, 12).map(provider => ({ provider: provider.id, status: 'eligible', discovered: 0, latencyMs: 0, message: 'Eligible source; awaiting execution telemetry.' }))
-  }, [providers, result, working])
+  }, [providers, result, liveTelemetry, working])
+
+  function applyProviderProgress(telemetry: Telemetry) {
+    setLiveTelemetry(current => {
+      const index = current.findIndex(item => item.provider === telemetry.provider)
+      if (index < 0) return [...current, telemetry]
+      const next = [...current]
+      next[index] = telemetry
+      return next
+    })
+  }
 
   async function run(event?: FormEvent) {
     event?.preventDefault()
     const message = query.trim()
     if (!message || working) return
-    setError(''); setWeb(null); setContacts([]); setWorking('planning')
+    setError(''); setWeb(null); setContacts([]); setLiveTelemetry([]); setWorking('planning')
     try {
       const response = await fetch('/api/agent-runtime/plan', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify({ message, ...(previousPlan ? { previousPlan } : {}) }) })
       const json = await response.json().catch(() => ({}))
@@ -107,10 +136,51 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
       if (next.action === 'approval_required') return
       setPreviousPlan(next)
       setWorking('searching'); setResult(null); setSelectedIndex(null)
-      const searchResponse = await fetch('/api/candidate-data/search', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(next.providerRequest) })
-      const searchJson = await searchResponse.json().catch(() => ({}))
-      if (!searchResponse.ok || !searchJson.ok) throw new Error(searchJson.error || 'People search failed.')
-      const nextResult: SearchResult = { observations: Array.isArray(searchJson.observations) ? searchJson.observations : [], telemetry: Array.isArray(searchJson.telemetry) ? searchJson.telemetry : [], discoveredBeforeCap: Number(searchJson.discoveredBeforeCap || 0), returnedAfterCap: Number(searchJson.returnedAfterCap || 0), contributingProviders: Number(searchJson.contributingProviders || 0), warnings: Array.isArray(searchJson.warnings) ? searchJson.warnings : [] }
+      const searchResponse = await fetch('/api/candidate-data/search?stream=1', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/x-ndjson, application/json' }, body: JSON.stringify(next.providerRequest) })
+      if (!searchResponse.ok) {
+        const failure = await searchResponse.json().catch(() => ({}))
+        throw new Error(failure.error || 'People search failed.')
+      }
+
+      let finalPayload: Record<string, unknown> | null = null
+      const contentType = searchResponse.headers.get('content-type') || ''
+      if (searchResponse.body && contentType.includes('application/x-ndjson')) {
+        const reader = searchResponse.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          for (const line of lines) {
+            if (!line.trim()) continue
+            const streamEvent = JSON.parse(line) as SearchStreamEvent
+            if (streamEvent.type === 'start') {
+              setLiveTelemetry(streamEvent.providers.map(provider => ({ provider, status: 'running', discovered: 0, latencyMs: 0, message: 'Provider request is running.' })))
+            } else if (streamEvent.type === 'provider') {
+              applyProviderProgress(streamEvent.telemetry)
+            } else if (streamEvent.type === 'error') {
+              throw new Error(streamEvent.error || 'People search failed.')
+            } else if (streamEvent.type === 'final') {
+              finalPayload = streamEvent.payload
+            }
+          }
+          if (done) break
+        }
+        if (buffer.trim()) {
+          const streamEvent = JSON.parse(buffer) as SearchStreamEvent
+          if (streamEvent.type === 'provider') applyProviderProgress(streamEvent.telemetry)
+          if (streamEvent.type === 'error') throw new Error(streamEvent.error || 'People search failed.')
+          if (streamEvent.type === 'final') finalPayload = streamEvent.payload
+        }
+      } else {
+        finalPayload = await searchResponse.json().catch(() => null) as Record<string, unknown> | null
+      }
+
+      if (!finalPayload || finalPayload.ok !== true) throw new Error(String(finalPayload?.error || 'People search ended without a final retained slate.'))
+      const nextResult = normalizeSearchResult(finalPayload)
+      setLiveTelemetry(nextResult.telemetry)
       setResult(nextResult)
       setTurns(current => current.map((turn, index) => index === 0 ? { ...turn, count: nextResult.observations.length } : turn))
       if (nextResult.observations.length) setSelectedIndex(0)
@@ -140,7 +210,7 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
 
   return <div className="search-workspace">
     <section className="search-workspace-left">
-      <header className="search-pane-head"><div><span className="search-kicker">Search Brain</span><h1>Who are you looking for?</h1></div><button type="button" className="search-icon-button" onClick={() => { setPlan(null); setPreviousPlan(undefined); setResult(null); setWeb(null); setSelectedIndex(null); setContacts([]); setQuery(role ? rolePrompt(role) : '') }} aria-label="New search">＋</button></header>
+      <header className="search-pane-head"><div><span className="search-kicker">Search Brain</span><h1>Who are you looking for?</h1></div><button type="button" className="search-icon-button" onClick={() => { setPlan(null); setPreviousPlan(undefined); setResult(null); setWeb(null); setSelectedIndex(null); setContacts([]); setLiveTelemetry([]); setQuery(role ? rolePrompt(role) : '') }} aria-label="New search">＋</button></header>
       {role && <div className="search-role-context"><span><b>{role.intake.title}</b><small>Role-linked search · nothing runs until you press Search.</small></span><Link href={`/app/roles/${encodeURIComponent(role.id)}`}>Back to role</Link></div>}
       {!role && source && source !== 'direct' && <div className="search-route-context">Consolidated from {label(source.replaceAll('-', '_'))}. One Search Brain now owns people discovery.</div>}
       <form className="search-composer" onSubmit={run}><textarea ref={composerRef} value={query} onChange={event => setQuery(event.target.value)} placeholder="Find a RHEL admin with 5+ years near Annapolis Junction, MD with Secret clearance or higher…" rows={4} disabled={Boolean(working)} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') void run() }} /><div className="search-composer-footer"><span>⌘↵ run search</span><button type="submit" disabled={!query.trim() || Boolean(working)}>{working && working !== 'contacts' ? 'Working…' : 'Search'}</button></div></form>
@@ -151,9 +221,9 @@ export function SearchWorkspaceV37({ initialQuery = '', roleId, source }: { init
     </section>
 
     <main className="search-workspace-center">
-      <header className="search-results-head"><div><span className="search-kicker">Candidate slate</span><h2>{working === 'searching' ? 'Researching talent…' : result ? `${observations.length} retained candidates` : web ? 'Live web research' : plan?.action === 'approval_required' ? 'Approval required' : 'Your results will appear here'}</h2></div><div className="search-results-meta">{result && <><span>{result.discoveredBeforeCap || observations.length} discovered</span><span>{result.contributingProviders || 0} sources</span></>}{!!observations.length && <span>J/K review</span>}</div></header>
+      <header className="search-results-head"><div><span className="search-kicker">Candidate slate</span><h2>{working === 'searching' ? 'Researching talent…' : result ? `${observations.length} retained candidates` : web ? 'Live web research' : plan?.action === 'approval_required' ? 'Approval required' : 'Your results will appear here'}</h2></div><div className="search-results-meta">{result && <><span>{result.discoveredBeforeCap || observations.length} discovered</span><span>{result.contributingProviders || 0} sources</span>{Boolean(result.relevanceRejected) && <span>{result.relevanceRejected} relevance filtered</span>}</>}{!!observations.length && <span>J/K review</span>}</div></header>
 
-      <section className="provider-progress" aria-label="Source execution status"><div className="search-section-title"><span>Source execution</span><small>{working && working !== 'contacts' ? 'in progress' : sourceTelemetry.length ? 'latest search' : 'ready'}</small></div>{working && working !== 'contacts' && <div className="provider-progress-bar"><span /></div>}<div className="provider-progress-list">{sourceTelemetry.length ? sourceTelemetry.map(item => <div className={`provider-progress-item ${statusClass(item.status)}`} key={item.provider} title={item.message || ''}><i /><span>{label(item.provider)}</span><b>{item.status === 'eligible' ? 'eligible' : item.status}</b>{item.discovered > 0 && <small>{item.discovered}</small>}</div>) : <span className="search-empty-copy">Provider execution telemetry will appear here. Eligible is not the same as executed.</span>}</div></section>
+      <section className="provider-progress" aria-label="Source execution status"><div className="search-section-title"><span>Source execution</span><small>{working && working !== 'contacts' ? 'live' : sourceTelemetry.length ? 'latest search' : 'ready'}</small></div>{working && working !== 'contacts' && <div className="provider-progress-bar"><span /></div>}<div className="provider-progress-list">{sourceTelemetry.length ? sourceTelemetry.map(item => <div className={`provider-progress-item ${statusClass(item.status)}`} key={item.provider} title={item.message || ''}><i /><span>{label(item.provider)}</span><b>{item.status === 'eligible' ? 'eligible' : item.status}</b>{item.discovered > 0 && <small>{item.discovered}</small>}</div>) : <span className="search-empty-copy">Provider execution telemetry will appear here. Eligible is not the same as executed.</span>}</div></section>
 
       {working === 'searching' && <div className="candidate-skeleton-list">{Array.from({ length: 6 }).map((_, index) => <div className="candidate-skeleton" key={index}><i /><span /><span /><b /></div>)}</div>}
       {!working && !result && !web && plan?.action !== 'approval_required' && <div className="search-zero-state"><div className="search-zero-mark">⌕</div><h3>Search starts with intent, not filters.</h3><p>Describe the role in recruiter language. SourcingOS separates requirements from discovery expansion and keeps evidence uncertainty visible.</p><div><button type="button" onClick={() => setQuery('Find 25 backend engineers in Minneapolis, MN with AWS + Kubernetes')}>Backend engineers · Minneapolis</button><button type="button" onClick={() => setQuery('Find a RHEL admin near Annapolis Junction, MD with Secret clearance or higher')}>RHEL · Secret+ · Maryland</button></div></div>}
