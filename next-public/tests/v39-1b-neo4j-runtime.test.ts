@@ -96,7 +96,7 @@ describe('V39.1B Neo4j Query API runtime', () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body)
     expect(body.parameters.ownerId).toBe('owner-123')
     expect(body.parameters.candidateKey).toBe('owner-123:candidate:candidate-1')
-    expect(body.statement).toContain('relationship.sourcingOsManaged')
+    expect(body.statement).toContain('rel.sourcingOsManaged = true')
     expect(JSON.stringify(body)).not.toContain('+1-555-sensitive')
   })
 
