@@ -57,7 +57,7 @@ export function classifyProviderHealthV38(item: CandidateDataProviderTelemetryV3
   }
 
   if (/\b429\b|rate.?limit|too many requests/i.test(message)) return 'RATE_LIMITED'
-  if (/credit|quota|balance|plan limit|usage limit/i.test(message)) return 'CREDITS_EXHAUSTED'
+  if (/\b402\b|payment required|credit|quota|balance|plan limit|usage limit/i.test(message)) return 'CREDITS_EXHAUSTED'
   if (/not entitled|entitlement|upgrade.*plan|plan does not|not included/i.test(message)) return 'NOT_ENTITLED'
   if (/\b401\b|unauthori[sz]ed|invalid.*(?:api.?key|token|credential)|authentication failed/i.test(message)) return 'AUTH_FAILURE'
   if (/\b403\b|forbidden/i.test(message)) {
