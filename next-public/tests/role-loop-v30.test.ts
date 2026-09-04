@@ -13,6 +13,7 @@ const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 const canonicalSearch = read('components/RoleCanonicalSearchActions.tsx')
 const pasteBack = read('components/RolePasteBackV33.tsx')
 const rolePage = read('app/app/roles/[id]/page.tsx')
+const roleWorkspace = read('components/RoleWorkspaceV37.tsx')
 const importRoute = read('app/api/candidate-db/import-resume/route.ts')
 
 function candidate(): CandidateRecord {
@@ -55,11 +56,13 @@ function sourceProfile(): SourceProfileRecord {
   }
 }
 
-describe('role sourcing loop on canonical V33 Search Brain', () => {
-  it('keeps search and guided paste-back on the role route without the legacy second planner', () => {
-    expect(rolePage).toContain('<RoleCanonicalSearchActions roleId={id} />')
-    expect(rolePage).toContain('<RolePasteBackV33 roleId={id} />')
-    expect(rolePage).not.toContain('<RoleSearchActions roleId={id} />')
+describe('role sourcing loop on canonical Search Brain', () => {
+  it('keeps one V37 role workbench on the primary route while legacy guided helpers remain non-primary', () => {
+    expect(rolePage).toContain('<RoleWorkspaceV37 roleId={id} />')
+    expect(rolePage).not.toContain('RoleCanonicalSearchActions')
+    expect(rolePage).not.toContain('RolePasteBackV33')
+    expect(roleWorkspace).toContain('Search for this role')
+    expect(roleWorkspace).toContain('Open Search Workspace →')
     expect(canonicalSearch).toContain('One Search Brain')
     expect(canonicalSearch).toContain('Search Plan v')
     expect(pasteBack).toContain('Bring candidates back to this role')
