@@ -69,7 +69,7 @@ export async function GET() {
       exactCount(sb.from('source_profiles').select('id', { count: 'exact', head: true }).eq('owner_id', gate.userId).gte('created_at', since24h)),
       exactCount(sb.from('evidence_items').select('id', { count: 'exact', head: true }).eq('owner_id', gate.userId).gte('created_at', since24h)),
       exactCount(sb.from('fleet_raw_discoveries').select('id', { count: 'exact', head: true }).eq('owner_id', gate.userId).gte('created_at', since24h)),
-      exactCount(sb.from('identity_match_reviews').select('id', { count: 'exact', head: true }).eq('owner_id', gate.userId).eq('status', 'pending')),
+      exactCount(sb.from('identity_match_reviews').select('id', { count: 'exact', head: true }).eq('owner_id', gate.userId).is('decision', null)),
     ])
 
     if (lanesResult.error) throw new Error(lanesResult.error.message)
