@@ -72,12 +72,14 @@ const DETERMINISTIC_KINDS: ReadonlySet<IdentityAnchorKind> = new Set<IdentityAnc
   'github_login',
   'orcid',
   'explicit_profile_link',
+  'npi_number',
 ])
 
 const ANCHOR_EXPLANATIONS: Record<IdentityAnchorKind, string> = {
   personal_domain: 'Both records publish the same personal domain.',
   public_email: 'Both records expose the same public email address.',
   github_login: 'Both records point at the same GitHub account.',
+  npi_number: 'Both records publish the same National Provider Identifier.',
   stackexchange_user_id: 'Both records point at the same Stack Exchange account.',
   orcid: 'Both records carry the same ORCID identifier.',
   explicit_profile_link: 'One record explicitly links to the other profile.',

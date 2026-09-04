@@ -32,9 +32,14 @@ describe('AutoSource V22 contract', () => {
     expect(cronAuth).not.toContain('searchParams')
   })
 
-  it('does not schedule unattended autosource while trust hardening is in progress', () => {
-    expect(vercel).toContain('"crons": []')
+  it('schedules only the hardened V40.2 fleet endpoint for unattended discovery', () => {
+    const fleetCron = read('app/api/cron/fleet/route.ts')
+    expect(vercel).toContain('/api/cron/fleet')
+    expect(vercel).toContain('*/30 * * * *')
     expect(vercel).not.toContain('/api/cron/autosource')
+    expect(fleetCron).toContain('authorizeCronRequest')
+    expect(fleetCron).toContain('claimDueFleetLanesV40')
+    expect(fleetCron).toContain('runFleetLaneV40')
   })
 
   it('keeps every automated discovery in recruiter review and forbids automated Candidate Graph promotion', () => {

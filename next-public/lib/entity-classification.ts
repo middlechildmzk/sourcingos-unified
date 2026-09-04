@@ -114,6 +114,10 @@ function isIdentifierOnlyOrcidResult(result: SourceResult): boolean {
 function observedSkills(result: SourceResult): string[] {
   const root = record(result.raw)
 
+  if (root.resolver === 'fleet_public_person_v40_2') {
+    return unique(result.skills)
+  }
+
   if (result.source === 'github') {
     // The GitHub API boundary has a dedicated truth guard that derives skills
     // only from observed repository languages and topics.
@@ -233,6 +237,8 @@ export function resolveStoredEntityKind(input: {
 
   const source = input.source as SourceName | undefined
   if (!source) return 'unknown'
+  const root = record(input.raw)
+  if (root.resolver === 'fleet_public_person_v40_2') return 'person'
   if (SEARCH_LANE_SOURCES.has(source)) return 'search_lane'
   if (PUBLICATION_SOURCES.has(source)) return 'publication'
   if (ARTIFACT_SOURCES.has(source)) return 'artifact'
