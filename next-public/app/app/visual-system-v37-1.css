@@ -1,0 +1,108 @@
+/* V37.1 — canonical recruiter visual system. Loaded last so canonical surfaces no longer inherit legacy visual language. */
+.v37-shell{font-family:var(--sos-font-ui);font-size:13px;letter-spacing:-.006em;background:var(--sos-canvas);color:var(--sos-text)}
+.v37-shell *{box-sizing:border-box}
+.v37-shell button,.v37-shell input,.v37-shell textarea,.v37-shell select{font:inherit}
+.v37-shell a,.v37-shell button{transition:background-color .14s ease,border-color .14s ease,color .14s ease,opacity .14s ease,transform .14s ease}
+.v37-shell button:focus-visible,.v37-shell a:focus-visible,.v37-shell input:focus-visible,.v37-shell textarea:focus-visible,.v37-shell select:focus-visible{outline:0;box-shadow:var(--sos-focus)}
+.v37-shell h1,.v37-shell h2,.v37-shell h3,.v37-shell h4{font-family:var(--sos-font-ui);letter-spacing:var(--sos-tracking-tight);line-height:var(--sos-leading-tight);font-weight:650}
+.v37-shell p{line-height:var(--sos-leading-body)}
+.v37-shell .search-kicker,.v37-shell .kicker,.v37-shell [class*="-kicker"],.v37-shell .candidate-source,.v37-shell .candidate-inspector-source,.v37-shell [class*="-meta"]>b:first-child,.v37-shell .status-pill{font-family:var(--sos-font-mono);letter-spacing:var(--sos-tracking-label)}
+.v37-shell ::selection{background:var(--sos-accent-strong);color:var(--sos-text)}
+.v37-shell ::-webkit-scrollbar{width:8px;height:8px}.v37-shell ::-webkit-scrollbar-thumb{background:var(--sos-border-strong);border-radius:99px;border:2px solid transparent;background-clip:padding-box}.v37-shell ::-webkit-scrollbar-track{background:transparent}
+
+/* App chrome */
+.v37-shell{grid-template-columns:var(--sos-sidebar-width) minmax(0,1fr)}
+.v37-shell .app-sidebar{padding:15px 10px 12px;background:var(--sos-sidebar);border-right:1px solid var(--sos-divider)}
+.v37-shell .app-brand-row{padding:1px 7px 18px}
+.v37-shell .app-brand-mark{font-family:var(--sos-font-ui);gap:9px}
+.v37-shell .app-brand-mark>span{width:28px;height:28px;border-radius:8px;background:var(--sos-text);color:var(--sos-canvas);font-size:12px;font-weight:850;box-shadow:none}
+.v37-shell .app-brand-mark b{font-size:13px;font-weight:720;letter-spacing:-.025em}.v37-shell .app-brand-mark small{font-family:var(--sos-font-mono);font-size:8px;letter-spacing:.02em;color:var(--sos-text-faint)}
+.v37-shell .app-new-role-button{grid-template-columns:25px 1fr;margin:0 3px 14px;padding:8px 9px;border:1px solid var(--sos-divider);border-radius:8px;background:transparent}
+.v37-shell .app-new-role-button:hover{background:var(--sos-surface-soft);border-color:var(--sos-border)}
+.v37-shell .app-new-role-plus{width:24px;height:24px;border-radius:6px;background:var(--sos-accent-soft);color:var(--sos-accent);font-size:14px}.v37-shell .app-new-role-button b{font-size:11px;font-weight:680}.v37-shell .app-new-role-button small{font-size:8px;color:var(--sos-text-faint)}
+.v37-shell .app-primary-nav{gap:1px}
+.v37-shell .app-nav-item{position:relative;grid-template-columns:25px 1fr;gap:8px;padding:8px;border-radius:7px;color:var(--sos-text-muted)}
+.v37-shell .app-nav-item:hover{background:var(--sos-surface-soft);color:var(--sos-text)}
+.v37-shell .app-nav-item.active{background:var(--sos-accent-soft);color:var(--sos-text);box-shadow:none}
+.v37-shell .app-nav-item.active:before{content:'';position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--sos-accent)}
+.v37-shell .app-nav-icon{width:23px;height:23px;border:0;border-radius:6px}.v37-shell .app-nav-item.active .app-nav-icon{border:0;background:transparent;color:var(--sos-accent)}
+.v37-shell .app-nav-item b{font-size:11px;font-weight:680}.v37-shell .app-nav-item small{font-size:8px;line-height:1.25;color:var(--sos-text-faint);margin-top:1px}
+.v37-shell .app-trust-note{margin:0 4px 10px;padding:8px 9px;border:0;border-top:1px solid var(--sos-divider);border-radius:0;color:var(--sos-text-faint);font-size:8px}.v37-shell .app-trust-dot{background:var(--sos-success)}
+.v37-shell .app-account-card{padding:10px 4px 0;border-color:var(--sos-divider)}.v37-shell .app-account-avatar{width:28px;height:28px;background:var(--sos-surface-raised);color:var(--sos-text-muted);font-size:10px}.v37-shell .app-account-copy b{font-size:9px}.v37-shell .app-account-copy small{font-family:var(--sos-font-mono);font-size:8px;color:var(--sos-text-faint)}
+.v37-shell .app-desktop-topbar{height:var(--sos-topbar-height);padding:0 16px;border-bottom:1px solid var(--sos-divider);background:color-mix(in srgb,var(--sos-canvas) 88%,transparent);backdrop-filter:blur(18px) saturate(1.15)}
+.v37-shell .app-context-title{gap:9px}.v37-shell .app-context-title span{font-family:var(--sos-font-mono);font-size:8px;letter-spacing:.08em;color:var(--sos-text-faint)}.v37-shell .app-context-title b{font-size:12px;font-weight:650}
+.v37-shell .app-connection-pill{border-color:var(--sos-divider);background:var(--sos-surface-soft);font-family:var(--sos-font-mono);font-size:8px}
+.v37-shell .app-main-content{background:var(--sos-canvas)}
+.v37-shell .app-preview-strip{font-family:var(--sos-font-mono);font-size:8px;background:var(--sos-warning-soft);border-color:color-mix(in srgb,var(--sos-warning) 20%,transparent)}
+
+/* Controls */
+.v37-shell .btn,.v37-shell [class*="actions"] a,.v37-shell [class*="actions"] button{font-weight:650}
+.v37-shell .btn,.v37-shell button,.v37-shell input,.v37-shell textarea,.v37-shell select{border-color:var(--sos-border)}
+.v37-shell .btn{border-radius:7px}.v37-shell .btn:not(.secondary):not(.ghost),.v37-shell a.primary{background:var(--sos-accent);border-color:var(--sos-accent);color:#0b0c10}.v37-shell .btn:not(.secondary):not(.ghost):hover,.v37-shell a.primary:hover{background:var(--sos-accent-hover);border-color:var(--sos-accent-hover)}
+.v37-shell input,.v37-shell textarea,.v37-shell select{background:var(--sos-surface-quiet)!important;color:var(--sos-text);border-radius:7px!important;box-shadow:none!important}.v37-shell input::placeholder,.v37-shell textarea::placeholder{color:var(--sos-text-faint)}
+
+/* Page hierarchy */
+.today-workspace-v37,.talent-workspace-v37,.sources-workspace-v37,.roles-portfolio-v37{max-width:1540px;padding:22px 26px 56px}
+.today-v37-header,.talent-v37-header,.sources-v37-header,.roles-v37-header{padding:2px 0 18px;border-color:var(--sos-divider)}
+.today-v37-header h1,.talent-v37-header h1,.sources-v37-header h1,.roles-v37-header h1{font-size:27px;font-weight:620;letter-spacing:-.04em}
+.today-v37-header p,.talent-v37-header p,.sources-v37-header p,.roles-v37-header p{font-size:11px;line-height:1.55;color:var(--sos-text-muted)}
+
+/* Metrics behave like a compact data strip instead of cards. */
+.today-v37-metrics,.talent-v37-metrics,.sources-v37-metrics,.roles-v37-metrics{gap:0;margin:14px 0 18px;border-top:1px solid var(--sos-divider);border-bottom:1px solid var(--sos-divider)}
+.today-v37-metrics>div,.talent-v37-metrics>div,.sources-v37-metrics>div,.roles-v37-metrics>div{border:0!important;border-right:1px solid var(--sos-divider)!important;border-radius:0!important;background:transparent!important;padding:11px 14px!important}.today-v37-metrics>div:last-child,.talent-v37-metrics>div:last-child,.sources-v37-metrics>div:last-child,.roles-v37-metrics>div:last-child{border-right:0!important}
+.today-v37-metrics small,.talent-v37-metrics small,.sources-v37-metrics small,.roles-v37-metrics small{font-family:var(--sos-font-mono);font-size:7px!important;letter-spacing:.075em!important}.today-v37-metrics b,.talent-v37-metrics b,.sources-v37-metrics b,.roles-v37-metrics b{font-size:20px!important;font-weight:600}
+
+/* Today — decision queue, not dashboard cards. */
+.today-v37-grid{gap:18px;grid-template-columns:minmax(0,1fr) 300px}
+.today-v37-queue,.today-v37-side-section{border-color:var(--sos-divider);border-radius:9px;background:var(--sos-surface)}
+.today-v37-queue{padding:10px 0}.today-v37-queue .today-v37-section-head{padding:0 14px 10px}
+.today-v37-list{gap:0;border-top:1px solid var(--sos-divider)}
+.today-v37-row{grid-template-columns:7px minmax(0,1fr) 120px;gap:11px;border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;background:transparent;padding:12px 14px}.today-v37-row:last-child{border-bottom:0}.today-v37-row:hover{background:var(--sos-surface-soft)}.today-v37-row.is-first{border-color:var(--sos-divider);background:linear-gradient(90deg,var(--sos-accent-soft),transparent 38%)}
+.today-v37-row-main>strong{font-size:12px;font-weight:630}.today-v37-row-main p{font-size:9px}.today-v37-row-action b{color:var(--sos-accent)}
+
+/* Search — three-pane sourcing workbench. */
+.search-workspace{grid-template-columns:minmax(250px,292px) minmax(500px,1fr) minmax(320px,372px);background:var(--sos-canvas)}
+.search-workspace-left{background:var(--sos-sidebar);border-color:var(--sos-divider);padding:20px 16px}.search-workspace-center{padding:20px 20px 44px}.search-workspace-right{background:var(--sos-surface);border-color:var(--sos-divider)}
+.search-pane-head h1{font-size:22px;font-weight:620}.search-results-head h2{font-size:19px;font-weight:620}.search-kicker{font-size:7px;letter-spacing:.09em}
+.search-composer{border-color:var(--sos-border-strong);border-radius:10px;background:var(--sos-surface);box-shadow:none}.search-composer:focus-within{border-color:var(--sos-accent);box-shadow:var(--sos-focus)}.search-composer textarea{min-height:116px;font-size:12px;line-height:1.6;padding:13px!important}.search-composer-footer{border-color:var(--sos-divider);padding:8px 9px}.search-composer-footer button{background:var(--sos-accent);color:#0b0c10;border-radius:6px;padding:7px 11px}
+.search-brief,.search-history{border-color:var(--sos-divider)}.search-section-title>span{font-family:var(--sos-font-mono);font-size:8px;letter-spacing:.075em;color:var(--sos-text-faint)}
+.provider-progress{border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;background:transparent;padding:8px 2px 12px}.provider-progress-item{border-color:var(--sos-divider);background:var(--sos-surface-soft);font-family:var(--sos-font-mono)}
+.candidate-slate{gap:0;border-top:1px solid var(--sos-divider)}
+.candidate-row{grid-template-columns:30px minmax(0,1fr) 116px;gap:11px;border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;padding:13px 10px;background:transparent}.candidate-row:last-child{border-bottom:0}.candidate-row:hover{background:var(--sos-surface-soft)}.candidate-row.is-selected{border-color:var(--sos-divider);background:linear-gradient(90deg,var(--sos-accent-soft),rgba(139,140,255,.025) 55%,transparent);box-shadow:inset 2px 0 var(--sos-accent)}
+.candidate-row-rank{background:transparent;border:1px solid var(--sos-divider);border-radius:6px}.candidate-row-name-line strong{font-size:13px;font-weight:640}.candidate-row-role{font-size:10px}.candidate-row-skills>span{background:transparent;border:1px solid var(--sos-divider);border-radius:5px}.candidate-source{background:transparent;border-color:var(--sos-divider)}
+.candidate-inspector-nav{height:46px;border-color:var(--sos-divider);background:color-mix(in srgb,var(--sos-surface) 92%,transparent);backdrop-filter:blur(12px)}.candidate-inspector-identity,.candidate-inspector-section{padding:17px 16px;border-color:var(--sos-divider)}.candidate-inspector-identity h2{font-size:24px;font-weight:610;letter-spacing:-.04em}.candidate-inspector-identity p{font-size:12px}.candidate-inspector-identity small{font-size:9px}.requirement-evidence-list{gap:0;border-top:1px solid var(--sos-divider)}.requirement-evidence-list>div{grid-template-columns:21px 1fr;border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;padding:10px 1px}.inspector-contact-grid>div{border-color:var(--sos-divider);background:transparent}
+
+/* Role workspace — same list/inspector grammar as Search. */
+.role-workspace-v37{background:var(--sos-canvas)}.role-workspace-v37-header{min-height:76px;padding:14px 20px;border-color:var(--sos-divider);background:var(--sos-canvas)}.role-workspace-v37-heading h1{font-size:22px;font-weight:620}.role-back-link{border-color:var(--sos-divider);background:var(--sos-surface-soft)}
+.role-workspace-v37-grid{grid-template-columns:minmax(250px,288px) minmax(500px,1fr) minmax(320px,372px)}.role-workspace-v37-brief{background:var(--sos-sidebar);border-color:var(--sos-divider);padding:16px}.role-workspace-v37-slate{padding:18px 20px 34px}.role-workspace-v37-inspector{background:var(--sos-surface);border-color:var(--sos-divider)}.role-workspace-v37-brief>section+section{border-color:var(--sos-divider)}
+.role-workspace-v37-stats{gap:0;border-top:1px solid var(--sos-divider);border-bottom:1px solid var(--sos-divider)}.role-workspace-v37-stats>div{border:0;border-right:1px solid var(--sos-divider);border-radius:0;background:transparent}.role-workspace-v37-stats>div:last-child{border-right:0}
+.role-candidate-list-v37{gap:0;border-top:1px solid var(--sos-divider)}.role-candidate-row-v37{grid-template-columns:30px minmax(0,1fr) 106px;gap:11px;border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;background:transparent;padding:13px 10px}.role-candidate-row-v37:hover{background:var(--sos-surface-soft)}.role-candidate-row-v37.is-selected{border-color:var(--sos-divider);background:linear-gradient(90deg,var(--sos-accent-soft),rgba(139,140,255,.025) 55%,transparent);box-shadow:inset 2px 0 var(--sos-accent)}.role-candidate-rank-v37{background:transparent;border:1px solid var(--sos-divider)}.role-candidate-copy-v37 strong{font-size:12px;font-weight:640}.role-candidate-tags-v37 i{background:transparent;border:1px solid var(--sos-divider)}
+.role-inspector-identity-v37,.role-inspector-section-v37{padding:17px 16px;border-color:var(--sos-divider)}.role-inspector-identity-v37 h2{font-size:23px;font-weight:610;letter-spacing:-.04em}.role-evidence-state-v37{border-color:var(--sos-divider);background:transparent}.role-inspector-actions-v37{border-color:var(--sos-divider);background:color-mix(in srgb,var(--sos-surface) 94%,transparent);backdrop-filter:blur(12px)}.role-workspace-v37-footer{border-color:var(--sos-divider);background:var(--sos-sidebar)}
+
+/* Talent — library list + resume/profile inspector. */
+.talent-v37-grid{grid-template-columns:minmax(0,1fr) minmax(330px,390px);border-color:var(--sos-divider);border-radius:9px;background:var(--sos-surface)}.talent-v37-list-pane{padding:10px 0;border-color:var(--sos-divider)}.talent-v37-toolbar{padding:0 12px 10px}.talent-v37-people{gap:0;border-top:1px solid var(--sos-divider)}
+.talent-v37-people>button{grid-template-columns:30px minmax(0,1fr) 108px;gap:11px;border:0;border-bottom:1px solid var(--sos-divider);border-radius:0;background:transparent;padding:13px 12px}.talent-v37-people>button:hover{background:var(--sos-surface-soft)}.talent-v37-people>button.is-selected{border-color:var(--sos-divider);background:linear-gradient(90deg,var(--sos-accent-soft),rgba(139,140,255,.025) 55%,transparent);box-shadow:inset 2px 0 var(--sos-accent)}.talent-v37-rank{background:transparent;border:1px solid var(--sos-divider)}.talent-v37-person-main strong{font-size:12px;font-weight:640}.talent-v37-tags i{background:transparent;border:1px solid var(--sos-divider)}
+.talent-v37-inspector{background:var(--sos-surface)}.talent-inspector-v37>section{padding:17px 16px;border-color:var(--sos-divider)}.talent-inspector-v37-identity h2{font-size:23px;font-weight:610;letter-spacing:-.04em}.talent-v37-identity-state,.talent-v37-state-grid>div{border-color:var(--sos-divider);background:transparent}.talent-v37-skill-list span,.talent-v37-profile-links a{border-color:var(--sos-divider);background:transparent}.talent-inspector-v37-actions{border-color:var(--sos-divider);background:color-mix(in srgb,var(--sos-surface) 94%,transparent);backdrop-filter:blur(12px)}
+
+/* Sources and Roles portfolio — quieter containers, stronger rows. */
+.sources-workspace-v37 [class*="panel"],.sources-workspace-v37 [class*="card"],.roles-portfolio-v37 [class*="panel"],.roles-portfolio-v37 [class*="card"]{border-color:var(--sos-divider)!important;box-shadow:none!important}
+.sources-workspace-v37 [class*="row"],.roles-portfolio-v37 [class*="row"]{border-color:var(--sos-divider)!important}
+
+/* Empty/loading states */
+.search-zero-state,.role-workspace-v37-empty,.role-inspector-empty-v37,.talent-v37-empty,.talent-v37-inspector-empty,.today-v37-empty{background:transparent}.search-zero-mark{color:var(--sos-accent);opacity:.8}.candidate-skeleton,.talent-v37-skeletons>div{border-color:var(--sos-divider);border-radius:0;background:transparent}
+
+/* Mobile is a document flow, not a shrunk three-pane desktop. */
+@media(max-width:980px){
+  .v37-shell .app-mobile-header{background:color-mix(in srgb,var(--sos-sidebar) 94%,transparent);border-color:var(--sos-divider);backdrop-filter:blur(16px)}
+  .today-workspace-v37,.talent-workspace-v37,.sources-workspace-v37,.roles-portfolio-v37{padding:18px}
+}
+@media(max-width:760px){
+  .v37-shell .app-mobile-brand{font-family:var(--sos-font-ui);font-weight:700;letter-spacing:-.025em}
+  .search-workspace{height:auto;min-height:calc(100vh - 54px);display:block;overflow:visible}.search-workspace-left,.search-workspace-center,.search-workspace-right{overflow:visible}.search-workspace-left{border-right:0;border-bottom:1px solid var(--sos-divider);padding:16px 14px}.search-workspace-center{padding:16px 14px 24px}.search-workspace-right{position:static!important;width:auto!important;inset:auto!important;border-left:0;border-top:1px solid var(--sos-divider);box-shadow:none!important}.search-results-head{position:static;background:transparent}.candidate-row{grid-template-columns:28px minmax(0,1fr);padding:12px 7px}.candidate-row-side{grid-column:2;justify-items:start;display:flex;gap:8px}.candidate-inspector-nav{position:static}
+  .role-workspace-v37{height:auto;overflow:visible}.role-workspace-v37-grid{display:block;overflow:visible}.role-workspace-v37-brief{border-right:0;border-bottom:1px solid var(--sos-divider)}.role-workspace-v37-slate{padding:14px}.role-workspace-v37-inspector{position:static!important;width:auto!important;inset:auto!important;border-left:0;border-top:1px solid var(--sos-divider);box-shadow:none!important}.role-candidate-row-v37{grid-template-columns:28px minmax(0,1fr);padding:12px 7px}.role-candidate-meta-v37{grid-column:2;justify-items:start;display:flex}.role-inspector-actions-v37{position:static}
+  .talent-v37-grid{display:block;min-height:0}.talent-v37-list-pane{border-right:0}.talent-v37-inspector{position:static!important;width:auto!important;inset:auto!important;box-shadow:none!important;border-top:1px solid var(--sos-divider)}.talent-v37-people>button{grid-template-columns:28px minmax(0,1fr);padding:12px}.talent-v37-person-meta{grid-column:2;justify-items:start;display:flex}.talent-inspector-v37-actions{position:static}
+  .today-v37-header h1,.talent-v37-header h1,.sources-v37-header h1,.roles-v37-header h1{font-size:23px}.today-v37-metrics,.talent-v37-metrics,.sources-v37-metrics,.roles-v37-metrics{grid-template-columns:1fr 1fr}.today-v37-metrics>div:nth-child(2){border-right:0!important}
+}
+@media(max-width:520px){
+  .today-workspace-v37,.talent-workspace-v37,.sources-workspace-v37,.roles-portfolio-v37{padding:14px 12px 40px}.today-v37-grid{gap:12px}.today-v37-row{grid-template-columns:7px minmax(0,1fr);padding:11px 10px}.today-v37-row-action{grid-column:2;justify-items:start;display:flex;justify-content:space-between}.search-composer textarea{min-height:96px}.candidate-inspector-identity h2,.role-inspector-identity-v37 h2,.talent-inspector-v37-identity h2{font-size:21px}
+}

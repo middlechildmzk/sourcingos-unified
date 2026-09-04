@@ -8,6 +8,7 @@ import './agentic-role.css'
 import './home-v31.css'
 import './public-v31.css'
 import './theme-v31.css'
+import './public-v37-1.css'
 import { Nav } from '@/components/Nav'
 import { PageTracker } from '@/components/PageTracker'
 import { siteUrl } from '@/lib/site'
@@ -31,11 +32,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
-        {/* DM Sans (body) + Syne (display), loaded once by the root App Router layout. */}
+        {/* Public legacy families remain available; V37.1 recruiter surfaces use Manrope + IBM Plex Mono. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,900;1,9..40,400&family=Syne:wght@700;800;900&display=swap"
+          href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;0,9..40,900;1,9..40,400&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Syne:wght@700;800;900&display=swap"
           rel="stylesheet"
         />
       </head>
