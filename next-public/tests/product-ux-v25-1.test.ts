@@ -17,12 +17,11 @@ const cron = read('app/api/cron/autosource/route.ts')
 const rolesPage = read('app/app/roles/page.tsx')
 
 describe('V25.1 recruiter-first product experience', () => {
-  it('keeps the primary navigation focused on canonical recruiter destinations', () => {
-    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'Talent'"]) expect(shell).toContain(destination)
-    expect(shell).toContain('Research & data')
-    expect(shell).toContain("label: 'Search Lab'")
-    expect(shell).toContain("label: 'AutoSource'")
-    expect(shell).toContain('app-tools-toggle')
+  it('keeps the primary navigation focused on the canonical V37 recruiter workflows', () => {
+    for (const destination of ["label: 'Today'", "label: 'Roles'", "label: 'Search'", "label: 'Talent'", "label: 'Sources'"]) expect(shell).toContain(destination)
+    expect(shell).not.toContain("label: 'Search Lab'")
+    expect(shell).not.toContain("label: 'AutoSource'")
+    expect(shell).toContain('Evidence visible. Decisions stay human.')
     expect(shellCss).toContain('.app-sidebar')
     expect(shellCss).toContain('.product-row')
   })
