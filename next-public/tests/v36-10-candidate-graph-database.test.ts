@@ -60,12 +60,15 @@ describe('V36.10 Candidate Graph identity and talent database', () => {
     expect(ui).toContain('never authorizes an identity merge or outreach')
   })
 
-  it('exposes artifacts and identity review as first-class Candidate 360/database workflows', () => {
+  it('exposes artifacts and identity review as first-class Candidate 360/Talent workflows', () => {
     const candidatePage = read('app/app/candidate/[id]/page.tsx')
     const databasePage = read('app/app/candidate-database/page.tsx')
+    const talent = read('components/TalentWorkspaceV37.tsx')
     expect(candidatePage).toContain('<CandidateFieldResolutionV36_10 candidateId={id} />')
     expect(candidatePage).toContain('<CandidateArtifactsV36_10 candidateId={id} />')
-    expect(databasePage).toContain('href="/app/identity-review"')
-    expect(databasePage).toContain('One canonical person record with source-level provenance')
+    expect(databasePage).toContain('<TalentWorkspaceV37')
+    expect(talent).toContain('href="/app/identity-review"')
+    expect(talent).toContain('Your canonical people library.')
+    expect(talent).toContain('Cross-source observations stay attached to this canonical person only under SourcingOS identity rules.')
   })
 })
