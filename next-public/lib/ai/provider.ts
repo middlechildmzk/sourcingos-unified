@@ -63,7 +63,17 @@ function activeProvider(): AiProviderName | undefined {
 
 function modelFor(provider: AiProviderName): string {
   if (provider === 'vercel_gateway') {
-    return process.env.AI_GATEWAY_MODEL?.trim() || process.env.AI_PROVIDER_MODEL?.trim() || 'openai/gpt-5.6-sol'
+    const gatewayModel = process.env.AI_GATEWAY_MODEL?.trim()
+    if (gatewayModel) return gatewayModel
+
+    // AI_PROVIDER_MODEL historically stores direct-provider model ids such as
+    // `gpt-5.6-luna` or `claude-...`. Vercel AI Gateway requires a provider-
+    // qualified slug (`creator/model`), so only reuse the legacy value when it
+    // is already explicitly Gateway-shaped. Otherwise use the known-safe
+    // Gateway default rather than silently sending an invalid model id.
+    const legacyModel = process.env.AI_PROVIDER_MODEL?.trim()
+    if (legacyModel?.includes('/')) return legacyModel
+    return 'openai/gpt-5.6-sol'
   }
   const configured = process.env.AI_PROVIDER_MODEL?.trim()
   if (configured) return configured
@@ -128,56 +138,74 @@ async function callAnthropicJson<T>(prompt: string, key: string, model: string, 
     if (!text) return { ok: false, error: 'empty_response', aiGenerated: false, provider: 'anthropic', model }
     return { ok: true, data: parseJsonText<T>(text), aiGenerated: true, provider: 'anthropic', model }
   } catch {
-    return { ok: false, error: 'parse_or_network_error', aiGenerated: false, provider: 'anthropic', model }
+    return { ok: false, error: 'provider_error', aiGenerated: false, provider: 'anthropic', model }
   }
 }
 
-async function callResponsesJson<T>(
-  endpoint: string,
-  prompt: string,
-  key: string,
-  model: string,
-  maxTokens: number,
-  provider: 'openai' | 'vercel_gateway',
-): Promise<AiCallResult<T>> {
+async function callOpenAiJson<T>(prompt: string, key: string, model: string, maxTokens: number): Promise<AiCallResult<T>> {
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch(OPENAI_ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
+        authorization: `Bearer ${key}`,
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         model,
         input: prompt,
         max_output_tokens: maxTokens,
-        store: false,
         text: { format: { type: 'json_object' } },
       }),
       cache: 'no-store',
     })
-    if (!res.ok) return { ok: false, error: 'provider_error', aiGenerated: false, provider, model }
-    const json = await res.json() as {
-      output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>
-    }
+    if (!res.ok) return { ok: false, error: 'provider_error', aiGenerated: false, provider: 'openai', model }
+    const json = await res.json() as { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }
     const text = responseOutputText(json)
-    if (!text) return { ok: false, error: 'empty_response', aiGenerated: false, provider, model }
-    return { ok: true, data: parseJsonText<T>(text), aiGenerated: true, provider, model }
+    if (!text) return { ok: false, error: 'empty_response', aiGenerated: false, provider: 'openai', model }
+    return { ok: true, data: parseJsonText<T>(text), aiGenerated: true, provider: 'openai', model }
   } catch {
-    return { ok: false, error: 'parse_or_network_error', aiGenerated: false, provider, model }
+    return { ok: false, error: 'provider_error', aiGenerated: false, provider: 'openai', model }
   }
 }
 
-/** Call the configured reasoning model with a prompt expecting JSON output. */
-export async function callModelJson<T>(prompt: string, maxTokens = 1200): Promise<AiCallResult<T>> {
+async function callVercelGatewayJson<T>(prompt: string, key: string, model: string, maxTokens: number): Promise<AiCallResult<T>> {
+  try {
+    const res = await fetch(VERCEL_GATEWAY_RESPONSES_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${key}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        input: prompt,
+        max_output_tokens: maxTokens,
+        text: { format: { type: 'json_object' } },
+      }),
+      cache: 'no-store',
+    })
+    if (!res.ok) return { ok: false, error: 'provider_error', aiGenerated: false, provider: 'vercel_gateway', model }
+    const json = await res.json() as { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> }
+    const text = responseOutputText(json)
+    if (!text) return { ok: false, error: 'empty_response', aiGenerated: false, provider: 'vercel_gateway', model }
+    return { ok: true, data: parseJsonText<T>(text), aiGenerated: true, provider: 'vercel_gateway', model }
+  } catch {
+    return { ok: false, error: 'provider_error', aiGenerated: false, provider: 'vercel_gateway', model }
+  }
+}
+
+export async function callAiJson<T>(prompt: string, maxTokens = 1200): Promise<AiCallResult<T>> {
   const provider = activeProvider()
   if (!provider) return { ok: false, error: 'not_configured', aiGenerated: false }
   const model = modelFor(provider)
   if (provider === 'vercel_gateway') {
-    return callResponsesJson<T>(VERCEL_GATEWAY_RESPONSES_ENDPOINT, prompt, gatewayToken()!, model, maxTokens, 'vercel_gateway')
+    const key = gatewayToken()
+    return key ? callVercelGatewayJson<T>(prompt, key, model, maxTokens) : { ok: false, error: 'not_configured', aiGenerated: false }
   }
-  if (provider === 'openai') {
-    return callResponsesJson<T>(OPENAI_ENDPOINT, prompt, openAiKey()!, model, maxTokens, 'openai')
+  if (provider === 'anthropic') {
+    const key = anthropicKey()
+    return key ? callAnthropicJson<T>(prompt, key, model, maxTokens) : { ok: false, error: 'not_configured', aiGenerated: false }
   }
-  return callAnthropicJson<T>(prompt, anthropicKey()!, model, maxTokens)
+  const key = openAiKey()
+  return key ? callOpenAiJson<T>(prompt, key, model, maxTokens) : { ok: false, error: 'not_configured', aiGenerated: false }
 }
