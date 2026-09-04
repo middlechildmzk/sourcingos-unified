@@ -7,6 +7,7 @@ import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase
 import { executableCandidateSearchProvidersV36_8 } from '@/lib/candidate-data/provider-registry-v36-8'
 import { runCandidateDataSearchV36_8, type CandidateDataOrchestrationV36_8 } from '@/lib/candidate-data/orchestrator-v36-8'
 import { observationSigningConfiguredV36_12, signedProviderObservationV36_8 } from '@/lib/candidate-data/provider-observation-bridge-v36-8'
+import { buildUnifiedCandidateSlateV38_2 } from '@/lib/candidate-data/unified-candidate-slate-v38-2'
 import { searchPearchV36_8 } from '@/lib/candidate-data/providers/pearch-v36-8'
 import { searchPeopleDataLabsV36_8 } from '@/lib/candidate-data/providers/people-data-labs-search-v36-8'
 import { searchCoresignalV36_8 } from '@/lib/candidate-data/providers/coresignal-v36-8'
@@ -55,7 +56,7 @@ function adapter(provider: CandidateDataProviderV36_8): CandidateDataSearchAdapt
   return undefined
 }
 
-async function finalizeCandidateSearchPayloadV37({
+async function finalizeCandidateSearchPayloadV38_2({
   ownerId,
   preview,
   searchRequest,
@@ -69,7 +70,11 @@ async function finalizeCandidateSearchPayloadV37({
   requestedProviders: CandidateDataProviderV36_8[]
 }) {
   const signingConfigured = observationSigningConfiguredV36_12()
+  // Sign the raw provider observations. The unified display slate is derived on
+  // the server, but durable saves continue to trust only signed source-native
+  // observations. This keeps richer review UX separate from identity authority.
   const reviewObservations = signingConfigured ? result.observations.map(signedProviderObservationV36_8).filter(Boolean) : []
+  const unifiedSlate = buildUnifiedCandidateSlateV38_2(result.observations)
   const searchQuality = buildSearchQualitySnapshotV36_12(searchRequest, result)
   const sourceHealthEvents = sourceHealthEventsForSearchV36_12(result.telemetry, result.retainedProviderMix)
 
@@ -90,7 +95,14 @@ async function finalizeCandidateSearchPayloadV37({
             locations: searchRequest.locations || [],
             providers: requestedProviders,
           },
-          metrics: searchQuality,
+          metrics: {
+            ...searchQuality,
+            identityFusionV38_2: {
+              rawObservationCount: unifiedSlate.rawObservationCount,
+              unifiedCandidateCount: unifiedSlate.unifiedCandidateCount,
+              groupedObservationCount: unifiedSlate.groupedObservationCount,
+            },
+          },
           provider_telemetry: result.telemetry,
         }).select('id').single()
 
@@ -114,12 +126,24 @@ async function finalizeCandidateSearchPayloadV37({
   }
 
   const warnings = [...result.warnings]
+  if (unifiedSlate.groupedObservationCount > 0) {
+    warnings.push(`${unifiedSlate.groupedObservationCount} duplicate source observation${unifiedSlate.groupedObservationCount === 1 ? '' : 's'} grouped into ${unifiedSlate.unifiedCandidateCount} unified review candidate${unifiedSlate.unifiedCandidateCount === 1 ? '' : 's'} using deterministic public-professional identity anchors. Durable identity remains recruiter-reviewed.`)
+  }
   if (!signingConfigured) warnings.unshift('Provider review observations cannot be saved until OBSERVATION_SIGNING_SECRET is configured for this environment.')
 
   return {
     ok: true,
-    observations: result.observations,
+    observations: unifiedSlate.observations,
     reviewObservations,
+    identityFusion: {
+      version: 'v38.2',
+      rawObservationCount: unifiedSlate.rawObservationCount,
+      unifiedCandidateCount: unifiedSlate.unifiedCandidateCount,
+      groupedObservationCount: unifiedSlate.groupedObservationCount,
+      clusters: unifiedSlate.clusters,
+      linkedinOverlapIsDeterministicAuthority: false,
+      persistentMergePerformed: false,
+    },
     telemetry: result.telemetry,
     sourceHealth: sourceHealthEvents,
     providerMix: result.providerMix,
@@ -135,6 +159,7 @@ async function finalizeCandidateSearchPayloadV37({
       providerScoresAreQualificationScores: false,
       contactRevealDuringSearch: false,
       identityMergePerformed: false,
+      provisionalDisplayGroupingPerformed: unifiedSlate.groupedObservationCount > 0,
       recruiterDecisionPerformed: false,
       providerReviewObservationsSignedServerSide: signingConfigured,
       providerDatabaseCountsAreNotUniquePeopleCounts: true,
@@ -188,7 +213,7 @@ export async function POST(req: NextRequest) {
             const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit, providerResult => {
               write({ type: 'provider', telemetry: providerResult.telemetry })
             })
-            const payload = await finalizeCandidateSearchPayloadV37({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
+            const payload = await finalizeCandidateSearchPayloadV38_2({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
             write({ type: 'final', payload })
           } catch {
             write({ type: 'error', error: 'Candidate search failed before a final retained slate was produced.' })
@@ -209,6 +234,6 @@ export async function POST(req: NextRequest) {
   }
 
   const result = await runCandidateDataSearchV36_8(searchRequest, adapters, parsed.data.limit)
-  const payload = await finalizeCandidateSearchPayloadV37({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
+  const payload = await finalizeCandidateSearchPayloadV38_2({ ownerId: gate.userId, preview: gate.preview, searchRequest, result, requestedProviders })
   return NextResponse.json(payload)
 }
