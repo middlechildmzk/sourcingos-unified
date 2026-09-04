@@ -76,14 +76,16 @@ describe('V38.1 canonical Search + Review Workspace', () => {
     expect(workspace).not.toContain('sync_ats')
   })
 
-  it('saves only server-signed review observations before creating a canonical candidate', () => {
+  it('separates automatic durable discovery capture from signed recruiter save and role actions', () => {
     expect(searchRoute).toContain('reviewObservations')
+    expect(searchRoute).toContain('autoCaptureSearchObservationsV40')
     expect(workspace).toContain('result?.reviewObservations.find')
     expect(workspace).toContain("fetch('/api/candidate-data/save'")
     expect(workspace).toContain('observationSignature: signed.observationSignature')
     expect(saveRoute).toContain('verifyProviderObservationV36_8')
     expect(saveRoute).toContain('Client-supplied entity kind, skills, contacts, and evidence are ignored.')
-    expect(workspace).toContain('Save all retained')
+    expect(workspace).toContain('Discoveries captured. Review the slate.')
+    expect(workspace).toContain('Add all to role')
   })
 
   it('makes Candidate 360 review, exports, and recruiter-authored disposition explicit', () => {
