@@ -1,5 +1,25 @@
 /** @type {import('next').NextConfig} */
-const cspReportOnly = [
+const productionCsp = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "frame-src 'none'",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "media-src 'self'",
+  'upgrade-insecure-requests',
+].join('; ')
+
+// Preview/local remains report-only and permits the framework/debug tooling that
+// may require eval. Production uses the enforced policy above.
+const previewCsp = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
@@ -15,6 +35,8 @@ const cspReportOnly = [
   'upgrade-insecure-requests',
 ].join('; ')
 
+const isVercelProduction = process.env.VERCEL_ENV === 'production'
+
 const nextConfig = {
   trailingSlash: true,
   async headers() {
@@ -22,10 +44,19 @@ const nextConfig = {
       {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy-Report-Only', value: cspReportOnly },
+          {
+            key: isVercelProduction ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only',
+            value: isVercelProduction ? productionCsp : previewCsp,
+          },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+          { key: 'X-DNS-Prefetch-Control', value: 'off' },
+          { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+          ...(isVercelProduction
+            ? [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' }]
+            : []),
         ],
       },
     ]

@@ -20,6 +20,8 @@ import './roles-v37.css'
 import './mobile-v37.css'
 /* Canonical V37.1 presentation layer. Legacy files above remain fallback-only for non-canonical/advanced routes. */
 import './visual-system-v37-1.css'
+/* V37.3 deliberately strengthens only narrow-screen hierarchy and loads last. */
+import './mobile-visual-strength-v37-3.css'
 
 export const metadata: Metadata = { robots: { index: false, follow: false } }
 

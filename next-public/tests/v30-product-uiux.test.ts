@@ -18,7 +18,7 @@ describe('V30 product experience release gate on the canonical V33 role loop', (
   it('keeps the primary navigation focused on the V37 recruiter workflow', () => {
     expect(shell).toContain("label: 'Today'")
     expect(shell).toContain("label: 'Roles'")
-    expect(shell).toContain("label: 'Search'")
+    expect(shell).toContain("label: 'People Search'")
     expect(shell).toContain("label: 'Talent'")
     expect(shell).toContain("label: 'Sources'")
     expect(shell).not.toContain("label: 'Search Lab'")

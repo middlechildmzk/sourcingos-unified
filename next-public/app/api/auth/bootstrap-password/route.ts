@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -27,7 +28,10 @@ function validToken(providedCode: string, storedHash: string) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const rl = await rateLimit(request, 'authBootstrap')
+  if (!rl.ok) return rl.response
+
   let body: BootstrapBody
   try {
     body = await request.json() as BootstrapBody

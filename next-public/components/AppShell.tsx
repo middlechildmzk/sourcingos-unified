@@ -26,7 +26,7 @@ type NavigationItem = {
 const primary: NavigationItem[] = [
   { href: '/app/today', label: 'Today', icon: 'today', description: 'Your recruiting work now' },
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Search, slate, calibration' },
-  { href: '/app/search', label: 'Search', icon: 'search', description: 'Find and refine talent' },
+  { href: '/app/search', label: 'People Search', icon: 'search', description: 'Find and refine talent' },
   { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'People you know and can rediscover' },
   { href: '/app/sources', label: 'Sources', icon: 'toolkit', description: 'Connections, provenance, evidence' },
 ]

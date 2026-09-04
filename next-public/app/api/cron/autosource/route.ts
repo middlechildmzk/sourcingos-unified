@@ -2,18 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server'
 import { processEnrichmentQueue, runCampaign } from '@/lib/acquisition-engine-v22'
 import { generateDailyBrief, runDueAgentWorkflows } from '@/lib/agent-automation-v25-1'
+import { authorizeCronRequest } from '@/lib/cron-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-function authorized(req: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  if (!secret) return false
-  return req.headers.get('authorization') === `Bearer ${secret}` || req.nextUrl.searchParams.get('secret') === secret
-}
-
 export async function GET(req: NextRequest) {
-  if (!authorized(req)) return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 })
+  const auth = authorizeCronRequest(req)
+  if (auth === 'unavailable') return NextResponse.json({ ok: false, error: 'Cron authentication is unavailable.' }, { status: 503 })
+  if (auth !== 'authorized') return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 })
   if (!isSupabaseConfigured()) return NextResponse.json({ ok: false, error: 'Supabase is not configured.' }, { status: 503 })
   const sb = createServerSupabaseClient(); if (!sb) return NextResponse.json({ ok: false, error: 'Supabase unavailable.' }, { status: 500 })
   const [campaignResult, workflowOwnersResult] = await Promise.all([

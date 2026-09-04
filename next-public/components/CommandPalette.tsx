@@ -9,7 +9,7 @@ type Candidate = { id: string; canonicalName: string; headline?: string; current
 type Command = { label: string; detail: string; href: string; shortcut?: string }
 
 const commands: Command[] = [
-  { label: 'Search', detail: 'Find and refine talent with conversational Search Brain, provider execution, and evidence review', href: '/app/search', shortcut: 'G S' },
+  { label: 'People Search', detail: 'Find and refine talent with conversational Search Brain, provider execution, and evidence review', href: '/app/search', shortcut: 'G S' },
   { label: 'Today', detail: 'Resume recruiter decisions, approvals, briefs, and active work', href: '/app/today', shortcut: 'G T' },
   { label: 'Roles', detail: 'Open role workspaces, candidate slates, and calibration', href: '/app/roles', shortcut: 'G R' },
   { label: 'Create a role', detail: 'Start from a hiring need and create a calibrated workspace', href: '/app/roles?new=1', shortcut: 'N R' },

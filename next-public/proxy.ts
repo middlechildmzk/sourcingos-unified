@@ -21,7 +21,7 @@ function loginRedirect(request: NextRequest) {
   return NextResponse.redirect(loginUrl)
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const canonicalHost = new URL(CANONICAL_SITE_URL).host
   if (process.env.VERCEL_ENV === 'production' && request.nextUrl.host !== canonicalHost) {
