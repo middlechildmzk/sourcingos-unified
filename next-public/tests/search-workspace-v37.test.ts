@@ -5,6 +5,8 @@ import path from 'node:path'
 const root = path.resolve(__dirname, '..')
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 const page = read('app/app/search/page.tsx')
+const peopleSearchWorkspace = read('components/PeopleSearchWorkspaceV38_4.tsx')
+const personLookup = read('components/PersonLookupV38_4.tsx')
 const workspace = read('components/SearchWorkspaceV38_1.tsx')
 const searchRoute = read('app/api/candidate-data/search/route.ts')
 const saveRoute = read('app/api/candidate-data/save/route.ts')
@@ -15,7 +17,13 @@ const labRedirect = read('app/app/candidate-search/page.tsx')
 
 describe('V38.1 canonical Search + Review Workspace', () => {
   it('owns one authenticated people-search route while preserving legacy URLs as redirects', () => {
-    expect(page).toContain('<SearchWorkspaceV38_1')
+    expect(page).toContain("import { PeopleSearchWorkspaceV38_4 } from '@/components/PeopleSearchWorkspaceV38_4'")
+    expect(page).toContain('<PeopleSearchWorkspaceV38_4')
+    expect(peopleSearchWorkspace).toContain("import { SearchWorkspaceV38_1 } from '@/components/SearchWorkspaceV38_1'")
+    expect(peopleSearchWorkspace).toContain('<SearchWorkspaceV38_1 initialQuery={initialQuery} roleId={roleId} source={source} />')
+    expect(peopleSearchWorkspace).toContain('Find a person')
+    expect(peopleSearchWorkspace).toContain('<PersonLookupV38_4')
+    expect(personLookup).toContain('Search Candidate Graph')
     expect(peopleRedirect).toContain("redirect('/app/search?from=people-search')")
     expect(agenticRedirect).toContain("redirect('/app/search?from=agentic-sourcing')")
     expect(labRedirect).toContain('/app/search?')
