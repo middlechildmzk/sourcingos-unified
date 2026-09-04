@@ -63,7 +63,7 @@ export function TalentWorkspaceV37({ initialQuery = '' }: { initialQuery?: strin
 
   return <div className="talent-workspace-v37">
     <header className="talent-v37-header">
-      <div><span className="search-kicker">Talent</span><h1>Your canonical people library.</h1><p>Rediscover known people across source observations, evidence, skills, profile URLs, and allowed stored contact signals.</p></div>
+      <div><span className="search-kicker">Talent</span><h1>Your canonical people library.</h1><p>Rediscover known people across source observations, evidence, skills, employment history, and allowed stored contact signals.</p></div>
       <div className="talent-v37-header-actions"><Link href="/app/identity-review">Identity review{snapshot.counts.pendingMatchReviews ? ` · ${snapshot.counts.pendingMatchReviews}` : ''}</Link><Link className="primary" href="/app/search">Find new people</Link></div>
     </header>
 
@@ -96,12 +96,13 @@ export function TalentWorkspaceV37({ initialQuery = '' }: { initialQuery?: strin
 }
 
 function TalentInspector({ person }: { person: TalentPerson }) {
+  const employment = person.universe?.employmentObservations || []
   return <div className="talent-inspector-v37">
     <section className="talent-inspector-v37-identity"><span className="search-kicker">Canonical person</span><h2>{person.canonicalName}</h2><p>{[person.headline || person.currentTitle, person.currentCompany].filter(Boolean).join(' · ') || 'Candidate profile'}</p><small>{person.location || 'Location not evidenced'}</small></section>
     <section><div className="search-section-title"><span>Identity state</span><small>{words(person.mergeStatus)}</small></div><div className="talent-v37-identity-state"><b>{person.sourceProfileIds.length} source observation{person.sourceProfileIds.length === 1 ? '' : 's'}</b><span>Cross-source observations stay attached to this canonical person only under SourcingOS identity rules.</span></div></section>
     <section><div className="search-section-title"><span>Observed skills</span><small>{person.skills.length}</small></div>{person.skills.length ? <div className="talent-v37-skill-list">{person.skills.slice(0, 20).map(skill => <span key={skill}>{skill}</span>)}</div> : <p className="talent-v37-muted">No structured skills are attached yet.</p>}</section>
     <section><div className="search-section-title"><span>Evidence & contact</span><small>truth layers</small></div><div className="talent-v37-state-grid"><div><small>Evidence records</small><b>{person.evidenceItemIds.length}</b></div><div><small>Contact signals</small><b>{person.contactSignalIds.length}</b></div></div><p className="talent-v37-muted">Contact signals do not imply ownership verification, deliverability, or permission to contact.</p></section>
-    <section><div className="search-section-title"><span>Public profiles</span><small>{person.profileUrls.length}</small></div><div className="talent-v37-profile-links">{person.profileUrls.slice(0, 6).map(profile => <a href={profile.url} target="_blank" rel="noreferrer" key={`${profile.kind}:${profile.url}`}>{words(profile.kind)} ↗</a>)}</div></section>
+    <section><div className="search-section-title"><span>Employment observations</span><small>{employment.length}</small></div>{employment.length ? <div className="talent-v37-profile-links">{employment.slice(0, 6).map(item => item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer" key={item.observationId}>{item.companyName}{item.title ? ` · ${item.title}` : ''} ↗</a> : <span key={item.observationId}>{item.companyName}{item.title ? ` · ${item.title}` : ''}</span>)}</div> : <p className="talent-v37-muted">No normalized employment observations are attached yet.</p>}</section>
     <footer className="talent-inspector-v37-actions"><AddToRoleButton candidate={{ candidateId: person.id, name: person.canonicalName, headline: person.headline, company: person.currentCompany, location: person.location, source: 'candidate_database', contactStatus: person.contactSignalIds.length ? 'signals_found' : 'unknown', evidenceStatus: person.evidenceItemIds.length ? 'reviewed' : 'unreviewed', tags: person.skills }} /><Link href={`/app/candidate/${encodeURIComponent(person.id)}`}>Open Candidate 360</Link></footer>
   </div>
 }
