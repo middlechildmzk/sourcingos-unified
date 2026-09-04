@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     role,
     structuredRequest: parsed,
-    configuredProviders: configured.map(item => ({ provider: item.provider, transport: item.transport, costClass: item.costClass })),
+    configuredProviders: configured.map(item => ({ provider: item.provider, label: item.label, capabilities: item.capabilities })),
     telemetry: result.telemetry,
     providerMix: result.providerMix,
     retainedProviderMix: result.retainedProviderMix,
