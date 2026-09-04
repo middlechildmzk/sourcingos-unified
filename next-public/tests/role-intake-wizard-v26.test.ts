@@ -42,12 +42,13 @@ describe('V26 guided role setup and product polish', () => {
     expect(roles).not.toContain('roleHealth(role)')
   })
 
-  it('replaces navigation glyphs with a consistent product icon system', () => {
+  it('uses the consistent product icon system for the canonical V37 navigation', () => {
     expect(shell).toContain('ProductIcon')
     expect(shell).toContain("icon: 'today'")
     expect(shell).toContain("icon: 'roles'")
-    expect(shell).toContain("icon: 'autosource'")
+    expect(shell).toContain("icon: 'search'")
     expect(shell).toContain("icon: 'candidates'")
+    expect(shell).toContain("icon: 'toolkit'")
   })
 
   it('includes responsive wizard and portfolio styling', () => {
