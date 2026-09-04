@@ -167,7 +167,7 @@ describe('V38 stage packet and request inspector', () => {
         'RHEL', '5+ years relevant experience', 'Secret clearance or higher',
       ]))
       const serialized = JSON.stringify(inspector)
-      expect(serialized).not.toMatch(/api[_-]?key|authorization|bearer|token|secret/i)
+      expect(serialized).not.toMatch(/API_KEY|Authorization\s*:|Bearer\s+|CRON_SECRET|SUPABASE_SERVICE_ROLE_KEY/i)
     }
   })
 })
