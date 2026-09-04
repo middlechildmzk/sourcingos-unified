@@ -22,6 +22,8 @@ const rhelRequest: CandidateDataSearchRequestV36_8 = {
   revealContact: false,
 }
 
+const normalizedTitles = (values: string[] | undefined) => (values || []).map(title => title.toLowerCase())
+
 describe('V37.2 recruiter search accuracy', () => {
   it('keeps recruiter requirements intact while adding bounded RHEL discovery aliases', () => {
     const expanded = applySearchDiscoveryExpansionV37_2(rhelRequest)
@@ -60,21 +62,22 @@ describe('V37.2 recruiter search accuracy', () => {
     }
 
     const cyber = expand('cleared-cyber-fort-meade')
-    const cyberTitles = (cyber.titles || []).map(title => title.toLowerCase())
+    const cyberTitles = normalizedTitles(cyber.titles)
     expect(cyberTitles).toEqual(expect.arrayContaining(['cybersecurity engineer', 'cyber security engineer', 'information security engineer', 'security engineer']))
     expect(cyber.locations).toEqual(expect.arrayContaining(['Fort Meade, MD', 'Annapolis Junction, MD', 'Odenton, MD', 'Severn, MD']))
     expect(cyberTitles.join(' ')).not.toContain('linux administrator')
 
     const ml = expand('ml-researcher-boston')
-    expect(ml.titles).toEqual(expect.arrayContaining(['Machine Learning Researcher', 'Machine Learning Scientist', 'Research Scientist', 'Applied Scientist']))
-    expect(ml.titles?.join(' ').toLowerCase()).not.toContain('cybersecurity engineer')
+    const mlTitles = normalizedTitles(ml.titles)
+    expect(mlTitles).toEqual(expect.arrayContaining(['machine learning researcher', 'machine learning scientist', 'research scientist', 'applied scientist']))
+    expect(mlTitles.join(' ')).not.toContain('cybersecurity engineer')
 
     const sourcer = expand('enterprise-gtm-sourcer')
-    expect(sourcer.titles).toEqual(expect.arrayContaining(['Talent Sourcer', 'Senior Talent Sourcer', 'Technical Sourcer', 'Recruiting Sourcer', 'Sourcing Recruiter']))
-    expect(sourcer.titles?.join(' ').toLowerCase()).not.toContain('research scientist')
+    const sourcerTitles = normalizedTitles(sourcer.titles)
+    expect(sourcerTitles).toEqual(expect.arrayContaining(['talent sourcer', 'senior talent sourcer', 'technical sourcer', 'recruiting sourcer', 'sourcing recruiter']))
+    expect(sourcerTitles.join(' ')).not.toContain('research scientist')
 
-    const software = expand('software-engineer-remote')
-    const softwareTitles = (software.titles || []).join(' ').toLowerCase()
+    const softwareTitles = normalizedTitles(expand('software-engineer-remote').titles).join(' ')
     expect(softwareTitles).not.toContain('linux administrator')
     expect(softwareTitles).not.toContain('cybersecurity engineer')
     expect(softwareTitles).not.toContain('talent sourcer')
