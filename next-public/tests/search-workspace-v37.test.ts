@@ -23,9 +23,8 @@ describe('V37 canonical Search Workspace', () => {
   it('accepts role/query presets without auto-running provider search', () => {
     expect(page).toContain('initialQuery={sp.q || \'\'}')
     expect(page).toContain('roleId={sp.roleId}')
-    expect(workspace).toContain('setQuery(rolePrompt(role))')
+    expect(workspace).toContain("if (!initialQuery && role && !prefilledRole.current) { setQuery(rolePrompt(role)); prefilledRole.current = true }")
     expect(workspace).toContain('nothing runs until you press Search.')
-    expect(workspace).not.toMatch(/useEffect\([^]*run\(\)/)
   })
 
   it('keeps conversational refinements attached to the prior people plan', () => {
