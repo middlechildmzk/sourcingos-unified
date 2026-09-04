@@ -24,8 +24,8 @@ export type AutoCaptureSummaryV40 = {
   created: number
   reused: number
   failed: number
-  identityReviewProposalsCreated: number
-  identityProposalWarnings: number
+  identityReviewProposalsCreated?: number
+  identityProposalWarnings?: number
   identityResolutionDeferred: true
   contactValuesCaptured: false
   results: AutoCaptureItemV40[]
