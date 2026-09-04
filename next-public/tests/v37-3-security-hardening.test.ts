@@ -8,9 +8,10 @@ describe('V37.3 production security hardening', () => {
   it('cannot disable rate limiting through a production environment flag', () => {
     const source = read('lib/rate-limit.ts')
     expect(source).toContain("process.env.RATE_LIMIT_DISABLED === 'true' && process.env.NODE_ENV !== 'production'")
-    expect(source).toContain("authBootstrap:   { limit: 8,  windowSec: 900, sharedFallback: true }")
+    expect(source).toContain("authBootstrap:   { limit: 8,  windowSec: 900, sharedFallback: true, failClosed: true }")
     expect(source).toContain("waitlist:        { limit: 3,  windowSec: 3_600, sharedFallback: true }")
     expect(source).toContain("submit:          { limit: 5,  windowSec: 3_600, sharedFallback: true }")
+    expect(source).toContain("count === null && def.failClosed && process.env.NODE_ENV === 'production'")
   })
 
   it('rate limits one-time password bootstrap before token lookup', () => {
