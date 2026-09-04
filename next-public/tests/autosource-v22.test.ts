@@ -9,6 +9,7 @@ describe('AutoSource V22 contract', () => {
   const migration = read('sql/autosource-v22.sql')
   const engine = read('lib/acquisition-engine-v22.ts')
   const cron = read('app/api/cron/autosource/route.ts')
+  const cronAuth = read('lib/cron-auth.ts')
   const route = read('app/api/autosource/campaigns/route.ts')
   const vercel = read('vercel.json')
 
@@ -20,11 +21,15 @@ describe('AutoSource V22 contract', () => {
     expect(migration).toContain('revoke all on public.acquisition_campaigns')
   })
 
-  it('requires authenticated server routes and keeps the legacy cron endpoint secret-gated', () => {
+  it('requires authenticated server routes and keeps the legacy cron endpoint header-secret-gated', () => {
     expect(route).toContain('requireSession()')
     expect(route).toContain("rateLimit(req, 'workbench'")
-    expect(cron).toContain('process.env.CRON_SECRET')
+    expect(cron).toContain('authorizeCronRequest(req)')
     expect(cron).toContain("status: 401")
+    expect(cronAuth).toContain('process.env.CRON_SECRET')
+    expect(cronAuth).toContain("request.headers.get('authorization')")
+    expect(cronAuth).toContain("request.headers.get('x-cron-secret')")
+    expect(cronAuth).not.toContain('searchParams')
   })
 
   it('does not schedule unattended autosource while trust hardening is in progress', () => {
