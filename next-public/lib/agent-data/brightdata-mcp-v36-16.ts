@@ -4,10 +4,15 @@ import { publicDeepRefreshUrlV36_16 } from '@/lib/agent-data/public-web-policy-v
 
 const HOST = 'mcp.brightdata.com'
 const API_HOST = 'api.brightdata.com'
+const FIRECRAWL_HOST = 'api.firecrawl.dev'
 const ALLOWED_TOOLS = ['search_engine', 'scrape_as_markdown'] as const
 
 function apiToken(): string | undefined {
   return process.env.BRIGHTDATA_API_KEY?.trim() || undefined
+}
+
+function firecrawlToken(): string | undefined {
+  return process.env.FIRECRAWL_API_KEY?.trim() || undefined
 }
 
 function endpoint(): string | undefined {
@@ -34,6 +39,19 @@ export type BrightDataWebResultV36_16 = {
   }
 }
 
+export type PublicUrlRefreshResultV40_5I = {
+  provider: 'brightdata' | 'firecrawl'
+  transport: 'mcp' | 'rest'
+  tool: 'scrape_as_markdown' | 'scrape'
+  text: string
+  observedAt: string
+  freshness: 'live'
+  trust: {
+    externalContentIsUntrusted: true
+    becomesCandidateFact: false
+  }
+}
+
 export function combineBrightDataSearchPayloadV36_16(text: string, structuredContent: unknown): string {
   let structured = ''
   if (structuredContent !== undefined && structuredContent !== null) {
@@ -47,6 +65,13 @@ export function combineBrightDataSearchPayloadV36_16(text: string, structuredCon
 
 export function brightDataPayloadHasPublicUrlV36_16(text: string): boolean {
   return /https?:\/\//i.test(String(text || ''))
+}
+
+export function firecrawlMarkdownFromPayloadV40_5I(payload: unknown): string {
+  const root = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
+  const data = root.data && typeof root.data === 'object' ? root.data as Record<string, unknown> : {}
+  const markdown = typeof data.markdown === 'string' ? data.markdown : ''
+  return markdown.slice(0, 100_000)
 }
 
 export function brightDataSearchEngineForQueryV36_16(
@@ -69,6 +94,18 @@ async function fetchJsonWithTimeoutV36_16(url: string, init: RequestInit, timeou
   try {
     const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
     if (!response.ok) throw new Error(`Bright Data API returned HTTP ${response.status}.`)
+    return await response.json()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function fetchFirecrawlJsonV40_5I(url: string, init: RequestInit, timeoutMs = 30_000): Promise<unknown> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
+    if (!response.ok) throw new Error(`Firecrawl public document refresh returned HTTP ${response.status}.`)
     return await response.json()
   } finally {
     clearTimeout(timer)
@@ -125,6 +162,36 @@ async function searchPublicResumeLinksWithSerpApiV36_16(query: string): Promise<
   try { return JSON.stringify(response).slice(0, 40_000) } catch { return '' }
 }
 
+async function refreshPublicUrlWithFirecrawlV40_5I(url: string): Promise<PublicUrlRefreshResultV40_5I> {
+  const token = firecrawlToken()
+  if (!token) throw new Error('Firecrawl is not configured for public document refresh.')
+  const payload = await fetchFirecrawlJsonV40_5I(`https://${FIRECRAWL_HOST}/v2/scrape`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'user-agent': 'sourcingos-public-document-refresh/40.5i',
+    },
+    body: JSON.stringify({
+      url,
+      formats: ['markdown'],
+      onlyMainContent: true,
+      parsers: ['pdf'],
+      removeBase64Images: true,
+      blockAds: true,
+      timeout: 25_000,
+    }),
+  })
+  const text = firecrawlMarkdownFromPayloadV40_5I(payload)
+  if (!text.trim()) throw new Error('Firecrawl public document refresh returned no markdown.')
+  return {
+    provider: 'firecrawl', transport: 'rest', tool: 'scrape',
+    text,
+    observedAt: new Date().toISOString(), freshness: 'live',
+    trust: { externalContentIsUntrusted: true, becomesCandidateFact: false },
+  }
+}
+
 export async function searchWebWithBrightDataV36_16(
   query: string,
   options: { engine?: BrightDataSearchEngineV36_16 } = {},
@@ -158,23 +225,43 @@ export async function searchWebWithBrightDataV36_16(
   }
 }
 
-export async function refreshPublicUrlWithBrightDataV36_16(rawUrl: string): Promise<BrightDataWebResultV36_16> {
-  const mcpEndpoint = endpoint()
-  if (!mcpEndpoint) throw new Error('Bright Data is not configured.')
+export async function refreshPublicUrlWithBrightDataV36_16(rawUrl: string): Promise<PublicUrlRefreshResultV40_5I> {
+  // Every fetch route starts from the existing SourcingOS public-web policy.
+  // Firecrawl is only a retrieval transport for the already-approved public URL;
+  // it does not loosen host restrictions or perform authenticated interaction.
   const url = publicDeepRefreshUrlV36_16(rawUrl)
-  const result = await callAllowlistedRemoteMcpToolV36_16({
-    endpoint: mcpEndpoint,
-    allowedHosts: [HOST],
-    allowedTools: [...ALLOWED_TOOLS],
-    tool: 'scrape_as_markdown',
-    arguments: { url },
-    clientName: 'sourcingos-web-research',
-  })
-  if (result.isError) throw new Error('Bright Data MCP scrape_as_markdown returned an error.')
-  return {
-    provider: 'brightdata', transport: 'mcp', tool: 'scrape_as_markdown',
-    text: result.text,
-    observedAt: new Date().toISOString(), freshness: 'live',
-    trust: { externalContentIsUntrusted: true, becomesCandidateFact: false },
+  const mcpEndpoint = endpoint()
+  let brightDataError: unknown = null
+
+  if (mcpEndpoint) {
+    try {
+      const result = await callAllowlistedRemoteMcpToolV36_16({
+        endpoint: mcpEndpoint,
+        allowedHosts: [HOST],
+        allowedTools: [...ALLOWED_TOOLS],
+        tool: 'scrape_as_markdown',
+        arguments: { url },
+        clientName: 'sourcingos-web-research',
+      })
+      if (result.isError) throw new Error('Bright Data MCP scrape_as_markdown returned an error.')
+      if (!result.text.trim()) throw new Error('Bright Data MCP scrape_as_markdown returned no public text.')
+      return {
+        provider: 'brightdata', transport: 'mcp', tool: 'scrape_as_markdown',
+        text: result.text,
+        observedAt: new Date().toISOString(), freshness: 'live',
+        trust: { externalContentIsUntrusted: true, becomesCandidateFact: false },
+      }
+    } catch (error) {
+      brightDataError = error
+    }
   }
+
+  // Bright Data's hosted MCP currently exposes search_engine but not the
+  // requested scrape tool in production. Firecrawl is a bounded fallback only
+  // when its server-side key is configured; no browser actions or auth headers
+  // from the target site are supplied.
+  if (firecrawlToken()) return await refreshPublicUrlWithFirecrawlV40_5I(url)
+
+  if (brightDataError instanceof Error) throw brightDataError
+  throw new Error('No public document refresh provider is configured.')
 }
