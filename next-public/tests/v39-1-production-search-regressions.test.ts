@@ -66,11 +66,12 @@ describe('V39.1 production search regressions', () => {
     })).toBe('TIMEOUT')
   })
 
-  it('keeps known-person live lookup out of the role-search planner and automatically falls through after a graph miss', () => {
+  it('keeps known-person lookup out of the role planner while exact identifiers fail closed', () => {
     const source = fs.readFileSync(path.join(process.cwd(), 'components/PersonLookupV38_4.tsx'), 'utf8')
     expect(source).toContain("fetch('/api/candidate-data/search'")
     expect(source).not.toContain("fetch('/api/agent-runtime/plan'")
-    expect(source).toContain("JSON.stringify({ query: value, limit: 12, highFreshness: false })")
+    expect(source).toContain('liveKnownPersonSearchPayloadV41_1(value)')
+    expect(source).toContain('/api/candidate-db/exact-identifier')
     expect(source).toContain('/api/candidate-db/list')
     expect(source).toContain('if (candidates.length === 0) await searchLiveForValue(value)')
     expect(source).toContain("'Refresh live sources'")
