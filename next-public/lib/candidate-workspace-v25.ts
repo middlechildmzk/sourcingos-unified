@@ -28,7 +28,13 @@ function relationCandidateName(value: unknown) {
     : ''
 }
 
-function candidateEntityKind(profiles: any[]): EntityKind {
+/**
+ * Stored candidates have already crossed the discovery-time entity safety gate.
+ * Older rows can legitimately predate persisted entity_kind, so a stored graph
+ * row with at least one profile is treated leniently as a person only when no
+ * explicit non-person classification exists. Discovery-time gates stay strict.
+ */
+export function candidateWorkspaceEntityKindV41(profiles: any[]): EntityKind {
   const kinds = profiles.map(profile => resolveStoredEntityKind({
     source: profile.source,
     raw: profile.raw,
@@ -39,7 +45,7 @@ function candidateEntityKind(profiles: any[]): EntityKind {
   if (kinds.includes('artifact')) return 'artifact'
   if (kinds.includes('publication')) return 'publication'
   if (kinds.includes('search_lane')) return 'search_lane'
-  return 'unknown'
+  return profiles.length > 0 ? 'person' : 'unknown'
 }
 
 export async function getCandidateWorkspace(ownerId: string, query: CandidateWorkspaceQuery = {}) {
@@ -155,7 +161,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastRefreshedAt: row.last_refreshed_at || undefined,
-      entityKind: candidateEntityKind(candidateProfiles),
+      entityKind: candidateWorkspaceEntityKindV41(candidateProfiles),
       sourceProfileIds: candidateProfiles.map(item => item.id),
       evidenceItemIds: candidateEvidence.map(item => item.id),
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
