@@ -16,7 +16,7 @@
     "@next/mdx": "^16.3.3",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.2",
-    "inngest": "^4.19.0",
+    "inngest": "4.19.0",
     "next": "^16.3.3",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -30,7 +30,7 @@
     "@types/react-dom": "18.3.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.3",
-    "typescript": "5.5.4",
+    "typescript": "5.9.3",
     "vitest": "^3.2.7"
   }
 }
