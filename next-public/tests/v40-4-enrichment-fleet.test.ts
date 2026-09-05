@@ -98,12 +98,11 @@ describe('V40.4 50-agent enrichment fleet', () => {
     expect(runtime).toContain('claimCandidateEnrichmentTasksV40_4(sb, 4')
   })
 
-  it('keeps discovery and enrichment schedulers separately authenticated', () => {
+  it('keeps discovery, enrichment, and sprint schedulers separately authenticated', () => {
     const config = JSON.parse(read('vercel.json'))
-    expect(config.crons).toEqual([
-      { path: '/api/cron/fleet/', schedule: '*/30 * * * *' },
-      { path: '/api/cron/enrichment/', schedule: '*/15 * * * *' },
-    ])
+    expect(config.crons).toContainEqual({ path: '/api/cron/fleet/', schedule: '*/30 * * * *' })
+    expect(config.crons).toContainEqual({ path: '/api/cron/enrichment/', schedule: '*/15 * * * *' })
+    expect(config.crons).toContainEqual({ path: '/api/cron/resume-sprint/', schedule: '*/3 * * * *' })
     const enrichment = read('app/api/cron/enrichment/route.ts')
     expect(enrichment).toContain('authorizeCronRequest(req)')
     expect(enrichment).toContain("auth !== 'authorized'")
