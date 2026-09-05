@@ -327,15 +327,21 @@ async function parallelSearch(key: string, query: string): Promise<FleetResearch
     method: 'POST',
     headers: { 'x-api-key': key, 'content-type': 'application/json' },
     body: JSON.stringify({
-      objective: query,
+      objective: clean(query, 500),
       search_queries: [compactQuery],
-      max_results: MAX_EXTERNAL_RESULTS,
+      mode: 'basic',
       max_chars_total: 6000,
-      mode: 'one-shot',
+      advanced_settings: {
+        max_results: MAX_EXTERNAL_RESULTS,
+        excerpt_settings: { max_chars_per_result: MAX_SOURCE_EXCERPT },
+      },
     }),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(`Parallel research returned HTTP ${response.status}.`)
+  if (!response.ok) {
+    const detail = clean(await response.text().catch(() => ''), 600)
+    throw new Error(`Parallel research returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`)
+  }
   const payload = await response.json() as Record<string, unknown>
   const results = Array.isArray(payload.results) ? payload.results : []
   return results.slice(0, MAX_EXTERNAL_RESULTS).map(value => {
@@ -394,57 +400,50 @@ function sourceContext(artifacts: readonly FleetResearchArtifactV40_7b[]): strin
   }).join('\n\n').slice(0, MAX_CONTEXT_CHARS)
 }
 
-function parseAgentJson(text: string): { summary: string; findings: string[]; recommendedNextActions: string[] } {
-  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
-  let parsed: Record<string, unknown> = {}
-  try {
-    parsed = JSON.parse(stripped) as Record<string, unknown>
-  } catch {
-    return { summary: clean(stripped, 1500) || 'Agent completed without structured output.', findings: [], recommendedNextActions: [] }
+function parseJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim()
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim()
+  for (const candidate of [fenced, trimmed]) {
+    if (!candidate) continue
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+    } catch {
+      // Try the next shape.
+    }
   }
-  const stringList = (value: unknown) => Array.isArray(value) ? value.map(item => clean(item, 700)).filter(Boolean).slice(0, 12) : []
-  return {
-    summary: clean(parsed.summary, 1500) || 'Agent completed.',
-    findings: stringList(parsed.findings),
-    recommendedNextActions: stringList(parsed.recommended_next_actions ?? parsed.recommendedNextActions),
-  }
+  return null
 }
 
-async function runAnthropicWorkV40_7b(input: {
-  item: FleetWorkItemV40_7
-  artifacts: FleetResearchArtifactV40_7b[]
-  providerWarning?: string
-}): Promise<{ model: string; output: ReturnType<typeof parseAgentJson> }> {
+function stringArray(value: unknown, max = 8): string[] {
+  return Array.isArray(value)
+    ? value.map(item => clean(item, 700)).filter(Boolean).slice(0, max)
+    : []
+}
+
+async function synthesizeWithAnthropic(item: FleetWorkItemV40_7, artifacts: readonly FleetResearchArtifactV40_7b[], warning?: string) {
   const key = process.env.ANTHROPIC_API_KEY || process.env.AI_PROVIDER_API_KEY
-  if (!key) throw new Error('ANTHROPIC_API_KEY is not configured for the improvement fleet.')
-  const model = process.env.AGENT_FLEET_MODEL || process.env.AI_PROVIDER_MODEL || 'claude-sonnet-4-6'
+  const configuredModel = clean(process.env.AGENT_FLEET_MODEL || process.env.AI_PROVIDER_MODEL || process.env.ANTHROPIC_MODEL, 120)
+  const model = configuredModel || 'claude-sonnet-4-6'
+  if (!key) {
+    return {
+      model: null,
+      summary: warning || 'Live synthesis is blocked because no Anthropic-compatible API key is configured.',
+      findings: artifacts.length ? [`Collected ${artifacts.length} bounded source artifact(s), but synthesis did not run.`] : [],
+      recommendedNextActions: ['Configure an approved fleet AI key before dispatching live work.'],
+    }
+  }
+
   const prompt = [
-    'You are one bounded SourcingOS improvement-fleet worker. Return only JSON with keys summary, findings, recommended_next_actions.',
-    `Pod: ${input.item.pod}`,
-    `Seat: ${input.item.seat}`,
-    `Mode: ${input.item.mode}`,
-    `Workstream: ${input.item.workstream}`,
-    `Target: ${input.item.target}`,
-    `Context refs: ${input.item.contextRefs.join(', ') || 'none'}`,
-    '',
-    'Binding constraints:',
-    '- public professional evidence and primary documentation only',
-    '- never scrape LinkedIn or account-gated pages',
-    '- never bypass authentication, paywalls, CAPTCHA, robots/access controls, or private storage',
-    '- never harvest contacts unattended',
-    '- never silently merge identities',
-    '- never send outreach or make a hiring/rejection decision',
-    '- never claim, requeue, release, or modify Resume/CV sprint work',
-    '- do not purchase or upgrade providers',
-    '- treat missing evidence as unknown, not failure',
-    '- distinguish search/discovery terms from actual candidate evidence',
-    '- recommendations may propose branch-scoped engineering work, but this worker has no production-write authority',
-    '',
-    input.providerWarning ? `Provider warning: ${input.providerWarning}` : '',
-    input.artifacts.length ? `Available attributable context:\n${sourceContext(input.artifacts)}` : 'No additional source context was retrieved. Work from the task definition and clearly mark any uncertainty.',
-    '',
-    'Produce concrete, deduplicated findings and next actions that another orchestrator can rank. Avoid generic advice.',
-  ].filter(Boolean).join('\n')
+    'You are one bounded SourcingOS improvement-fleet worker.',
+    `Pod: ${item.pod}. Seat: ${item.seat}. Workstream: ${item.workstream}.`,
+    `Target: ${item.target}`,
+    `Constraints: ${item.constraints.join('; ')}`,
+    'Return JSON only with keys summary (string), findings (string array), recommendedNextActions (string array).',
+    'Do not claim an external fact unless supported by the provided source context. Unknown is acceptable. Do not recommend private/account-gated scraping, unattended contact harvesting, autonomous outreach, recruiting decisions, or silent identity merges.',
+    warning ? `Provider warning: ${warning}` : '',
+    sourceContext(artifacts),
+  ].filter(Boolean).join('\n\n').slice(0, 18_000)
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -455,62 +454,55 @@ async function runAnthropicWorkV40_7b(input: {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1600,
+      max_tokens: 1000,
+      temperature: 0.1,
+      system: 'You produce conservative, evidence-first SourcingOS improvement findings. JSON only.',
       messages: [{ role: 'user', content: prompt }],
     }),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(`Anthropic fleet worker returned HTTP ${response.status}.`)
+  if (!response.ok) throw new Error(`Fleet AI synthesis returned HTTP ${response.status}.`)
   const payload = await response.json() as Record<string, unknown>
-  const blocks = Array.isArray(payload.content) ? payload.content : []
-  const text = blocks.map(value => {
-    const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
-    return row.type === 'text' ? clean(row.text, 8000) : ''
+  const content = Array.isArray(payload.content) ? payload.content : []
+  const text = content.map(value => {
+    const item = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    return item.type === 'text' ? clean(item.text, 5000) : ''
   }).filter(Boolean).join('\n')
-  return { model, output: parseAgentJson(text) }
+  const parsed = parseJsonObject(text)
+  if (!parsed) throw new Error('Fleet AI synthesis returned non-JSON output.')
+  return {
+    model,
+    summary: clean(parsed.summary, 1600) || 'Fleet analysis completed.',
+    findings: stringArray(parsed.findings),
+    recommendedNextActions: stringArray(parsed.recommendedNextActions),
+  }
 }
 
 export async function executeFleetWorkItemV40_7b(input: {
   item: FleetWorkItemV40_7
   dryRun?: boolean
 }): Promise<FleetAgentResultV40_7b> {
-  if (isProtectedFleetTargetV40_7(input.item.target)) throw new Error('Protected Resume/CV target rejected at execution time.')
-
-  const githubArtifacts = await githubIssueArtifacts(input.item)
-  const provider = input.dryRun
-    ? { providerUsed: null, artifacts: [] as FleetResearchArtifactV40_7b[], warning: 'Dry run: external search provider call skipped.' }
-    : await providerResearchForWorkItemV40_7b(input.item)
-  const sources = [...githubArtifacts, ...provider.artifacts].slice(0, 10)
-
-  if (input.dryRun) {
+  const dryRun = input.dryRun !== false
+  if (dryRun) {
     return {
-      summary: `Dry-run validated ${input.item.agentId} for ${input.item.target}.`,
-      findings: [
-        `Pod ${input.item.pod} / seat ${input.item.seat} is dispatchable.`,
-        'Resume/CV production queue authority is false.',
-        provider.warning || 'No provider warning.',
-      ],
-      recommendedNextActions: ['Send the same bounded item with dryRun=false after runtime credentials and migration are validated.'],
-      sources,
+      summary: `Dry-run only: validated ${input.item.pod} / ${input.item.workstream} without provider or AI execution.`,
+      findings: ['Work item contract validated.', 'No external provider call executed.', 'No production write authority was granted.'],
+      recommendedNextActions: ['Review this item before any live execution.'],
+      sources: [],
       model: null,
-      providerUsed: provider.providerUsed,
+      providerUsed: null,
       dryRun: true,
     }
   }
 
-  const agent = await runAnthropicWorkV40_7b({
-    item: input.item,
-    artifacts: sources,
-    providerWarning: provider.warning,
-  })
-
+  const external = await providerResearchForWorkItemV40_7b(input.item)
+  const github = await githubIssueArtifacts(input.item)
+  const artifacts = [...external.artifacts, ...github].slice(0, 8)
+  const synthesized = await synthesizeWithAnthropic(input.item, artifacts, external.warning)
   return {
-    summary: agent.output.summary,
-    findings: agent.output.findings,
-    recommendedNextActions: agent.output.recommendedNextActions,
-    sources,
-    model: agent.model,
-    providerUsed: provider.providerUsed,
+    ...synthesized,
+    sources: artifacts,
+    providerUsed: external.providerUsed,
     dryRun: false,
   }
 }
