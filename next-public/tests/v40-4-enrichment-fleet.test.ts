@@ -76,6 +76,17 @@ describe('V40.4 50-agent enrichment fleet', () => {
     expect(migration).toContain('owner_id uuid not null')
   })
 
+  it('retries transient enrichment failures and preserves existing skills', () => {
+    const runtime = read('lib/fleet/enrichment-runtime-v40-4.ts')
+    expect(runtime).toContain("status: 'queued'")
+    expect(runtime).toContain('backoffMinutes')
+    expect(runtime).toContain('preserveExistingSkills')
+    expect(runtime).toContain('beforeSkills')
+    expect(runtime).toContain('queryLimit: 2')
+    expect(runtime).toContain('seedCandidateEnrichmentTasksV40_4(sb, 6)')
+    expect(runtime).toContain('claimCandidateEnrichmentTasksV40_4(sb, 4')
+  })
+
   it('keeps discovery and enrichment schedulers separately authenticated', () => {
     const config = JSON.parse(read('vercel.json'))
     expect(config.crons).toEqual([
