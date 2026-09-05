@@ -27,7 +27,6 @@ export const runFleetImprovementWorkV40_7b = sourcingOsInngest.createFunction(
   {
     id: 'v40-7b-governed-fleet-work-item',
     name: 'V40.7b governed fleet work item',
-    triggers: { event: 'sourcingos/fleet.v40_7.work.requested' },
     concurrency: { limit: 4 },
     retries: 2,
     timeouts: { finish: '12m' },
@@ -45,6 +44,7 @@ export const runFleetImprovementWorkV40_7b = sourcingOsInngest.createFunction(
       })
     },
   },
+  { event: 'sourcingos/fleet.v40_7.work.requested' },
   async ({ event, step, runId }) => {
     const data = event.data as FleetRuntimeEventDataV40_7b
     const item = data?.item
