@@ -39,6 +39,18 @@ function clean(value: unknown, max = 1000): string {
   return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : ''
 }
 
+/**
+ * Resume/CV documents are information-dense and frequently contain personal
+ * contact values. Unattended research may use the professional evidence but
+ * must not silently persist email or phone values into Candidate Graph storage.
+ */
+export function scrubUnattendedContactValuesV40_4(text: string): string {
+  return String(text || '')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+    .replace(/(?<!\d)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]\d{4}(?!\d)/g, '[redacted-phone]')
+    .replace(/(?:tel|phone|mobile)\s*:\s*\+?[\d()\s.-]{7,}/gi, '[redacted-phone]')
+}
+
 function normalizeUrl(raw: string): string | null {
   try {
     const url = new URL(raw.replace(/[),.;]+$/, ''))
@@ -264,12 +276,13 @@ export async function fetchParseAttachResumeLeadV40_4(input: {
     return { ok: false, attached: false, error: error instanceof Error ? error.message : 'Public document fetch failed.' }
   }
 
-  if (pageText.trim().length < 200) {
+  const safeText = scrubUnattendedContactValuesV40_4(pageText)
+  if (safeText.trim().length < 200) {
     await input.sb.from('public_document_leads').update({ status: 'fetch_failed', last_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', lead.id).eq('owner_id', input.ownerId)
     return { ok: false, attached: false, error: 'Document did not yield enough public text to parse.' }
   }
 
-  const identity = resumeIdentityConfidenceV40_4({ text: pageText, candidate, profiles: profiles || [] })
+  const identity = resumeIdentityConfidenceV40_4({ text: safeText, candidate, profiles: profiles || [] })
   if (identity.confidence !== 'high') {
     await input.sb.from('public_document_leads').update({
       status: 'identity_review', identity_confidence: identity.confidence, identity_reason: identity.reason,
@@ -284,32 +297,35 @@ export async function fetchParseAttachResumeLeadV40_4(input: {
   const { data: existing } = await input.sb.from('source_profiles').select('id').eq('owner_id', input.ownerId).eq('source', 'resume_xray').eq('source_profile_id', sourceProfileId).maybeSingle()
   if (existing?.id) {
     sourceProfileUuid = existing.id
-    await input.sb.from('source_profiles').update({ candidate_id: candidate.id, profile_url: lead.url, display_name: candidate.canonical_name, raw_text: pageText.slice(0, 50_000), status: 'confirmed', last_seen_at: observedAt, updated_at: observedAt, acquisition_basis: 'public_web', usage_scope: ['search','enrichment','candidate_profile'], search_allowed: true, raw_export_allowed: false, retention_until: new Date(Date.now() + 90 * 86400_000).toISOString(), refresh_after: new Date(Date.now() + 30 * 86400_000).toISOString(), rights_metadata: { publicAccess: true, noAuthBypass: true, sourceUrl: lead.url, rawRetentionDays: 90 } }).eq('id', existing.id).eq('owner_id', input.ownerId)
+    await input.sb.from('source_profiles').update({ candidate_id: candidate.id, profile_url: lead.url, display_name: candidate.canonical_name, raw_text: safeText.slice(0, 50_000), status: 'confirmed', last_seen_at: observedAt, updated_at: observedAt, acquisition_basis: 'public_web', usage_scope: ['search','enrichment','candidate_profile'], search_allowed: true, raw_export_allowed: false, retention_until: new Date(Date.now() + 90 * 86400_000).toISOString(), refresh_after: new Date(Date.now() + 30 * 86400_000).toISOString(), rights_metadata: { publicAccess: true, noAuthBypass: true, sourceUrl: lead.url, rawRetentionDays: 90, contactValuesRedacted: true } }).eq('id', existing.id).eq('owner_id', input.ownerId)
   } else {
     sourceProfileUuid = randomUUID()
     const { error } = await input.sb.from('source_profiles').insert({
       id: sourceProfileUuid, owner_id: input.ownerId, candidate_id: candidate.id, source: 'resume_xray', source_profile_id: sourceProfileId,
       profile_url: lead.url, display_name: candidate.canonical_name, headline: 'Public Resume/CV', location: candidate.location || null,
-      organization: candidate.current_company || null, raw_text: pageText.slice(0, 50_000), raw: { type: 'public_resume_cv', sourceUrl: lead.url, contactValuesCaptured: false },
+      organization: candidate.current_company || null, raw_text: safeText.slice(0, 50_000), raw: { type: 'public_resume_cv', sourceUrl: lead.url, contactValuesCaptured: false, contactValuesRedacted: true },
       status: 'confirmed', match_score: 0, match_reasons: ['Exact name plus independent public identity anchor(s) matched'],
       last_seen_at: observedAt, created_at: observedAt, updated_at: observedAt, acquisition_basis: 'public_web',
       usage_scope: ['search','enrichment','candidate_profile'], search_allowed: true, raw_export_allowed: false,
       retention_until: new Date(Date.now() + 90 * 86400_000).toISOString(), refresh_after: new Date(Date.now() + 30 * 86400_000).toISOString(),
-      rights_metadata: { publicAccess: true, noAuthBypass: true, sourceUrl: lead.url, rawRetentionDays: 90 },
+      rights_metadata: { publicAccess: true, noAuthBypass: true, sourceUrl: lead.url, rawRetentionDays: 90, contactValuesRedacted: true },
     })
     if (error) return { ok: false, attached: false, error: `Resume source profile write failed: ${error.message}` }
   }
 
   const artifact = buildCandidateArtifactV36_10({
-    text: pageText, candidateId: candidate.id, sourceProfileId: sourceProfileUuid || undefined,
+    text: safeText, candidateId: candidate.id, sourceProfileId: sourceProfileUuid || undefined,
     artifactType: 'resume', dataOrigin: 'public_web', fileName: new URL(lead.url).pathname.split('/').filter(Boolean).at(-1) || 'public-resume',
     mimeType: lead.url.toLowerCase().includes('.pdf') ? 'application/pdf' : 'text/html', sourceUrl: lead.url, observedAt,
-    metadata: { discovery: 'resume_xray_v40_4', identityConfidence: identity.confidence, identityReason: identity.reason, publicAccess: true, contactValuesCaptured: false },
+    metadata: { discovery: 'resume_xray_v40_4', identityConfidence: identity.confidence, identityReason: identity.reason, publicAccess: true, contactValuesCaptured: false, contactValuesRedacted: true },
   })
+  // Defense in depth: the shared recruiter-upload artifact helper extracts
+  // email anchors. Unattended public-web research explicitly discards them.
+  artifact.identityAnchors.observedEmails = []
   const artifactResult = await persistCandidateArtifactV36_10({ sb: input.sb, ownerId: input.ownerId, artifact })
   if (!artifactResult.ok) return { ok: false, attached: false, error: artifactResult.warning || 'Artifact write failed.' }
 
-  const facts = parseResumeFactsV40_4(pageText)
+  const facts = parseResumeFactsV40_4(safeText)
   let factsWritten = 0
   for (const fact of facts) {
     const fingerprint = factsFingerprint(candidate.id, lead.normalized_url, fact)
@@ -332,9 +348,9 @@ export async function fetchParseAttachResumeLeadV40_4(input: {
 
   const resumeSkills = facts.filter(fact => fact.factType === 'skill').map(fact => clean(fact.value.name, 80)).filter(Boolean)
   if (resumeSkills.length) {
-    const currentSkills = Array.isArray((candidate as any).skills) ? (candidate as any).skills : []
-    const merged = Array.from(new Set([...currentSkills, ...resumeSkills].map(value => clean(value, 80)).filter(Boolean))).slice(0, 200)
-    await input.sb.from('candidates').update({ skills: merged, last_refreshed_at: observedAt, updated_at: observedAt }).eq('id', candidate.id).eq('owner_id', input.ownerId)
+    // The enrichment runtime restores the pre-existing skill union after this
+    // additive update, preventing resume parsing from erasing prior evidence.
+    await input.sb.from('candidates').update({ skills: resumeSkills.slice(0, 200), last_refreshed_at: observedAt, updated_at: observedAt }).eq('id', candidate.id).eq('owner_id', input.ownerId)
   } else {
     await input.sb.from('candidates').update({ last_refreshed_at: observedAt, updated_at: observedAt }).eq('id', candidate.id).eq('owner_id', input.ownerId)
   }
