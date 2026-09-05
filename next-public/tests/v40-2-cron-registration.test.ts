@@ -19,6 +19,13 @@ describe('V40.2 autonomous fleet cron registration', () => {
     ])
   })
 
+  it('lets platform cron requests bypass public canonical-host redirects', () => {
+    const proxy = read('proxy.ts')
+    expect(proxy).toContain('isPlatformCronPath(pathname)')
+    expect(proxy).toContain("clean === '/api/cron' || clean.startsWith('/api/cron/')")
+    expect(proxy).toContain('request.nextUrl.host !== canonicalHost && !isPlatformCronPath(pathname)')
+  })
+
   it('keeps the fleet cron behind explicit cron authentication', () => {
     const route = read('app/api/cron/fleet/route.ts')
     expect(route).toContain('authorizeCronRequest(req)')
