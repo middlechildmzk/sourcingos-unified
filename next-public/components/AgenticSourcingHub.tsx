@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { AgenticSourcingChatV36_15 } from '@/components/AgenticSourcingChatV36_15'
+import { AgenticSourcingChatV36_16b } from '@/components/AgenticSourcingChatV36_16b'
 import { AgentProviderStatusV36_16 } from '@/components/AgentProviderStatusV36_16'
 import { roleMetrics } from '@/lib/role-workspace'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
@@ -30,12 +30,12 @@ export function AgenticSourcingHub() {
     </section>
 
     <AgentProviderStatusV36_16 />
-    <AgenticSourcingChatV36_15 />
+    <AgenticSourcingChatV36_16b />
 
     <div className="product-summary-grid">
       <div className="product-stat"><small>Active roles</small><b>{activeRoles.length}</b><span>Available to source</span></div>
       <div className="product-stat"><small>Agentic loop</small><b>5</b><span>Brief → Strategy → Slate → Review → Learned</span></div>
-      <div className="product-stat"><small>Auto-execution</small><b>Read</b><span>People search; paid reads remain approval gated</span></div>
+      <div className="product-stat"><small>Auto-execution</small><b>Read</b><span>People/web search; paid reads remain approval gated</span></div>
       <div className="product-stat"><small>Hiring actions</small><b>Human</b><span>No autonomous outreach, merge, or ATS write</span></div>
     </div>
 
@@ -54,7 +54,7 @@ export function AgenticSourcingHub() {
       <div className="grid three">
         <div className="product-row"><div className="product-row-main"><div className="product-row-title">Conversational search planning</div><div className="product-row-meta">The agent translates recruiter language into explicit Role/Search Brain criteria before the sourcing stack executes.</div></div><span className="status-pill success">runs</span></div>
         <div className="product-row"><div className="product-row-main"><div className="product-row-title">Executable professional sources</div><div className="product-row-meta">The chat calls the same universal people-search orchestration as People Search, including provider telemetry and evidence boundaries.</div></div><span className="status-pill success">runs</span></div>
-        <div className="product-row"><div className="product-row-main"><div className="product-row-title">Search memory + refinement</div><div className="product-row-meta">Follow-up turns retain prior criteria so recruiters can narrow, expand, or redirect the search instead of starting over.</div></div><span className="status-pill">session</span></div>
+        <div className="product-row"><div className="product-row-main"><div className="product-row-title">Durable contact enrichment</div><div className="product-row-meta">After recruiter approval, synchronous sources run first and still-missing channels can continue through webhook-backed providers without blocking the conversation.</div></div><span className="status-pill">approval</span></div>
       </div>
     </section>
 

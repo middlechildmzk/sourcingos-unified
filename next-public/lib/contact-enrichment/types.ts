@@ -67,6 +67,9 @@ export type ContactEnrichmentProvider =
   | 'hunter'
   | 'apollo'
   | 'lusha'
+  | 'wiza'
+  | 'fullenrich'
+  | 'coldiq'
   | 'none'
 
 export interface ProviderStatus {
