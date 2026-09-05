@@ -27,7 +27,12 @@ jobs:
           lines = []
           for line in block.splitlines():
               lines.append(line[10:] if line.startswith('          ') else line)
-          Path('/tmp/v40-7d-apply.sh').write_text('\n'.join(lines) + '\n')
+          script = '\n'.join(lines) + '\n'
+          script = script.replace(
+              'text, count = pattern.subn(replacement, text, count=1)',
+              'text, count = pattern.subn(lambda _match: replacement, text, count=1)',
+          )
+          Path('/tmp/v40-7d-apply.sh').write_text(script)
           PY
           bash /tmp/v40-7d-apply.sh
       - name: Remove integration scaffolding and verify exact scope
