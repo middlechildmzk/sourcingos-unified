@@ -8,14 +8,15 @@ function read(relative: string) {
   return fs.readFileSync(path.join(root, relative), 'utf8')
 }
 
-describe('V40.2 autonomous fleet cron registration', () => {
-  it('targets the canonical trailing-slash route used by this Next app', () => {
+describe('V40 autonomous fleet cron registration', () => {
+  it('targets canonical trailing-slash routes used by this Next app', () => {
     const config = JSON.parse(read('vercel.json')) as { crons?: Array<{ path: string; schedule: string }> }
     const nextConfig = read('next.config.mjs')
 
     expect(nextConfig).toContain('trailingSlash: true')
     expect(config.crons).toEqual([
-      { path: '/api/cron/fleet/', schedule: '*/5 * * * *' },
+      { path: '/api/cron/fleet/', schedule: '*/30 * * * *' },
+      { path: '/api/cron/enrichment/', schedule: '*/15 * * * *' },
     ])
   })
 
@@ -26,10 +27,14 @@ describe('V40.2 autonomous fleet cron registration', () => {
     expect(proxy).toContain('request.nextUrl.host !== canonicalHost && !isPlatformCronPath(pathname)')
   })
 
-  it('keeps the fleet cron behind explicit cron authentication', () => {
-    const route = read('app/api/cron/fleet/route.ts')
-    expect(route).toContain('authorizeCronRequest(req)')
-    expect(route).toContain("auth !== 'authorized'")
-    expect(route).toContain('claimDueFleetLanesV40(sb, 4)')
+  it('keeps both fleet crons behind explicit cron authentication', () => {
+    const discovery = read('app/api/cron/fleet/route.ts')
+    const enrichment = read('app/api/cron/enrichment/route.ts')
+    for (const route of [discovery, enrichment]) {
+      expect(route).toContain('authorizeCronRequest(req)')
+      expect(route).toContain("auth !== 'authorized'")
+    }
+    expect(discovery).toContain('claimDueFleetLanesV40(sb, 4)')
+    expect(enrichment).toContain('runEnrichmentTickV40_4(sb)')
   })
 })

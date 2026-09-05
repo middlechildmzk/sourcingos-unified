@@ -32,14 +32,19 @@ describe('AutoSource V22 contract', () => {
     expect(cronAuth).not.toContain('searchParams')
   })
 
-  it('schedules only the hardened V40.2 fleet endpoint for unattended discovery', () => {
+  it('schedules hardened discovery and enrichment endpoints, never legacy AutoSource cron', () => {
     const fleetCron = read('app/api/cron/fleet/route.ts')
+    const enrichmentCron = read('app/api/cron/enrichment/route.ts')
     expect(vercel).toContain('/api/cron/fleet/')
-    expect(vercel).toContain('*/5 * * * *')
+    expect(vercel).toContain('*/30 * * * *')
+    expect(vercel).toContain('/api/cron/enrichment/')
+    expect(vercel).toContain('*/15 * * * *')
     expect(vercel).not.toContain('/api/cron/autosource')
     expect(fleetCron).toContain('authorizeCronRequest')
     expect(fleetCron).toContain('claimDueFleetLanesV40')
     expect(fleetCron).toContain('runFleetLaneV40')
+    expect(enrichmentCron).toContain('authorizeCronRequest')
+    expect(enrichmentCron).toContain('runEnrichmentTickV40_4')
   })
 
   it('keeps every automated discovery in recruiter review and forbids automated Candidate Graph promotion', () => {
