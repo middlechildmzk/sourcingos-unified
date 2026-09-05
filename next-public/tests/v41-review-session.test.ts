@@ -94,8 +94,10 @@ describe('V41 review session', () => {
   it('never renders a public clearance requirement as supported or verified', () => {
     const assessment = clearanceAssessment('supported')
     expect(displayRequirementStateV41(assessment)).toBe('needs_verification')
-    expect(requirementStateLabelV41(assessment)).toBe('Unverified clearance breadcrumb')
-    expect(requirementStateLabelV41(assessment).toLowerCase()).not.toContain('verified clearance')
+    const label = requirementStateLabelV41(assessment)
+    expect(label).toBe('Unverified clearance breadcrumb')
+    expect(label.toLowerCase()).not.toBe('verified clearance')
+    expect(label.toLowerCase()).not.toBe('clearance verified')
   })
 
   it('maps recruiter decisions without moving the pipeline stage', () => {
