@@ -136,7 +136,7 @@ export function CandidateEnrichmentV40_4({ candidateId }: { candidateId: string 
             <div className="product-row-meta">{valueText(fact.value) || 'Structured observation'} · source: {fact.source}</div>
           </div>
           {fact.source_url && <a className="btn ghost" href={fact.source_url} target="_blank" rel="noreferrer noopener">Evidence</a>}
-        </div>)))}
+        </div>))}
       </div>
     </div>}
 
