@@ -3,7 +3,11 @@
   "crons": [
     {
       "path": "/api/cron/fleet/",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/enrichment/",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
