@@ -8,6 +8,7 @@ export type KnownPersonLookupInputV41_1 = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const NAME_TOKEN_RE = /^[\p{L}][\p{L}'’.\-]*$/u
+const NAME_CONTEXT_TOKENS = new Set(['at', 'from', 'in', 'near', 'with', 'for', 'of'])
 
 export function classifyKnownPersonLookupV41_1(value: string): KnownPersonLookupInputV41_1 {
   const trimmed = String(value || '').trim()
@@ -26,7 +27,8 @@ export function classifyKnownPersonLookupV41_1(value: string): KnownPersonLookup
   }
 
   const tokens = trimmed.split(/\s+/).filter(Boolean)
-  if (tokens.length >= 2 && tokens.length <= 4 && tokens.every(token => NAME_TOKEN_RE.test(token))) {
+  const hasContextMarker = tokens.some(token => NAME_CONTEXT_TOKENS.has(token.toLowerCase()))
+  if (!hasContextMarker && tokens.length >= 2 && tokens.length <= 4 && tokens.every(token => NAME_TOKEN_RE.test(token))) {
     return { kind: 'name', normalized: trimmed.replace(/\s+/g, ' '), exact: false }
   }
 
