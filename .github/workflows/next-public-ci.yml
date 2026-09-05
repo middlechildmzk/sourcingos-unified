@@ -87,7 +87,7 @@ jobs:
         run: npm run build
 
   database-contract:
-    name: Atomic role migration smoke test
+    name: Database migration smoke tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -121,3 +121,11 @@ jobs:
           --username postgres
           --dbname postgres
           --file next-public/tests/sql/role-workspace-atomic-smoke.sql
+
+      - name: Execute V40.7b fleet idempotency contract
+        run: >-
+          psql
+          --host localhost
+          --username postgres
+          --dbname postgres
+          --file next-public/tests/sql/fleet-improvement-runtime-v40-7b-smoke.sql
