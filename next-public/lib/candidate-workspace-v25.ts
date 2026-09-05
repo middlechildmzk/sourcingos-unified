@@ -28,18 +28,43 @@ function relationCandidateName(value: unknown) {
     : ''
 }
 
-function candidateEntityKind(profiles: any[]): EntityKind {
+const EXPLICIT_ENTITY_KINDS_V41 = new Set<EntityKind>(['person', 'organization', 'artifact', 'publication', 'search_lane'])
+
+function explicitStoredEntityKindV41(value: unknown): EntityKind | undefined {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() as EntityKind : undefined
+  return normalized && EXPLICIT_ENTITY_KINDS_V41.has(normalized) ? normalized : undefined
+}
+
+/**
+ * Stored candidates have already crossed the discovery-time entity safety gate.
+ * Older rows can legitimately predate persisted entity_kind, so a stored graph
+ * row with at least one profile is treated leniently as a person only when no
+ * explicit non-person classification exists. Discovery-time gates stay strict.
+ */
+export function candidateWorkspaceEntityKindV41(profiles: any[]): EntityKind {
+  const explicitKinds = profiles
+    .map(profile => explicitStoredEntityKindV41(profile?.entity_kind))
+    .filter(Boolean) as EntityKind[]
+
+  // An explicit stored non-person classification is authoritative on this read
+  // path and must never be converted into a person merely because older raw
+  // payloads do not carry enough classifier context.
+  for (const kind of ['organization', 'artifact', 'publication', 'search_lane'] as const) {
+    if (explicitKinds.includes(kind)) return kind
+  }
+  if (explicitKinds.includes('person')) return 'person'
+
   const kinds = profiles.map(profile => resolveStoredEntityKind({
     source: profile.source,
     raw: profile.raw,
     entityKind: profile.entity_kind,
   }))
-  if (kinds.includes('person')) return 'person'
   if (kinds.includes('organization')) return 'organization'
   if (kinds.includes('artifact')) return 'artifact'
   if (kinds.includes('publication')) return 'publication'
   if (kinds.includes('search_lane')) return 'search_lane'
-  return 'unknown'
+  if (kinds.includes('person')) return 'person'
+  return profiles.length > 0 ? 'person' : 'unknown'
 }
 
 export async function getCandidateWorkspace(ownerId: string, query: CandidateWorkspaceQuery = {}) {
@@ -155,7 +180,7 @@ export async function getCandidateWorkspace(ownerId: string, query: CandidateWor
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       lastRefreshedAt: row.last_refreshed_at || undefined,
-      entityKind: candidateEntityKind(candidateProfiles),
+      entityKind: candidateWorkspaceEntityKindV41(candidateProfiles),
       sourceProfileIds: candidateProfiles.map(item => item.id),
       evidenceItemIds: candidateEvidence.map(item => item.id),
       contactSignalIds: (contactMap.get(row.id) || []).map(item => item.id),
