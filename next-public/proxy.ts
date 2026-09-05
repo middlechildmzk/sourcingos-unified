@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveServerAuthMode } from '@/lib/supabase/config'
+import { requestFirewallDecisionV41_2 } from '@/lib/request-firewall-v41-2'
 
 const CANONICAL_SITE_URL = 'https://www.getsourcingos.com'
 
@@ -28,6 +29,18 @@ function loginRedirect(request: NextRequest) {
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  // App-layer firewall: reject request methods SourcingOS never uses and
+  // common secret/repository probe paths before auth, redirects, or route code.
+  // This deliberately leaves /api/inngest (GET/POST/PUT), Vercel cron GETs,
+  // and /.well-known/* untouched.
+  const firewall = requestFirewallDecisionV41_2({ method: request.method, pathname })
+  if (firewall.action === 'deny') {
+    const response = new NextResponse(null, { status: firewall.status })
+    response.headers.set('cache-control', 'no-store')
+    return response
+  }
+
   const canonicalHost = new URL(CANONICAL_SITE_URL).host
   // Vercel Cron invokes the production deployment host, not necessarily the
   // public canonical domain. Redirecting a cron request can strip the Bearer
