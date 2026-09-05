@@ -1,0 +1,231 @@
+name: V41 PR1 integration handoff
+on:
+  push:
+    branches:
+      - v41-pr1-current-main-integration
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: v41-pr1-current-main-integration
+          fetch-depth: 0
+      - name: Apply Claude PR1 changes exactly
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one replacement target, found {count}')
+              p.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'next-public/components/ReviewSessionV41.tsx',
+              "  undoReviewDecisionV41,\n  validReviewSessionSnapshotV41,",
+              "  undoReviewDecisionV41,\n  reviewShortcutBlockedByModifierV41,\n  validReviewSessionSnapshotV41,",
+          )
+          replace_once(
+              'next-public/components/ReviewSessionV41.tsx',
+              "      if (isTypingTarget(event.target)) return\n      const key = event.key.toLowerCase()",
+              "      if (isTypingTarget(event.target)) return\n      if (reviewShortcutBlockedByModifierV41(event)) return\n      const key = event.key.toLowerCase()",
+          )
+
+          replace_once(
+              'next-public/components/TalentWorkspaceV37.tsx',
+              "import { EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT, normalizeCandidateWorkspaceSnapshot, type CandidateWorkspaceSnapshot } from '@/lib/candidate-workspace-normalization'",
+              "import { EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT, normalizeCandidateWorkspaceSnapshot, type CandidateWorkspaceSnapshot } from '@/lib/candidate-workspace-normalization'\nimport { talentListVisibilityV41 } from '@/lib/talent-list-visibility-v41'",
+          )
+          replace_once(
+              'next-public/components/TalentWorkspaceV37.tsx',
+              "  const people = useMemo(() => snapshot.candidates.filter(candidate => candidate.entityKind === 'person'), [snapshot.candidates])\n  const selected = people.find(candidate => candidate.id === selectedId) || people[0] || null",
+              "  const people = useMemo(() => snapshot.candidates.filter(candidate => candidate.entityKind === 'person'), [snapshot.candidates])\n  const visibility = useMemo(() => talentListVisibilityV41(snapshot.candidates, { searchApplied: Boolean(applied) }), [snapshot.candidates, applied])\n  const withheldOnPage = visibility.withheldCount\n  const selected = people.find(candidate => candidate.id === selectedId) || people[0] || null",
+          )
+          replace_once(
+              'next-public/components/TalentWorkspaceV37.tsx',
+              "      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return\n      if (!people.length) return",
+              "      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return\n      if (target?.isContentEditable) return\n      // Cmd/Ctrl/Alt chords belong to the browser and screen readers, not to\n      // list navigation. Ctrl+K must not silently move the recruiter's selection.\n      if (event.metaKey || event.ctrlKey || event.altKey) return\n      if (!people.length) return",
+          )
+          replace_once(
+              'next-public/components/TalentWorkspaceV37.tsx',
+              "\n        {loading && <div className=\"talent-v37-skeletons\">",
+              "\n        {!loading && people.length > 0 && withheldOnPage > 0 && <p className=\"talent-v37-muted\">{withheldOnPage.toLocaleString()} more record{withheldOnPage === 1 ? '' : 's'} on this page {withheldOnPage === 1 ? 'is' : 'are'} not classified as a person and {withheldOnPage === 1 ? 'is' : 'are'} not listed here. <Link href=\"/app/identity-review\">Identity review →</Link></p>}\n\n        {loading && <div className=\"talent-v37-skeletons\">",
+          )
+          replace_once(
+              'next-public/components/TalentWorkspaceV37.tsx',
+              "        </button>)}{!people.length && <div className=\"talent-v37-empty\"><h3>{applied ? 'No canonical people matched.' : 'No people yet.'}</h3><p>{applied ? 'Try a broader name, skill, company, or professional profile URL.' : 'Save discoveries from Search or import authorized data from Sources.'}</p><Link href=\"/app/search\">Search talent →</Link></div>}</div>}",
+              "        </button>)}{!people.length && (withheldOnPage > 0\n          ? <div className=\"talent-v37-empty\"><h3>No person records on this page.</h3><p>{withheldOnPage.toLocaleString()} record{withheldOnPage === 1 ? '' : 's'} on this page {withheldOnPage === 1 ? 'is' : 'are'} stored in the Candidate Graph but {withheldOnPage === 1 ? 'is' : 'are'} not classified as a person, so {withheldOnPage === 1 ? 'it is' : 'they are'} not shown in Talent. Personhood is never inferred. Send {withheldOnPage === 1 ? 'it' : 'them'} to Identity review to classify.</p><Link href=\"/app/identity-review\">Identity review →</Link></div>\n          : <div className=\"talent-v37-empty\"><h3>{applied ? 'No canonical people matched.' : 'No people yet.'}</h3><p>{applied ? 'Try a broader name, skill, company, or professional profile URL.' : 'Save discoveries from Search or import authorized data from Sources.'}</p><Link href=\"/app/search\">Search talent →</Link></div>)}</div>}",
+          )
+
+          session = Path('next-public/lib/review/session-v41.ts')
+          text = session.read_text()
+          addition = '''\n\n/**
+           * Review-session shortcuts are single-key accelerators (spec §6: "No modifier-key
+           * chords beyond Shift. Nothing that collides with browser or screen-reader
+           * defaults."). A held Meta/Ctrl/Alt means the recruiter is driving the browser or
+           * an assistive technology, so the session must not claim the keystroke.
+           *
+           * Without this guard, Cmd+F records an evidence-fit decision and advances,
+           * Cmd+X records not-a-fit, and Cmd+U fires Undo — all silently, mid-pass.
+           * Shift stays permitted because Shift+decision opens the note field.
+           */
+          export function reviewShortcutBlockedByModifierV41(
+            event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey'>,
+          ): boolean {
+            return event.metaKey || event.ctrlKey || event.altKey
+          }'''.replace('\n          ', '\n').rstrip()
+          if 'export function reviewShortcutBlockedByModifierV41(' in text:
+              raise SystemExit('session-v41 already contains modifier guard')
+          session.write_text(text.rstrip() + addition + '\n')
+
+          Path('next-public/lib/talent-list-visibility-v41.ts').write_text('''import type { EntityKind } from '@/lib/source-types'
+
+          export type TalentListEmptyReason = 'no_records' | 'no_search_match' | 'all_withheld'
+
+          export type TalentListVisibility = {
+            /** Rows on the current page that resolved to a person and are rendered. */
+            personCount: number
+            /**
+             * Rows the Candidate Graph returned for this page that did not resolve to a
+             * person. Talent lists people only, but withholding a row must be disclosed:
+             * a page of nothing but non-person rows previously rendered "No people yet."
+             * while the header metric counted them, which reads to a recruiter as data
+             * loss rather than as a classification outcome.
+             */
+            withheldCount: number
+            /** True when the page rendered nothing but the graph did return rows. */
+            hasWithheldOnly: boolean
+            emptyReason: TalentListEmptyReason | null
+          }
+
+          /**
+           * Personhood is never inferred here. This resolver does not reclassify anything;
+           * it only decides what the recruiter is told about rows Talent will not render.
+           */
+          export function talentListVisibilityV41(
+            candidates: ReadonlyArray<{ entityKind: EntityKind }>,
+            options: { searchApplied?: boolean } = {},
+          ): TalentListVisibility {
+            const personCount = candidates.filter(candidate => candidate.entityKind === 'person').length
+            const withheldCount = candidates.length - personCount
+            const hasWithheldOnly = personCount === 0 && withheldCount > 0
+
+            let emptyReason: TalentListEmptyReason | null = null
+            if (personCount === 0) {
+              if (withheldCount > 0) emptyReason = 'all_withheld'
+              else if (options.searchApplied) emptyReason = 'no_search_match'
+              else emptyReason = 'no_records'
+            }
+
+            return { personCount, withheldCount, hasWithheldOnly, emptyReason }
+          }
+          '''.replace('\n          ', '\n').lstrip())
+
+          Path('next-public/tests/v41-recruiter-workflow-cleanup.test.ts').write_text('''import { describe, expect, it } from 'vitest'
+          import { reviewShortcutBlockedByModifierV41 } from '@/lib/review/session-v41'
+          import { talentListVisibilityV41 } from '@/lib/talent-list-visibility-v41'
+
+          type ModifierState = Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey'>
+
+          function modifiers(overrides: Partial<ModifierState> = {}): ModifierState {
+            return { metaKey: false, ctrlKey: false, altKey: false, ...overrides }
+          }
+
+          describe('V41 review-session shortcut modifier guard', () => {
+            it('allows an unmodified decision key', () => {
+              expect(reviewShortcutBlockedByModifierV41(modifiers())).toBe(false)
+            })
+
+            // The defect this proves: with no guard, Cmd+F was intercepted by the review
+            // handler, which called preventDefault, recorded an evidence-fit decision and
+            // advanced the session. A browser find must never mutate a recruiter decision.
+            it('blocks Meta chords so Cmd+F cannot record a decision', () => {
+              expect(reviewShortcutBlockedByModifierV41(modifiers({ metaKey: true }))).toBe(true)
+            })
+
+            it('blocks Ctrl chords so Ctrl+X cannot record not-a-fit', () => {
+              expect(reviewShortcutBlockedByModifierV41(modifiers({ ctrlKey: true }))).toBe(true)
+            })
+
+            it('blocks Alt chords used by screen readers', () => {
+              expect(reviewShortcutBlockedByModifierV41(modifiers({ altKey: true }))).toBe(true)
+            })
+
+            it('does not block Shift, which opens the note field before committing', () => {
+              // Shift is absent from the guard's input by design; a Shift-only keystroke
+              // reaches the handler with every blocking modifier false.
+              expect(reviewShortcutBlockedByModifierV41(modifiers())).toBe(false)
+            })
+          })
+
+          describe('V41 Talent list withheld-row disclosure', () => {
+            const person = { entityKind: 'person' as const }
+            const org = { entityKind: 'organization' as const }
+            const unknown = { entityKind: 'unknown' as const }
+
+            it('reports a clean page of people with nothing withheld', () => {
+              const result = talentListVisibilityV41([person, person, person])
+              expect(result).toMatchObject({ personCount: 3, withheldCount: 0, hasWithheldOnly: false, emptyReason: null })
+            })
+
+            it('counts non-person rows as withheld rather than dropping them silently', () => {
+              const result = talentListVisibilityV41([person, org, unknown])
+              expect(result.personCount).toBe(1)
+              expect(result.withheldCount).toBe(2)
+              expect(result.emptyReason).toBeNull()
+            })
+
+            // The 160-rows regression: the graph returned rows, the header metric counted
+            // them, and the list said "No people yet." That empty state was wrong — the
+            // records exist, they just did not classify as people.
+            it('distinguishes an all-withheld page from an empty library', () => {
+              const result = talentListVisibilityV41([org, unknown, unknown])
+              expect(result.hasWithheldOnly).toBe(true)
+              expect(result.emptyReason).toBe('all_withheld')
+            })
+
+            it('still reports a genuinely empty library as no records', () => {
+              expect(talentListVisibilityV41([]).emptyReason).toBe('no_records')
+            })
+
+            it('reports an unmatched search distinctly from an empty library', () => {
+              expect(talentListVisibilityV41([], { searchApplied: true }).emptyReason).toBe('no_search_match')
+            })
+
+            it('prefers the withheld explanation over the search-miss explanation', () => {
+              // A search that returned only non-person rows is not "no match found".
+              expect(talentListVisibilityV41([org], { searchApplied: true }).emptyReason).toBe('all_withheld')
+            })
+
+            it('never reclassifies a withheld row as a person', () => {
+              const result = talentListVisibilityV41([unknown, unknown])
+              expect(result.personCount).toBe(0)
+            })
+          })
+          '''.replace('\n          ', '\n').lstrip())
+          PY
+      - name: Remove one-time workflow and verify handoff scope
+        run: |
+          rm .github/workflows/v41-pr1-integrate.yml
+          git diff --check
+          git status --short
+          test "$(git status --short | wc -l | tr -d ' ')" = "5"
+      - name: Commit integrated PR1 handoff
+        run: |
+          git config user.name "SourcingOS Integration"
+          git config user.email "actions@users.noreply.github.com"
+          git add next-public/components/ReviewSessionV41.tsx \
+                  next-public/components/TalentWorkspaceV37.tsx \
+                  next-public/lib/review/session-v41.ts \
+                  next-public/lib/talent-list-visibility-v41.ts \
+                  next-public/tests/v41-recruiter-workflow-cleanup.test.ts
+          git commit -m "V41 PR1 recruiter workflow cleanup"
+          git push origin HEAD:v41-pr1-current-main-integration
