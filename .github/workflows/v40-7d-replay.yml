@@ -1,0 +1,55 @@
+name: V40.7d provider-agnostic synthesis replay
+on:
+  push:
+    branches: [v40-7d-provider-agnostic-fleet-synthesis-retry]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v40-7d-provider-agnostic-fleet-synthesis-retry
+          fetch-depth: 0
+      - name: Replay the already-reviewed integration script
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/v40-7d-provider-agnostic-synthesis.yml')
+          text = p.read_text()
+          start = text.index('      - name: Apply provider-agnostic fleet synthesis\n')
+          run = text.index('        run: |\n', start) + len('        run: |\n')
+          end = text.index('      - name: Remove one-time workflow and verify scope\n', run)
+          block = text[run:end]
+          lines = []
+          for line in block.splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/v40-7d-apply.sh').write_text('\n'.join(lines) + '\n')
+          PY
+          bash /tmp/v40-7d-apply.sh
+      - name: Remove integration scaffolding and verify exact scope
+        shell: bash
+        run: |
+          rm .github/workflows/v40-7d-provider-agnostic-synthesis.yml
+          rm .github/workflows/v40-7d-replay.yml
+          git diff --check
+          test "$(git diff 874e3a026d4445478fc94838ecd15430a13d864d --name-only | sort | tr '\n' ' ')" = "next-public/app/api/cron/fleet-activation/route.ts next-public/lib/fleet/runtime-v40-7b.ts next-public/lib/fleet/synthesis-provider-v40-7c.ts next-public/tests/v40-7d-provider-agnostic-synthesis.test.ts "
+      - name: Validate
+        working-directory: next-public
+        shell: bash
+        run: |
+          npm ci
+          npx vitest run tests/v40-7d-provider-agnostic-synthesis.test.ts tests/v40-7b-fleet-runtime.test.ts
+          npx tsc -p tsconfig.json --noEmit
+          npm run build
+      - name: Commit integration
+        shell: bash
+        run: |
+          git config user.name "SourcingOS Integration"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "V40.7d: make fleet synthesis provider-agnostic"
+          git push origin HEAD:v40-7d-provider-agnostic-fleet-synthesis-retry
