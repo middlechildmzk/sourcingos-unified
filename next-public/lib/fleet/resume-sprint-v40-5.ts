@@ -58,8 +58,21 @@ function hostname(raw: string) {
   try { return new URL(raw).hostname.toLowerCase() } catch { return '' }
 }
 
-function searchResultUrls(text: string): string[] {
-  const matches = String(text || '').match(/https?:\/\/[^\s<>"'\])}]+/gi) || []
+/**
+ * Bright Data's search_engine response can be plain text, Markdown, or a
+ * JSON-serialized payload. JSON strings commonly escape slashes (https:\/\/)
+ * and ampersands (\u0026). Normalize those transport escapes before URL
+ * extraction so legitimate public result URLs are not silently discarded.
+ * This does not decode redirect targets, enumerate private resources, or
+ * expand shortened links; it only recovers URLs already present in the public
+ * search response.
+ */
+export function resumeSprintSearchResultUrlsV40_5(text: string): string[] {
+  const normalizedText = String(text || '')
+    .replace(/\\u0026/gi, '&')
+    .replace(/\\u003d/gi, '=')
+    .replace(/\\\//g, '/')
+  const matches = normalizedText.match(/https?:\/\/[^\s<>"'\])}]+/gi) || []
   return Array.from(new Set(matches.map(normalizeUrl).filter((url): url is string => Boolean(url))))
 }
 
@@ -81,8 +94,16 @@ export function resumeSprintQueriesV40_5(candidate: ResumeSeed): string[] {
   const location = clean(candidate.location, 120)
   const context = [company, title, location].filter(Boolean).slice(0, 2).join(' ')
   return [
-    `${name} resume ${context} filetype:pdf`.trim(),
-    `${name} CV ${context} filetype:pdf`.trim(),
+    // Keep the first family deliberately broad and name-only. Imported
+    // connection rows frequently have stale or incomplete company/title data,
+    // so context should corroborate later rather than suppress discovery.
+    `${name} resume filetype:pdf`,
+    `${name} CV filetype:pdf`,
+    `${name} "curriculum vitae" filetype:pdf`,
+    `${name} resume`,
+    `${name} CV`,
+    `${name} resume ${context}`.trim(),
+    `${name} CV ${context}`.trim(),
     `${name} (resume OR CV) (site:drive.google.com OR site:docs.google.com)`,
     `${name} (resume OR CV) (site:github.io OR site:raw.githubusercontent.com OR site:github.com)`,
     `${name} (resume OR CV) (site:amazonaws.com OR site:dropbox.com OR site:dropboxusercontent.com)`,
@@ -108,16 +129,26 @@ async function discoverLeads(input: {
   let found = 0
   let persisted = 0
   let restricted = 0
+  let resultUrlsObserved = 0
+  let resumeLikeUrlsObserved = 0
+  const queryTelemetry: Array<{ queryIndex: number; resultChars: number; urlsObserved: number; resumeLikeUrls: number }> = []
 
-  for (const query of selected) {
+  for (let selectedIndex = 0; selectedIndex < selected.length; selectedIndex += 1) {
+    const query = selected[selectedIndex]
     try {
       const result = await searchWebWithBrightDataV36_16(query)
-      for (const raw of searchResultUrls(result.text)) {
+      const urls = resumeSprintSearchResultUrlsV40_5(result.text)
+      let queryResumeLike = 0
+      resultUrlsObserved += urls.length
+      for (const raw of urls) {
         const url = normalizeUrl(raw)
         if (!url) continue
         const host = hostname(url)
         const metadataOnly = METADATA_ONLY_HOSTS.has(host)
-        if (!metadataOnly && !directResumeLike(url)) continue
+        const resumeLike = metadataOnly || directResumeLike(url)
+        if (!resumeLike) continue
+        queryResumeLike += 1
+        resumeLikeUrlsObserved += 1
         found += 1
         if (metadataOnly) restricted += 1
         const { data, error } = await input.sb.from('public_document_leads').upsert({
@@ -140,11 +171,27 @@ async function discoverLeads(input: {
           if (data?.id && data.status === 'discovered') leadIds.push(data.id)
         }
       }
+      queryTelemetry.push({
+        queryIndex: (start + selectedIndex) % queries.length,
+        resultChars: String(result.text || '').length,
+        urlsObserved: urls.length,
+        resumeLikeUrls: queryResumeLike,
+      })
     } catch (error) {
       warnings.push(`${query}: ${error instanceof Error ? error.message : 'search failed'}`)
     }
   }
-  return { queries: selected, found, persisted, restricted, leadIds: Array.from(new Set(leadIds)).slice(0, 3), warnings }
+  return {
+    queries: selected,
+    found,
+    persisted,
+    restricted,
+    resultUrlsObserved,
+    resumeLikeUrlsObserved,
+    queryTelemetry,
+    leadIds: Array.from(new Set(leadIds)).slice(0, 3),
+    warnings,
+  }
 }
 
 async function completeTask(sb: SupabaseClient, task: SprintTask, status: 'complete' | 'needs_review' | 'failed', result: Record<string, unknown>, error?: string) {
@@ -285,6 +332,8 @@ export async function runResumeSprintTickV40_5(sb: SupabaseClient) {
     attached: results.filter((row: any) => row.attached === true).length,
     needsReview: results.filter((row: any) => row.needsReview === true).length,
     leadsFound: results.reduce((sum: number, row: any) => sum + Number(row.found || 0), 0),
+    resultUrlsObserved: results.reduce((sum: number, row: any) => sum + Number(row.resultUrlsObserved || 0), 0),
+    resumeLikeUrlsObserved: results.reduce((sum: number, row: any) => sum + Number(row.resumeLikeUrlsObserved || 0), 0),
     results,
     trust: {
       publicOnly: true,
