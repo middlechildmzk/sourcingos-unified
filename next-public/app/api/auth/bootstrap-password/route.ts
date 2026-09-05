@@ -22,7 +22,8 @@ function validToken(providedCode: string, storedHash: string) {
   try {
     const providedHash = createHash('sha256').update(providedCode, 'utf8').digest()
     const expectedHash = Buffer.from(storedHash, 'hex')
-    return expectedHash.length === providedHash.length && timingSafeEqual(providedHash, expectedHash)
+    return expectedHash.length === providedHash.length
+      && timingSafeEqual(Uint8Array.from(providedHash), Uint8Array.from(expectedHash))
   } catch {
     return false
   }
