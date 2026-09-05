@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { FLEET_AGENTS_V40_4, fleetAgentSummaryV40_4 } from '@/lib/fleet/agent-registry-v40-4'
-import { parseResumeFactsV40_4, resumeIdentityConfidenceV40_4, resumeSearchQueriesV40_4 } from '@/lib/fleet/resume-intelligence-v40-4'
+import { parseResumeFactsV40_4, resumeIdentityConfidenceV40_4, resumeSearchQueriesV40_4, scrubUnattendedContactValuesV40_4 } from '@/lib/fleet/resume-intelligence-v40-4'
 
 const root = path.resolve(process.cwd())
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
@@ -53,6 +53,17 @@ describe('V40.4 50-agent enrichment fleet', () => {
       profiles: [],
     })
     expect(weak.confidence).not.toBe('high')
+  })
+
+  it('redacts email and phone values before unattended resume persistence', () => {
+    const safe = scrubUnattendedContactValuesV40_4('Jane Engineer jane@example.com +1 (555) 222-9191 RHEL engineer')
+    expect(safe).toContain('[redacted-email]')
+    expect(safe).toContain('[redacted-phone]')
+    expect(safe).not.toContain('jane@example.com')
+    expect(safe).not.toContain('555')
+    const resume = read('lib/fleet/resume-intelligence-v40-4.ts')
+    expect(resume).toContain('artifact.identityAnchors.observedEmails = []')
+    expect(resume).toContain('contactValuesRedacted: true')
   })
 
   it('keeps public document acquisition bounded and blocks login/paywall bypass', () => {
