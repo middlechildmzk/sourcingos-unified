@@ -60,22 +60,27 @@ describe('V40 autonomous fleet integration', () => {
     expect(migration).toContain('count_auto_promoted integer not null default 0 check (count_auto_promoted = 0)')
   })
 
-  it('activates secured discovery, enrichment, and bounded resume sprint cron schedules', () => {
+  it('activates secured discovery, enrichment, bounded resume sprint, and temporary fleet activation cron schedules', () => {
     const config = JSON.parse(read('vercel.json'))
     expect(config.crons).toEqual([
       { path: '/api/cron/fleet/', schedule: '*/30 * * * *' },
       { path: '/api/cron/enrichment/', schedule: '*/15 * * * *' },
       { path: '/api/cron/resume-sprint/', schedule: '*/3 * * * *' },
+      { path: '/api/cron/fleet-activation/', schedule: '*/3 * * * *' },
     ])
     const route = read('app/api/cron/fleet/route.ts')
     const enrichment = read('app/api/cron/enrichment/route.ts')
     const resumeSprint = read('app/api/cron/resume-sprint/route.ts')
+    const activation = read('app/api/cron/fleet-activation/route.ts')
     expect(route).toContain('authorizeCronRequest')
     expect(route).toContain('claimDueFleetLanesV40(sb, 4)')
     expect(route).toContain('identityMergeAuthorized: false')
     expect(enrichment).toContain('runEnrichmentTickV40_4(sb)')
     expect(resumeSprint).toContain('authorizeCronRequest(req)')
     expect(resumeSprint).toContain('runResumeSprintTickV40_5(sb)')
+    expect(activation).toContain('authorizeCronRequest(req)')
+    expect(activation).toContain('PARALLEL_BATCH')
+    expect(activation).toContain('FIFTY_BATCH')
   })
 
   it('treats ORCID employment as an affiliation, not a license', () => {

@@ -1,0 +1,7 @@
+- [ ] Parallel canary completed with `providerUsed=parallel`
+- [ ] five-item stage completed
+- [ ] ten-item stage completed
+- [ ] fifty-item stage completed
+- [ ] no blocked or failed items
+- [ ] Resume/CV held cohort unchanged
+- [ ] temporary activation cron removed after verification
