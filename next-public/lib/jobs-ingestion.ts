@@ -1,4 +1,4 @@
-export type JobSourceType = 'greenhouse' | 'lever' | 'ashby' | 'usajobs' | 'remotive' | 'arbeitnow' | 'employer-submission' | 'manual-curation'
+export type JobSourceType = 'greenhouse' | 'lever' | 'ashby' | 'usajobs' | 'remotive' | 'arbeitnow' | 'adzuna' | 'openwebninja' | 'employer-submission' | 'manual-curation'
 
 export type NormalizedJob = {
   id: string
