@@ -217,15 +217,11 @@ jobs:
           rm .github/workflows/v41-pr1-integrate.yml
           git diff --check
           git status --short
-          test "$(git status --short | wc -l | tr -d ' ')" = "5"
+          test "$(git status --short | wc -l | tr -d ' ')" = "6"
       - name: Commit integrated PR1 handoff
         run: |
           git config user.name "SourcingOS Integration"
           git config user.email "actions@users.noreply.github.com"
-          git add next-public/components/ReviewSessionV41.tsx \
-                  next-public/components/TalentWorkspaceV37.tsx \
-                  next-public/lib/review/session-v41.ts \
-                  next-public/lib/talent-list-visibility-v41.ts \
-                  next-public/tests/v41-recruiter-workflow-cleanup.test.ts
+          git add -A
           git commit -m "V41 PR1 recruiter workflow cleanup"
           git push origin HEAD:v41-pr1-current-main-integration
