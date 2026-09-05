@@ -14,10 +14,9 @@ describe('V40 autonomous fleet cron registration', () => {
     const nextConfig = read('next.config.mjs')
 
     expect(nextConfig).toContain('trailingSlash: true')
-    expect(config.crons).toEqual([
-      { path: '/api/cron/fleet/', schedule: '*/30 * * * *' },
-      { path: '/api/cron/enrichment/', schedule: '*/15 * * * *' },
-    ])
+    expect(config.crons).toContainEqual({ path: '/api/cron/fleet/', schedule: '*/30 * * * *' })
+    expect(config.crons).toContainEqual({ path: '/api/cron/enrichment/', schedule: '*/15 * * * *' })
+    expect(config.crons).toContainEqual({ path: '/api/cron/resume-sprint/', schedule: '*/3 * * * *' })
   })
 
   it('lets platform cron requests bypass public canonical-host redirects', () => {
@@ -27,14 +26,16 @@ describe('V40 autonomous fleet cron registration', () => {
     expect(proxy).toContain('request.nextUrl.host !== canonicalHost && !isPlatformCronPath(pathname)')
   })
 
-  it('keeps both fleet crons behind explicit cron authentication', () => {
+  it('keeps discovery, enrichment, and Resume/CV sprint crons behind explicit cron authentication', () => {
     const discovery = read('app/api/cron/fleet/route.ts')
     const enrichment = read('app/api/cron/enrichment/route.ts')
-    for (const route of [discovery, enrichment]) {
+    const sprint = read('app/api/cron/resume-sprint/route.ts')
+    for (const route of [discovery, enrichment, sprint]) {
       expect(route).toContain('authorizeCronRequest(req)')
       expect(route).toContain("auth !== 'authorized'")
     }
     expect(discovery).toContain('claimDueFleetLanesV40(sb, 4)')
     expect(enrichment).toContain('runEnrichmentTickV40_4(sb)')
+    expect(sprint).toContain('runResumeSprintTickV40_5(sb)')
   })
 })
