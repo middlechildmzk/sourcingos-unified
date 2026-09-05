@@ -34,8 +34,8 @@ describe('AutoSource V22 contract', () => {
 
   it('schedules only the hardened V40.2 fleet endpoint for unattended discovery', () => {
     const fleetCron = read('app/api/cron/fleet/route.ts')
-    expect(vercel).toContain('/api/cron/fleet')
-    expect(vercel).toContain('*/30 * * * *')
+    expect(vercel).toContain('/api/cron/fleet/')
+    expect(vercel).toContain('*/5 * * * *')
     expect(vercel).not.toContain('/api/cron/autosource')
     expect(fleetCron).toContain('authorizeCronRequest')
     expect(fleetCron).toContain('claimDueFleetLanesV40')
