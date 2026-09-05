@@ -327,15 +327,21 @@ async function parallelSearch(key: string, query: string): Promise<FleetResearch
     method: 'POST',
     headers: { 'x-api-key': key, 'content-type': 'application/json' },
     body: JSON.stringify({
-      objective: query,
+      objective: clean(query, 500),
       search_queries: [compactQuery],
-      max_results: MAX_EXTERNAL_RESULTS,
+      mode: 'basic',
       max_chars_total: 6000,
-      mode: 'one-shot',
+      advanced_settings: {
+        max_results: MAX_EXTERNAL_RESULTS,
+        excerpt_settings: { max_chars_per_result: MAX_SOURCE_EXCERPT },
+      },
     }),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(`Parallel research returned HTTP ${response.status}.`)
+  if (!response.ok) {
+    const detail = clean(await response.text().catch(() => ''), 600)
+    throw new Error(`Parallel research returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`)
+  }
   const payload = await response.json() as Record<string, unknown>
   const results = Array.isArray(payload.results) ? payload.results : []
   return results.slice(0, MAX_EXTERNAL_RESULTS).map(value => {
@@ -417,7 +423,8 @@ async function runAnthropicWorkV40_7b(input: {
 }): Promise<{ model: string; output: ReturnType<typeof parseAgentJson> }> {
   const key = process.env.ANTHROPIC_API_KEY || process.env.AI_PROVIDER_API_KEY
   if (!key) throw new Error('ANTHROPIC_API_KEY is not configured for the improvement fleet.')
-  const model = process.env.AGENT_FLEET_MODEL || process.env.AI_PROVIDER_MODEL || 'claude-sonnet-4-6'
+  const genericModel = String(process.env.AI_PROVIDER_MODEL || '').trim()
+  const model = process.env.AGENT_FLEET_MODEL || process.env.ANTHROPIC_MODEL || (genericModel.startsWith('claude-') ? genericModel : '') || 'claude-sonnet-4-6'
   const prompt = [
     'You are one bounded SourcingOS improvement-fleet worker. Return only JSON with keys summary, findings, recommended_next_actions.',
     `Pod: ${input.item.pod}`,
@@ -460,7 +467,10 @@ async function runAnthropicWorkV40_7b(input: {
     }),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(`Anthropic fleet worker returned HTTP ${response.status}.`)
+  if (!response.ok) {
+    const detail = clean(await response.text().catch(() => ''), 800)
+    throw new Error(`Anthropic fleet worker returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`)
+  }
   const payload = await response.json() as Record<string, unknown>
   const blocks = Array.isArray(payload.content) ? payload.content : []
   const text = blocks.map(value => {
