@@ -15,7 +15,7 @@ import { experimentalProviderFlagsV40_7 } from '@/lib/fleet/governance-v40-7'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
-const PARALLEL_BATCH = 'v40-7c-parallel-canary-1'
+const PARALLEL_BATCH = 'v40-7c-parallel-canary-2'
 const FIVE_BATCH = 'v40-7c-live-5'
 const TEN_BATCH = 'v40-7c-live-10'
 const FIFTY_BATCH = 'v40-7c-live-50'
@@ -106,14 +106,23 @@ async function runParallelConnectivityProbe(key: string): Promise<FleetAgentResu
     headers: { 'x-api-key': key, 'content-type': 'application/json' },
     body: JSON.stringify({
       objective: 'Find current primary-source information relevant to evaluating AI-native recruiter sourcing workbenches, evidence-first candidate review, and public-web talent discovery.',
-      search_queries: ['AI recruiter sourcing workbench evidence candidate review public web talent discovery'],
-      max_results: 4,
+      search_queries: [
+        'AI recruiter sourcing workbench',
+        'evidence candidate review',
+      ],
       max_chars_total: 6000,
-      mode: 'one-shot',
+      mode: 'basic',
+      advanced_settings: {
+        max_results: 4,
+        excerpt_settings: { max_chars_per_result: 1500 },
+      },
     }),
     cache: 'no-store',
   })
-  if (!response.ok) throw new Error(`Parallel connectivity canary returned HTTP ${response.status}.`)
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '')
+    throw new Error(`Parallel connectivity canary returned HTTP ${response.status}${detail ? `: ${detail.slice(0, 500)}` : '.'}`)
+  }
   const payload = await response.json() as Record<string, unknown>
   const results = Array.isArray(payload.results) ? payload.results : []
   const sources = results.slice(0, 4).map(value => {
