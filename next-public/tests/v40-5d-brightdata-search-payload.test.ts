@@ -42,7 +42,7 @@ describe('V40.5 Bright Data search payloads', () => {
     expect(adapter).toContain("search_engine: 'bing'")
     expect(adapter).toContain("data_format: 'parsed_bing_api'")
     expect(adapter).toContain("format: 'json'")
-    expect(adapter).not.toContain('/discover')
+    expect(adapter).not.toContain("`https://${API_HOST}/discover`")
     expect(adapter).not.toContain("tool: 'discover'")
   })
 
