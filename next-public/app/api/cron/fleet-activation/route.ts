@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const PARALLEL_BATCH = 'v40-7c-parallel-canary-2'
-const FIVE_BATCH = 'v40-7c-live-5'
+const FIVE_BATCH = 'v40-7c-live-5-v2'
 const TEN_BATCH = 'v40-7c-live-10'
 const FIFTY_BATCH = 'v40-7c-live-50'
 const CONTEXT_REFS = ['#171', '#172'] as const
