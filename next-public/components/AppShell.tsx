@@ -28,6 +28,7 @@ const primary: NavigationItem[] = [
   { href: '/app/roles', label: 'Roles', icon: 'roles', description: 'Search, slate, calibration' },
   { href: '/app/search', label: 'People Search', icon: 'search', description: 'Find and refine talent' },
   { href: '/app/candidate-database', label: 'Talent', icon: 'candidates', description: 'People you know and can rediscover' },
+  { href: '/app/fleet', label: 'Agent Fleet', icon: 'toolkit', description: 'Autonomous discovery and enrichment' },
   { href: '/app/sources', label: 'Sources', icon: 'toolkit', description: 'Connections, provenance, evidence' },
 ]
 
@@ -35,6 +36,7 @@ function active(pathname: string, href: string) {
   if (href === '/app/roles') return pathname === href || pathname.startsWith('/app/roles/') || pathname.startsWith('/app/agentic-sourcing/')
   if (href === '/app/search') return pathname === href || pathname.startsWith('/app/search/') || pathname === '/app/people-search' || pathname === '/app/agentic-sourcing' || pathname === '/app/candidate-search'
   if (href === '/app/candidate-database') return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/app/network' || pathname === '/app/evidence-ledger'
+  if (href === '/app/fleet') return pathname === href || pathname.startsWith(`${href}/`)
   if (href === '/app/sources') return pathname === href || pathname.startsWith(`${href}/`) || pathname === '/sources' || pathname === '/app/import' || pathname === '/app/acquisition'
   return pathname === href || pathname.startsWith(`${href}/`)
 }
