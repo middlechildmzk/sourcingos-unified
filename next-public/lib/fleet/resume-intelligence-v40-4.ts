@@ -3,7 +3,8 @@ import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { buildCandidateArtifactV36_10, persistCandidateArtifactV36_10 } from '@/lib/candidate-artifacts-v36-10'
-import { refreshPublicUrlWithBrightDataV36_16, searchWebWithBrightDataV36_16 } from '@/lib/agent-data/brightdata-mcp-v36-16'
+import { refreshPublicUrlWithBrightDataV36_16 } from '@/lib/agent-data/brightdata-mcp-v36-16'
+import { discoverResumeCvUrlsV40_5I } from './resume-providers/orchestrator-v40-5i'
 
 const RESTRICTED_DOCUMENT_HOSTS = new Set([
   'scribd.com', 'www.scribd.com', 'linkedin.com', 'www.linkedin.com',
@@ -75,17 +76,6 @@ function containsExactName(text: string, name: string): boolean {
   if (tokens.length < 2) return false
   const normalized = text.toLowerCase().replace(/[^a-z0-9]+/g, ' ')
   return normalized.includes(tokens.join(' '))
-}
-
-function resumeLikeUrl(url: string): boolean {
-  const value = url.toLowerCase()
-  const host = hostname(url)
-  if (/\.(pdf|doc|docx|rtf)(?:[?#]|$)/i.test(value)) return true
-  if (/(^|[\/_-])(resume|curriculum[-_ ]?vitae|cv)([\/_\-.?&#]|$)/i.test(value)) return true
-  if (host === 'drive.google.com' || host === 'docs.google.com') return true
-  if (host.endsWith('.s3.amazonaws.com') || host === 's3.amazonaws.com') return true
-  if (host === 'raw.githubusercontent.com') return true
-  return false
 }
 
 function searchResultUrls(text: string): string[] {
@@ -199,27 +189,27 @@ export async function discoverPublicResumeLeadsV40_4(input: {
   const start = Math.max(0, Number(input.queryOffset || 0)) % queries.length
   const count = Math.max(1, Math.min(Number(input.queryLimit || 3), 3))
   const selected = Array.from({ length: count }, (_, index) => queries[(start + index) % queries.length])
-  const leads = new Map<string, { url: string; query: string; provider: string; status: string; restrictedReason?: string }>()
-  const warnings: string[] = []
 
-  for (const query of selected) {
-    try {
-      const result = await searchWebWithBrightDataV36_16(query)
-      for (const url of searchResultUrls(result.text)) {
-        if (!resumeLikeUrl(url)) continue
-        const host = hostname(url)
-        const restricted = RESTRICTED_DOCUMENT_HOSTS.has(host)
-        leads.set(url, {
-          url,
-          query,
-          provider: result.provider,
-          status: restricted ? 'restricted_metadata_only' : 'discovered',
-          restrictedReason: restricted ? 'Host requires login/subscription or is intentionally excluded from unattended deep retrieval.' : undefined,
-        })
-      }
-    } catch (error) {
-      warnings.push(`${query}: ${error instanceof Error ? error.message : 'search failed'}`)
-    }
+  // Provider-agnostic Resume/CV discovery: Serper (exact/Google-style) runs
+  // the selected keyword queries, Exa runs one semantic/public-web expansion
+  // query, and Bright Data is only attempted as a bounded fallback when the
+  // first two return nothing. See lib/fleet/resume-providers/orchestrator-v40-5i.
+  const discovery = await discoverResumeCvUrlsV40_5I({
+    candidate: input.candidate,
+    serperQueries: selected,
+  })
+  const warnings = [...discovery.warnings]
+  const leads = new Map<string, { url: string; query: string; provider: string; status: string; restrictedReason?: string }>()
+  for (const lead of discovery.urls) {
+    if (lead.classification === 'irrelevant') continue
+    const restricted = lead.classification === 'metadata_only' || RESTRICTED_DOCUMENT_HOSTS.has(hostname(lead.url))
+    leads.set(lead.url, {
+      url: lead.url,
+      query: lead.query,
+      provider: lead.provider,
+      status: restricted ? 'restricted_metadata_only' : 'discovered',
+      restrictedReason: restricted ? 'Host requires login/subscription or is intentionally excluded from unattended deep retrieval.' : undefined,
+    })
   }
 
   let persisted = 0

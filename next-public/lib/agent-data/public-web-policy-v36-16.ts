@@ -18,17 +18,27 @@ function isPrivateIpv4(host: string): boolean {
     || /^172\.(1[6-9]|2\d|3[01])\./.test(host)
 }
 
+/**
+ * Shared local/private-network host check. Exported so any discovery-time
+ * (not just fetch-time) URL safety gate can reject localhost, private IPv4
+ * ranges, IPv6 loopback, and internal/local TLDs before a URL is ever
+ * persisted as a lead, not only when it is later fetched.
+ */
+export function isLocalOrPrivateHostV36_16(rawHost: string): boolean {
+  const host = rawHost.toLowerCase().replace(/\.$/, '')
+  return host === 'localhost'
+    || host === '::1'
+    || isPrivateIpv4(host)
+    || host.endsWith('.internal')
+    || host.endsWith('.local')
+}
+
 export function publicDeepRefreshUrlV36_16(raw: string): string {
   const url = new URL(raw)
   if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only public HTTP(S) URLs can be refreshed.')
   if (url.username || url.password) throw new Error('Credential-bearing URLs are not allowed for live-web refresh.')
   const host = url.hostname.toLowerCase().replace(/\.$/, '')
-  const local = host === 'localhost'
-    || host === '::1'
-    || isPrivateIpv4(host)
-    || host.endsWith('.internal')
-    || host.endsWith('.local')
-  if (local) throw new Error('Private or local URLs are not allowed for live-web refresh.')
+  if (isLocalOrPrivateHostV36_16(host)) throw new Error('Private or local URLs are not allowed for live-web refresh.')
   if (RESTRICTED_DEEP_REFRESH_HOSTS.some(blocked => host === blocked || host.endsWith(`.${blocked}`))) {
     throw new Error('Deep refresh is not allowed for this login-gated/social host. Use public search results and approved structured profile providers instead.')
   }

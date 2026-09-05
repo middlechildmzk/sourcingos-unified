@@ -121,3 +121,116 @@ jobs:
           --username postgres
           --dbname postgres
           --file next-public/tests/sql/role-workspace-atomic-smoke.sql
+
+  v40-5i-canary-admission:
+    # The V40.5i Resume/CV canary ceiling is enforced by PostgreSQL, not by the
+    # application, so it can only be proven against a real database. Without
+    # this job the proofs skip silently and CI would go green while the
+    # invariant is untested. The concurrency case in particular admits 12
+    # candidates against a ceiling of 6 if the advisory lock is ever removed.
+    name: V40.5i Postgres canary admission proofs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: next-public
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          # Throwaway database, created empty for this job only. No production
+          # or Supabase credentials are used anywhere in this workflow.
+          POSTGRES_DB: v40_5i_proof
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v40_5i_proof"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+          --health-start-period 10s
+
+    env:
+      PGPASSWORD: postgres
+      PGTEST_PSQL: psql --host localhost --port 5432 --username postgres --dbname v40_5i_proof
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: next-public/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Ensure PostgreSQL client is available
+        run: command -v psql || (sudo apt-get update && sudo apt-get install -y postgresql-client)
+
+      - name: Wait for PostgreSQL and assert the expected major version
+        run: |
+          for attempt in $(seq 1 30); do
+            if pg_isready --host localhost --port 5432 --username postgres --dbname v40_5i_proof; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "PostgreSQL did not become ready in time." >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          major=$(psql --host localhost --port 5432 --username postgres --dbname v40_5i_proof \
+            --tuples-only --no-align --command "show server_version_num;" | cut -c1-2)
+          echo "PostgreSQL major version: ${major}"
+          if [ "$major" != "16" ]; then
+            echo "Expected PostgreSQL 16 for the V40.5i admission proofs, got ${major}." >&2
+            exit 1
+          fi
+
+      - name: Execute V40.5i canary admission proofs against real PostgreSQL
+        run: |
+          npx vitest run tests/v40-5i-canary-admission.test.ts \
+            --reporter=json --outputFile=v40-5i-admission-report.json
+
+      - name: Assert the Postgres proofs executed rather than skipped
+        run: |
+          node - <<'NODE'
+          const report = require('./v40-5i-admission-report.json')
+          const names = report.testResults.flatMap(suite =>
+            suite.assertionResults.map(item => ({ title: item.fullName || item.title, status: item.status })))
+          const required = [
+            'enforces the ceiling across every admission scenario',
+            'holds the ceiling when two claim transactions genuinely overlap',
+          ]
+          for (const needle of required) {
+            const match = names.find(item => item.title.includes(needle))
+            if (!match) {
+              console.error(`Required Postgres proof not found in report: "${needle}"`)
+              process.exit(1)
+            }
+            if (match.status !== 'passed') {
+              console.error(`Required Postgres proof did not pass (status: ${match.status}): "${needle}"`)
+              process.exit(1)
+            }
+            console.log(`Executed against PostgreSQL: ${needle}`)
+          }
+          if (report.numPendingTests) {
+            console.error(`${report.numPendingTests} V40.5i database proof(s) skipped; they must execute in CI.`)
+            process.exit(1)
+          }
+          console.log(`V40.5i admission proofs: ${report.numPassedTests}/${report.numTotalTests} passed, 0 skipped.`)
+          NODE
+
+      - name: Upload V40.5i admission proof report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: v40-5i-admission-report
+          path: next-public/v40-5i-admission-report.json
+          if-no-files-found: warn
