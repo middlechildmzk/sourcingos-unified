@@ -63,82 +63,66 @@ function isResumeResearchQuery(query: string): boolean {
   return /(?:\bresume\b|\bcv\b|curriculum\s+vitae|filetype\s*:\s*(?:pdf|docx?|rtf))/i.test(query)
 }
 
-type BrightDataDiscoverRecordV36_16 = {
-  link?: string
-  title?: string
-  description?: string
-  relevance_score?: number
-}
-
 async function fetchJsonWithTimeoutV36_16(url: string, init: RequestInit, timeoutMs = 12_000): Promise<unknown> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
-    if (!response.ok) throw new Error(`Bright Data Discover API returned HTTP ${response.status}.`)
+    if (!response.ok) throw new Error(`Bright Data API returned HTTP ${response.status}.`)
     return await response.json()
   } finally {
     clearTimeout(timer)
   }
 }
 
+type BrightDataZoneV36_16 = { name?: unknown; type?: unknown }
+let cachedSerpZoneV36_16: string | null = null
+
+async function resolveActiveSerpZoneV36_16(token: string): Promise<string> {
+  const configured = process.env.BRIGHTDATA_SERP_ZONE?.trim()
+  if (configured) return configured
+  if (cachedSerpZoneV36_16) return cachedSerpZoneV36_16
+
+  const zones = await fetchJsonWithTimeoutV36_16(`https://${API_HOST}/zone/get_active_zones`, {
+    method: 'GET',
+    headers: { authorization: `Bearer ${token}` },
+  })
+  const rows = Array.isArray(zones) ? zones as BrightDataZoneV36_16[] : []
+  const serp = rows.find(row => row?.type === 'serp' && typeof row?.name === 'string')
+  const name = typeof serp?.name === 'string' ? serp.name.trim() : ''
+  if (!name) throw new Error('Bright Data has no active SERP API zone available for public Resume/CV search.')
+  cachedSerpZoneV36_16 = name
+  return name
+}
+
 /**
- * Bright Data's hosted MCP deployment currently does not expose `discover`
- * even though the current official server source documents it. The same
- * official provider exposes Discover directly at api.brightdata.com/discover.
- * Use that read-only search API as a narrowly-scoped fallback for Resume/CV
- * searches only when the MCP SERP response contains no URL.
- *
- * This performs public search-result discovery only. It does not fetch result
- * pages, bypass authentication/paywalls/CAPTCHAs, enumerate storage, or capture
- * contact values.
+ * The retired /discover endpoint returned HTTP 410 in production. Bright Data's
+ * current documented public search endpoint is POST /request with an active SERP
+ * API zone. Use it only as a bounded Resume/CV fallback when hosted MCP search
+ * returns no URL. This is structured search-result retrieval only; downstream
+ * policy still decides which already-public document URLs are eligible to fetch.
  */
-async function discoverPublicResumeLinksV36_16(query: string): Promise<string> {
+async function searchPublicResumeLinksWithSerpApiV36_16(query: string): Promise<string> {
   const token = apiToken()
   if (!token) throw new Error('Bright Data is not configured.')
-  const headers = {
-    authorization: `Bearer ${token}`,
-    'content-type': 'application/json',
-    'user-agent': 'sourcingos-resume-public-discovery/40.5g',
-  }
-  const triggered = await fetchJsonWithTimeoutV36_16(`https://${API_HOST}/discover`, {
+  const zone = await resolveActiveSerpZoneV36_16(token)
+  const response = await fetchJsonWithTimeoutV36_16(`https://${API_HOST}/request`, {
     method: 'POST',
-    headers,
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+      'user-agent': 'sourcingos-resume-public-discovery/40.5h',
+    },
     body: JSON.stringify({
+      zone,
+      search_engine: 'bing',
       query,
+      data_format: 'parsed_bing_api',
       format: 'json',
-      intent: 'Find already-public professional Resume/CV documents or portfolio pages that directly match this named person.',
-      country: 'US',
-      language: 'en',
-      num_results: 10,
-      remove_duplicates: true,
+      country: 'us',
     }),
-  }) as { task_id?: unknown }
-  const taskId = typeof triggered?.task_id === 'string' ? triggered.task_id : ''
-  if (!taskId) throw new Error('Bright Data Discover API did not return a task_id.')
-
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const polled = await fetchJsonWithTimeoutV36_16(
-      `https://${API_HOST}/discover?task_id=${encodeURIComponent(taskId)}`,
-      { method: 'GET', headers },
-    ) as { status?: unknown; results?: unknown }
-    if (polled?.status === 'processing') {
-      await new Promise(resolve => setTimeout(resolve, 500))
-      continue
-    }
-    const rows = Array.isArray(polled?.results) ? polled.results : []
-    const safeRows = rows.slice(0, 10).map(item => {
-      const row = item && typeof item === 'object' && !Array.isArray(item) ? item as BrightDataDiscoverRecordV36_16 : {}
-      return {
-        link: typeof row.link === 'string' ? row.link : undefined,
-        title: typeof row.title === 'string' ? row.title.slice(0, 500) : undefined,
-        description: typeof row.description === 'string' ? row.description.slice(0, 1500) : undefined,
-        relevance_score: typeof row.relevance_score === 'number' ? row.relevance_score : undefined,
-      }
-    })
-    return JSON.stringify(safeRows).slice(0, 30_000)
-  }
-  throw new Error('Bright Data Discover API timed out waiting for public search results.')
+  }, 20_000)
+  try { return JSON.stringify(response).slice(0, 40_000) } catch { return '' }
 }
 
 export async function searchWebWithBrightDataV36_16(
@@ -162,8 +146,8 @@ export async function searchWebWithBrightDataV36_16(
 
   let text = combineBrightDataSearchPayloadV36_16(result.text, result.structuredContent)
   if (isResumeResearchQuery(clean) && !brightDataPayloadHasPublicUrlV36_16(text)) {
-    const discoveredText = await discoverPublicResumeLinksV36_16(clean)
-    text = [text, discoveredText].filter(Boolean).join('\n').slice(0, 50_000)
+    const serpText = await searchPublicResumeLinksWithSerpApiV36_16(clean)
+    text = [text, serpText].filter(Boolean).join('\n').slice(0, 50_000)
   }
 
   return {
