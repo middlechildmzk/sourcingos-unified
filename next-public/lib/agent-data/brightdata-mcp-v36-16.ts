@@ -3,10 +3,15 @@ import { callAllowlistedRemoteMcpToolV36_16 } from '@/lib/mcp/streamable-http-v3
 import { publicDeepRefreshUrlV36_16 } from '@/lib/agent-data/public-web-policy-v36-16'
 
 const HOST = 'mcp.brightdata.com'
-const ALLOWED_TOOLS = ['search_engine', 'discover', 'scrape_as_markdown'] as const
+const API_HOST = 'api.brightdata.com'
+const ALLOWED_TOOLS = ['search_engine', 'scrape_as_markdown'] as const
+
+function apiToken(): string | undefined {
+  return process.env.BRIGHTDATA_API_KEY?.trim() || undefined
+}
 
 function endpoint(): string | undefined {
-  const token = process.env.BRIGHTDATA_API_KEY?.trim()
+  const token = apiToken()
   if (!token) return undefined
   const url = new URL(`https://${HOST}/mcp`)
   url.searchParams.set('token', token)
@@ -29,16 +34,6 @@ export type BrightDataWebResultV36_16 = {
   }
 }
 
-/**
- * Bright Data's search_engine can return its actual SERP records in MCP
- * structuredContent while the text content is only a compact summary. Preserve
- * both representations in-memory so downstream public URL discovery can see
- * links that are already present in the provider response.
- *
- * The combined payload is still untrusted research content. It is bounded and
- * is not itself persisted by the Resume/CV sprint; only policy-qualified public
- * document URLs and aggregate telemetry may be stored.
- */
 export function combineBrightDataSearchPayloadV36_16(text: string, structuredContent: unknown): string {
   let structured = ''
   if (structuredContent !== undefined && structuredContent !== null) {
@@ -54,13 +49,6 @@ export function brightDataPayloadHasPublicUrlV36_16(text: string): boolean {
   return /https?:\/\//i.test(String(text || ''))
 }
 
-/**
- * Google parsed-light output on the hosted MCP can arrive as a compact text
- * summary that omits result links from MCP content. Bright Data documents Bing
- * search_engine output as Markdown, which keeps public result URLs visible.
- * Route only resume/CV-shaped research to Bing by default; all other searches
- * keep the existing Google default unless a caller explicitly chooses an engine.
- */
 export function brightDataSearchEngineForQueryV36_16(
   query: string,
   requested?: BrightDataSearchEngineV36_16,
@@ -73,6 +61,84 @@ export function brightDataSearchEngineForQueryV36_16(
 
 function isResumeResearchQuery(query: string): boolean {
   return /(?:\bresume\b|\bcv\b|curriculum\s+vitae|filetype\s*:\s*(?:pdf|docx?|rtf))/i.test(query)
+}
+
+type BrightDataDiscoverRecordV36_16 = {
+  link?: string
+  title?: string
+  description?: string
+  relevance_score?: number
+}
+
+async function fetchJsonWithTimeoutV36_16(url: string, init: RequestInit, timeoutMs = 12_000): Promise<unknown> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
+    if (!response.ok) throw new Error(`Bright Data Discover API returned HTTP ${response.status}.`)
+    return await response.json()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Bright Data's hosted MCP deployment currently does not expose `discover`
+ * even though the current official server source documents it. The same
+ * official provider exposes Discover directly at api.brightdata.com/discover.
+ * Use that read-only search API as a narrowly-scoped fallback for Resume/CV
+ * searches only when the MCP SERP response contains no URL.
+ *
+ * This performs public search-result discovery only. It does not fetch result
+ * pages, bypass authentication/paywalls/CAPTCHAs, enumerate storage, or capture
+ * contact values.
+ */
+async function discoverPublicResumeLinksV36_16(query: string): Promise<string> {
+  const token = apiToken()
+  if (!token) throw new Error('Bright Data is not configured.')
+  const headers = {
+    authorization: `Bearer ${token}`,
+    'content-type': 'application/json',
+    'user-agent': 'sourcingos-resume-public-discovery/40.5g',
+  }
+  const triggered = await fetchJsonWithTimeoutV36_16(`https://${API_HOST}/discover`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      query,
+      format: 'json',
+      intent: 'Find already-public professional Resume/CV documents or portfolio pages that directly match this named person.',
+      country: 'US',
+      language: 'en',
+      num_results: 10,
+      remove_duplicates: true,
+    }),
+  }) as { task_id?: unknown }
+  const taskId = typeof triggered?.task_id === 'string' ? triggered.task_id : ''
+  if (!taskId) throw new Error('Bright Data Discover API did not return a task_id.')
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const polled = await fetchJsonWithTimeoutV36_16(
+      `https://${API_HOST}/discover?task_id=${encodeURIComponent(taskId)}`,
+      { method: 'GET', headers },
+    ) as { status?: unknown; results?: unknown }
+    if (polled?.status === 'processing') {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      continue
+    }
+    const rows = Array.isArray(polled?.results) ? polled.results : []
+    const safeRows = rows.slice(0, 10).map(item => {
+      const row = item && typeof item === 'object' && !Array.isArray(item) ? item as BrightDataDiscoverRecordV36_16 : {}
+      return {
+        link: typeof row.link === 'string' ? row.link : undefined,
+        title: typeof row.title === 'string' ? row.title.slice(0, 500) : undefined,
+        description: typeof row.description === 'string' ? row.description.slice(0, 1500) : undefined,
+        relevance_score: typeof row.relevance_score === 'number' ? row.relevance_score : undefined,
+      }
+    })
+    return JSON.stringify(safeRows).slice(0, 30_000)
+  }
+  throw new Error('Bright Data Discover API timed out waiting for public search results.')
 }
 
 export async function searchWebWithBrightDataV36_16(
@@ -95,35 +161,9 @@ export async function searchWebWithBrightDataV36_16(
   if (result.isError) throw new Error('Bright Data MCP search_engine returned an error.')
 
   let text = combineBrightDataSearchPayloadV36_16(result.text, result.structuredContent)
-
-  // V40.5f: the hosted search_engine transport has produced non-empty response
-  // text without any result URLs for Resume/CV searches. Bright Data's official
-  // `discover` tool returns JSON records with explicit `link` values, so use it
-  // only as a bounded public-search fallback when a resume-shaped search contains
-  // no URL at all. This is search-result discovery only: it does not fetch the
-  // result pages, bypass authentication, or change downstream identity gates.
   if (isResumeResearchQuery(clean) && !brightDataPayloadHasPublicUrlV36_16(text)) {
-    const discovered = await callAllowlistedRemoteMcpToolV36_16({
-      endpoint: mcpEndpoint,
-      allowedHosts: [HOST],
-      allowedTools: [...ALLOWED_TOOLS],
-      tool: 'discover',
-      arguments: {
-        query: clean,
-        intent: 'Find already-public professional Resume/CV documents or portfolio pages that directly match this named person.',
-        country: 'US',
-        language: 'en',
-        num_results: 10,
-        remove_duplicates: true,
-      },
-      clientName: 'sourcingos-resume-public-discovery',
-    })
-    if (!discovered.isError) {
-      text = combineBrightDataSearchPayloadV36_16(
-        text,
-        combineBrightDataSearchPayloadV36_16(discovered.text, discovered.structuredContent),
-      )
-    }
+    const discoveredText = await discoverPublicResumeLinksV36_16(clean)
+    text = [text, discoveredText].filter(Boolean).join('\n').slice(0, 50_000)
   }
 
   return {
