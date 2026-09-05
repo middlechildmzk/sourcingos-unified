@@ -14,6 +14,8 @@ function endpoint(): string | undefined {
   return url.toString()
 }
 
+export type BrightDataSearchEngineV36_16 = 'google' | 'bing' | 'yandex'
+
 export type BrightDataWebResultV36_16 = {
   provider: 'brightdata'
   transport: 'mcp'
@@ -48,17 +50,21 @@ export function combineBrightDataSearchPayloadV36_16(text: string, structuredCon
     .slice(0, 50_000)
 }
 
-export async function searchWebWithBrightDataV36_16(query: string): Promise<BrightDataWebResultV36_16> {
+export async function searchWebWithBrightDataV36_16(
+  query: string,
+  options: { engine?: BrightDataSearchEngineV36_16 } = {},
+): Promise<BrightDataWebResultV36_16> {
   const mcpEndpoint = endpoint()
   if (!mcpEndpoint) throw new Error('Bright Data is not configured.')
   const clean = query.replace(/\s+/g, ' ').trim().slice(0, 500)
   if (!clean) throw new Error('A web-search query is required.')
+  const engine = options.engine || 'google'
   const result = await callAllowlistedRemoteMcpToolV36_16({
     endpoint: mcpEndpoint,
     allowedHosts: [HOST],
     allowedTools: [...ALLOWED_TOOLS],
     tool: 'search_engine',
-    arguments: { query: clean },
+    arguments: { query: clean, engine },
     clientName: 'sourcingos-web-research',
   })
   if (result.isError) throw new Error('Bright Data MCP search_engine returned an error.')
