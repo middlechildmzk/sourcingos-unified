@@ -17,6 +17,7 @@ import {
   requirementStateLabelV41,
   reviewSessionStorageKeyV41,
   undoReviewDecisionV41,
+  reviewShortcutBlockedByModifierV41,
   validReviewSessionSnapshotV41,
   type ReviewDecisionMutationV41,
   type ReviewDecisionV41,
@@ -230,6 +231,7 @@ export function ReviewSessionV41({ roleId }: { roleId: string }) {
         return
       }
       if (isTypingTarget(event.target)) return
+      if (reviewShortcutBlockedByModifierV41(event)) return
       const key = event.key.toLowerCase()
       if (key === 'f') { event.preventDefault(); requestDecision('evidence_fit', event.shiftKey); return }
       if (key === 'x') { event.preventDefault(); requestDecision('not_fit', event.shiftKey); return }

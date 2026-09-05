@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { AddToRoleButton } from '@/components/AddToRoleButton'
 import { EMPTY_CANDIDATE_WORKSPACE_SNAPSHOT, normalizeCandidateWorkspaceSnapshot, type CandidateWorkspaceSnapshot } from '@/lib/candidate-workspace-normalization'
+import { talentListVisibilityV41 } from '@/lib/talent-list-visibility-v41'
 
 type TalentPerson = CandidateWorkspaceSnapshot['candidates'][number]
 
@@ -39,12 +40,18 @@ export function TalentWorkspaceV37({ initialQuery = '' }: { initialQuery?: strin
   useEffect(() => { void load(initialQuery, 0) }, [initialQuery, load])
 
   const people = useMemo(() => snapshot.candidates.filter(candidate => candidate.entityKind === 'person'), [snapshot.candidates])
+  const visibility = useMemo(() => talentListVisibilityV41(snapshot.candidates, { searchApplied: Boolean(applied) }), [snapshot.candidates, applied])
+  const withheldOnPage = visibility.withheldCount
   const selected = people.find(candidate => candidate.id === selectedId) || people[0] || null
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (target?.isContentEditable) return
+      // Cmd/Ctrl/Alt chords belong to the browser and screen readers, not to
+      // list navigation. Ctrl+K must not silently move the recruiter's selection.
+      if (event.metaKey || event.ctrlKey || event.altKey) return
       if (!people.length) return
       const index = Math.max(0, people.findIndex(person => person.id === selected?.id))
       if (event.key.toLowerCase() === 'j') { event.preventDefault(); setSelectedId(people[Math.min(people.length - 1, index + 1)].id) }
@@ -78,12 +85,16 @@ export function TalentWorkspaceV37({ initialQuery = '' }: { initialQuery?: strin
           <div><span>{status}</span>{applied && <button onClick={() => { setInput(''); setApplied(''); void load('', 0) }}>Clear</button>}</div>
         </div>
 
+        {!loading && people.length > 0 && withheldOnPage > 0 && <p className="talent-v37-muted">{withheldOnPage.toLocaleString()} more record{withheldOnPage === 1 ? '' : 's'} on this page {withheldOnPage === 1 ? 'is' : 'are'} not classified as a person and {withheldOnPage === 1 ? 'is' : 'are'} not listed here. <Link href="/app/identity-review">Identity review →</Link></p>}
+
         {loading && <div className="talent-v37-skeletons">{Array.from({ length: 7 }).map((_, index) => <div key={index}><i /><span /><b /></div>)}</div>}
         {!loading && <div className="talent-v37-people">{people.map((person, index) => <button type="button" className={selected?.id === person.id ? 'is-selected' : ''} key={person.id} onClick={() => setSelectedId(person.id)}>
           <span className="talent-v37-rank">{index + 1}</span>
           <span className="talent-v37-person-main"><span><strong>{person.canonicalName}</strong><em>{words(person.mergeStatus)}</em></span><small>{[person.headline || person.currentTitle, person.currentCompany, person.location].filter(Boolean).join(' · ') || 'Candidate profile'}</small>{person.summary && <p>{person.summary.slice(0, 150)}{person.summary.length > 150 ? '…' : ''}</p>}<span className="talent-v37-tags">{person.skills.slice(0, 5).map(skill => <i key={skill}>{skill}</i>)}</span></span>
           <span className="talent-v37-person-meta"><b>{person.sourceProfileIds.length} sources</b><small>{person.evidenceItemIds.length} evidence</small><small>{person.contactSignalIds.length ? 'Contact signal' : 'Contact unknown'}</small></span>
-        </button>)}{!people.length && <div className="talent-v37-empty"><h3>{applied ? 'No canonical people matched.' : 'No people yet.'}</h3><p>{applied ? 'Try a broader name, skill, company, or professional profile URL.' : 'Save discoveries from Search or import authorized data from Sources.'}</p><Link href="/app/search">Search talent →</Link></div>}</div>}
+        </button>)}{!people.length && (withheldOnPage > 0
+          ? <div className="talent-v37-empty"><h3>No person records on this page.</h3><p>{withheldOnPage.toLocaleString()} record{withheldOnPage === 1 ? '' : 's'} on this page {withheldOnPage === 1 ? 'is' : 'are'} stored in the Candidate Graph but {withheldOnPage === 1 ? 'is' : 'are'} not classified as a person, so {withheldOnPage === 1 ? 'it is' : 'they are'} not shown in Talent. Personhood is never inferred. Send {withheldOnPage === 1 ? 'it' : 'them'} to Identity review to classify.</p><Link href="/app/identity-review">Identity review →</Link></div>
+          : <div className="talent-v37-empty"><h3>{applied ? 'No canonical people matched.' : 'No people yet.'}</h3><p>{applied ? 'Try a broader name, skill, company, or professional profile URL.' : 'Save discoveries from Search or import authorized data from Sources.'}</p><Link href="/app/search">Search talent →</Link></div>)}</div>}
 
         <footer className="talent-v37-pagination"><button disabled={loading || snapshot.page.offset === 0} onClick={() => void load(applied, Math.max(0, snapshot.page.offset - snapshot.page.limit))}>← Previous</button><span>{people.length ? `${snapshot.page.offset + 1}–${snapshot.page.offset + people.length}` : '0'} shown</span><button disabled={loading || !snapshot.page.hasMore} onClick={() => void load(applied, snapshot.page.offset + snapshot.page.limit)}>Next →</button></footer>
       </main>

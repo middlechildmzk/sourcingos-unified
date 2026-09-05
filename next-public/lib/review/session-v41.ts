@@ -149,3 +149,19 @@ export function undoReviewDecisionV41(
     }, ...role.activity].slice(0, 200),
   }
 }
+
+/**
+ * Review-session shortcuts are single-key accelerators (spec §6: "No modifier-key
+ * chords beyond Shift. Nothing that collides with browser or screen-reader
+ * defaults."). A held Meta/Ctrl/Alt means the recruiter is driving the browser or
+ * an assistive technology, so the session must not claim the keystroke.
+ *
+ * Without this guard, Cmd+F records an evidence-fit decision and advances,
+ * Cmd+X records not-a-fit, and Cmd+U fires Undo — all silently, mid-pass.
+ * Shift stays permitted because Shift+decision opens the note field.
+ */
+export function reviewShortcutBlockedByModifierV41(
+  event: Pick<KeyboardEvent, 'metaKey' | 'ctrlKey' | 'altKey'>,
+): boolean {
+  return event.metaKey || event.ctrlKey || event.altKey
+}
