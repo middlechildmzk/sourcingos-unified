@@ -3,6 +3,11 @@
 import Link from 'next/link'
 import { FormEvent, useMemo, useState } from 'react'
 import { useRoleWorkspaces } from '@/lib/use-role-workspaces'
+import {
+  classifyKnownPersonLookupV41_1,
+  exactIdentifierQueryParamV41_1,
+  liveKnownPersonSearchPayloadV41_1,
+} from '@/lib/person-lookup-v41-1'
 import styles from './PersonLookupV38_4.module.css'
 
 type GraphCandidate = {
@@ -65,21 +70,31 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
   const [signed, setSigned] = useState<SignedObservation[]>([])
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState('')
+  const [exactMiss, setExactMiss] = useState('')
   const [contactSignals, setContactSignals] = useState<Record<string, ContactSignal[]>>({})
   const [contactConfirm, setContactConfirm] = useState<string | null>(null)
   const [savedIds, setSavedIds] = useState<Record<string, string>>({})
 
   const exactPrompt = useMemo(() => query.trim(), [query])
+  const currentInput = useMemo(() => classifyKnownPersonLookupV41_1(query), [query])
 
   async function searchLiveForValue(value: string) {
+    const payload = liveKnownPersonSearchPayloadV41_1(value)
+    if (!payload) {
+      const input = classifyKnownPersonLookupV41_1(value)
+      setLive([])
+      setSigned([])
+      setSearched(true)
+      setExactMiss(`No verified stored match for this ${input.kind === 'email' ? 'email address' : 'profile URL'}. SourcingOS did not substitute fuzzy people results. Edit the search to a person name or add more professional context for broader discovery.`)
+      return false
+    }
+
     setStatus('live')
+    setExactMiss('')
     try {
-      // Known-person lookup is an identity retrieval workflow, not a role-search
-      // planning workflow. Preserve the recruiter-entered identity anchor exactly
-      // and search connected sources without asking Role Brain to reinterpret it.
       const response = await fetch('/api/candidate-data/search', {
         method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ query: value, limit: 12, highFreshness: false }),
+        body: JSON.stringify(payload),
       })
       const json = await response.json().catch(() => ({}))
       if (!response.ok || !json.ok) throw new Error(json.error || 'Live person lookup failed.')
@@ -97,9 +112,13 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
     event?.preventDefault()
     const value = query.trim()
     if (!value || status) return
-    setError(''); setSearched(true); setStatus('graph'); setGraphCandidates([]); setLive([]); setSigned([])
+    setError(''); setExactMiss(''); setSearched(true); setStatus('graph'); setGraphCandidates([]); setLive([]); setSigned([])
     try {
-      const response = await fetch(`/api/candidate-db/list?q=${encodeURIComponent(value)}&limit=20`, { cache: 'no-store', headers: { accept: 'application/json' } })
+      const exactIdentifier = exactIdentifierQueryParamV41_1(value)
+      const endpoint = exactIdentifier
+        ? `/api/candidate-db/exact-identifier?identifier=${encodeURIComponent(exactIdentifier)}`
+        : `/api/candidate-db/list?q=${encodeURIComponent(value)}&limit=20`
+      const response = await fetch(endpoint, { cache: 'no-store', headers: { accept: 'application/json' } })
       const json = await response.json().catch(() => ({}))
       if (!response.ok || !json.ok) throw new Error(json.error || 'Candidate Graph lookup failed.')
       const candidates = Array.isArray(json.candidates) ? json.candidates.filter((item: GraphCandidate & { entityKind?: string }) => !item.entityKind || item.entityKind === 'person') : []
@@ -210,18 +229,19 @@ export function PersonLookupV38_4({ initialQuery = '', roleId }: { initialQuery?
     <section className={styles.hero}>
       <span className={styles.kicker}>Known-person lookup</span>
       <h1>Find one person, resolve the profile, then act.</h1>
-      <p>Search once: SourcingOS checks the Candidate Graph first, then automatically searches live connected sources when no stored person matches. Contact enrichment remains an explicit recruiter-approved action.</p>
+      <p>Email and profile URLs are exact identity lookups. Names use the Candidate Graph first, then live connected sources with the name preserved as an explicit anchor. Contact enrichment remains an explicit recruiter-approved action.</p>
       {role && <div className={styles.role}>Saving a person will also attach them to <strong>{role.intake.title}</strong>.</div>}
       <form onSubmit={searchGraph} className={styles.searchForm}>
-        <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Name · company · email · LinkedIn/GitHub/profile URL" autoFocus />
+        <input value={query} onChange={event => { setQuery(event.target.value); setExactMiss('') }} placeholder="Name · company · email · LinkedIn/GitHub/profile URL" autoFocus />
         <button type="submit" disabled={!exactPrompt || Boolean(status)}>{status === 'graph' ? 'Checking saved graph…' : status === 'live' ? 'Searching live sources…' : 'Find person'}</button>
       </form>
-      <div className={styles.liveRow}><span>Want fresh coverage even when a stored profile exists?</span><button type="button" onClick={searchLive} disabled={!exactPrompt || Boolean(status)}>{status === 'live' ? 'Searching live sources…' : 'Refresh live sources'}</button></div>
+      <div className={styles.liveRow}><span>{currentInput.exact ? 'Exact identifiers are not broadened automatically.' : 'Want fresh coverage even when a stored profile exists?'}</span><button type="button" onClick={searchLive} disabled={!exactPrompt || Boolean(status) || currentInput.exact}>{status === 'live' ? 'Searching live sources…' : 'Refresh live sources'}</button></div>
+      {exactMiss && <div className={styles.notice}>{exactMiss}</div>}
       {error && <div className={styles.error}>{error}</div>}
     </section>
 
     {searched && <section className={styles.results}>
-      <div className={styles.sectionHead}><div><span>Candidate Graph</span><strong>{graphCandidates.length} match{graphCandidates.length === 1 ? '' : 'es'}</strong></div>{graphCandidates.length === 0 && <small>No stored match. Live sources are checked automatically.</small>}</div>
+      <div className={styles.sectionHead}><div><span>Candidate Graph</span><strong>{graphCandidates.length} match{graphCandidates.length === 1 ? '' : 'es'}</strong></div>{graphCandidates.length === 0 && <small>{currentInput.exact ? 'No exact stored identifier match.' : 'No stored match. Live sources are checked automatically.'}</small>}</div>
       <div className={styles.cards}>{graphCandidates.map(candidate => {
         const key = `graph:${candidate.id}`
         const signals = contactSignals[key] || []
