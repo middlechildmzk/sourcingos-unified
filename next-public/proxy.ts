@@ -15,6 +15,11 @@ function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(prefix => clean === prefix || clean.startsWith(prefix + '/'))
 }
 
+function isPlatformCronPath(pathname: string): boolean {
+  const clean = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
+  return clean === '/api/cron' || clean.startsWith('/api/cron/')
+}
+
 function loginRedirect(request: NextRequest) {
   const loginUrl = new URL('/login', request.url)
   loginUrl.searchParams.set('from', request.nextUrl.pathname)
@@ -24,7 +29,10 @@ function loginRedirect(request: NextRequest) {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const canonicalHost = new URL(CANONICAL_SITE_URL).host
-  if (process.env.VERCEL_ENV === 'production' && request.nextUrl.host !== canonicalHost) {
+  // Vercel Cron invokes the production deployment host, not necessarily the
+  // public canonical domain. Redirecting a cron request can strip the Bearer
+  // CRON_SECRET, so platform cron callbacks must reach their handler directly.
+  if (process.env.VERCEL_ENV === 'production' && request.nextUrl.host !== canonicalHost && !isPlatformCronPath(pathname)) {
     const redirectUrl = new URL(request.nextUrl.pathname + request.nextUrl.search, CANONICAL_SITE_URL)
     return NextResponse.redirect(redirectUrl, 308)
   }
