@@ -8,6 +8,7 @@ import {
   fleetProviderReadinessV40_7b,
   finishFleetWorkItemV40_7b,
   persistFleetWorkItemsV40_7b,
+  type FleetAgentResultV40_7b,
 } from '@/lib/fleet/runtime-v40-7b'
 import { experimentalProviderFlagsV40_7 } from '@/lib/fleet/governance-v40-7'
 
@@ -20,10 +21,6 @@ const TEN_BATCH = 'v40-7c-live-10'
 const FIFTY_BATCH = 'v40-7c-live-50'
 const CONTEXT_REFS = ['#171', '#172'] as const
 const LIVE_TARGET = 'Audit current SourcingOS search intelligence, candidate intelligence, recruiter UX, product engineering, and QA readiness. Produce concrete, attributable findings and next actions without production writes.'
-
-function enabled(value: string | undefined): boolean {
-  return String(value || '').trim().toLowerCase() === 'true'
-}
 
 async function latestOwnerId(sb: ReturnType<typeof createServerSupabaseClient>) {
   if (!sb) return null
@@ -92,34 +89,92 @@ async function dispatchItems(input: {
   }
 }
 
-function parallelCanaryItem() {
-  const readiness = fleetProviderReadinessV40_7b()
-  const flags = experimentalProviderFlagsV40_7()
-  const globalExperimental = enabled(process.env.AGENT_FLEET_EXPERIMENTAL_PROVIDERS)
-  const providerOrder: string[] = []
-
-  if (readiness.exa) providerOrder.push('exa')
-  if (globalExperimental && enabled(process.env.AGENT_FLEET_PROVIDER_VERCEL_EXA) && readiness.vercelExa) providerOrder.push('vercel_exa')
-  if (flags.firecrawl && readiness.firecrawl) providerOrder.push('firecrawl')
-  if (flags.parallel && readiness.parallel) providerOrder.push('parallel')
-
-  const parallelIndex = providerOrder.indexOf('parallel')
-  if (!readiness.anthropic) {
-    return { ok: false as const, reason: 'Anthropic is not configured for live fleet synthesis.', readiness, flags, providerOrder }
-  }
-  if (parallelIndex < 0) {
-    return { ok: false as const, reason: 'Parallel is not both configured and enabled by the governed experimental-provider flags.', readiness, flags, providerOrder }
-  }
-
+function parallelProbeItem() {
   const batch = createImprovementFleetBatchV40_7({
     batchId: PARALLEL_BATCH,
-    target: 'Validate one live Parallel-backed Search Intelligence fleet worker against current SourcingOS provider benchmarking and recruiter-workbench priorities.',
-    contextRefs: CONTEXT_REFS,
+    target: 'Validate the explicitly approved Parallel production connection before staged governed-fleet activation.',
+    contextRefs: [...CONTEXT_REFS, 'activation-approved:parallel'],
   })
-  const seat = parallelIndex + 1
-  const item = batch.items.find(candidate => candidate.pod === 'search_intelligence' && candidate.seat === seat)
-  if (!item) throw new Error(`Could not select Search Intelligence seat ${seat} for Parallel canary.`)
-  return { ok: true as const, item, readiness, flags, providerOrder }
+  const item = batch.items.find(candidate => candidate.pod === 'search_intelligence' && candidate.seat === 1)
+  if (!item) throw new Error('Could not select Search Intelligence seat 1 for Parallel connectivity canary.')
+  return item
+}
+
+async function runParallelConnectivityProbe(key: string): Promise<FleetAgentResultV40_7b> {
+  const response = await fetch('https://api.parallel.ai/v1/search', {
+    method: 'POST',
+    headers: { 'x-api-key': key, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      objective: 'Find current primary-source information relevant to evaluating AI-native recruiter sourcing workbenches, evidence-first candidate review, and public-web talent discovery.',
+      search_queries: ['AI recruiter sourcing workbench evidence candidate review public web talent discovery'],
+      max_results: 4,
+      max_chars_total: 6000,
+      mode: 'one-shot',
+    }),
+    cache: 'no-store',
+  })
+  if (!response.ok) throw new Error(`Parallel connectivity canary returned HTTP ${response.status}.`)
+  const payload = await response.json() as Record<string, unknown>
+  const results = Array.isArray(payload.results) ? payload.results : []
+  const sources = results.slice(0, 4).map(value => {
+    const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    const excerpts = Array.isArray(row.excerpts)
+      ? row.excerpts.map(value => String(value || '').replace(/\s+/g, ' ').trim().slice(0, 600)).filter(Boolean).join(' ')
+      : ''
+    return {
+      provider: 'parallel' as const,
+      title: String(row.title || 'Parallel result').slice(0, 300),
+      url: typeof row.url === 'string' && /^https?:\/\//.test(row.url) ? row.url : undefined,
+      excerpt: excerpts.slice(0, 1500),
+    }
+  })
+  return {
+    summary: `Explicit Parallel production connectivity canary completed with ${sources.length} attributable result(s). This probe validates the configured provider connection; staged Inngest fleet workers are validated in the following 5 -> 10 -> 50 stages.`,
+    findings: [
+      'Parallel production API authentication succeeded.',
+      `Parallel returned ${sources.length} attributable result(s).`,
+      'No Resume/CV queue authority was granted or exercised.',
+    ],
+    recommendedNextActions: ['Proceed to the five-worker live Inngest stage.'],
+    sources,
+    model: null,
+    providerUsed: 'parallel',
+    dryRun: false,
+  }
+}
+
+async function executeParallelProbe(input: {
+  sb: NonNullable<ReturnType<typeof createServerSupabaseClient>>
+  ownerId: string
+  key: string
+}) {
+  const item = parallelProbeItem()
+  await persistFleetWorkItemsV40_7b({
+    sb: input.sb,
+    ownerId: input.ownerId,
+    batchId: PARALLEL_BATCH,
+    items: [item],
+  })
+  await input.sb.from('fleet_improvement_work_items').update({
+    status: 'running',
+    attempt_count: 1,
+    started_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq('id', item.id)
+
+  try {
+    const result = await runParallelConnectivityProbe(input.key)
+    await finishFleetWorkItemV40_7b({ sb: input.sb, itemId: item.id, status: 'completed', result })
+    return result
+  } catch (error) {
+    await finishFleetWorkItemV40_7b({
+      sb: input.sb,
+      itemId: item.id,
+      status: 'failed',
+      error: error instanceof Error ? error.message : 'Parallel connectivity canary failed.',
+    })
+    throw error
+  }
 }
 
 function parallelSucceeded(rows: Array<Record<string, unknown>>) {
@@ -142,20 +197,25 @@ export async function GET(req: NextRequest) {
     const ownerId = await latestOwnerId(sb)
     if (!ownerId) return NextResponse.json({ ok: false, error: 'No existing governed-fleet owner could be resolved.' }, { status: 409 })
 
-    const canary = parallelCanaryItem()
-    if (!canary.ok) {
-      return NextResponse.json({ ok: false, stage: 'parallel_canary', hold: true, reason: canary.reason, readiness: canary.readiness, experimentalProviderFlags: canary.flags, providerOrder: canary.providerOrder }, { status: 409 })
+    const readiness = fleetProviderReadinessV40_7b()
+    const flags = experimentalProviderFlagsV40_7()
+    if (!readiness.parallel || !process.env.PARALLEL_API_KEY) {
+      return NextResponse.json({ ok: false, stage: 'parallel_canary', hold: true, reason: 'PARALLEL_API_KEY is not available in production.', readiness, experimentalProviderFlags: flags }, { status: 409 })
     }
 
     const parallelRows = await batchRows(sb, PARALLEL_BATCH)
     const parallelState = batchState(parallelRows as Array<Record<string, unknown>>, 1)
     if (parallelState.state === 'absent') {
-      const eventIds = await dispatchItems({ sb, ownerId, batchId: PARALLEL_BATCH, items: [canary.item] })
-      return NextResponse.json({ ok: true, stage: 'parallel_canary', action: 'dispatched', count: 1, eventIds, providerOrder: canary.providerOrder })
+      const result = await executeParallelProbe({ sb, ownerId, key: process.env.PARALLEL_API_KEY })
+      return NextResponse.json({ ok: true, stage: 'parallel_canary', action: 'completed', providerUsed: result.providerUsed, sources: result.sources.length, generalFleetParallelFlag: flags.parallel })
     }
     if (parallelState.state === 'running') return NextResponse.json({ ok: true, stage: 'parallel_canary', action: 'waiting', rows: parallelRows })
     if (parallelState.state === 'failed' || !parallelSucceeded(parallelRows as Array<Record<string, unknown>>)) {
-      return NextResponse.json({ ok: false, stage: 'parallel_canary', hold: true, reason: 'Parallel live canary did not complete successfully with providerUsed=parallel.', rows: parallelRows }, { status: 409 })
+      return NextResponse.json({ ok: false, stage: 'parallel_canary', hold: true, reason: 'Parallel production connectivity canary did not complete successfully.', rows: parallelRows }, { status: 409 })
+    }
+
+    if (!readiness.anthropic) {
+      return NextResponse.json({ ok: false, stage: 'live_fleet', hold: true, reason: 'Anthropic is not configured for live fleet synthesis.', readiness }, { status: 409 })
     }
 
     const stages = [
@@ -182,7 +242,7 @@ export async function GET(req: NextRequest) {
       if (state.state === 'failed') return NextResponse.json({ ok: false, stage: stage.batchId, hold: true, reason: 'One or more fleet items failed or were blocked; later stages were not dispatched.', rows }, { status: 409 })
     }
 
-    return NextResponse.json({ ok: true, stage: 'complete', action: 'done', rollout: '1 Parallel -> 5 -> 10 -> 50', executionConcurrency: 4 })
+    return NextResponse.json({ ok: true, stage: 'complete', action: 'done', rollout: 'Parallel connectivity -> 5 -> 10 -> 50 live Inngest work items', executionConcurrency: 4 })
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Fleet activation cron failed.' }, { status: 500 })
   }
