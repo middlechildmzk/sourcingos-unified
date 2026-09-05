@@ -34,14 +34,18 @@ describe('V33.2 unified agent source-truth boundary', () => {
     expect(acquisition).toContain('skills: uniq((r.x_concepts || [])')
   })
 
-  it('keeps scheduled unattended acquisition discovery-only until recruiter review', () => {
+  it('keeps scheduled unattended acquisition governed and recruiter-safe', () => {
     const engine = read('lib/acquisition-engine-v22.ts')
     const vercel = read('vercel.json')
     const fleetCron = read('app/api/cron/fleet/route.ts')
+    const enrichmentCron = read('app/api/cron/enrichment/route.ts')
     expect(vercel).toContain('/api/cron/fleet/')
-    expect(vercel).toContain('*/5 * * * *')
+    expect(vercel).toContain('*/30 * * * *')
+    expect(vercel).toContain('/api/cron/enrichment/')
+    expect(vercel).toContain('*/15 * * * *')
     expect(vercel).not.toContain('/api/cron/autosource')
     expect(fleetCron).toContain('authorizeCronRequest')
+    expect(enrichmentCron).toContain('authorizeCronRequest')
     expect(engine).toContain("const disposition = 'needs_review' as const")
     expect(engine).toContain('Automated Candidate Graph promotion is disabled; recruiter review is required.')
     expect(engine).not.toContain("'auto_promoted'")
