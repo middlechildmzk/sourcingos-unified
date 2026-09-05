@@ -84,9 +84,9 @@ describe('V40.2 autonomous fleet integration', () => {
     expect(migration).toContain('count_auto_promoted integer not null default 0 check (count_auto_promoted = 0)')
   })
 
-  it('activates a secured 30-minute Vercel cron', () => {
+  it('activates a secured Vercel cron for production canary verification', () => {
     const config = JSON.parse(read('vercel.json'))
-    expect(config.crons).toEqual([{ path: '/api/cron/fleet', schedule: '*/30 * * * *' }])
+    expect(config.crons).toEqual([{ path: '/api/cron/fleet/', schedule: '*/5 * * * *' }])
     const route = read('app/api/cron/fleet/route.ts')
     expect(route).toContain('authorizeCronRequest')
     expect(route).toContain('claimDueFleetLanesV40(sb, 4)')
