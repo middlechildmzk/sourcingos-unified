@@ -21,32 +21,8 @@ function dossier(): TechnicalDossier {
     artifacts: [],
     technologies: [],
     anchors: [
-      {
-        kind: 'orcid',
-        value: '0000-0002-1825-0097',
-        normalized: '0000-0002-1825-0097',
-        strength: 'deterministic',
-        provenance: {
-          source: 'orcid',
-          sourceField: 'orcid-identifier.path',
-          sourceRecordId: '0000-0002-1825-0097',
-          basis: 'source_stated',
-          observedAt: '2026-09-04T12:00:00.000Z',
-        },
-      },
-      {
-        kind: 'public_email',
-        value: 'fixture-at-invalid.test',
-        normalized: 'fixture-at-invalid.test',
-        strength: 'deterministic',
-        provenance: {
-          source: 'orcid',
-          sourceField: 'fixture',
-          sourceRecordId: '0000-0002-1825-0097',
-          basis: 'source_stated',
-          observedAt: '2026-09-04T12:00:00.000Z',
-        },
-      },
+      { kind: 'orcid', value: '0000-0002-1825-0097', normalized: '0000-0002-1825-0097', strength: 'deterministic', provenance: { source: 'orcid', sourceField: 'orcid-identifier.path', sourceRecordId: '0000-0002-1825-0097', basis: 'source_stated', observedAt: '2026-09-04T12:00:00.000Z' } },
+      { kind: 'public_email', value: 'fixture-at-invalid.test', normalized: 'fixture-at-invalid.test', strength: 'deterministic', provenance: { source: 'orcid', sourceField: 'fixture', sourceRecordId: '0000-0002-1825-0097', basis: 'source_stated', observedAt: '2026-09-04T12:00:00.000Z' } },
     ],
     activity: { activeYears: [] },
     limits: [],
@@ -55,7 +31,7 @@ function dossier(): TechnicalDossier {
   }
 }
 
-describe('V40.2 autonomous fleet integration', () => {
+describe('V40 autonomous fleet integration', () => {
   it('converts dossiers to person SourceResults without unattended contact values', () => {
     const result = technicalDossierToSourceResultV40(dossier())
     expect(result.entityKind).toBe('person')
@@ -84,13 +60,18 @@ describe('V40.2 autonomous fleet integration', () => {
     expect(migration).toContain('count_auto_promoted integer not null default 0 check (count_auto_promoted = 0)')
   })
 
-  it('activates a secured Vercel cron for production canary verification', () => {
+  it('activates secured discovery and enrichment cron schedules', () => {
     const config = JSON.parse(read('vercel.json'))
-    expect(config.crons).toEqual([{ path: '/api/cron/fleet/', schedule: '*/5 * * * *' }])
+    expect(config.crons).toEqual([
+      { path: '/api/cron/fleet/', schedule: '*/30 * * * *' },
+      { path: '/api/cron/enrichment/', schedule: '*/15 * * * *' },
+    ])
     const route = read('app/api/cron/fleet/route.ts')
+    const enrichment = read('app/api/cron/enrichment/route.ts')
     expect(route).toContain('authorizeCronRequest')
     expect(route).toContain('claimDueFleetLanesV40(sb, 4)')
     expect(route).toContain('identityMergeAuthorized: false')
+    expect(enrichment).toContain('runEnrichmentTickV40_4(sb)')
   })
 
   it('treats ORCID employment as an affiliation, not a license', () => {
