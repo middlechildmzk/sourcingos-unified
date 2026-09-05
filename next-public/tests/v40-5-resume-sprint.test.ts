@@ -62,11 +62,11 @@ describe('V40.5 governed Resume/CV sprint', () => {
     expect(urls).toHaveLength(3)
   })
 
-  it('records aggregate result-shape telemetry without persisting raw search responses', () => {
+  it('records aggregate result-shape and per-provider telemetry without persisting raw search responses', () => {
     const sprint = read('lib/fleet/resume-sprint-v40-5.ts')
     expect(sprint).toContain('resultUrlsObserved')
     expect(sprint).toContain('resumeLikeUrlsObserved')
-    expect(sprint).toContain('resultChars')
+    expect(sprint).toContain('providerTelemetry')
     expect(sprint).not.toContain('rawSearchResponse')
   })
 
