@@ -1,5 +1,17 @@
 {
-  "rewrites": [
-    { "source": "/((?!assets/|favicon.ico).*)", "destination": "/index.html" }
+  "installCommand": "npm ci",
+  "crons": [
+    {
+      "path": "/api/cron/fleet/",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/enrichment/",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/resume-sprint/",
+      "schedule": "*/3 * * * *"
+    }
   ]
 }
