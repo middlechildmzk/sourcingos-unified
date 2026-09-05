@@ -3,7 +3,7 @@ import { callAllowlistedRemoteMcpToolV36_16 } from '@/lib/mcp/streamable-http-v3
 import { publicDeepRefreshUrlV36_16 } from '@/lib/agent-data/public-web-policy-v36-16'
 
 const HOST = 'mcp.brightdata.com'
-const ALLOWED_TOOLS = ['search_engine', 'scrape_as_markdown'] as const
+const ALLOWED_TOOLS = ['search_engine', 'discover', 'scrape_as_markdown'] as const
 
 function endpoint(): string | undefined {
   const token = process.env.BRIGHTDATA_API_KEY?.trim()
@@ -50,6 +50,10 @@ export function combineBrightDataSearchPayloadV36_16(text: string, structuredCon
     .slice(0, 50_000)
 }
 
+export function brightDataPayloadHasPublicUrlV36_16(text: string): boolean {
+  return /https?:\/\//i.test(String(text || ''))
+}
+
 /**
  * Google parsed-light output on the hosted MCP can arrive as a compact text
  * summary that omits result links from MCP content. Bright Data documents Bing
@@ -65,6 +69,10 @@ export function brightDataSearchEngineForQueryV36_16(
   return /(?:\bresume\b|\bcv\b|curriculum\s+vitae|filetype\s*:\s*(?:pdf|docx?|rtf))/i.test(query)
     ? 'bing'
     : 'google'
+}
+
+function isResumeResearchQuery(query: string): boolean {
+  return /(?:\bresume\b|\bcv\b|curriculum\s+vitae|filetype\s*:\s*(?:pdf|docx?|rtf))/i.test(query)
 }
 
 export async function searchWebWithBrightDataV36_16(
@@ -85,9 +93,42 @@ export async function searchWebWithBrightDataV36_16(
     clientName: 'sourcingos-web-research',
   })
   if (result.isError) throw new Error('Bright Data MCP search_engine returned an error.')
+
+  let text = combineBrightDataSearchPayloadV36_16(result.text, result.structuredContent)
+
+  // V40.5f: the hosted search_engine transport has produced non-empty response
+  // text without any result URLs for Resume/CV searches. Bright Data's official
+  // `discover` tool returns JSON records with explicit `link` values, so use it
+  // only as a bounded public-search fallback when a resume-shaped search contains
+  // no URL at all. This is search-result discovery only: it does not fetch the
+  // result pages, bypass authentication, or change downstream identity gates.
+  if (isResumeResearchQuery(clean) && !brightDataPayloadHasPublicUrlV36_16(text)) {
+    const discovered = await callAllowlistedRemoteMcpToolV36_16({
+      endpoint: mcpEndpoint,
+      allowedHosts: [HOST],
+      allowedTools: [...ALLOWED_TOOLS],
+      tool: 'discover',
+      arguments: {
+        query: clean,
+        intent: 'Find already-public professional Resume/CV documents or portfolio pages that directly match this named person.',
+        country: 'US',
+        language: 'en',
+        num_results: 10,
+        remove_duplicates: true,
+      },
+      clientName: 'sourcingos-resume-public-discovery',
+    })
+    if (!discovered.isError) {
+      text = combineBrightDataSearchPayloadV36_16(
+        text,
+        combineBrightDataSearchPayloadV36_16(discovered.text, discovered.structuredContent),
+      )
+    }
+  }
+
   return {
     provider: 'brightdata', transport: 'mcp', tool: 'search_engine',
-    text: combineBrightDataSearchPayloadV36_16(result.text, result.structuredContent),
+    text,
     observedAt: new Date().toISOString(), freshness: 'live',
     trust: { externalContentIsUntrusted: true, becomesCandidateFact: false },
   }
