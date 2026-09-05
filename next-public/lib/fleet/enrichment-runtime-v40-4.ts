@@ -3,6 +3,12 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { FLEET_AGENTS_V40_4 } from './agent-registry-v40-4'
 import { discoverPublicResumeLeadsV40_4, fetchParseAttachResumeLeadV40_4 } from './resume-intelligence-v40-4'
+import {
+  runStructuredProfileEnrichmentV40_4,
+  STRUCTURED_ENRICHMENT_AGENT_BY_TASK_V40_4,
+  STRUCTURED_ENRICHMENT_TASK_ORDER_V40_4,
+  type StructuredEnrichmentTaskKindV40_4,
+} from './profile-enrichment-v40-4'
 
 export type EnrichmentTaskV40_4 = {
   id: string
@@ -18,9 +24,18 @@ export type EnrichmentTaskV40_4 = {
 }
 
 const RESUME_SEARCH_AGENTS = FLEET_AGENTS_V40_4.filter(agent => agent.team === 'resume_cv' && agent.task === 'resume_search')
+const STRUCTURED_TASK_SET = new Set<string>(STRUCTURED_ENRICHMENT_TASK_ORDER_V40_4)
 
 function daysAgo(days: number) {
   return new Date(Date.now() - days * 86400_000).toISOString()
+}
+
+function isStructuredTaskKind(value: string): value is StructuredEnrichmentTaskKindV40_4 {
+  return STRUCTURED_TASK_SET.has(value)
+}
+
+function nextStructuredTaskForCandidate(candidateId: string, recentTaskKeys: Set<string>) {
+  return STRUCTURED_ENRICHMENT_TASK_ORDER_V40_4.find(kind => !recentTaskKeys.has(`${candidateId}:${kind}`)) || null
 }
 
 export async function seedCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limit = 6) {
@@ -31,9 +46,9 @@ export async function seedCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limi
     .not('canonical_name', 'is', null)
     .order('last_refreshed_at', { ascending: true, nullsFirst: true })
     .order('created_at', { ascending: false })
-    .limit(capped * 4)
+    .limit(capped * 6)
   if (error) throw new Error(error.message)
-  if (!candidates?.length) return { considered: 0, queued: 0 }
+  if (!candidates?.length) return { considered: 0, queued: 0, resumeQueued: 0, structuredQueued: 0 }
 
   const ids = candidates.map(candidate => candidate.id)
   const [{ data: artifacts }, { data: recentTasks }, { data: profiles }] = await Promise.all([
@@ -43,19 +58,46 @@ export async function seedCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limi
   ])
 
   const resumeCandidates = new Set((artifacts || []).map(row => row.candidate_id))
-  const recentResumeSearch = new Set((recentTasks || []).filter(row => row.task_kind === 'resume_search').map(row => row.candidate_id))
+  const recentTaskKeys = new Set((recentTasks || []).map(row => `${row.candidate_id}:${row.task_kind}`))
   const liveByCandidateKind = new Set((recentTasks || []).filter(row => ['queued','running'].includes(row.status)).map(row => `${row.candidate_id}:${row.task_kind}`))
   const profileCount = new Map<string, number>()
   for (const row of profiles || []) profileCount.set(row.candidate_id, (profileCount.get(row.candidate_id) || 0) + 1)
 
   let queued = 0
+  let resumeQueued = 0
+  let structuredQueued = 0
   let agentCursor = 0
+  const resumeBudget = Math.max(1, Math.ceil(capped / 2))
+  const structuredBudget = Math.max(1, capped - resumeBudget)
+
   for (const candidate of candidates) {
     if (queued >= capped) break
-    if (resumeCandidates.has(candidate.id) || recentResumeSearch.has(candidate.id) || liveByCandidateKind.has(`${candidate.id}:resume_search`)) continue
+    const hasProfiles = (profileCount.get(candidate.id) || 0) > 0
+
+    if (structuredQueued < structuredBudget && hasProfiles) {
+      const taskKind = nextStructuredTaskForCandidate(candidate.id, recentTaskKeys)
+      if (taskKind && !liveByCandidateKind.has(`${candidate.id}:${taskKind}`)) {
+        const { error: insertError } = await sb.from('candidate_enrichment_tasks').insert({
+          owner_id: candidate.owner_id,
+          candidate_id: candidate.id,
+          task_kind: taskKind,
+          agent_id: STRUCTURED_ENRICHMENT_AGENT_BY_TASK_V40_4[taskKind],
+          priority: taskKind === 'employment_history' ? 90 : taskKind === 'skills_evidence' ? 88 : taskKind === 'professional_urls' ? 82 : 70,
+          status: 'queued',
+          payload: { sourceProfileCount: profileCount.get(candidate.id) || 0, trust: { evidenceOnly: true, contactValuesCaptured: false, recruiterDecisionAutomated: false } },
+        })
+        if (!insertError) {
+          queued += 1
+          structuredQueued += 1
+          recentTaskKeys.add(`${candidate.id}:${taskKind}`)
+        }
+      }
+    }
+
+    if (queued >= capped || resumeQueued >= resumeBudget) continue
+    if (resumeCandidates.has(candidate.id) || recentTaskKeys.has(`${candidate.id}:resume_search`) || liveByCandidateKind.has(`${candidate.id}:resume_search`)) continue
     if (!candidate.canonical_name || String(candidate.canonical_name).trim().split(/\s+/).length < 2) continue
-    // Require some corroborating context before spending public-web research credits.
-    if (!candidate.current_company && !candidate.location && (profileCount.get(candidate.id) || 0) < 1) continue
+    if (!candidate.current_company && !candidate.location && !hasProfiles) continue
 
     const worker = RESUME_SEARCH_AGENTS[agentCursor % Math.max(1, RESUME_SEARCH_AGENTS.length)]
     agentCursor += 1
@@ -63,7 +105,7 @@ export async function seedCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limi
       55
       + (candidate.current_company ? 10 : 0)
       + (candidate.current_title ? 8 : 0)
-      + ((profileCount.get(candidate.id) || 0) >= 1 ? 12 : 0)
+      + (hasProfiles ? 12 : 0)
       + (!Array.isArray(candidate.skills) || candidate.skills.length < 5 ? 5 : 0),
     )
     const { error: insertError } = await sb.from('candidate_enrichment_tasks').insert({
@@ -75,10 +117,14 @@ export async function seedCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limi
       status: 'queued',
       payload: { queryOffset: agentCursor % 7, trust: { publicOnly: true, noAuthBypass: true, contactValuesCaptured: false } },
     })
-    if (!insertError) queued += 1
+    if (!insertError) {
+      queued += 1
+      resumeQueued += 1
+      recentTaskKeys.add(`${candidate.id}:resume_search`)
+    }
   }
 
-  return { considered: candidates.length, queued }
+  return { considered: candidates.length, queued, resumeQueued, structuredQueued }
 }
 
 export async function claimCandidateEnrichmentTasksV40_4(sb: SupabaseClient, limit = 4, worker = 'enrichment-cron') {
@@ -171,12 +217,10 @@ async function executeResumeParse(sb: SupabaseClient, task: EnrichmentTaskV40_4)
     return { taskId: task.id, kind: task.task_kind, attached: false, error: 'No lead IDs.' }
   }
 
-  // Snapshot pre-existing skills so a resume can add evidence without replacing
-  // richer skills that were already observed from GitHub/Stack/etc.
   const { data: before } = await sb.from('candidates').select('skills').eq('id', task.candidate_id).eq('owner_id', task.owner_id).maybeSingle()
   const beforeSkills = Array.isArray(before?.skills) ? before.skills.filter((value): value is string => typeof value === 'string') : []
-
   const attempts: Array<Record<string, unknown>> = []
+
   for (const leadId of leadIds) {
     const result = await fetchParseAttachResumeLeadV40_4({ sb, ownerId: task.owner_id, leadId })
     attempts.push({ leadId, ...result })
@@ -192,11 +236,18 @@ async function executeResumeParse(sb: SupabaseClient, task: EnrichmentTaskV40_4)
   return { taskId: task.id, kind: task.task_kind, attached: false, needsReview, attempts }
 }
 
+async function executeStructuredEnrichment(sb: SupabaseClient, task: EnrichmentTaskV40_4, taskKind: StructuredEnrichmentTaskKindV40_4) {
+  const result = await runStructuredProfileEnrichmentV40_4({ sb, ownerId: task.owner_id, candidateId: task.candidate_id, taskKind })
+  await completeTask(sb, task, 'complete', result)
+  return { taskId: task.id, kind: task.task_kind, ...result }
+}
+
 export async function executeCandidateEnrichmentTaskV40_4(sb: SupabaseClient, task: EnrichmentTaskV40_4) {
   try {
     if (task.task_kind === 'resume_search') return await executeResumeSearch(sb, task)
     if (task.task_kind === 'resume_fetch_parse') return await executeResumeParse(sb, task)
-    await completeTask(sb, task, 'paused', { reason: 'Worker adapter not yet activated in V40.4 canary.' })
+    if (isStructuredTaskKind(task.task_kind)) return await executeStructuredEnrichment(sb, task, task.task_kind)
+    await completeTask(sb, task, 'paused', { reason: 'Worker adapter is staged but not yet activated in V40.4.' })
     return { taskId: task.id, kind: task.task_kind, paused: true }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Enrichment task failed.'
@@ -208,9 +259,6 @@ export async function executeCandidateEnrichmentTaskV40_4(sb: SupabaseClient, ta
 }
 
 export async function runEnrichmentTickV40_4(sb: SupabaseClient) {
-  // Start small in production: the scheduler can wake every 15 minutes while
-  // each tick remains bounded. Scale this only after yield/cost/identity quality
-  // is visible in the Agent Fleet dashboard.
   const seeded = await seedCandidateEnrichmentTasksV40_4(sb, 6)
   const tasks = await claimCandidateEnrichmentTasksV40_4(sb, 4, `enrichment-${Date.now().toString(36)}`)
   const results = []
