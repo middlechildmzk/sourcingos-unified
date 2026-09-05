@@ -180,7 +180,7 @@ export function ReviewSessionV41({ roleId }: { roleId: string }) {
         ...applied.role,
         activity: [{
           id: crypto.randomUUID(),
-          type: 'note_added',
+          type: 'note_added' as const,
           message: `Review note for ${candidate.name}: ${note.trim().slice(0, 1000)}`,
           createdAt,
         }, ...applied.role.activity].slice(0, 200),
