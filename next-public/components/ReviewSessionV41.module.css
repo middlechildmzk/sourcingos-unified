@@ -465,7 +465,7 @@
   background: transparent !important;
 }
 
-kbd {
+.shell kbd {
   margin-left: 5px;
   border: 1px solid rgba(156, 178, 199, 0.18);
   border-bottom-color: rgba(156, 178, 199, 0.3);
