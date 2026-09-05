@@ -66,9 +66,6 @@ export function fitDecisionForReviewDecisionV41(decision: ReviewDecisionV41): Fi
 }
 
 export function displayRequirementStateV41(assessment: RequirementAssessment): RequirementState {
-  // Public/open evidence can provide a clearance breadcrumb, never a verified
-  // clearance determination. The UI is intentionally stricter than generic
-  // requirement assessment for this sensitive requirement kind.
   if (assessment.kind === 'clearance' && assessment.state === 'supported') return 'needs_verification'
   return assessment.state
 }
@@ -116,14 +113,12 @@ export function applyReviewDecisionV41(
         ...item,
         fitDecision: nextFitDecision,
         evidenceStatus: nextEvidenceStatus,
-        // Deliberately preserve stage. A review decision is recruiter-authored
-        // evidence judgment, not an automatic pipeline transition.
         stage: item.stage,
         updatedAt,
       } : item),
       activity: [{
         id: crypto.randomUUID(),
-        type: 'candidate_reviewed',
+        type: 'candidate_reviewed' as const,
         message: `${decisionLabel}: ${candidate.name}.`,
         createdAt: updatedAt,
       }, ...role.activity].slice(0, 200),
@@ -148,7 +143,7 @@ export function undoReviewDecisionV41(
     } : candidate),
     activity: [{
       id: crypto.randomUUID(),
-      type: 'candidate_reviewed',
+      type: 'candidate_reviewed' as const,
       message: `Undid review decision for ${role.candidates.find(candidate => candidate.id === mutation.candidateId)?.name || 'candidate'}.`,
       createdAt: updatedAt,
     }, ...role.activity].slice(0, 200),
