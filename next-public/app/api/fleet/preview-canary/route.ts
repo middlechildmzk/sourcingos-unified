@@ -8,12 +8,15 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-const OWNER_ID = '__v40_7b_preview_canary__'
-const BATCH_ID = 'v40-7b-preview-canary-1'
+// Temporary fixed-ID canary. It is safe to expose briefly in production because
+// every invocation targets the same idempotent row/event and dryRun=true prevents
+// provider/AI spend. This route is removed immediately after verification.
+const OWNER_ID = '__v40_7b_runtime_canary__'
+const BATCH_ID = 'v40-7b-runtime-canary-1'
 
 export async function GET() {
-  if (process.env.VERCEL_ENV !== 'preview') {
-    return NextResponse.json({ ok: false, error: 'Preview-only canary.' }, { status: 404 })
+  if (!['preview', 'production'].includes(String(process.env.VERCEL_ENV || ''))) {
+    return NextResponse.json({ ok: false, error: 'Vercel canary only.' }, { status: 404 })
   }
 
   const sb = createServerSupabaseClient()
@@ -38,7 +41,7 @@ export async function GET() {
   })
 
   const sent = await sourcingOsInngest.send({
-    id: `v40-7b-preview-canary:${item.id}`,
+    id: `v40-7b-runtime-canary:${item.id}`,
     name: 'sourcingos/fleet.v40_7.work.requested',
     data: {
       ownerId: OWNER_ID,
@@ -50,6 +53,7 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
+    environment: process.env.VERCEL_ENV,
     dryRun: true,
     itemId: item.id,
     batchId: BATCH_ID,
