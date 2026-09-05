@@ -16,9 +16,9 @@ export const dynamic = 'force-dynamic'
 export const maxDuration = 300
 
 const PARALLEL_BATCH = 'v40-7c-parallel-canary-2'
-const FIVE_BATCH = 'v40-7c-live-5-v2'
-const TEN_BATCH = 'v40-7c-live-10'
-const FIFTY_BATCH = 'v40-7c-live-50'
+const FIVE_BATCH = 'v40-7d-live-5'
+const TEN_BATCH = 'v40-7d-live-10'
+const FIFTY_BATCH = 'v40-7d-live-50'
 const CONTEXT_REFS = ['#171', '#172'] as const
 const LIVE_TARGET = 'Audit current SourcingOS search intelligence, candidate intelligence, recruiter UX, product engineering, and QA readiness. Produce concrete, attributable findings and next actions without production writes.'
 
@@ -223,8 +223,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, stage: 'parallel_canary', hold: true, reason: 'Parallel production connectivity canary did not complete successfully.', rows: parallelRows }, { status: 409 })
     }
 
-    if (!readiness.anthropic) {
-      return NextResponse.json({ ok: false, stage: 'live_fleet', hold: true, reason: 'Anthropic is not configured for live fleet synthesis.', readiness }, { status: 409 })
+    if (!readiness.synthesisGateway && !readiness.anthropic) {
+      return NextResponse.json({ ok: false, stage: 'live_fleet', hold: true, reason: 'No live fleet synthesis provider is configured. Vercel AI Gateway OIDC/API-key auth or Anthropic is required.', readiness }, { status: 409 })
     }
 
     const stages = [

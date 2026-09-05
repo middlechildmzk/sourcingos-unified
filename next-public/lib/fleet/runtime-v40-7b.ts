@@ -11,6 +11,7 @@ import {
   type FleetWorkBatchV40_7,
   type FleetWorkItemV40_7,
 } from './improvement-workflow-v40-7'
+import { resolveFleetSynthesisProviderV40_7c } from './synthesis-provider-v40-7c'
 
 export type FleetRuntimeEventDataV40_7b = {
   ownerId: string
@@ -21,6 +22,7 @@ export type FleetRuntimeEventDataV40_7b = {
 export type FleetProviderReadinessV40_7b = {
   inngestEventKey: boolean
   inngestSigningKey: boolean
+  synthesisGateway: boolean
   anthropic: boolean
   exa: boolean
   vercelExa: boolean
@@ -82,7 +84,8 @@ export function fleetProviderReadinessV40_7b(
   return {
     inngestEventKey: Boolean(env.INNGEST_EVENT_KEY),
     inngestSigningKey: Boolean(env.INNGEST_SIGNING_KEY),
-    anthropic: Boolean(env.ANTHROPIC_API_KEY || env.AI_PROVIDER_API_KEY),
+    synthesisGateway: Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN),
+    anthropic: Boolean(env.ANTHROPIC_API_KEY),
     exa: Boolean(env.EXA_API_KEY),
     vercelExa: Boolean(env.VERCEL_EXA_EXA_API_KEY),
     firecrawl: Boolean(env.FIRECRAWL_API_KEY),
@@ -416,17 +419,58 @@ function parseAgentJson(text: string): { summary: string; findings: string[]; re
   }
 }
 
-async function runAnthropicWorkV40_7b(input: {
+async function runGatewayWorkV40_7d(input: {
   item: FleetWorkItemV40_7
   artifacts: FleetResearchArtifactV40_7b[]
   providerWarning?: string
+  model: string
+  authToken: string
 }): Promise<{ model: string; output: ReturnType<typeof parseAgentJson> }> {
-  const key = process.env.ANTHROPIC_API_KEY || process.env.AI_PROVIDER_API_KEY
-  if (!key) throw new Error('ANTHROPIC_API_KEY is not configured for the improvement fleet.')
-  const genericModel = String(process.env.AI_PROVIDER_MODEL || '').trim()
-  const model = process.env.AGENT_FLEET_MODEL || process.env.ANTHROPIC_MODEL || (genericModel.startsWith('claude-') ? genericModel : '') || 'claude-sonnet-4-6'
-  const prompt = [
+  const prompt = fleetSynthesisPromptV40_7d(input)
+  const response = await fetch('https://ai-gateway.vercel.sh/v1/responses', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${input.authToken}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: input.model,
+      input: [{ type: 'message', role: 'user', content: prompt }],
+      max_output_tokens: 1200,
+    }),
+    cache: 'no-store',
+  })
+  if (!response.ok) {
+    const detail = clean(await response.text().catch(() => ''), 1200)
+    throw new Error(`Vercel AI Gateway fleet worker returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`)
+  }
+  const payload = await response.json() as Record<string, unknown>
+  const directText = clean(payload.output_text, 8000)
+  const output = Array.isArray(payload.output) ? payload.output : []
+  const parts = output.flatMap(value => {
+    const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
+    const content = Array.isArray(row.content) ? row.content : []
+    return content.map(part => {
+      const block = part && typeof part === 'object' ? part as Record<string, unknown> : {}
+      return clean(block.text, 8000)
+    }).filter(Boolean)
+  })
+  const text = directText || parts.join('\n')
+  if (!text) throw new Error('Vercel AI Gateway fleet worker returned no text output.')
+  return {
+    model: clean(payload.model, 200) || input.model,
+    output: parseAgentJson(text),
+  }
+}
+
+function fleetSynthesisPromptV40_7d(input: {
+  item: FleetWorkItemV40_7
+  artifacts: FleetResearchArtifactV40_7b[]
+  providerWarning?: string
+}): string {
+  return [
     'You are one bounded SourcingOS improvement-fleet worker. Return only JSON with keys summary, findings, recommended_next_actions.',
+    'Keep the JSON concise: at most 6 findings and 6 recommended actions.',
     `Pod: ${input.item.pod}`,
     `Seat: ${input.item.seat}`,
     `Mode: ${input.item.mode}`,
@@ -452,23 +496,32 @@ async function runAnthropicWorkV40_7b(input: {
     '',
     'Produce concrete, deduplicated findings and next actions that another orchestrator can rank. Avoid generic advice.',
   ].filter(Boolean).join('\n')
+}
 
+async function runAnthropicWorkV40_7b(input: {
+  item: FleetWorkItemV40_7
+  artifacts: FleetResearchArtifactV40_7b[]
+  providerWarning?: string
+  model: string
+  key: string
+}): Promise<{ model: string; output: ReturnType<typeof parseAgentJson> }> {
+  const prompt = fleetSynthesisPromptV40_7d(input)
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'x-api-key': key,
+      'x-api-key': input.key,
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model,
-      max_tokens: 1600,
+      model: input.model,
+      max_tokens: 1200,
       messages: [{ role: 'user', content: prompt }],
     }),
     cache: 'no-store',
   })
   if (!response.ok) {
-    const detail = clean(await response.text().catch(() => ''), 800)
+    const detail = clean(await response.text().catch(() => ''), 1200)
     throw new Error(`Anthropic fleet worker returned HTTP ${response.status}${detail ? `: ${detail}` : '.'}`)
   }
   const payload = await response.json() as Record<string, unknown>
@@ -477,7 +530,27 @@ async function runAnthropicWorkV40_7b(input: {
     const row = value && typeof value === 'object' ? value as Record<string, unknown> : {}
     return row.type === 'text' ? clean(row.text, 8000) : ''
   }).filter(Boolean).join('\n')
-  return { model, output: parseAgentJson(text) }
+  return { model: input.model, output: parseAgentJson(text) }
+}
+
+async function runAiSynthesisV40_7d(input: {
+  item: FleetWorkItemV40_7
+  artifacts: FleetResearchArtifactV40_7b[]
+  providerWarning?: string
+}): Promise<{ model: string; output: ReturnType<typeof parseAgentJson> }> {
+  const provider = resolveFleetSynthesisProviderV40_7c(process.env)
+  if (provider.kind === 'gateway') {
+    const authToken = provider.authSource === 'ai_gateway_api_key'
+      ? process.env.AI_GATEWAY_API_KEY
+      : process.env.VERCEL_OIDC_TOKEN
+    if (!authToken) throw new Error('Vercel AI Gateway authentication resolved without an available token.')
+    return runGatewayWorkV40_7d({ ...input, model: provider.model, authToken })
+  }
+  if (provider.kind === 'anthropic') {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('Anthropic synthesis resolved without ANTHROPIC_API_KEY.')
+    return runAnthropicWorkV40_7b({ ...input, model: provider.model, key: process.env.ANTHROPIC_API_KEY })
+  }
+  throw new Error('No fleet synthesis provider is configured. Vercel AI Gateway OIDC/API key or Anthropic API key is required.')
 }
 
 export async function executeFleetWorkItemV40_7b(input: {
@@ -508,7 +581,7 @@ export async function executeFleetWorkItemV40_7b(input: {
     }
   }
 
-  const agent = await runAnthropicWorkV40_7b({
+  const agent = await runAiSynthesisV40_7d({
     item: input.item,
     artifacts: sources,
     providerWarning: provider.warning,
