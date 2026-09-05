@@ -1,15 +1,52 @@
 import { describe, expect, it } from 'vitest'
-import fs from 'node:fs'
-import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { technicalDossierToSourceResultV40 } from '../lib/fleet/dossier-source-result'
+import type { TechnicalDossier } from '../lib/connectors/contract-v33-3'
 
-const root = path.resolve(process.cwd())
-const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
+const root = process.cwd()
+const read = (path: string) => readFileSync(join(root, path), 'utf8')
+
+function dossier(): TechnicalDossier {
+  return {
+    source: 'orcid',
+    person: {
+      source: 'orcid',
+      sourceProfileId: '0000-0002-1825-0097',
+      profileUrl: 'https://orcid.org/0000-0002-1825-0097',
+      displayName: 'Amara Okonkwo',
+      publicEmail: 'fixture-at-invalid.test',
+      websites: ['https://github.com/aokonkwo'],
+    },
+    artifacts: [],
+    technologies: [],
+    anchors: [
+      { kind: 'orcid', value: '0000-0002-1825-0097', normalized: '0000-0002-1825-0097', strength: 'deterministic', provenance: { source: 'orcid', sourceField: 'orcid-identifier.path', sourceRecordId: '0000-0002-1825-0097', basis: 'source_stated', observedAt: '2026-09-04T12:00:00.000Z' } },
+      { kind: 'public_email', value: 'fixture-at-invalid.test', normalized: 'fixture-at-invalid.test', strength: 'deterministic', provenance: { source: 'orcid', sourceField: 'fixture', sourceRecordId: '0000-0002-1825-0097', basis: 'source_stated', observedAt: '2026-09-04T12:00:00.000Z' } },
+    ],
+    activity: { activeYears: [] },
+    limits: [],
+    observedAt: '2026-09-04T12:00:00.000Z',
+    raw: {},
+  }
+}
 
 describe('V40 autonomous fleet integration', () => {
-  it('keeps discovery capture evidence-only and recruiter-controlled', () => {
-    const capture = read('lib/fleet/capture-discovery-v40.ts')
-    expect(capture).toContain('identityMergeAuthorized: false')
-    expect(capture).toContain('count_auto_promoted: 0')
+  it('converts dossiers to person SourceResults without unattended contact values', () => {
+    const result = technicalDossierToSourceResultV40(dossier())
+    expect(result.entityKind).toBe('person')
+    expect(result.contactSignals).toEqual([])
+    expect(JSON.stringify(result.raw)).not.toContain('fixture-at-invalid.test')
+    expect(result.deterministicIdentityAnchors?.map(item => item.kind)).toEqual(['orcid'])
+  })
+
+  it('keeps the fleet proposal-only and reuses the canonical Identity Review path', () => {
+    const types = read('lib/fleet/types.ts')
+    const orchestrator = read('lib/fleet/orchestrator.ts')
+    const capture = read('lib/candidate-data/capture-source-result-v40.ts')
+    expect(types).not.toContain("kind: 'deterministic_link'")
+    expect(orchestrator).not.toContain('recordDeterministicLink')
+    expect(capture).toContain('createDeterministicIdentityProposals')
     expect(capture).not.toContain('confirm_identity_match_atomic_v34')
   })
 
