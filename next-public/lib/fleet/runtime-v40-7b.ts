@@ -12,6 +12,7 @@ import {
   type FleetWorkItemV40_7,
 } from './improvement-workflow-v40-7'
 import { resolveFleetSynthesisProviderV40_7c } from './synthesis-provider-v40-7c'
+import { runParallelResponsesSynthesisV40_7e } from './parallel-responses-synthesis-v40-7e'
 
 export type FleetRuntimeEventDataV40_7b = {
   ownerId: string
@@ -23,6 +24,7 @@ export type FleetProviderReadinessV40_7b = {
   inngestEventKey: boolean
   inngestSigningKey: boolean
   synthesisGateway: boolean
+  synthesisParallel: boolean
   anthropic: boolean
   exa: boolean
   vercelExa: boolean
@@ -85,6 +87,7 @@ export function fleetProviderReadinessV40_7b(
     inngestEventKey: Boolean(env.INNGEST_EVENT_KEY),
     inngestSigningKey: Boolean(env.INNGEST_SIGNING_KEY),
     synthesisGateway: Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN),
+    synthesisParallel: Boolean(env.PARALLEL_API_KEY),
     anthropic: Boolean(env.ANTHROPIC_API_KEY),
     exa: Boolean(env.EXA_API_KEY),
     vercelExa: Boolean(env.VERCEL_EXA_EXA_API_KEY),
@@ -546,11 +549,19 @@ async function runAiSynthesisV40_7d(input: {
     if (!authToken) throw new Error('Vercel AI Gateway authentication resolved without an available token.')
     return runGatewayWorkV40_7d({ ...input, model: provider.model, authToken })
   }
+  if (provider.kind === 'parallel') {
+    if (!process.env.PARALLEL_API_KEY) throw new Error('Parallel synthesis resolved without PARALLEL_API_KEY.')
+    const result = await runParallelResponsesSynthesisV40_7e({
+      key: process.env.PARALLEL_API_KEY,
+      prompt: fleetSynthesisPromptV40_7d(input),
+    })
+    return { model: result.model, output: parseAgentJson(result.text) }
+  }
   if (provider.kind === 'anthropic') {
     if (!process.env.ANTHROPIC_API_KEY) throw new Error('Anthropic synthesis resolved without ANTHROPIC_API_KEY.')
     return runAnthropicWorkV40_7b({ ...input, model: provider.model, key: process.env.ANTHROPIC_API_KEY })
   }
-  throw new Error('No fleet synthesis provider is configured. Vercel AI Gateway OIDC/API key or Anthropic API key is required.')
+  throw new Error('No fleet synthesis provider is configured. Vercel AI Gateway, Parallel Responses, or Anthropic is required.')
 }
 
 export async function executeFleetWorkItemV40_7b(input: {
