@@ -1,5 +1,6 @@
 export type FleetSynthesisResolutionV40_7c =
   | { kind: 'gateway'; model: string; authSource: 'ai_gateway_api_key' | 'vercel_oidc' }
+  | { kind: 'parallel'; model: 'parallel'; authSource: 'parallel_api_key' }
   | { kind: 'anthropic'; model: string; authSource: 'anthropic_api_key' }
   | { kind: 'unavailable'; model: null; authSource: null }
 
@@ -34,6 +35,9 @@ export function resolveFleetSynthesisProviderV40_7c(
   }
   if (value(env, 'VERCEL_OIDC_TOKEN')) {
     return { kind: 'gateway', model: gatewayModel(env), authSource: 'vercel_oidc' }
+  }
+  if (value(env, 'PARALLEL_API_KEY')) {
+    return { kind: 'parallel', model: 'parallel', authSource: 'parallel_api_key' }
   }
   if (value(env, 'ANTHROPIC_API_KEY')) {
     return { kind: 'anthropic', model: anthropicModel(env), authSource: 'anthropic_api_key' }
