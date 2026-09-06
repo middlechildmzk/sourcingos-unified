@@ -33,3 +33,122 @@
 .candidate-inspector-identity h2{font-size:22px}.candidate-inspector-identity p{font-size:12px;line-height:1.45}.candidate-inspector-identity small{font-size:10px}
 .search-section-title>span{font-size:10.5px}.search-plan-summary{font-size:12px}.search-empty-copy{font-size:11px}
 .inspector-contact-grid small{font-size:9px}.inspector-contact-grid b{font-size:11px}
+
+
+/* ── V41 PR2: /app/search master–detail information architecture ─────────────
+   Layout is decided in lib/search/workspace-layout-v41.ts and delivered here as
+   --sos-search-columns plus data-phase / data-rail / data-mobile-pane. These
+   rules only consume that decision; they do not make their own. */
+
+.search-workspace{grid-template-columns:var(--sos-search-columns,minmax(250px,300px) minmax(460px,1fr) minmax(300px,360px));transition:grid-template-columns .18s cubic-bezier(.4,0,.2,1)}
+.search-workspace-left{position:relative;transition:padding .18s ease}
+
+/* Collapsed rail keeps the brief one click away instead of unmounting it. */
+.search-rail-toggle{position:absolute;top:10px;right:8px;z-index:9;width:22px;height:22px;display:grid;place-items:center;border:1px solid var(--sos-border);border-radius:6px;background:var(--sos-surface);color:var(--sos-text-faint);font-size:11px;line-height:1}
+.search-rail-toggle:hover{color:var(--sos-text);border-color:var(--sos-border-strong)}
+.search-workspace-left[data-collapsed="true"]{padding:14px 4px;overflow:hidden}
+.search-workspace-left[data-collapsed="true"]>*:not(.search-rail-toggle){display:none}
+.search-workspace-left[data-collapsed="true"] .search-rail-toggle{right:50%;transform:translateX(50%)}
+
+/* Agent Activity: full pipeline while working, one progress strip afterwards.
+   Provider diagnostics stay reachable behind the Source detail disclosure. */
+.provider-progress[data-mode="strip"]{padding:7px 10px;margin-bottom:10px;background:var(--sos-surface-soft)}
+.provider-progress[data-mode="strip"] .search-section-title{margin-bottom:0}
+.provider-progress-summary{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:6px;font-size:9px;color:var(--sos-text-faint)}
+.provider-progress-summary i{font-style:normal;opacity:.4}
+.provider-progress-summary b{color:var(--sos-text);font-size:9.5px;font-weight:850}
+
+/* Dense review list. The slate is the centre of gravity once candidates land,
+   so rows lose their standalone-card outline and become a scannable ledger. */
+.search-workspace[data-phase="reviewing"] .candidate-slate{gap:0;border:1px solid var(--sos-border);border-radius:var(--sos-radius-md);overflow:hidden;background:var(--sos-surface)}
+.search-workspace[data-phase="reviewing"] .candidate-row{border:0;border-bottom:1px solid var(--sos-border);border-radius:0;padding:12px 13px;background:transparent}
+.search-workspace[data-phase="reviewing"] .candidate-slate>.candidate-row:last-child{border-bottom:0}
+.search-workspace[data-phase="reviewing"] .candidate-row.is-selected{background:var(--sos-accent-soft);box-shadow:inset 3px 0 var(--sos-accent)}
+.search-workspace[data-phase="reviewing"] .candidate-row:focus-visible{outline:2px solid var(--sos-accent);outline-offset:-2px}
+/* Provider name is metadata, not the headline. */
+.search-workspace[data-phase="reviewing"] .candidate-source{opacity:.62}
+
+/* Candidate 360 becomes the dominant workspace rather than a pinned sidebar. */
+.search-workspace[data-detail="open"] .search-workspace-right{border-left:1px solid var(--sos-border)}
+.search-workspace[data-phase="reviewing"] .candidate-inspector-identity h2{font-size:26px;letter-spacing:-.02em}
+.search-workspace[data-phase="reviewing"] .candidate-inspector-section{padding:18px}
+
+.search-mobile-back,.search-mobile-brief-toggle{display:none}
+
+@media(max-width:1240px){
+  /* Narrow desktop: the rail steps aside so list and detail keep working. */
+  .search-workspace[data-phase="reviewing"][data-detail="open"] .search-workspace-left{display:none}
+}
+
+@media(max-width:760px){
+  /* Mobile is modes, not three compressed columns. Exactly one pane is live. */
+  .search-workspace{display:block;grid-template-columns:none}
+  .search-workspace-left,.search-workspace-center,.search-workspace-right{display:none}
+  .search-workspace[data-mobile-pane="brief"] .search-workspace-left{display:block}
+  .search-workspace[data-mobile-pane="results"] .search-workspace-center{display:block}
+  .search-workspace[data-mobile-pane="detail"] .search-workspace-right{display:block;position:static;width:auto;transform:none;box-shadow:none;border-left:0}
+  .search-rail-toggle{display:none}
+  .search-mobile-back,.search-mobile-brief-toggle{display:inline-flex;align-items:center;gap:4px}
+  /* Thumb-reachable, full-width return path out of the dossier. */
+  .search-mobile-back{position:sticky;top:0;z-index:12;width:100%;justify-content:flex-start;border:0;border-bottom:1px solid var(--sos-border);background:var(--sos-surface);color:var(--sos-accent);font-size:12px;font-weight:800;padding:13px 14px;min-height:46px}
+  .search-mobile-brief-toggle{border:1px solid var(--sos-border);border-radius:999px;background:var(--sos-surface);color:var(--sos-text-muted);font-size:10px;padding:7px 11px;min-height:34px}
+}
+
+
+/* ── V41 PR3: Candidate 360 evidence, contacts, company context ──────────────
+   States carry meaning in mark + label, never colour alone. Green is reserved
+   for `supported` and appears nowhere else in this block. */
+
+.requirement-evidence-v41{display:grid;gap:8px}
+.requirement-evidence-v41>div{border:1px solid var(--sos-border);border-radius:9px;padding:10px 11px;background:var(--sos-surface-soft)}
+.requirement-evidence-v41-head{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}
+.requirement-evidence-v41-head i{font-style:normal;font-size:10px;line-height:1}
+.requirement-evidence-v41-head b{font-size:11.5px;color:var(--sos-text)}
+.requirement-evidence-v41-head em{font-style:normal;font-size:8px;text-transform:uppercase;letter-spacing:.07em;color:var(--sos-text-faint)}
+.requirement-evidence-v41-head u{margin-left:auto;text-decoration:none;font-size:8.5px;font-weight:850;letter-spacing:.03em}
+.requirement-evidence-v41>div>small{display:block;font-size:9px;line-height:1.5;color:var(--sos-text-faint);margin-top:7px}
+
+.requirement-evidence-v41>div[data-state="supported"] i,.requirement-evidence-v41>div[data-state="supported"] u{color:var(--sos-success)}
+.requirement-evidence-v41>div[data-state="supported"]{border-color:color-mix(in srgb,var(--sos-success) 26%,var(--sos-border))}
+.requirement-evidence-v41>div[data-state="contradicted"] i,.requirement-evidence-v41>div[data-state="contradicted"] u{color:var(--sos-warning)}
+.requirement-evidence-v41>div[data-state="needs_verification"] i,.requirement-evidence-v41>div[data-state="needs_verification"] u{color:var(--sos-accent)}
+.requirement-evidence-v41>div[data-state="unknown"] i,.requirement-evidence-v41>div[data-state="unknown"] u{color:var(--sos-text-faint)}
+
+/* Evidence is a quotation, not a summary. */
+.requirement-evidence-v41-quotes{display:grid;gap:6px;margin-top:8px}
+.requirement-evidence-v41-quotes blockquote{margin:0;padding:7px 9px;border-left:2px solid var(--sos-border-strong);background:var(--sos-canvas);border-radius:0 7px 7px 0;font-size:10.5px;line-height:1.5;color:var(--sos-text)}
+.requirement-evidence-v41-quotes cite{display:block;margin-top:5px;font-style:normal;font-size:8px;color:var(--sos-text-faint)}
+
+/* Discovery expansion is visually separated from evidence, never mixed in. */
+.requirement-expansion-v41{margin-top:12px;padding-top:11px;border-top:1px dashed var(--sos-border)}
+.requirement-expansion-v41>small{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--sos-text-faint);margin-bottom:6px}
+.requirement-expansion-v41>div{display:flex;gap:4px;flex-wrap:wrap}
+.requirement-expansion-v41 span{font-size:9px;border:1px dashed var(--sos-border);border-radius:6px;padding:3px 6px;color:var(--sos-text-faint);background:transparent}
+.requirement-expansion-v41 span[data-observed="true"]{color:var(--sos-text-muted);border-style:solid}
+.requirement-expansion-v41>p{font-size:8.5px;line-height:1.45;color:var(--sos-text-faint);margin:7px 0 0}
+
+/* Canonical contact: one primary per channel, alternates collapsed. */
+.contact-canonical-v41{display:grid;gap:5px;margin-top:9px}
+.contact-canonical-v41-row{display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:8px;align-items:baseline;padding:7px 9px;border:1px solid var(--sos-border);border-radius:8px;background:var(--sos-surface-soft)}
+.contact-canonical-v41-row small{font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:var(--sos-text-faint)}
+.contact-canonical-v41-row b{font-size:11px;word-break:break-all}
+.contact-canonical-v41-row span{font-size:8px;font-weight:850;letter-spacing:.03em}
+.contact-canonical-v41-row span[data-confidence="verified"]{color:var(--sos-success)}
+.contact-canonical-v41-row span[data-confidence="likely"]{color:var(--sos-accent)}
+.contact-canonical-v41-row span[data-confidence="possible"]{color:var(--sos-warning)}
+.contact-canonical-v41-row span[data-confidence="not_checked"]{color:var(--sos-text-faint)}
+.contact-canonical-v41-row em{grid-column:2/-1;font-style:normal;font-size:8px;color:var(--sos-text-faint)}
+.contact-conflict-v41{font-size:9px;line-height:1.5;color:var(--sos-warning);background:var(--sos-warning-soft);border-radius:8px;padding:8px 9px;margin:0}
+.contact-alternates-v41{margin-top:3px}
+.contact-alternates-v41 summary{font-size:9px;color:var(--sos-text-muted);cursor:pointer;padding:6px 2px}
+.contact-alternates-v41[open] summary{color:var(--sos-text)}
+.contact-alternates-v41 .contact-canonical-v41-row{margin-top:5px;background:transparent}
+
+/* Company context: progressive disclosure, not another resident dashboard. */
+.company-context-v41 summary{display:flex;align-items:baseline;gap:8px;cursor:pointer;padding:8px 10px;border:1px solid var(--sos-border);border-radius:8px;background:var(--sos-surface-soft)}
+.company-context-v41 summary b{font-size:11.5px}
+.company-context-v41 summary span{margin-left:auto;font-size:9px;color:var(--sos-text-faint)}
+.company-context-v41>div{padding:9px 10px 0}
+.company-context-v41>div small{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.07em;color:var(--sos-text-faint)}
+.company-context-v41>div p{font-size:10.5px;line-height:1.5;color:var(--sos-text-muted);margin:3px 0 0}
+.company-context-v41>p{padding:10px 10px 0;margin:0}
