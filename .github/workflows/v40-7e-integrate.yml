@@ -1,0 +1,71 @@
+name: V40.7e integrate Parallel Responses fleet synthesis
+on:
+  push:
+    branches: [v40-7e-parallel-responses-fleet-synthesis]
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v40-7e-parallel-responses-fleet-synthesis
+          fetch-depth: 0
+      - name: Wire Parallel Responses into the governed runtime
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          runtime = Path('next-public/lib/fleet/runtime-v40-7b.ts')
+          text = runtime.read_text()
+          old = "import { resolveFleetSynthesisProviderV40_7c } from './synthesis-provider-v40-7c'\n"
+          new = old + "import { runParallelResponsesSynthesisV40_7e } from './parallel-responses-synthesis-v40-7e'\n"
+          if old not in text:
+            raise SystemExit('runtime synthesis-provider import anchor missing')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+            "  synthesisGateway: boolean\n  anthropic: boolean\n",
+            "  synthesisGateway: boolean\n  synthesisParallel: boolean\n  anthropic: boolean\n",
+            1,
+          )
+          text = text.replace(
+            "    synthesisGateway: Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN),\n    anthropic: Boolean(env.ANTHROPIC_API_KEY),\n",
+            "    synthesisGateway: Boolean(env.AI_GATEWAY_API_KEY || env.VERCEL_OIDC_TOKEN),\n    synthesisParallel: Boolean(env.PARALLEL_API_KEY),\n    anthropic: Boolean(env.ANTHROPIC_API_KEY),\n",
+            1,
+          )
+          gateway_tail = "    return runGatewayWorkV40_7d({ ...input, model: provider.model, authToken })\n  }\n  if (provider.kind === 'anthropic') {"
+          parallel_block = "    return runGatewayWorkV40_7d({ ...input, model: provider.model, authToken })\n  }\n  if (provider.kind === 'parallel') {\n    if (!process.env.PARALLEL_API_KEY) throw new Error('Parallel synthesis resolved without PARALLEL_API_KEY.')\n    const result = await runParallelResponsesSynthesisV40_7e({\n      key: process.env.PARALLEL_API_KEY,\n      prompt: fleetSynthesisPromptV40_7d(input),\n    })\n    return { model: result.model, output: parseAgentJson(result.text) }\n  }\n  if (provider.kind === 'anthropic') {"
+          if gateway_tail not in text:
+            raise SystemExit('runtime gateway branch anchor missing')
+          text = text.replace(gateway_tail, parallel_block, 1)
+          text = text.replace(
+            "  throw new Error('No fleet synthesis provider is configured. Vercel AI Gateway OIDC/API key or Anthropic API key is required.')",
+            "  throw new Error('No fleet synthesis provider is configured. Vercel AI Gateway, Parallel Responses, or Anthropic is required.')",
+            1,
+          )
+          runtime.write_text(text)
+
+          route = Path('next-public/app/api/cron/fleet-activation/route.ts')
+          route_text = route.read_text()
+          route_text = route_text.replace("const FIVE_BATCH = 'v40-7d-live-5'", "const FIVE_BATCH = 'v40-7e-live-5'", 1)
+          route_text = route_text.replace("const TEN_BATCH = 'v40-7d-live-10'", "const TEN_BATCH = 'v40-7e-live-10'", 1)
+          route_text = route_text.replace("const FIFTY_BATCH = 'v40-7d-live-50'", "const FIFTY_BATCH = 'v40-7e-live-50'", 1)
+          old_gate = "    if (!readiness.synthesisGateway && !readiness.anthropic) {\n      return NextResponse.json({ ok: false, stage: 'live_fleet', hold: true, reason: 'No live fleet synthesis provider is configured. Vercel AI Gateway OIDC/API-key auth or Anthropic is required.', readiness }, { status: 409 })\n    }"
+          new_gate = "    if (!readiness.synthesisGateway && !readiness.synthesisParallel && !readiness.anthropic) {\n      return NextResponse.json({ ok: false, stage: 'live_fleet', hold: true, reason: 'No live fleet synthesis provider is configured. Vercel AI Gateway, Parallel Responses, or Anthropic is required.', readiness }, { status: 409 })\n    }"
+          if old_gate not in route_text:
+            raise SystemExit('fleet activation synthesis gate anchor missing')
+          route.write_text(route_text.replace(old_gate, new_gate, 1))
+          PY
+          git diff --check
+      - name: Remove one-time workflow and commit
+        shell: bash
+        run: |
+          rm .github/workflows/v40-7e-integrate.yml
+          git config user.name "SourcingOS Integration"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "V40.7e wire Parallel Responses into live fleet synthesis"
+          git push origin HEAD:v40-7e-parallel-responses-fleet-synthesis
